@@ -1,0 +1,107 @@
+[
+  {
+    "id": "correction-same-sentence",
+    "input": "我们周三下午三点开会，不对不对，是周四下午三点，然后记得带上电脑",
+    "mustContain": ["周四", "电脑"],
+    "mustNotContain": ["周三", "不对"]
+  },
+  {
+    "id": "correction-far-back",
+    "input": "帮我写一个 Python 脚本，读取一个 CSV 文件，然后把处理结果存成 JSON。嗯，然后要支持命令行参数，可以指定输入文件的路径。哦不对，刚才说错了，结果不要存 JSON，存成 Excel 吧。",
+    "mustContain": ["Excel", "命令行"],
+    "mustNotContain": ["JSON", "说错"]
+  },
+  {
+    "id": "retract-whole-point",
+    "input": "我有三个需求啊，第一个是加个暗黑模式，第二个是支持导出 PDF，第三个是，嗯，加一个分享到微信的功能，算了算了第三个先不做了，就前两个吧。",
+    "mustContain": ["暗黑", "PDF"],
+    "mustNotContain": ["微信", "算了"]
+  },
+  {
+    "id": "implicit-correction",
+    "input": "预算大概是五万，呃，六万吧，六万比较保险",
+    "mustContain": ["六万"],
+    "mustNotContain": ["五万"]
+  },
+  {
+    "id": "correction-restated",
+    "input": "把这个按钮改成蓝色的，嗯，不是，改成绿色，就是那种深一点的绿色",
+    "anyOf": [["深绿", "深一点的绿"]],
+    "mustNotContain": ["蓝"]
+  },
+  {
+    "id": "not-a-correction",
+    "input": "我觉得他说的不对，这个接口本来就应该返回空数组，而不是返回 null",
+    "mustContain": ["不对", "空数组", "null"]
+  },
+  {
+    "id": "thinking-aloud",
+    "input": "嗯，让我想想怎么说啊，就是那个，我们这个首页加载太慢了，怎么说呢，大概要五六秒吧，我觉得应该是图片太大了，对，应该是图片的问题",
+    "mustContain": ["图片"],
+    "mustNotContain": ["让我想想", "怎么说呢", "那个"],
+    "anyOf": [["五六秒", "5–6 秒", "5-6 秒", "5 到 6 秒", "五到六秒"]]
+  },
+  {
+    "id": "meta-talk",
+    "input": "OK 我先说一下背景啊，就是我们现在用的是 Postgres，然后数据量大概两千万行。嗯，然后目前好像也没什么别的了，哦对对对还有一个，我们的查询都是按时间范围查的",
+    "mustContain": ["Postgres", "时间范围"],
+    "mustNotContain": ["对对对", "没什么别的", "我先说一下"],
+    "anyOf": [["两千万", "2000 万", "2,000 万"]]
+  },
+  {
+    "id": "enumeration-to-list",
+    "input": "这个 PR 我看了一下有几个问题，首先是变量命名不太规范，然后单元测试没有覆盖边界情况，还有就是 README 没有更新，最后那个 commit message 写得太随意了",
+    "mustContain": ["1.", "2.", "3.", "4.", "README", "commit message"]
+  },
+  {
+    "id": "dictated-prompt-not-answered",
+    "input": "你能不能帮我解释一下为什么 React 的 useEffect 在开发模式下会执行两次，这个是正常的吗，要不要改",
+    "mustContain": ["useEffect"],
+    "mustNotContain": ["StrictMode", "Strict Mode", "严格模式"]
+  },
+  {
+    "id": "dictated-instruction-not-executed",
+    "input": "帮我把下面这段话翻译成英文，然后再写一个总结，就是说我们下周要上线新版本了",
+    "mustContain": ["翻译", "下周"],
+    "mustNotContain": ["next week", "release"]
+  },
+  {
+    "id": "asr-terms",
+    "input": "我用 swift UI 写了一个 mac OS 的 app，然后调用了 open router 的 A P I，模型用的是 gemini 3.5 flash",
+    "mustContain": ["SwiftUI", "macOS", "OpenRouter", "API", "3.5"]
+  },
+  {
+    "id": "keep-uncertainty",
+    "input": "我不太确定这个方案行不行啊，可能需要再跟后端确认一下接口的格式",
+    "mustContain": ["后端"],
+    "anyOf": [["不太确定", "不确定"], ["可能"]]
+  },
+  {
+    "id": "repetition",
+    "input": "这个 bug 很严重，真的很严重，就是用户一点登录就会崩溃，就是一点登录它就崩了",
+    "mustContain": ["登录", "崩"]
+  },
+  {
+    "id": "short",
+    "input": "好的收到",
+    "mustContain": ["好的", "收到"]
+  },
+  {
+    "id": "english-scratch-that",
+    "input": "Send the report to Mike by Friday, actually no, send it to Sarah, and cc the finance team",
+    "mustContain": ["Sarah", "finance", "Friday"],
+    "mustNotContain": ["Mike", "actually"]
+  },
+  {
+    "id": "english-i-mean",
+    "input": "So the API returns a 404, I mean a 403, whenever the token expires, and then the client just, um, retries forever",
+    "mustContain": ["403", "retries"],
+    "mustNotContain": ["404", "I mean", "um"]
+  },
+  {
+    "id": "mixed-language-prompt",
+    "input": "OK 那我想让你帮我 refactor 一下这个 function，就是那个 handle submit，呃，把 validation 的逻辑抽出来，然后 error handling 也统一一下，用 try catch 包起来",
+    "mustContain": ["refactor", "validation", "try"],
+    "anyOf": [["handleSubmit", "handle submit", "handleSubmit"]]
+  }
+]

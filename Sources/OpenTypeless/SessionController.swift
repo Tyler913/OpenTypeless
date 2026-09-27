@@ -285,27 +285,31 @@ final class SessionController: ObservableObject {
         await deliver(text, notice: notice)
     }
 
-    /// Pastes at the cursor when a text input has focus; otherwise leaves the text on the clipboard.
-    /// When focus can't be determined (apps without accessibility info) it pastes *and* keeps the
-    /// text on the clipboard, so nothing is lost either way.
+    /// Pastes at the cursor unless focus is clearly not a text input. Whether the paste actually
+    /// landed is detected from the target app reading the clipboard: if it did, the user's previous
+    /// clipboard is restored; if not, the text stays on the clipboard and the HUD says so.
     private func deliver(_ text: String, notice: String?) async {
         let target = deliverByPaste ? FocusProbe.focusedTarget() : .notEditable
-        note("deliver → \(target) in \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?")")
         if target == .notEditable {
+            note("deliver → clipboard (focus not editable) in \(frontmostID)")
             TextInserter.copyToClipboard(text)
             finish(showing: notice.map { .error($0) } ?? .copied, hideAfter: 1.6)
             return
         }
-        let inserted = await TextInserter.insert(text, restoreClipboard: target == .editable && settings.restoreClipboard)
-        if !inserted {
-            TextInserter.copyToClipboard(text)
+        let outcome = await TextInserter.insert(text, restoreClipboard: settings.restoreClipboard)
+        note("deliver → \(outcome) (focus \(target)) in \(frontmostID)")
+        switch outcome {
+        case .pasted:
+            if let notice { finish(showing: .error(notice), hideAfter: 3) } else { finish(showing: .hidden, hideAfter: 0) }
+        case .notPasted:
             finish(showing: .copied, hideAfter: 1.6)
-        } else if let notice {
-            finish(showing: .error(notice), hideAfter: 3)
-        } else {
-            finish(showing: .hidden, hideAfter: 0)
+        case .noPermission:
+            finish(showing: .error(L("没有辅助功能权限，文字已复制到剪贴板",
+                                     "No Accessibility permission — text copied to the clipboard")), hideAfter: 3)
         }
     }
+
+    private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
 
     private func polish(_ raw: String) async throws -> APIClient.PolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {

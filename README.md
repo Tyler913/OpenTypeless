@@ -67,7 +67,29 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 - An API key for at least one provider ([OpenRouter](https://openrouter.ai/keys) is the easiest: one key covers both steps).
 - To build: Xcode 26+ installed (the Command Line Tools alone are enough to compile, but the build borrows SwiftUI's macro plugin from `/Applications/Xcode.app`).
 
-## Install (build from source)
+## Install
+
+### Download
+
+1. Download `OpenTypeless-<version>-macOS-arm64.zip` from [Releases](https://github.com/Tyler913/OpenTypeless/releases) and unzip it.
+2. Move **OpenTypeless.app** to your **Applications** folder.
+3. The app isn't notarized by Apple (that needs a paid developer account), so macOS blocks it on first launch, and may even say it "is damaged and can't be opened". Remove the download quarantine flag once in Terminal:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/OpenTypeless.app
+   ```
+
+   Then open it normally:
+
+   ```bash
+   open /Applications/OpenTypeless.app
+   ```
+
+   Alternatively, try to open it once, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
+
+OpenTypeless lives in the menu bar (waveform icon), not the Dock.
+
+### Build from source
 
 ```bash
 git clone https://github.com/Tyler913/OpenTypeless.git
@@ -77,6 +99,8 @@ scripts/build-app.sh             # builds, signs and installs /Applications/Open
 ```
 
 `create-signing-cert.sh` creates a local code-signing identity. Without it the app is signed ad hoc, and macOS asks for Accessibility and Microphone permission again after every rebuild.
+
+To make a release zip instead of installing: `scripts/build-app.sh --package` writes `dist/OpenTypeless-<version>-macOS-arm64.zip` (ad-hoc signed) and prints its SHA-256.
 
 `build-app.sh` keeps exactly one copy of the app on the machine. It assembles the bundle in a hidden staging folder, moves it into `/Applications`, unregisters stale copies from LaunchServices, and clears outdated privacy entries when the signature changes.
 

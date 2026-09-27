@@ -1,7 +1,8 @@
 #!/bin/zsh
 # Builds OpenTypeless and installs it as the ONE copy on this Mac: /Applications/OpenTypeless.app.
 #
-#   scripts/build-app.sh
+#   scripts/build-app.sh             build and install into /Applications
+#   scripts/build-app.sh --package   build a distributable zip in dist/ (doesn't touch /Applications)
 #
 # Keeping the system tidy:
 #   • The .app is assembled in a hidden staging folder (never indexed by Spotlight), moved into
@@ -24,6 +25,8 @@ STAGING_DIR=".build/app-staging"
 STAGED="$STAGING_DIR/$APP_NAME.app"
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 PROJECT_DIR="$(pwd)"
+PACKAGE=false
+[[ "${1:-}" == "--package" ]] && PACKAGE=true
 
 echo "▸ Compiling (release)…"
 swift build -c release --product "$APP_NAME"
@@ -60,7 +63,20 @@ cat > "$STAGED/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-if security find-identity -v -p codesigning | grep -q "$IDENTITY_NAME"; then
+if $PACKAGE; then
+    # Downloads are always signed ad hoc: a local identity means nothing on other Macs.
+    echo "▸ Signing ad-hoc for distribution"
+    codesign --force --deep --sign - "$STAGED"
+    mkdir -p dist
+    ZIP="dist/$APP_NAME-$VERSION-macOS-arm64.zip"
+    rm -f "$ZIP"
+    ditto -c -k --sequesterRsrc --keepParent "$STAGED" "$ZIP"
+    "$LSREGISTER" -u "$STAGED" >/dev/null 2>&1 || true
+    rm -rf "$STAGING_DIR"
+    echo "✓ Packaged $ZIP ($(du -h "$ZIP" | cut -f1 | xargs))"
+    echo "  SHA-256: $(shasum -a 256 "$ZIP" | cut -d' ' -f1)"
+    exit 0
+elif security find-identity -v -p codesigning | grep -q "$IDENTITY_NAME"; then
     echo "▸ Signing with \"$IDENTITY_NAME\" (stable — permissions survive updates)"
     codesign --force --deep --sign "$IDENTITY_NAME" "$STAGED"
 else

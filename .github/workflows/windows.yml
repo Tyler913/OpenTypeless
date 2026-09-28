@@ -38,7 +38,16 @@ jobs:
       # The same script used locally: runs the tests, publishes the app and CLI self-contained, zips them.
       - name: Test, build and package
         shell: pwsh
-        run: scripts/build.ps1 -Package -Arch ${{ matrix.arch }}
+        run: scripts/build.ps1 -Package -Arch ${{ matrix.arch }} *>&1 | Tee-Object -FilePath build.log
+
+      # Job logs need a GitHub sign-in to read, but annotations show on the run page for everyone.
+      - name: Show the end of the build output on the run page
+        if: failure()
+        shell: pwsh
+        run: |
+          $tail = (Get-Content build.log -Tail 80 -ErrorAction SilentlyContinue) -join "`n"
+          $escaped = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+          Write-Output "::error title=Build (${{ matrix.arch }}) failed::$escaped"
 
       - uses: actions/upload-artifact@v7
         with:

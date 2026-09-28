@@ -3,16 +3,19 @@ import Foundation
 public struct PolishOptions: Sendable {
     public var model: String
     public var vocabulary: [String]
+    /// Earlier recognition errors the user fixed by hand, shown to the model as hints.
+    public var misheard: [Correction]
     public var extraInstructions: String
     /// OpenRouter model metadata from `/models`, used to switch reasoning off (or to its minimum).
     public var modelInfo: APIClient.ModelInfo?
     /// Replaces the built-in system prompt (used by the prompt evaluation tool).
     public var systemPromptOverride: String?
 
-    public init(model: String, vocabulary: [String] = [], extraInstructions: String = "",
+    public init(model: String, vocabulary: [String] = [], misheard: [Correction] = [], extraInstructions: String = "",
                 modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil) {
         self.model = model
         self.vocabulary = vocabulary
+        self.misheard = misheard
         self.extraInstructions = extraInstructions
         self.modelInfo = modelInfo
         self.systemPromptOverride = systemPromptOverride
@@ -98,7 +101,7 @@ extension APIClient {
             "stream": true,
             "messages": [
                 ["role": "system", "content": options.systemPromptOverride ?? Prompts.polishSystemPrompt(
-                    vocabulary: options.vocabulary, extraInstructions: options.extraInstructions)],
+                    vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions)],
                 ["role": "user", "content": Prompts.polishUserMessage(transcript: transcript)],
             ],
         ]

@@ -60,6 +60,7 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 - **Pastes where your cursor is.** In a text field the text is pasted and your clipboard restored; with no text field focused it goes to the clipboard. Browsers and Electron apps are handled too.
 - **Bring your own provider.** OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek, or any OpenAI-compatible endpoint. Speech-to-text, clean-up and the backup clean-up model can each use a different provider.
 - **Custom vocabulary and style preferences** for names, products and jargon.
+- **Learns from your fixes.** Correct a misrecognised word after it's pasted (TypeList → Typeless) and it's added to your vocabulary automatically, along with how it was misheard. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps, and a word you remove is never learned again.
 - **History** of every dictation with raw and cleaned text, timing, copy and re-transcribe. Choose how long recordings are kept: not at all, a day, a week, a month, a year, or forever.
 - **Bilingual UI** (English / 简体中文), following the system language or chosen manually.
 - **Liquid Glass design** on macOS 26+, with a small recording capsule and a menu-bar panel.

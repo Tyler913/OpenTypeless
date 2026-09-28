@@ -56,6 +56,13 @@ The Accessibility API is asked what has focus:
 - **Clearly not editable** (desktop, lists, buttons in native apps): copy to the clipboard.
 - **Unknown** (browsers and Electron apps that don't expose their page tree, e.g. Firefox): paste *and* leave the text on the clipboard.
 
+### Learning from corrections (`OpenTypeless/EditWatcher.swift`, `TypelessCore/CorrectionLearner.swift`)
+Like Wispr Flow and Typeless, fixes the user makes to pasted text grow the vocabulary.
+- After a paste into a field whose Accessibility value contains the dictated text, that field is read twice a second, locally. Secure fields and very large fields are skipped.
+- The watch ends when focus leaves the field, the field is sent or cleared (the dictated text can no longer be located), a new dictation starts, or after two minutes. Only that final state is compared, so half-finished edits (a known failure mode of eager learners) are never learned.
+- The dictated span is diffed against its edited version token by token (Latin words, single CJK characters). A replacement is learned only if it sounds alike (edit distance ≤ 0.5 on a pinyin/Latin key, so 逻辑 → 罗技 and "TypeList" → "Typeless" qualify but "Mike" → "Sarah" doesn't), keeps the same digits, isn't a first-letter capitalisation, isn't one ordinary English word swapped for another (system spell checker), and the whole edit isn't a rewrite (similarity ≥ 0.5, ≤ 5 changes).
+- New terms are appended to the vocabulary; the misheard forms go into the clean-up prompt as hints. Removing a learned term blocks it from being learned again.
+
 ### Hotkey (`OpenTypeless/Hotkey.swift`)
 - A session-level `CGEventTap` (default tap, which only needs Accessibility).
 - A modifier-only hotkey is tracked through `flagsChanged`. Combinations are matched on `keyDown` and swallowed.

@@ -82,7 +82,8 @@ enum CLI {
             }
             func route(_ endpoint: ProviderEndpoint, _ model: String) -> PolishRoute {
                 PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
-                    model: model, vocabulary: settings.vocabularyList, extraInstructions: settings.extraInstructions,
+                    model: model, vocabulary: settings.vocabularyList, misheard: settings.misheardHints,
+                    extraInstructions: settings.extraInstructions,
                     modelInfo: endpoint.id == .openrouter ? models?.first { $0.id == model } : nil))
             }
             let outcome = try await HedgedPolish.run(

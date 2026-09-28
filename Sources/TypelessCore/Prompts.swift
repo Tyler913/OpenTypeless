@@ -4,12 +4,18 @@ public enum Prompts {
     /// Clean-up instructions. Tuned against eval/polish-cases.json, eval/polish-holdout.json and real
     /// dictations with `OpenTypeless --eval-polish` — re-run those after changing anything here.
     /// The examples matter more than the rules: models follow a shown example far more reliably.
-    public static func polishSystemPrompt(vocabulary: [String], extraInstructions: String) -> String {
+    /// `misheard` are corrections the speaker made to earlier dictations (learned from their edits).
+    public static func polishSystemPrompt(vocabulary: [String], misheard: [Correction] = [],
+                                          extraInstructions: String) -> String {
         var prompt = basePolishPrompt
         let terms = vocabulary.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         if !terms.isEmpty {
             prompt += "\n\n## Vocabulary\nThese terms may appear; spell them exactly like this: "
                 + terms.joined(separator: ", ")
+        }
+        if !misheard.isEmpty {
+            prompt += "\nSpeech recognition has misheard some of them before. Where the context fits, fix these: "
+                + misheard.map { "“\($0.heard)” → \($0.corrected)" }.joined(separator: ", ")
         }
         let extra = extraInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
         if !extra.isEmpty {

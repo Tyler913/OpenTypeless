@@ -19,6 +19,7 @@ final class SessionController: ObservableObject {
     @Published private(set) var lastError: String?
 
     let hud = HUDController()
+    private let editWatcher = EditWatcher()
     private let settings = AppSettings.shared
     private let history = HistoryStore.shared
     private let recorder = AudioRecorder()
@@ -39,6 +40,14 @@ final class SessionController: ObservableObject {
     private let tapThreshold: TimeInterval = 0.35
 
     init() {
+        editWatcher.onCorrections = { [weak self] corrections, quiet in
+            guard let self, self.settings.learnFromEdits else { return }
+            let added = self.settings.learn(corrections)
+            self.note("learned from edits: \(corrections.map { "\($0.heard) → \($0.corrected)" }), new: \(added)")
+            if !added.isEmpty, !quiet, self.state == .idle {
+                self.hud.show(.learned(added.joined(separator: L("、", ", "))), autoHideAfter: 2.5)
+            }
+        }
         recorder.onFailure = { [weak self] error in
             Task { @MainActor in
                 self?.abort(message: L("录音中断：", "Recording interrupted: ") + error.localizedDescription)
@@ -114,6 +123,9 @@ final class SessionController: ObservableObject {
             }
             return
         }
+
+        // Whatever the user did to the previous dictation is final now.
+        editWatcher.finish(quiet: true)
 
         var record = history.create()
         record.status = .recording
@@ -310,6 +322,7 @@ final class SessionController: ObservableObject {
         switch outcome {
         case .pasted:
             if let notice { finish(showing: .error(notice), hideAfter: 3) } else { finish(showing: .hidden, hideAfter: 0) }
+            if settings.learnFromEdits { editWatcher.watch(inserted: text) }
         case .notPasted:
             finish(showing: .copied, hideAfter: 1.6)
         case .noPermission:
@@ -336,6 +349,7 @@ final class SessionController: ObservableObject {
         return PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
             vocabulary: settings.vocabularyList,
+            misheard: settings.misheardHints,
             extraInstructions: settings.extraInstructions,
             modelInfo: endpoint.id == .openrouter ? modelInfo[model] : nil
         ))

@@ -11,6 +11,8 @@ final class HUDModel: ObservableObject {
         case working
         /// Nothing to paste into, so the text went to the clipboard.
         case copied
+        /// New words were learned from the user's fixes to the last dictation.
+        case learned(String)
         case error(String)
     }
 
@@ -125,6 +127,12 @@ struct HUDView: View {
                 Image(systemName: "doc.on.clipboard").foregroundStyle(.secondary)
                 Text(L("已复制到剪贴板", "Copied to clipboard"))
             }
+        case let .learned(terms):
+            HStack(spacing: 7) {
+                Image(systemName: "character.book.closed.fill").foregroundStyle(.tint)
+                Text(L("已加入词汇表：", "Added to vocabulary: ") + terms).lineLimit(1).truncationMode(.tail)
+            }
+            .frame(maxWidth: 340)
         case let .error(message):
             HStack(spacing: 7) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)

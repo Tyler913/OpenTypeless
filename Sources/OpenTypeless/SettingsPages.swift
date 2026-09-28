@@ -717,6 +717,19 @@ struct StylePage: View {
                     .padding(10)
                     .frame(height: 110)
             }
+            CardSection(title: L("自动学习", "Learning"),
+                        footer: L("粘贴后如果你在输入框里改了某个识别错的词（比如把 TypeList 改成 Typeless），离开输入框或发送后会自动把它加进词汇表。只学发音相近的改动，不学改写、改数字和普通词替换。输入框内容只在本机读取。",
+                                  "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. The field is read on this Mac only.")) {
+                CardRow(icon: "character.book.closed.fill", iconColor: .orange, title: L("从我的修改中学习", "Learn from my corrections")) {
+                    Toggle("", isOn: $settings.learnFromEdits).toggleStyle(.switch).labelsHidden()
+                }
+                if !settings.learnedTerms.isEmpty {
+                    ForEach(settings.learnedTerms.reversed()) { learned in
+                        CardDivider(inset: 14)
+                        LearnedTermRow(learned: learned) { settings.forget(learned) }
+                    }
+                }
+            }
             CardSection(title: L("整理偏好（可选）", "Clean-up preferences (optional)"),
                         footer: L("例如：「不要使用列表」「保留我的口语语气」「英文术语保持小写」。",
                                   "e.g. “Never use bullet lists”, “Keep my casual tone”, “Keep technical terms lowercase”.")) {
@@ -727,6 +740,26 @@ struct StylePage: View {
                     .frame(height: 150)
             }
         }
+    }
+}
+
+private struct LearnedTermRow: View {
+    let learned: LearnedTerm
+    let onForget: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(learned.term).font(.system(size: 13, weight: .medium))
+            Text(L("听成了 ", "heard as ") + learned.heardAs.map { "“\($0)”" }.joined(separator: L("、", ", ")))
+                .font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+            Spacer(minLength: 8)
+            Text(learned.date.formatted(date: .abbreviated, time: .omitted)).font(.system(size: 11)).foregroundStyle(.tertiary)
+            Button(action: onForget) { Image(systemName: "xmark.circle.fill") }
+                .buttonStyle(.borderless).foregroundStyle(.secondary)
+                .help(L("从词汇表删除，以后不再自动学习", "Remove from the vocabulary and never learn it again"))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 }
 

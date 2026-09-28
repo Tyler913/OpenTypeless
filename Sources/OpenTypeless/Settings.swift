@@ -29,6 +29,12 @@ final class AppSettings: ObservableObject {
     @AppStorage("maxRecordingMinutes") var maxRecordingMinutes: Int = 20
     @AppStorage("historyRetention") var historyRetention: HistoryRetention = .month
 
+    /// Learn vocabulary from the fixes the user makes to dictated text (see EditWatcher).
+    @AppStorage("learnFromEdits") var learnFromEdits: Bool = true
+    @Published private(set) var learnedTerms: [LearnedTerm]
+    /// Learned terms the user removed; never learned again (lowercased).
+    private var forgottenTerms: Set<String>
+
     @Published private(set) var apiKeys: [String: String]
     @Published private(set) var baseURLs: [String: String]
 
@@ -37,6 +43,9 @@ final class AppSettings: ObservableObject {
         let cli = !(ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"] ?? "").isEmpty
         apiKeys = cli ? [:] : Credentials.load()
         baseURLs = (UserDefaults.standard.dictionary(forKey: "baseURLs") as? [String: String]) ?? [:]
+        learnedTerms = UserDefaults.standard.data(forKey: "learnedVocabulary")
+            .flatMap { try? JSONDecoder().decode([LearnedTerm].self, from: $0) } ?? []
+        forgottenTerms = Set(UserDefaults.standard.stringArray(forKey: "forgottenVocabulary") ?? [])
     }
 
     // MARK: Hotkey
@@ -123,11 +132,69 @@ final class AppSettings: ObservableObject {
         polishBackupModel = id.defaultBackupChatModel
     }
 
+    // MARK: Learned vocabulary
+
+    /// Adds what the user's corrections taught to the vocabulary. Returns the terms that are new.
+    @discardableResult
+    func learn(_ corrections: [Correction]) -> [String] {
+        var added: [String] = []
+        for correction in corrections {
+            let term = correction.corrected.trimmingCharacters(in: .whitespacesAndNewlines)
+            let key = term.lowercased()
+            guard !forgottenTerms.contains(key) else { continue }
+            if let index = learnedTerms.firstIndex(where: { $0.term.lowercased() == key }) {
+                if !learnedTerms[index].heardAs.contains(correction.heard) { learnedTerms[index].heardAs.append(correction.heard) }
+                continue
+            }
+            learnedTerms.append(LearnedTerm(term: term, heardAs: [correction.heard], date: Date()))
+            if !vocabularyList.contains(where: { $0.lowercased() == key }) {
+                let current = vocabulary.trimmingCharacters(in: .whitespacesAndNewlines)
+                vocabulary = current.isEmpty ? term : current + ", " + term
+                added.append(term)
+            }
+        }
+        saveLearnedTerms()
+        return added
+    }
+
+    /// Removes a learned term from the vocabulary and makes sure it isn't learned again.
+    func forget(_ learned: LearnedTerm) {
+        let key = learned.term.lowercased()
+        learnedTerms.removeAll { $0.term.lowercased() == key }
+        forgottenTerms.insert(key)
+        UserDefaults.standard.set(Array(forgottenTerms), forKey: "forgottenVocabulary")
+        if vocabularyList.contains(where: { $0.lowercased() == key }) {
+            vocabulary = vocabularyList.filter { $0.lowercased() != key }.joined(separator: ", ")
+        }
+        saveLearnedTerms()
+    }
+
+    /// Misheard forms of vocabulary terms, newest first, for the clean-up prompt.
+    var misheardHints: [Correction] {
+        let terms = Set(vocabularyList.map { $0.lowercased() })
+        return learnedTerms.reversed()
+            .filter { terms.contains($0.term.lowercased()) }
+            .flatMap { learned in learned.heardAs.map { Correction(heard: $0, corrected: learned.term) } }
+            .prefix(40).map { $0 }
+    }
+
+    private func saveLearnedTerms() {
+        UserDefaults.standard.set(try? JSONEncoder().encode(learnedTerms), forKey: "learnedVocabulary")
+    }
+
     var vocabularyList: [String] {
         vocabulary.split(whereSeparator: { $0 == "," || $0 == "，" || $0 == "\n" })
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
     }
+}
+
+/// A vocabulary term learned from the user fixing a dictation, with what recognition heard instead.
+struct LearnedTerm: Codable, Identifiable, Equatable {
+    var term: String
+    var heardAs: [String]
+    var date: Date
+    var id: String { term }
 }
 
 enum LaunchAtLogin {

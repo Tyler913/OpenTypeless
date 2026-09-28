@@ -1,6 +1,6 @@
 # OpenTypeless for Windows — port plan
 
-This is a full re-implementation of the macOS app (`Tyler913/OpenTypeless`, SwiftUI) on **WinUI 3 / Windows App SDK (C#, .NET 10)**.
+This is a full re-implementation of the macOS app (`macos/`, SwiftUI) on **WinUI 3 / Windows App SDK (C#, .NET 10)**.
 The goal is feature parity: the same pipeline, the same prompts, the same settings, the same history format and the same
 failure handling. Only the system-integration layer and the look differ.
 
@@ -8,11 +8,11 @@ failure handling. Only the system-integration layer and the look differ.
 
 | macOS | Windows | Notes |
 |---|---|---|
-| `Sources/TypelessCore` (Swift library) | `src/TypelessCore` (`net10.0` class library) | Pure logic, no UI, no Windows APIs. Line-by-line port. |
-| `Sources/OpenTypeless` (AppKit + SwiftUI app) | `src/OpenTypeless` (WinUI 3, unpackaged) | Tray app, HUD, settings window, hotkey, recorder, paste. |
-| CLI modes of the app binary | `src/OpenTypeless.Cli` (console exe) | A WinUI app has no console, so `--transcribe-file`, `--chunks-only`, `--eval-polish` live in a sibling exe that shares settings and keys with the app. `--snapshot-ui` stays in the app. |
-| `Tests/TypelessCoreTests` (swift-testing) | `tests/TypelessCore.Tests` (xUnit) | Same cases, including the mock server that fails every chunk of a 130 s recording once. |
-| `eval/` | `eval/` | Copied unchanged; the prompt is byte-identical so results are comparable. |
+| `macos/Sources/TypelessCore` (Swift library) | `windows/src/TypelessCore` (`net10.0` class library) | Pure logic, no UI, no Windows APIs. Line-by-line port. |
+| `macos/Sources/OpenTypeless` (AppKit + SwiftUI app) | `windows/src/OpenTypeless` (WinUI 3, unpackaged) | Tray app, HUD, settings window, hotkey, recorder, paste. |
+| CLI modes of the app binary | `windows/src/OpenTypeless.Cli` (console exe) | A WinUI app has no console, so `--transcribe-file`, `--chunks-only`, `--eval-polish` live in a sibling exe that shares settings and keys with the app. `--snapshot-ui` stays in the app. |
+| `macos/Tests/TypelessCoreTests` (swift-testing) | `windows/tests/TypelessCore.Tests` (xUnit) | Same cases, including the mock server that fails every chunk of a 130 s recording once. |
+| `eval/` | `eval/` | Shared by both apps; the prompt is byte-identical so results are comparable. |
 
 ## Core (TypelessCore) — 1:1 port
 
@@ -83,7 +83,7 @@ These follow from how Windows works rather than from missing features:
 
 ## Verification
 
-- `tests/TypelessCore.Tests`: xUnit tests, all Swift test cases ported (WAV, chunker, joiner, SSE, retry
+- `windows/tests/TypelessCore.Tests`: xUnit tests, all Swift test cases ported (WAV, chunker, joiner, SSE, retry
   classification, timeout, prompt sanitising, reasoning config, mock-server pipeline with a 130 s recording whose every
   chunk fails once, permanent failures, silence skipping, multipart, custom endpoints, polish fallbacks, evaluation
   ledger, hedged clean-up against a per-model fake server, clean-up metrics, the correction learner), plus retry reuse

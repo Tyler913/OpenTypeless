@@ -58,11 +58,9 @@ jobs:
           rm "$RUNNER_TEMP/release.p12"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" >/dev/null
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          # A self-signed certificate has to be trusted for code signing on this runner before codesign uses it.
-          security find-certificate -a -p "$keychain" > "$RUNNER_TEMP/release.pem"
-          sudo security authorizationdb write com.apple.trust-settings.admin allow
-          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/release.pem"
-          identity="$(security find-identity -v -p codesigning "$keychain" | grep -Eo '[0-9A-F]{40}' | head -1)"
+          # Self-signed, so not trusted here (or on users' Macs): codesign doesn't need that, and macOS permissions
+          # only compare the signature with the certificate's hash. Hence no -v, which lists trusted identities only.
+          identity="$(security find-identity -p codesigning "$keychain" | grep -Eo '[0-9A-F]{40}' | head -1)"
           [[ -n "$identity" ]] || { security find-identity -p codesigning "$keychain"; echo "::error::The certificate can't be used for code signing"; exit 1; }
           echo "OPENTYPELESS_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 

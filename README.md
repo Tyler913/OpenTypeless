@@ -10,6 +10,14 @@
 </p>
 
 <p align="center">
+  <img src="docs/images/recording.png" width="380" alt="The recording capsule shown while you talk">
+</p>
+
+<p align="center">
+  <img src="docs/images/menu-bar.png" width="330" alt="The menu-bar panel: shortcut hint and recent dictations">
+</p>
+
+<p align="center">
   🪟 On Windows? See the <a href="https://github.com/Tyler913/OpenTypeless/tree/windows"><b>Windows version</b></a> (WinUI 3) on the <code>windows</code> branch.
 </p>
 
@@ -51,6 +59,10 @@ Raw speech-to-text is messy: fillers, restarts, "no wait, I mean…", thinking o
 - **Never answers you.** Dictated prompts ("can you explain why…") are cleaned up, not answered or executed.
 - **Your words, your languages.** Edits are kept to a minimum: wording, order and tone stay yours. When you mix Chinese and English, every word stays in the language you said it in, everyday words too ("shortcut", "dark mode"), with spacing between CJK and Latin text.
 
+<p align="center">
+  <img src="docs/images/history.png" width="720" alt="History: the cleaned-up text above the raw transcript, with timing for each step">
+</p>
+
 The prompt is tuned against development and held-out test sets (see [eval/](eval/)), including real dictations.
 
 ## Features
@@ -66,6 +78,17 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 - **Liquid Glass design** on macOS 26+, with a small recording capsule and a menu-bar panel.
 - **Launch at login.**
 - **Tiny and native.** A ~3 MB Swift/SwiftUI app with no Electron, no account and no server of its own.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/models.png" alt="Models: a provider and model for each step, plus a backup clean-up model"></td>
+    <td width="50%"><img src="docs/images/vocabulary.png" alt="Vocabulary: your terms, including ones learned from your corrections"></td>
+  </tr>
+  <tr>
+    <td align="center">Pick a provider and model for each step, with a backup clean-up model</td>
+    <td align="center">Vocabulary, including words learned from your corrections</td>
+  </tr>
+</table>
 
 ## Requirements
 
@@ -149,6 +172,10 @@ Useful command-line modes of the built binary:
 
 # Evaluate clean-up prompts and models (see eval/README.md)
 .build/debug/OpenTypeless --eval-polish eval/polish-holdout.json --model google/gemini-3.8-flash ...
+
+# Render the settings pages, menu-bar panel and HUD to PNGs (--live shows them on screen for real Liquid Glass).
+# The README screenshots use sample history and --demo, which treats permissions as granted.
+OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --lang en
 ```
 
 Project layout:
@@ -159,6 +186,7 @@ Sources/OpenTypeless/   The app: hotkey, recorder, HUD, settings, history, paste
 Tests/                  swift-testing suites
 eval/                   Clean-up test sets and the evaluation guide
 docs/DESIGN.md          Architecture and design decisions
+docs/images/            README screenshots
 scripts/                Build, signing, icon and test scripts
 ```
 

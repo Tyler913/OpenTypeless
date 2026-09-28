@@ -7,6 +7,8 @@ import TypelessCore
 @MainActor
 enum UISnapshots {
     static func run(outputDirectory: String) {
+        // `--demo`: pretend permissions are granted (pair with OPENTYPELESS_SUPPORT_DIR pointing at sample history).
+        Permissions.assumeGranted = CommandLine.arguments.contains("--demo")
         let dir = URL(fileURLWithPath: outputDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let controller = SessionController()
@@ -17,7 +19,10 @@ enum UISnapshots {
             return
         }
 
-        for language in live ? [AppLanguage.zh] : [AppLanguage.zh, .en] {
+        let requested = CommandLine.arguments.firstIndex(of: "--lang").flatMap { index in
+            CommandLine.arguments.indices.contains(index + 1) ? AppLanguage(rawValue: CommandLine.arguments[index + 1]) : nil
+        }
+        for language in requested.map { [$0] } ?? (live ? [AppLanguage.zh] : [AppLanguage.zh, .en]) {
             UserDefaults.standard.set(language.rawValue, forKey: AppLanguage.defaultsKey)
             for page in SettingsPage.allCases {
                 let navigation = SettingsNavigation()

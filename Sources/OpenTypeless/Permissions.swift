@@ -3,8 +3,11 @@ import AVFoundation
 import ApplicationServices
 
 enum Permissions {
+    /// Set by `--snapshot-ui --demo` so README screenshots show a set-up app.
+    nonisolated(unsafe) static var assumeGranted = false
+
     static var microphoneGranted: Bool {
-        AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        assumeGranted || AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
     }
 
     static var microphoneAsked: Bool {
@@ -23,7 +26,7 @@ enum Permissions {
     }
 
     /// Needed both for the global key listener and for posting ⌘V into other apps.
-    static var accessibilityGranted: Bool { AXIsProcessTrusted() }
+    static var accessibilityGranted: Bool { assumeGranted || AXIsProcessTrusted() }
 
     static func promptAccessibility() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary

@@ -273,7 +273,9 @@ enum Credentials {
 
 enum AppPaths {
     static var support: URL {
-        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        // OPENTYPELESS_SUPPORT_DIR points history elsewhere, e.g. at sample data for screenshots.
+        let url = ProcessInfo.processInfo.environment["OPENTYPELESS_SUPPORT_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("OpenTypeless", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url

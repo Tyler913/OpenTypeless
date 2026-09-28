@@ -295,12 +295,9 @@ GitHub Actions ([`.github/workflows/`](.github/workflows/)) builds only the app 
 
 Download the zips from a run's **Artifacts** section on the Actions tab. **Actions → macOS build / Windows build → Run workflow** starts a build by hand.
 
-To release, bump the version (`macos/scripts/build-app.sh`, `windows/Directory.Build.props`) and push a tag:
+To release, bump the version in both apps (`macos/scripts/build-app.sh`, `windows/Directory.Build.props`) and push one tag, `1.0.2` (or `V1.0.2`). It builds both apps and creates one **draft** release, "OpenTypeless V1.0.2", with the macOS zip (signed with the release certificate) and the Windows x64 and ARM64 zips. The build fails if a zip's version doesn't match the tag.
 
-- `1.0.2` builds the macOS app and creates a **draft** release with its zip, marked as the latest release when you publish it.
-- `1.0.2-windows` builds the Windows app and creates a **draft** release with both zips, never marked as the latest release.
-
-Review the draft and publish it by hand. Installed copies find it within a day: the in-app updater looks for the newest published, non-prerelease release that has a zip for its platform (`OpenTypeless-<version>-macOS-arm64.zip`, `-windows-x64.zip`, `-windows-arm64.zip`), whichever tag it's under. Mark a release as a pre-release to keep it from being offered.
+Review the draft and publish it by hand; it becomes the latest release. Installed copies find it within a day: the in-app updater looks for the newest published, non-prerelease release that has a zip for its platform (`OpenTypeless-<version>-macOS-arm64.zip`, `-windows-x64.zip`, `-windows-arm64.zip`). Mark a release as a pre-release to keep it from being offered.
 
 **macOS release signing (one time).** macOS ties Accessibility and Microphone permission to the app's signature, so releases should always be signed with the same certificate; otherwise users are asked for both permissions again after every update. Run `macos/scripts/create-release-cert.sh`, keep the `.p12` it writes somewhere private, and add the two repository secrets it prints (`MACOS_SIGNING_CERTIFICATE`, `MACOS_SIGNING_CERTIFICATE_PASSWORD`). Release builds then sign with it; without the secrets they're signed ad hoc, with a warning on the run.
 

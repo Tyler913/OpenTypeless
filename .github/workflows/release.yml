@@ -1,17 +1,19 @@
-# Pushing a version tag builds that app and drafts a GitHub Release with its zips attached:
+# Pushing a version tag builds both apps and drafts one GitHub Release titled "OpenTypeless V<version>" with all
+# three zips attached:
 #
-#   1.0.2           macOS: OpenTypeless-1.0.2-macOS-arm64.zip, marked as the latest release once published
-#   1.0.2-windows   Windows: the x64 and ARM64 zips, never marked latest (that belongs to the macOS release)
+#   1.0.2 (or v1.0.2 / V1.0.2)   OpenTypeless-1.0.2-macOS-arm64.zip (signed with the release certificate),
+#                                OpenTypeless-1.0.2-windows-x64.zip and OpenTypeless-1.0.2-windows-arm64.zip
 #
-# Releases are drafts, so nothing is public until you review and publish them. Bump the version first
-# (macos/scripts/build-app.sh, windows/Directory.Build.props); the release fails if the zips don't match the tag.
+# The release is a draft, so nothing is public until you review and publish it; it's marked as the latest release
+# then. Bump the version first (macos/scripts/build-app.sh, windows/Directory.Build.props); the release fails if the
+# zips don't match the tag.
 name: Release
 
 on:
   push:
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
-      - '[0-9]+.[0-9]+.[0-9]+-windows'
+      - '[vV][0-9]+.[0-9]+.[0-9]+'
 
 permissions:
   contents: read
@@ -19,19 +21,16 @@ permissions:
 jobs:
   macos:
     name: macOS
-    if: ${{ !endsWith(github.ref_name, '-windows') }}
     uses: ./.github/workflows/macos.yml
     secrets: inherit # the release signing certificate
 
   windows:
     name: Windows
-    if: endsWith(github.ref_name, '-windows')
     uses: ./.github/workflows/windows.yml
 
   release:
     name: Draft release
     needs: [macos, windows]
-    if: always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -42,16 +41,19 @@ jobs:
           merge-multiple: true
 
       - name: Check the zips match the tag's version
+        id: version
         run: |
-          version="${GITHUB_REF_NAME%-windows}"
+          version="${GITHUB_REF_NAME#[vV]}"
           ls dist
-          for zip in dist/*.zip; do
-            [[ "$zip" == *"-$version-"* ]] || { echo "::error::$zip doesn't match tag $GITHUB_REF_NAME: bump the version and tag again"; exit 1; }
+          for platform in macOS-arm64 windows-x64 windows-arm64; do
+            [[ -f "dist/OpenTypeless-$version-$platform.zip" ]] || { echo "::error::No OpenTypeless-$version-$platform.zip for tag $GITHUB_REF_NAME: bump the version in both apps and tag again"; exit 1; }
           done
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - uses: softprops/action-gh-release@v3
         with:
+          name: OpenTypeless V${{ steps.version.outputs.version }}
           draft: true
-          make_latest: ${{ endsWith(github.ref_name, '-windows') && 'false' || 'true' }}
+          make_latest: true
           files: dist/*.zip
           fail_on_unmatched_files: true

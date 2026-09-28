@@ -76,7 +76,7 @@ if $PACKAGE; then
         codesign --force --deep --sign - "$STAGED"
     fi
     codesign --verify --deep --strict "$STAGED"
-    codesign -d -r- "$STAGED" 2>/dev/null | sed -n 's/^# *designated => /  Requirement: /p'
+    codesign -d -r- "$STAGED" 2>/dev/null | sed -n 's/^#* *designated => /  Requirement: /p'
     mkdir -p dist
     ZIP="dist/$APP_NAME-$VERSION-macOS-arm64.zip"
     rm -f "$ZIP"

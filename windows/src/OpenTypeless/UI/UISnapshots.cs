@@ -13,7 +13,7 @@ namespace OpenTypeless.UI;
 /// <summary>
 /// <c>OpenTypeless.exe --snapshot-ui &lt;dir&gt;</c> shows every settings page (in Chinese and English), the tray
 /// popover and each HUD state, and saves them as PNGs, for checking the UI without clicking through it.
-/// <c>--lang en|zh</c> renders one language only; <c>--demo</c> treats permissions as granted (pair it with
+/// <c>--lang en|zh|ja|…</c> renders one language only; <c>--demo</c> treats permissions as granted (pair it with
 /// OPENTYPELESS_DATA_DIR pointing at sample history, so no real dictations end up in screenshots).
 /// </summary>
 public static class UISnapshots
@@ -24,12 +24,9 @@ public static class UISnapshots
         var args = Environment.GetCommandLineArgs();
         Permissions.AssumeGranted = args.Contains("--demo");
         var lang = Array.IndexOf(args, "--lang") is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
-        AppLanguage[] languages = lang switch
-        {
-            "zh" => [AppLanguage.Zh],
-            "en" => [AppLanguage.En],
-            _ => [AppLanguage.Zh, AppLanguage.En],
-        };
+        AppLanguage[] languages = Localization.ParseLanguage(lang) is var one and not AppLanguage.System
+            ? [one]
+            : [AppLanguage.Zh, AppLanguage.En];
         var settings = AppSettings.Shared;
         var original = settings.AppLanguage;
         var controller = new SessionController();

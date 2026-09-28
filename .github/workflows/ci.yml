@@ -3,8 +3,10 @@
 #   macos/**     macOS build: tests, then the app zip
 #   windows/**   Windows build: tests, then the x64 and ARM64 zips
 #   testdata/**  both: the test cases both apps' test suites read, so they count and price the same way
+#   i18n/**      both: the translations both apps embed
 #
-# Changes to shared files only (docs/, eval/, README.md) build nothing. A change to a workflow file builds
+# Every run also checks i18n/strings.json against the L(…) strings in both apps (python3 i18n/check.py).
+# Changes to shared files only (docs/, eval/, README*.md) build nothing. A change to a workflow file builds
 # the app it belongs to; a change to this file builds both.
 #
 # "CI passed" is the one check to require in branch protection. It fails if any build that ran failed, and
@@ -44,11 +46,13 @@ jobs:
             macos:
               - 'macos/**'
               - 'testdata/**'
+              - 'i18n/**'
               - '.github/workflows/macos.yml'
               - '.github/workflows/ci.yml'
             windows:
               - 'windows/**'
               - 'testdata/**'
+              - 'i18n/**'
               - '.gitattributes'
               - '.github/workflows/windows.yml'
               - '.github/workflows/ci.yml'
@@ -65,13 +69,21 @@ jobs:
     if: needs.changes.outputs.windows == 'true'
     uses: ./.github/workflows/windows.yml
 
+  translations:
+    name: Translations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check i18n/strings.json against the strings in both apps
+        run: python3 i18n/check.py
+
   passed:
     name: CI passed
-    needs: [changes, macos, windows]
+    needs: [changes, translations, macos, windows]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check that every build that ran succeeded
         run: |
-          echo "macOS: ${{ needs.macos.result }}, Windows: ${{ needs.windows.result }}"
+          echo "Translations: ${{ needs.translations.result }}, macOS: ${{ needs.macos.result }}, Windows: ${{ needs.windows.result }}"
           [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "false" ]]

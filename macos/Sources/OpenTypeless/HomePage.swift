@@ -174,12 +174,13 @@ struct ActivityHeatmap: View {
     private func grid(weeks: Int) -> some View {
         let firstWeekday = Calendar.current.firstWeekday - 1
         let columns = ledger.heatmap(today: today, weeks: weeks, firstWeekday: firstWeekday)
-        let months = monthLabels(columns)
+        let labels = DayLabels(AppLanguage.resolved)
+        let months = monthLabels(columns, labels: labels)
         return HStack(alignment: .top, spacing: gap) {
             VStack(alignment: .leading, spacing: gap) {
                 Color.clear.frame(height: monthRow - gap)
                 ForEach(0..<7) { row in
-                    Text(row % 2 == 1 ? Self.weekdayName((firstWeekday + row) % 7) : "")
+                    Text(row % 2 == 1 ? labels.weekday((firstWeekday + row) % 7) : "")
                         .font(.system(size: 9.5))
                         .foregroundStyle(.secondary)
                         .frame(height: cell)
@@ -198,7 +199,7 @@ struct ActivityHeatmap: View {
                         RoundedRectangle(cornerRadius: 2.5)
                             .fill(item.isFuture ? Color.clear : Self.shade(item.level))
                             .frame(width: cell, height: cell)
-                            .help(item.isFuture ? "" : Self.tooltip(item))
+                            .help(item.isFuture ? "" : Self.tooltip(item, labels: labels))
                     }
                 }
             }
@@ -206,13 +207,13 @@ struct ActivityHeatmap: View {
     }
 
     /// Month names above the first week that starts in that month (skipped when too close to the edge).
-    private func monthLabels(_ columns: [[HeatmapCell]]) -> [Int: String] {
+    private func monthLabels(_ columns: [[HeatmapCell]], labels names: DayLabels) -> [Int: String] {
         var labels: [Int: String] = [:]
         var lastMonth = -1
         for (week, column) in columns.enumerated() {
             let first = column[0].date
             guard first.month != lastMonth, week < columns.count - 2 else { continue }
-            if lastMonth != -1 || first.day <= 7 { labels[week] = Self.monthName(first.month) }
+            if lastMonth != -1 || first.day <= 7 { labels[week] = names.month(first.month) }
             lastMonth = first.month
         }
         return labels
@@ -229,18 +230,30 @@ struct ActivityHeatmap: View {
         }
     }
 
-    private static let englishMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
-    static func monthName(_ month: Int) -> String { L("\(month)月", englishMonths[month - 1]) }
-
-    static func weekdayName(_ weekday: Int) -> String {
-        L("周" + String(Array("日一二三四五六")[weekday]), ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][weekday])
-    }
-
-    static func tooltip(_ item: HeatmapCell) -> String {
-        let date = L("\(item.date.month)月\(item.date.day)日", "\(monthName(item.date.month)) \(item.date.day)")
+    static func tooltip(_ item: HeatmapCell, labels: DayLabels) -> String {
+        let date = labels.date(item.date)
         return item.words > 0
             ? L("\(date)：\(UsageFormat.count(item.words)) 字", "\(date): \(UsageFormat.count(item.words)) words")
             : L("\(date)：没有听写", "\(date): no dictation")
+    }
+}
+
+/// Heatmap labels in the UI language: "Sep" / "9月", "Mon" / "周一", "Sep 28" / "9月28日".
+struct DayLabels {
+    private let formatter = DateFormatter()
+
+    init(_ language: AppLanguage) {
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = language.locale
+        formatter.setLocalizedDateFormatFromTemplate("MMMd")
+    }
+
+    func month(_ month: Int) -> String { formatter.shortStandaloneMonthSymbols[month - 1] }
+
+    func weekday(_ weekday: Int) -> String { formatter.shortStandaloneWeekdaySymbols[weekday] }
+
+    func date(_ day: CalendarDay) -> String {
+        let noon = DateComponents(year: day.year, month: day.month, day: day.day, hour: 12)
+        return formatter.calendar.date(from: noon).map(formatter.string) ?? day.description
     }
 }

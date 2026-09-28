@@ -41,13 +41,12 @@ public sealed class GeneralPage : PageBase
         // Appearance
         var appearance = new CardSection { Title = L("外观", "Appearance") };
         var language = new ComboBox { MinWidth = 150 };
-        language.Items.Add(L("跟随系统", "System"));
-        language.Items.Add("简体中文");
-        language.Items.Add("English");
-        language.SelectedIndex = _settings.AppLanguage switch { AppLanguage.Zh => 1, AppLanguage.En => 2, _ => 0 };
+        AppLanguage[] languages = [AppLanguage.System, .. Localization.Supported];
+        foreach (var option in languages) language.Items.Add(option == AppLanguage.System ? L("跟随系统", "System") : option.NativeName());
+        language.SelectedIndex = Math.Max(0, Array.IndexOf(languages, _settings.AppLanguage));
         language.SelectionChanged += (_, _) =>
         {
-            var selected = language.SelectedIndex switch { 1 => AppLanguage.Zh, 2 => AppLanguage.En, _ => AppLanguage.System };
+            var selected = languages[Math.Max(0, language.SelectedIndex)];
             // Deferred: the language switch rebuilds this page.
             DispatcherQueue.TryEnqueue(() => _settings.AppLanguage = selected);
         };

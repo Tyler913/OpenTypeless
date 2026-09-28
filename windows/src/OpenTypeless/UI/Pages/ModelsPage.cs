@@ -114,7 +114,11 @@ public sealed class ModelsPage : PageBase
         stt.Body.Add(sttPriceRow);
         stt.Body.Add(new CardDivider());
         var language = new ComboBox { MinWidth = 140 };
-        (string Code, string Name)[] languages = [("", L("自动检测", "Auto-detect")), ("zh", "中文"), ("en", "English"), ("ja", "日本語"), ("ko", "한국어")];
+        (string Code, string Name)[] languages =
+        [
+            ("", L("自动检测", "Auto-detect")),
+            .. Localization.Supported.Select(l => (l.RawValue(), l == AppLanguage.Zh ? "中文" : l.NativeName())),
+        ];
         foreach (var (_, name) in languages) language.Items.Add(name);
         language.SelectedIndex = Math.Max(0, Array.FindIndex(languages, l => l.Code == _settings.SttLanguage));
         language.SelectionChanged += (_, _) => _settings.SttLanguage = languages[Math.Max(0, language.SelectedIndex)].Code;

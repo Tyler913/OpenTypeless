@@ -114,4 +114,4 @@ Releases are signed in CI with a stable self-signed certificate (`scripts/create
 - **Menu-bar app** (`LSUIElement`) with a popover. The popover is sized from its SwiftUI content *before* being shown; letting it resize while on screen made it re-anchor off-screen.
 - **Settings window:** an `NSSplitViewController` whose sidebar item gets the system Liquid Glass sidebar, with SwiftUI pages. Home comes first and is where the window opens.
 - **HUD:** a non-activating, click-through glass capsule that shows recording (level + timer), working, copied, or a short error.
-- **Localization:** inline `L("中文", "English")` strings, switchable at runtime without string tables.
+- **Localization:** inline `L("中文", "English")` strings, switchable at runtime. The other UI languages (ja, ko, es, pt-BR, fr, de, ru) come from `i18n/strings.json`, keyed by the English text with interpolations numbered `{0}`, `{1}`…, embedded into both apps at build time; a missing translation falls back to English, and `python3 i18n/check.py` (run by CI) finds missing, unused or malformed entries.

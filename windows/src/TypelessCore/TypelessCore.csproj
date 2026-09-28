@@ -7,4 +7,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="TypelessCore.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Translations for every UI language other than Chinese and English, shared with the macOS app. -->
+    <EmbeddedResource Include="..\..\..\i18n\strings.json" LogicalName="strings.json" Link="strings.json" />
+  </ItemGroup>
 </Project>

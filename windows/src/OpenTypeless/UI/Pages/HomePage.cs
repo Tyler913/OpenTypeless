@@ -236,10 +236,10 @@ internal sealed class ActivityHeatmap : UserControl
                 var cell = columns[week][day];
                 if (cell.IsFuture) continue;
                 var square = new Border { CornerRadius = new CornerRadius(2.5), Background = Shade(cell.Level) };
+                var date = DateLabel(cell.Date);
                 ToolTipService.SetToolTip(square, cell.Words > 0
-                    ? L($"{cell.Date.Month}月{cell.Date.Day}日：{UsageFormat.Count(cell.Words)} 字",
-                        $"{MonthName(cell.Date.Month)} {cell.Date.Day}: {UsageFormat.Count(cell.Words)} words")
-                    : L($"{cell.Date.Month}月{cell.Date.Day}日：没有听写", $"{MonthName(cell.Date.Month)} {cell.Date.Day}: no dictation"));
+                    ? L($"{date}：{UsageFormat.Count(cell.Words)} 字", $"{date}: {UsageFormat.Count(cell.Words)} words")
+                    : L($"{date}：没有听写", $"{date}: no dictation"));
                 Grid.SetRow(square, day + 1);
                 Grid.SetColumn(square, week + 1);
                 grid.Children.Add(square);
@@ -267,9 +267,12 @@ internal sealed class ActivityHeatmap : UserControl
         _ => Palette.Brush(Tint.Accent),
     };
 
-    private static string MonthName(int month) =>
-        L($"{month}月", CultureInfo.InvariantCulture.DateTimeFormat.AbbreviatedMonthNames[month - 1]);
+    // Labels in the UI language: "Sep" / "9月", "Mon" / "周一", "Sep 28" / "9月28日".
+    private static DateTimeFormatInfo Dates => Localization.Resolved.Culture().DateTimeFormat;
 
-    private static string WeekdayName(int weekday) =>
-        L("周" + "日一二三四五六"[weekday], CultureInfo.InvariantCulture.DateTimeFormat.AbbreviatedDayNames[weekday]);
+    private static string MonthName(int month) => Dates.AbbreviatedMonthNames[month - 1];
+
+    private static string WeekdayName(int weekday) => Dates.AbbreviatedDayNames[weekday];
+
+    private static string DateLabel(DateOnly day) => day.ToString(Dates.MonthDayPattern.Replace("MMMM", "MMM"), Dates);
 }

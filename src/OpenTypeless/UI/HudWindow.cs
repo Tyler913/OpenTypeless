@@ -1,12 +1,18 @@
+using System.Numerics;
+using Microsoft.UI;
+using Microsoft.UI.Composition;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using OpenTypeless.Native;
 using OpenTypeless.Session;
 using Windows.Graphics;
+using Windows.UI;
 
 namespace OpenTypeless.UI;
 
@@ -57,8 +63,7 @@ public sealed class HudWindow : Window
 
     private readonly HudModel _model;
     private readonly Grid _root = new() { Padding = new Thickness(16, 0, 16, 0) };
-    private readonly Rectangle[] _bars = new Rectangle[18];
-    private readonly StackPanel _barsPanel = new() { Orientation = Orientation.Horizontal, Spacing = 2, Height = 18, VerticalAlignment = VerticalAlignment.Center };
+    private readonly LevelBars _bars;
     private readonly TextBlock _elapsed = new() { FontSize = 13, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center };
     private readonly DispatcherQueueTimer _clock;
     private readonly Win32.SUBCLASSPROC _subclass; // kept alive for the window's lifetime
@@ -78,11 +83,9 @@ public sealed class HudWindow : Window
         Win32.SetWindowSubclass(Hwnd, _subclass, 1, 0);
         SystemBackdrop = new ActiveAcrylicBackdrop();
 
-        for (var i = 0; i < _bars.Length; i++)
-        {
-            _bars[i] = new Rectangle { Width = 2.5, Height = 3, RadiusX = 1.25, RadiusY = 1.25, VerticalAlignment = VerticalAlignment.Center };
-            _barsPanel.Children.Add(_bars[i]);
-        }
+        _bars = new LevelBars();
+        // Same-width digits, like the macOS timer's monospacedDigit(): the row doesn't shift every second.
+        Typography.SetNumeralAlignment(_elapsed, FontNumeralAlignment.Tabular);
         _root.VerticalAlignment = VerticalAlignment.Stretch;
         Content = _root;
 
@@ -99,6 +102,8 @@ public sealed class HudWindow : Window
     {
         Render();
         Resize(position: !_visible);
+        // The capsule may have just moved to a monitor with a different scale.
+        _bars.SetScale(WindowHelpers.Scale(Hwnd));
         if (!_visible)
         {
             _visible = true;
@@ -126,10 +131,12 @@ public sealed class HudWindow : Window
             case HudPhase.Recording:
                 row.Spacing = 10;
                 row.Children.Add(new Ellipse { Width = 7, Height = 7, Fill = Palette.Brush(Tint.Red), VerticalAlignment = VerticalAlignment.Center });
-                foreach (var bar in _bars) bar.Fill = Ui.Primary;
-                row.Children.Add(_barsPanel);
+                _bars.SetColor(Ui.Primary is SolidColorBrush primary ? primary.Color : _root.ActualTheme == ElementTheme.Light ? Colors.Black : Colors.White);
+                _bars.SetScale(WindowHelpers.Scale(Hwnd));
+                // A new recording starts from its own levels, not from the end of the previous one.
+                _bars.SetLevels(_model.Levels, animated: false);
+                row.Children.Add(_bars.Element);
                 row.Children.Add(_elapsed);
-                UpdateLevels();
                 UpdateElapsed();
                 _clock.Start();
                 break;
@@ -159,11 +166,7 @@ public sealed class HudWindow : Window
 
     private static TextBlock Label(string text) => new() { Text = text, FontSize = 13, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center };
 
-    private void UpdateLevels()
-    {
-        var levels = _model.Levels;
-        for (var i = 0; i < _bars.Length && i < levels.Length; i++) _bars[i].Height = Math.Max(3, levels[i] * 18);
-    }
+    private void UpdateLevels() => _bars.SetLevels(_model.Levels, animated: true);
 
     private void UpdateElapsed()
     {
@@ -214,5 +217,111 @@ public sealed class HudWindow : Window
         if (msg == Win32.WM_MOUSEACTIVATE) return Win32.MA_NOACTIVATE;
         if (msg == Win32.WM_NCHITTEST) return Win32.HTTRANSPARENT;
         return Win32.DefSubclassProc(hwnd, msg, wParam, lParam);
+    }
+}
+
+/// <summary>
+/// The capsule's 18 level bars, drawn and animated by the compositor instead of XAML layout. A new level only
+/// starts short linear animations of each bar's rounded rectangle, which the compositor interpolates at the
+/// display's refresh rate on its own thread, like the macOS bars' <c>.animation(.linear(duration: 0.08))</c>.
+/// (Resizing XAML shapes on every 40 ms level re-ran layout and re-rasterised each bar on the UI thread, and the
+/// bars jumped in uneven steps.) Resting positions are snapped to physical pixels, as XAML layout rounding did.
+/// </summary>
+internal sealed class LevelBars
+{
+    private const int Count = 18;
+    private const double BarWidth = 2.5, Spacing = 2, MaxHeight = 18, MinHeight = 3;
+    private static readonly TimeSpan AnimationDuration = TimeSpan.FromMilliseconds(80);
+
+    /// <summary>Placeholder in the XAML row that the bars are drawn on.</summary>
+    public FrameworkElement Element { get; }
+
+    private readonly CompositionColorBrush _fill;
+    private readonly CompositionSpriteShape[] _shapes = new CompositionSpriteShape[Count];
+    private readonly CompositionRoundedRectangleGeometry[] _geometries = new CompositionRoundedRectangleGeometry[Count];
+    private readonly Vector2KeyFrameAnimation _animation;
+    private readonly float[] _levels = new float[Count];
+    private readonly float[] _targetHeights = new float[Count];
+    private double _scale;
+    private float _barWidth;
+    private int _totalPixels;
+
+    public LevelBars()
+    {
+        var width = Count * BarWidth + (Count - 1) * Spacing;
+        var host = new Border { Width = width, Height = MaxHeight, VerticalAlignment = VerticalAlignment.Center };
+        Element = host;
+        var compositor = ElementCompositionPreview.GetElementVisual(host).Compositor;
+        _fill = compositor.CreateColorBrush(Colors.White);
+        var visual = compositor.CreateShapeVisual();
+        // A little wider than the placeholder so pixel snapping can never clip the last bar.
+        visual.Size = new Vector2((float)width + 2, (float)MaxHeight + 2);
+        for (var i = 0; i < Count; i++)
+        {
+            _geometries[i] = compositor.CreateRoundedRectangleGeometry();
+            _shapes[i] = compositor.CreateSpriteShape(_geometries[i]);
+            _shapes[i].FillBrush = _fill;
+            visual.Shapes.Add(_shapes[i]);
+        }
+        ElementCompositionPreview.SetElementChildVisual(host, visual);
+
+        // One template for every bar: StartAnimation copies it, so only the "target" parameter changes per start.
+        // With no keyframe at 0 each animation starts from the bar's current (possibly still animating) value.
+        _animation = compositor.CreateVector2KeyFrameAnimation();
+        _animation.InsertExpressionKeyFrame(1f, "target", compositor.CreateLinearEasingFunction());
+        _animation.Duration = AnimationDuration;
+
+        SetScale(1);
+    }
+
+    public void SetColor(Color color) => _fill.Color = color;
+
+    /// <summary>Lays the bars out on the physical pixel grid of <paramref name="scale"/> (DPI / 96).</summary>
+    public void SetScale(double scale)
+    {
+        if (!double.IsFinite(scale) || scale <= 0 || scale == _scale) return;
+        _scale = scale;
+        _totalPixels = Math.Max(1, (int)Math.Round(MaxHeight * scale));
+        _barWidth = (float)(Math.Max(1, Math.Round(BarWidth * scale)) / scale);
+        for (var i = 0; i < Count; i++)
+        {
+            _shapes[i].Offset = new Vector2((float)(Math.Round(i * (BarWidth + Spacing) * scale) / scale), 0);
+            _geometries[i].CornerRadius = new Vector2(_barWidth / 2);
+            Apply(i, animated: false);
+        }
+    }
+
+    public void SetLevels(float[] levels, bool animated)
+    {
+        for (var i = 0; i < Count; i++)
+        {
+            var level = i < levels.Length ? levels[i] : 0;
+            _levels[i] = float.IsFinite(level) ? Math.Clamp(level, 0, 1) : 0;
+            Apply(i, animated);
+        }
+    }
+
+    private void Apply(int i, bool animated)
+    {
+        // Height and top edge in whole pixels, centred like the XAML bars were.
+        var pixels = Math.Clamp((int)Math.Round(Math.Max(MinHeight, _levels[i] * MaxHeight) * _scale), 1, _totalPixels);
+        var top = Math.Round((_totalPixels - pixels) / 2.0);
+        var height = (float)(pixels / _scale);
+        var geometry = _geometries[i];
+        if (!animated)
+        {
+            geometry.StopAnimation("Size");
+            geometry.StopAnimation("Offset");
+            geometry.Size = new Vector2(_barWidth, height);
+            geometry.Offset = new Vector2(0, (float)(top / _scale));
+            _targetHeights[i] = height;
+            return;
+        }
+        if (height == _targetHeights[i]) return; // Nothing new: leave the running animation alone.
+        _targetHeights[i] = height;
+        _animation.SetVector2Parameter("target", new Vector2(_barWidth, height));
+        geometry.StartAnimation("Size", _animation);
+        _animation.SetVector2Parameter("target", new Vector2(0, (float)(top / _scale)));
+        geometry.StartAnimation("Offset", _animation);
     }
 }

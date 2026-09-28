@@ -78,6 +78,7 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 - **Bilingual UI** (English / 简体中文), following the system language or chosen manually.
 - **Native design.** Liquid Glass on macOS 26+ with a menu-bar panel; Mica and Acrylic on Windows 11 with a tray panel. Both show a small recording capsule while you talk.
 - **Launch at login.**
+- **Updates itself.** Checks GitHub Releases once a day, downloads a new version in the background and installs it when you click **Restart to update**, never in the middle of a dictation. Downloads are checked against GitHub's SHA-256 before anything is replaced. Turn it off, or check by hand, under **Settings → General → Updates**.
 - **Small and native.** A ~3 MB Swift/SwiftUI app on macOS and a self-contained WinUI 3 app on Windows. No Electron, no account and no server of its own.
 
 <table>
@@ -120,6 +121,8 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 
 OpenTypeless lives in the menu bar (waveform icon), not the Dock.
 
+Later versions install from inside the app (**Settings → General → Updates**), with no Terminal step: macOS only asks about apps downloaded by a browser.
+
 ### Build from source
 
 Needs Xcode 26+ installed (the Command Line Tools alone are enough to compile, but the build borrows SwiftUI's macro plugin from `/Applications/Xcode.app`).
@@ -150,6 +153,8 @@ To make a release zip instead of installing: `scripts/build-app.sh --package` wr
 1. Download `OpenTypeless-<version>-windows-x64.zip` (or `-arm64`) from [Releases](https://github.com/Tyler913/OpenTypeless/releases) and unzip it anywhere (e.g. `%LOCALAPPDATA%\Programs`).
 2. Run **OpenTypeless.exe**. It's self-contained: nothing else to install.
 3. The app isn't code-signed, so SmartScreen may say "Windows protected your PC": click **More info → Run anyway**.
+
+Later versions install from inside the app (**Settings → General → Updates**) into the same folder, with no SmartScreen prompt. Unzip it somewhere you can write to, such as `%LOCALAPPDATA%\Programs`; in `Program Files` the app can only link you to the download.
 
 OpenTypeless lives in the **notification area** (waveform icon next to the clock). Windows hides new icons in the overflow (^) at first; drag it onto the taskbar, or turn it on under **Settings → Personalization → Taskbar → Other system tray icons**.
 
@@ -188,6 +193,7 @@ Reasoning is automatically turned off or set to its minimum for the clean-up mod
 - Audio and text are only sent to the providers you configure.
 - API keys are stored in the macOS Keychain, or in Windows Credential Manager (one entry, `OpenTypeless/credentials`).
 - History (audio + transcripts) lives in `~/Library/Application Support/OpenTypeless/Sessions/` on macOS and `%LOCALAPPDATA%\OpenTypeless\` on Windows. Recordings are kept for a month by default (History page: not at all, a day, a week, a month, a year, or forever); after that the text stays among the newest 200 entries. Failed dictations keep their audio so they can be retried.
+- Update checks send one request a day to `api.github.com` (no account, nothing about you or your dictations); turn them off under **Settings → General → Updates**.
 - Learning from your fixes reads the text field you dictated into, on your computer only, for at most two minutes after a paste. Password fields are skipped. It can be turned off under **Vocabulary & Style**.
 
 ## Development
@@ -294,7 +300,9 @@ To release, bump the version (`macos/scripts/build-app.sh`, `windows/Directory.B
 - `1.0.2` builds the macOS app and creates a **draft** release with its zip, marked as the latest release when you publish it.
 - `1.0.2-windows` builds the Windows app and creates a **draft** release with both zips, never marked as the latest release.
 
-Review the draft and publish it by hand.
+Review the draft and publish it by hand. Installed copies find it within a day: the in-app updater looks for the newest published, non-prerelease release that has a zip for its platform (`OpenTypeless-<version>-macOS-arm64.zip`, `-windows-x64.zip`, `-windows-arm64.zip`), whichever tag it's under. Mark a release as a pre-release to keep it from being offered.
+
+**macOS release signing (one time).** macOS ties Accessibility and Microphone permission to the app's signature, so releases should always be signed with the same certificate; otherwise users are asked for both permissions again after every update. Run `macos/scripts/create-release-cert.sh`, keep the `.p12` it writes somewhere private, and add the two repository secrets it prints (`MACOS_SIGNING_CERTIFICATE`, `MACOS_SIGNING_CERTIFICATE_PASSWORD`). Release builds then sign with it; without the secrets they're signed ad hoc, with a warning on the run.
 
 ## Acknowledgements
 

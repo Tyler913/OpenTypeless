@@ -31,6 +31,7 @@ failure handling. Only the system-integration layer and the look differ.
 | `TranscriptionPipeline.swift` | `TranscriptionPipeline.cs` | Transcribe while talking, ≤ 3 concurrent, skip silent / < 0.3 s chunks, preset transcripts for retries, one extra round for transient failures, `PipelineFailure` with partial text. |
 | `PolishEvaluation.swift` | `PolishEvaluation.cs` | Evaluation-only accounting, durable budget ledger with an exclusive lock file, first-token time, `--provider-routing`, `PolishMetrics` (English kept, similarity). |
 | `Localization.swift` | `Localization.cs` | Inline `L("中文", "English")`, `system / zh / en`, switchable at runtime. |
+| `UpdateCheck.swift` | `UpdateCheck.cs` | GitHub release list → newest non-draft, non-prerelease zip named `OpenTypeless-<version>-<platform>.zip` for this platform, numeric version order, `sha256:` digest. |
 
 ## System integration — macOS API → Windows API
 
@@ -51,6 +52,7 @@ failure handling. Only the system-integration layer and the look differ.
 | HUD | Non-activating click-through glass capsule | Topmost, non-activating, click-through tool window (`WS_EX_NOACTIVATE`/`TOOLWINDOW`), Acrylic backdrop kept "active" so it never greys out; bottom-centre of the monitor under the mouse. Same phases: recording (red dot, 18 level bars, timer), working, copied, learned ("Added to vocabulary: …"), error. |
 | Sounds | `Tink` / `Pop` at 0.35 volume | Short soft chimes synthesised in-process (no bundled assets), played at the same low volume. |
 | Permissions | Microphone (TCC), Accessibility | Microphone: read the privacy consent store (`ConsentStore\microphone` + `NonPackaged`), link to `ms-settings:privacy-microphone`. Accessibility: not required on Windows (row explains the one exception: apps running as administrator). |
+| Updates | `Updater`: download to `~/Library/Caches/OpenTypeless/Updates`, check SHA-256, unpack with `ditto`, check bundle ID, version and signature (same certificate as the running copy unless it's ad hoc); a helper script swaps `/Applications/OpenTypeless.app` after the app quits and reopens it | `Updater`: download to `%LOCALAPPDATA%\OpenTypeless\Updates`, check SHA-256, unzip, check the version of `OpenTypeless.dll`; the *new* `OpenTypeless.exe --apply-update <pid> <folder>` waits for the old copy to exit, renames the install folder to `.old`, copies itself in (renaming `.old` back if that fails) and starts the app. Picks the x64 or ARM64 zip by process architecture. The paths don't change, so the login entry and Start menu shortcut keep working. |
 | Launch at login | `SMAppService` | `HKCU\…\Run`; "needs approval" = disabled in Task Manager (`StartupApproved\Run`). Enabled once by default for installed (non-dev) builds. |
 | Settings window | `NSSplitViewController` + Liquid Glass sidebar | `NavigationView` sidebar on a Mica window with a custom title bar. Same six pages and contents. |
 | Keyboard settings hint (Fn → emoji) | Banner on the Shortcut page | Windows equivalents: an AltGr notice when Right Alt is the hotkey, and a warning when a combination shadows a common `Ctrl+key` shortcut. |

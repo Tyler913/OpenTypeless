@@ -35,6 +35,37 @@ jobs:
       - name: Test
         run: scripts/test.sh
 
+      # Releases are signed with a stable self-signed certificate so that in-app updates keep macOS permissions
+      # (see scripts/create-release-cert.sh). Without the secrets, e.g. for pull requests, the zip is signed ad hoc.
+      - name: Import the release signing certificate
+        env:
+          CERTIFICATE: ${{ secrets.MACOS_SIGNING_CERTIFICATE }}
+          PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if [[ -z "$CERTIFICATE" ]]; then
+            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+              echo "::warning::No MACOS_SIGNING_CERTIFICATE secret: this release is signed ad hoc, so macOS asks for permissions again after users update"
+            fi
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/release-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/release.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/release.p12" -k "$keychain" -P "$PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/release.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          # A self-signed certificate has to be trusted for code signing on this runner before codesign uses it.
+          security find-certificate -a -p "$keychain" > "$RUNNER_TEMP/release.pem"
+          sudo security authorizationdb write com.apple.trust-settings.admin allow
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/release.pem"
+          identity="$(security find-identity -v -p codesigning "$keychain" | grep -Eo '[0-9A-F]{40}' | head -1)"
+          [[ -n "$identity" ]] || { security find-identity -p codesigning "$keychain"; echo "::error::The certificate can't be used for code signing"; exit 1; }
+          echo "OPENTYPELESS_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+
       - name: Build and package
         run: scripts/build-app.sh --package
 

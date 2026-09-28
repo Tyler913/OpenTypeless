@@ -243,6 +243,11 @@ private struct HistoryDetail: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
+                        if record.status == .cancelled {
+                            Banner(symbol: "xmark.circle.fill", color: .gray,
+                                   text: L("已取消，没有插入。这条会保留到 \(CancelPolicy.expiry(of: record.date).shortStamp)，之前可以复制或重新转写。",
+                                           "Cancelled, so nothing was inserted. It's kept until \(CancelPolicy.expiry(of: record.date).shortStamp) to copy or re-transcribe.")) { EmptyView() }
+                        }
                         if let error = record.error {
                             Banner(symbol: "exclamationmark.triangle.fill", color: .orange, text: error) { EmptyView() }
                         }

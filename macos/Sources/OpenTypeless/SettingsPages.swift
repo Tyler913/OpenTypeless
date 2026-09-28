@@ -936,6 +936,7 @@ extension DictationRecord.Status {
         case .done: return L("完成", "Done")
         case .polishFailed: return L("未整理", "Not cleaned up")
         case .failed: return L("失败", "Failed")
+        case .cancelled: return L("已取消", "Cancelled")
         case .recording, .processing: return L("进行中", "In progress")
         }
     }
@@ -945,6 +946,7 @@ extension DictationRecord.Status {
         case .done: return .green
         case .polishFailed: return .orange
         case .failed: return .red
+        case .cancelled: return .gray
         case .recording, .processing: return .blue
         }
     }

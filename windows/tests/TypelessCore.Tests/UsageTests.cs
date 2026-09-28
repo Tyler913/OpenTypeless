@@ -343,3 +343,18 @@ public class UsageFormatTests
         Assert.Equal(0, none);
     }
 }
+
+public class CancelPolicyTests
+{
+    [Fact]
+    public void KeepsLongRecordingsForADay()
+    {
+        Assert.False(CancelPolicy.Keeps(9.9));
+        Assert.True(CancelPolicy.Keeps(10));
+        Assert.True(CancelPolicy.Keeps(125));
+        var at = new DateTimeOffset(2026, 9, 28, 19, 14, 0, TimeSpan.Zero);
+        Assert.Equal(at.AddDays(1), CancelPolicy.Expiry(at));
+        Assert.False(CancelPolicy.IsExpired(at, at.AddHours(23.9)));
+        Assert.True(CancelPolicy.IsExpired(at, at.AddHours(24)));
+    }
+}

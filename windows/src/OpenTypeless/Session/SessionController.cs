@@ -123,7 +123,48 @@ public sealed class SessionController
     public void EscapePressed()
     {
         if (State == SessionState.Idle) return;
-        Cancel(silently: false);
+        if (State == SessionState.Recording && CancelPolicy.Keeps(_counter.Seconds)) KeepCancelledRecording();
+        else Cancel(silently: false);
+    }
+
+    /// <summary>
+    /// Esc on a long recording: stop and insert nothing, but keep it. The rest is transcribed in the background
+    /// (no clean-up), so the text is in History for a day, where it can also be re-transcribed.
+    /// </summary>
+    private void KeepCancelledRecording()
+    {
+        if (State != SessionState.Recording || _record is not { } record || _pipeline is not { } pipeline) return;
+        StopCapture();
+        PlaySound(Sounds.Kind.Stop);
+        record.Duration = _counter.Seconds;
+        record.Status = DictationStatus.Cancelled;
+        _history.Update(record);
+        Note($"cancelled after {record.Duration:0.0}s — kept in History");
+        Reset();
+        Hud.Show(new HudPhase.Error(L("已取消，录音在历史记录中保留 24 小时", "Cancelled — kept in History for 24 hours")), 2.5);
+        _ = Finish();
+
+        async Task Finish()
+        {
+            string raw;
+            try
+            {
+                raw = await pipeline.Finish();
+            }
+            catch (PipelineFailure failure)
+            {
+                raw = failure.PartialText;
+            }
+            catch
+            {
+                raw = TranscriptJoiner.Join(pipeline.CompletedTranscripts().OrderBy(p => p.Key).Select(p => p.Value));
+            }
+            if (_history.Records.All(r => r.Id != record.Id)) return; // deleted meanwhile
+            record.RawText = raw;
+            record.ChunkTexts = pipeline.CompletedTranscripts();
+            Account(record, pipeline, null);
+            _history.Update(record);
+        }
     }
 
     // MARK: - Recording
@@ -479,8 +520,16 @@ public sealed class SessionController
         }
         else if (_record is { } record)
         {
-            record.Status = DictationStatus.Failed;
-            record.Error = L("已取消", "Cancelled");
+            // Cancelled while processing: keep what was transcribed; it can be re-transcribed for a day.
+            if (_pipeline is { } pipeline)
+            {
+                record.ChunkTexts = pipeline.CompletedTranscripts();
+                if (record.RawText.Length == 0)
+                {
+                    record.RawText = TranscriptJoiner.Join(record.ChunkTexts.OrderBy(p => p.Key).Select(p => p.Value));
+                }
+            }
+            record.Status = DictationStatus.Cancelled;
             _history.Update(record);
         }
         Reset();

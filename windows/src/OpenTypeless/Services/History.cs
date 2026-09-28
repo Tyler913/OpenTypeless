@@ -6,7 +6,8 @@ using Microsoft.UI.Dispatching;
 
 namespace OpenTypeless.Services;
 
-public enum DictationStatus { Recording, Processing, Done, PolishFailed, Failed }
+/// <summary><c>Cancelled</c>: stopped with Esc after <see cref="TypelessCore.CancelPolicy.KeepAfterSeconds"/>, transcribed but not inserted, kept for a day.</summary>
+public enum DictationStatus { Recording, Processing, Done, PolishFailed, Failed, Cancelled }
 
 /// <summary>One dictation. Stored as <c>Sessions\&lt;id&gt;\session.json</c> next to its <c>audio.wav</c>, same schema as macOS.</summary>
 public sealed class DictationRecord
@@ -60,6 +61,7 @@ public sealed class DictationRecord
                 "processing" => DictationStatus.Processing,
                 "done" => DictationStatus.Done,
                 "polishFailed" => DictationStatus.PolishFailed,
+                "cancelled" => DictationStatus.Cancelled,
                 _ => DictationStatus.Failed,
             };
 
@@ -70,6 +72,7 @@ public sealed class DictationRecord
                 DictationStatus.Processing => "processing",
                 DictationStatus.Done => "done",
                 DictationStatus.PolishFailed => "polishFailed",
+                DictationStatus.Cancelled => "cancelled",
                 _ => "failed",
             });
     }
@@ -225,6 +228,20 @@ public sealed class HistoryStore
         for (var index = 0; index < _records.Count; index++)
         {
             var record = _records[index];
+            if (record.Status == DictationStatus.Cancelled)
+            {
+                // A cancelled dictation is only a safety net: it goes a day after it was made, whatever the setting.
+                if (TypelessCore.CancelPolicy.IsExpired(record.Date, now))
+                {
+                    try { Directory.Delete(record.Folder, recursive: true); } catch { }
+                    changed = true;
+                }
+                else
+                {
+                    kept.Add(record);
+                }
+                continue;
+            }
             var finished = record.Status is DictationStatus.Done or DictationStatus.PolishFailed;
             var expired = maxAge is { } age && now - record.Date >= age;
             if (!finished || !expired)

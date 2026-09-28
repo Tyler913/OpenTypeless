@@ -287,6 +287,13 @@ public sealed class HistoryPage : PageBase
         header.Children.Add(pill);
 
         var body = new StackPanel { Spacing = 14, Padding = new Thickness(16) };
+        if (record.Status == DictationStatus.Cancelled)
+        {
+            var until = Formatting.ShortStamp(CancelPolicy.Expiry(record.Date));
+            body.Children.Add(new Banner(Glyphs.Cancel, Tint.Gray,
+                L($"已取消，没有插入。这条会保留到 {until}，之前可以复制或重新转写。",
+                  $"Cancelled, so nothing was inserted. It's kept until {until} to copy or re-transcribe.")));
+        }
         if (record.Error is { } error) body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, error));
         if (record.FinalText.Length == 0 && record.Status is DictationStatus.Recording or DictationStatus.Processing)
         {

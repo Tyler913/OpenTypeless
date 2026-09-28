@@ -98,7 +98,43 @@ final class SessionController: ObservableObject {
 
     func escapePressed() {
         guard state != .idle else { return }
-        cancel(silently: false)
+        if state == .recording, CancelPolicy.keeps(recordedSeconds: counter.seconds) {
+            keepCancelledRecording()
+        } else {
+            cancel(silently: false)
+        }
+    }
+
+    /// Esc on a long recording: stop and insert nothing, but keep it. The rest is transcribed in the background
+    /// (no clean-up), so the text is in History for a day, where it can also be re-transcribed.
+    private func keepCancelledRecording() {
+        guard state == .recording, var record, let pipeline else { return }
+        stopCapture()
+        playSound("Pop")
+        record.duration = counter.seconds
+        record.status = .cancelled
+        history.update(record)
+        note(String(format: "cancelled after %.1fs — kept in History", record.duration))
+        reset()
+        hud.show(.error(L("已取消，录音在历史记录中保留 24 小时", "Cancelled — kept in History for 24 hours")), autoHideAfter: 2.5)
+
+        let kept = record
+        Task { [weak self] in
+            var record = kept
+            var raw: String
+            do {
+                raw = try await pipeline.finish()
+            } catch let failure as PipelineFailure {
+                raw = failure.partialText
+            } catch {
+                raw = TranscriptJoiner.join(pipeline.completedTranscripts().sorted { $0.key < $1.key }.map(\.value))
+            }
+            guard let self, self.history.records.contains(where: { $0.id == record.id }) else { return }
+            record.rawText = raw
+            record.chunkTexts = pipeline.completedTranscripts()
+            self.account(&record, pipeline: pipeline, polished: nil)
+            self.history.update(record)
+        }
     }
 
     // MARK: - Recording
@@ -421,8 +457,14 @@ final class SessionController: ObservableObject {
             stopCapture()
             if let record { history.delete(record) }
         } else if var record {
-            record.status = .failed
-            record.error = L("已取消", "Cancelled")
+            // Cancelled while processing: keep what was transcribed; it can be re-transcribed for a day.
+            if let pipeline {
+                record.chunkTexts = pipeline.completedTranscripts()
+                if record.rawText.isEmpty {
+                    record.rawText = TranscriptJoiner.join(record.chunkTexts.sorted { $0.key < $1.key }.map(\.value))
+                }
+            }
+            record.status = .cancelled
             history.update(record)
         }
         reset()

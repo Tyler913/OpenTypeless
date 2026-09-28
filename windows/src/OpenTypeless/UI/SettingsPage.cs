@@ -107,6 +107,7 @@ public static class StatusStyle
         DictationStatus.Done => L("完成", "Done"),
         DictationStatus.PolishFailed => L("未整理", "Not cleaned up"),
         DictationStatus.Failed => L("失败", "Failed"),
+        DictationStatus.Cancelled => L("已取消", "Cancelled"),
         _ => L("进行中", "In progress"),
     };
 
@@ -115,6 +116,7 @@ public static class StatusStyle
         DictationStatus.Done => UI.Tint.Green,
         DictationStatus.PolishFailed => UI.Tint.Orange,
         DictationStatus.Failed => UI.Tint.Red,
+        DictationStatus.Cancelled => UI.Tint.Gray,
         _ => UI.Tint.Blue,
     };
 }

@@ -228,6 +228,18 @@ import Testing
     }
 }
 
+@Suite struct CancelPolicyTests {
+    @Test func keepsLongRecordingsForADay() {
+        #expect(!CancelPolicy.keeps(recordedSeconds: 9.9))
+        #expect(CancelPolicy.keeps(recordedSeconds: 10))
+        #expect(CancelPolicy.keeps(recordedSeconds: 125))
+        let at = Date(timeIntervalSince1970: 1_790_000_000)
+        #expect(CancelPolicy.expiry(of: at) == at.addingTimeInterval(86_400))
+        #expect(!CancelPolicy.isExpired(recordedAt: at, now: at.addingTimeInterval(23.9 * 3600)))
+        #expect(CancelPolicy.isExpired(recordedAt: at, now: at.addingTimeInterval(24 * 3600)))
+    }
+}
+
 // These share MockOpenRouter.handler with the pipeline tests, so they must run in the same serialized suite.
 extension PipelineTests {
     @Test func transcriptionReportsUsageAndAudioLength() async throws {

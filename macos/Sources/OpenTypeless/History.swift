@@ -4,6 +4,8 @@ import TypelessCore
 struct DictationRecord: Codable, Identifiable, Equatable {
     enum Status: String, Codable {
         case recording, processing, done, polishFailed, failed
+        /// Stopped with Esc after `CancelPolicy.keepAfterSeconds`: transcribed but not inserted, kept for a day.
+        case cancelled
     }
 
     let id: String
@@ -172,6 +174,15 @@ final class HistoryStore: ObservableObject {
         let now = Date()
         var kept: [DictationRecord] = []
         for (index, record) in records.enumerated() {
+            if record.status == .cancelled {
+                // A cancelled dictation is only a safety net: it goes a day after it was made, whatever the setting.
+                if CancelPolicy.isExpired(recordedAt: record.date, now: now) {
+                    try? FileManager.default.removeItem(at: record.folder)
+                } else {
+                    kept.append(record)
+                }
+                continue
+            }
             let finished = record.status == .done || record.status == .polishFailed
             let expired = retention.maxAge.map { now.timeIntervalSince(record.date) >= $0 } ?? false
             guard finished, expired else { kept.append(record); continue }

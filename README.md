@@ -9,6 +9,10 @@
   Hold a key, talk for as long as you need, and get clean, structured text at your cursor.
 </p>
 
+<p align="center">
+  🪟 On Windows? See the <a href="https://github.com/Tyler913/OpenTypeless/tree/windows"><b>Windows version</b></a> (WinUI 3) on the <code>windows</code> branch.
+</p>
+
 ---
 
 ## Why this exists

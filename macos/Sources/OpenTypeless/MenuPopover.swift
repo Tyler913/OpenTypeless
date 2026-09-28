@@ -7,6 +7,7 @@ struct MenuPopoverView: View {
     @ObservedObject var controller: SessionController
     @ObservedObject var settings = AppSettings.shared
     @ObservedObject var history = HistoryStore.shared
+    @ObservedObject var updater = Updater.shared
     let openSettings: (SettingsPage?) -> Void
     let close: () -> Void
     @State private var copiedID: String?
@@ -58,7 +59,7 @@ struct MenuPopoverView: View {
 
     @ViewBuilder private var warnings: some View {
         let items = setupIssues
-        if !items.isEmpty || failedRecord != nil {
+        if !items.isEmpty || failedRecord != nil || updater.update != nil {
             VStack(spacing: 8) {
                 ForEach(items, id: \.text) { item in
                     Banner(symbol: "exclamationmark.triangle.fill", color: .orange, text: item.text) {
@@ -71,6 +72,27 @@ struct MenuPopoverView: View {
                                    "Last dictation failed (\(failed.duration.durationLabel) recording saved)")) {
                         Button(L("重试", "Retry")) { close(); controller.retry(failed, paste: true) }.controlSize(.small)
                     }
+                }
+                updateBanner
+            }
+        }
+    }
+
+    /// A downloaded update, or one that has to be downloaded by hand.
+    @ViewBuilder private var updateBanner: some View {
+        if let update = updater.update {
+            let version = update.version.description
+            if updater.isReady {
+                Banner(symbol: "arrow.down.circle.fill", color: .blue,
+                       text: updater.installPending ? L("听写结束后自动更新到 \(version)", "Updates to \(version) after this dictation")
+                                                    : L("新版本 \(version) 已就绪", "Version \(version) is ready")) {
+                    Button(L("重启更新", "Restart to update")) { updater.installAndRelaunch() }
+                        .controlSize(.small)
+                        .disabled(updater.installPending)
+                }
+            } else if updater.phase == .available {
+                Banner(symbol: "arrow.down.circle.fill", color: .blue, text: L("有新版本 \(version)", "Version \(version) is available")) {
+                    Button(L("下载", "Download")) { close(); NSWorkspace.shared.open(update.pageURL) }.controlSize(.small)
                 }
             }
         }

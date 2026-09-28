@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = AppSettings.shared
     private let controller = SessionController()
     private let hotkey = HotkeyMonitor.shared
+    private let updater = Updater.shared
     private lazy var settingsWindow = SettingsWindowController(controller: controller)
     private var statusItem: NSStatusItem!
     private var popover: StatusPopover!
@@ -36,7 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         controller.$state
             .receive(on: RunLoop.main)
-            .sink { [weak self] state in self?.updateStatusIcon(state) }
+            .sink { [weak self] state in
+                self?.updateStatusIcon(state)
+                if state == .idle { self?.updater.sessionBecameIdle() }
+            }
             .store(in: &cancellables)
 
         NotificationCenter.default.addObserver(forName: .openSettings, object: nil, queue: .main) { [weak self] note in
@@ -46,6 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         controller.refreshModelInfo()
         LaunchAtLogin.enableByDefaultOnce()
+        updater.canInstallNow = { [weak self] in self?.controller.state == .idle }
+        updater.start()
 
         // First run: ask for what we need up front, so the first dictation just works.
         if !Permissions.microphoneGranted { Permissions.requestMicrophone { _ in } }

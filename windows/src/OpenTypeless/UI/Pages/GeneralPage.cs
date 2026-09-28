@@ -12,6 +12,8 @@ public sealed class GeneralPage : PageBase
     private readonly ContentControl _micControl = new();
     private readonly ToggleSwitch _launchToggle = new() { OnContent = "", OffContent = "", MinWidth = 0 };
     private readonly CardSection _startup;
+    private readonly CardSection _updates = new() { Title = L("更新", "Updates") };
+    private readonly Updater _updater = Updater.Shared;
     private readonly DispatcherQueueTimer _timer;
     private string? _launchError;
     private bool _updating;
@@ -76,6 +78,11 @@ public sealed class GeneralPage : PageBase
         });
         Body.Children.Add(_startup);
 
+        // Updates
+        Body.Children.Add(_updates);
+        _updater.Changed += RefreshUpdates;
+        RefreshUpdates();
+
         // Dictation
         var dictation = new CardSection { Title = L("听写", "Dictation") };
         dictation.Body.Add(new CardRow
@@ -128,7 +135,101 @@ public sealed class GeneralPage : PageBase
         _timer.Start();
     }
 
-    protected override void OnClosed() => _timer.Stop();
+    protected override void OnClosed()
+    {
+        _timer.Stop();
+        _updater.Changed -= RefreshUpdates;
+    }
+
+    /// <summary>Current version, update status and the one action that fits it, plus the automatic-check switch.</summary>
+    private void RefreshUpdates()
+    {
+        _updates.Body.Clear();
+        _updates.Footer = _updater.Phase == Updater.UpdatePhase.Available ? _updater.ManualReason : null;
+        _updates.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Download, Tint = Tint.Indigo, Title = $"OpenTypeless {_updater.CurrentVersion}",
+            Subtitle = UpdateStatus(), Trailing = UpdateAction(),
+        });
+        if (_updater.Update is { } update)
+        {
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            if (_updater.CanSkip)
+            {
+                var skip = new Button { Content = L("跳过此版本", "Skip this version") };
+                skip.Click += (_, _) => _updater.SkipUpdate();
+                buttons.Children.Add(skip);
+            }
+            var notes = new Button { Content = L("发布说明", "Release notes") };
+            notes.Click += (_, _) => Updater.OpenInBrowser(update.PageUrl);
+            buttons.Children.Add(notes);
+            _updates.Body.Add(new CardDivider());
+            _updates.Body.Add(new CardRow
+            {
+                Glyph = Glyphs.Star, Tint = Tint.Purple, Title = L($"{update.Version} 更新内容", $"What’s new in {update.Version}"),
+                Subtitle = update.Notes.Length > 280 ? update.Notes[..280] + "…" : update.Notes, Trailing = buttons,
+            });
+        }
+        _updates.Body.Add(new CardDivider());
+        _updates.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Refresh, Tint = Tint.Gray, Title = L("自动检查更新", "Check automatically"),
+            Subtitle = L("每天一次，在后台下载，由你决定何时安装", "Once a day. Downloads in the background; installs when you choose"),
+            Trailing = Toggle(_settings.AutoCheckUpdates, on => _settings.AutoCheckUpdates = on),
+        });
+    }
+
+    private string UpdateStatus()
+    {
+        var version = _updater.Update?.Version.ToString() ?? "";
+        return _updater.Phase switch
+        {
+            Updater.UpdatePhase.Idle when _updater.IsDevelopmentBuild => L("开发版本不会检查更新", "Development builds don’t check for updates"),
+            Updater.UpdatePhase.Idle => _updater.LastChecked is { } date
+                ? L("上次检查：", "Last checked ") + Formatting.ShortStamp(date)
+                : L("还没有检查过", "Not checked yet"),
+            Updater.UpdatePhase.Checking => L("正在检查…", "Checking…"),
+            Updater.UpdatePhase.UpToDate => L("已是最新版本", "You’re up to date"),
+            Updater.UpdatePhase.Available => L($"有新版本 {version}", $"Version {version} is available"),
+            Updater.UpdatePhase.Downloading => L($"正在下载 {version}… {(int)(_updater.Progress * 100)}%",
+                                                 $"Downloading {version}… {(int)(_updater.Progress * 100)}%"),
+            Updater.UpdatePhase.Ready => _updater.InstallPending
+                ? L("这次听写结束后自动重启并更新", "Restarts to update when this dictation finishes")
+                : L($"{version} 已下载，重启即可完成更新", $"{version} is downloaded. Restart to finish updating"),
+            Updater.UpdatePhase.Installing => L("正在重启…", "Restarting…"),
+            _ => _updater.Error ?? "",
+        };
+    }
+
+    private UIElement? UpdateAction()
+    {
+        switch (_updater.Phase)
+        {
+            case Updater.UpdatePhase.Checking or Updater.UpdatePhase.Installing:
+                return new ProgressRing { IsActive = true, Width = 20, Height = 20 };
+            case Updater.UpdatePhase.Downloading:
+                return new ProgressBar { Value = _updater.Progress * 100, Maximum = 100, Width = 100 };
+            case Updater.UpdatePhase.Ready:
+                var restart = new Button
+                {
+                    Content = L("重启并更新", "Restart to update"),
+                    Style = (Style)Application.Current.Resources["AccentButtonStyle"],
+                    IsEnabled = !_updater.InstallPending,
+                };
+                restart.Click += (_, _) => _updater.InstallAndRestart();
+                return restart;
+            case Updater.UpdatePhase.Available when _updater.Update is { } update:
+                var download = new Button { Content = L("前往下载…", "Download…") };
+                download.Click += (_, _) => Updater.OpenInBrowser(update.PageUrl);
+                return download;
+            case Updater.UpdatePhase.Idle or Updater.UpdatePhase.UpToDate or Updater.UpdatePhase.Failed when !_updater.IsDevelopmentBuild:
+                var check = new Button { Content = L("检查更新", "Check now") };
+                check.Click += (_, _) => _updater.CheckNow();
+                return check;
+            default:
+                return null;
+        }
+    }
 
     private static ToggleSwitch Toggle(bool value, Action<bool> set)
     {

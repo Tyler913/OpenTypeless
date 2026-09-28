@@ -81,6 +81,21 @@ A session found in `recording`/`processing` state at launch is marked failed-but
 
 Retention is a user setting: don't keep recordings, 1 day, 7 days, 1 month (default), 1 year, or forever. Recordings are about 1.9 MB per minute of 16 kHz WAV; transcripts are a few KB. When a finished dictation expires, its `audio.wav` is deleted, and the whole folder goes too once it is also outside the newest 200 dictations. Failed dictations are never expired, so they can always be retried. Expiry runs at launch, after every dictation, when the setting changes, and hourly.
 
+## Updates
+
+`TypelessCore/UpdateCheck.swift` reads the repository's GitHub release list (no sign-in; the unauthenticated limit of 60 requests an hour is far above one check a day) and picks the newest published, non-prerelease release that carries this platform's zip. Releases are matched by the zip's file name, `OpenTypeless-<version>-macOS-arm64.zip`, not by tag, so a release may hold one app or both.
+
+`OpenTypeless/Updater.swift` checks 10 s after launch and then whenever 24 h have passed, if **Check automatically** is on (the default); **Check now** is always available. A newer version is downloaded in the background and installed only when the user clicks **Restart to update**, never during a dictation (the click is then held until the dictation finishes). A skipped version isn't offered by automatic checks.
+
+Before anything is replaced:
+- The zip's SHA-256 must match the `digest` GitHub publishes for every release file. Without one, the update is offered as a download link only.
+- The unpacked app must have our bundle ID and the expected version, and a valid signature (`SecStaticCodeCheckValidity`, strict, nested code).
+- If the running copy is signed with a certificate, the new one must satisfy the running copy's designated requirement, i.e. be signed with the same certificate. An ad-hoc copy has nothing to compare against (its requirement is a hash of that exact build).
+
+Install: a helper script started by the app waits for it to quit, moves the old bundle aside, moves the new one into place (putting the old one back if that fails), and opens it. The app notes the version it was installing; if the relaunched app is still older, it says the install failed. When the app can't replace itself (a folder the user can't write to, or macOS running it from an App Translocation path), the update is shown with a link to the release page instead.
+
+Releases are signed in CI with a stable self-signed certificate (`scripts/create-release-cert.sh`, stored as repository secrets), because macOS ties Accessibility and Microphone permission to the signature: with ad-hoc signing every update would ask for them again. Files downloaded by the app itself carry no quarantine flag, so Gatekeeper only warns on the very first manual install.
+
 ## UI
 
 - **Menu-bar app** (`LSUIElement`) with a popover. The popover is sized from its SwiftUI content *before* being shown; letting it resize while on screen made it re-anchor off-screen.

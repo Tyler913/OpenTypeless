@@ -20,6 +20,9 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Started by the updater from a freshly downloaded copy: install it over the running one, no UI.
+        if (args.Contains(Services.UpdateInstaller.Argument)) return Services.UpdateInstaller.Run(args);
+
         var snapshot = Array.IndexOf(args, "--snapshot-ui");
         if (snapshot >= 0 && snapshot + 1 < args.Length) SnapshotDirectory = Path.GetFullPath(args[snapshot + 1]);
         LaunchedAtLogin = args.Contains("--autostart");

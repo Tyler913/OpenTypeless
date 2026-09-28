@@ -183,6 +183,34 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("didEnableLaunchAtLoginByDefault", value);
     }
 
+    /// <summary>Look for a new release once a day and download it in the background (see Updater).</summary>
+    public bool AutoCheckUpdates
+    {
+        get => GetBool("autoCheckUpdates", true);
+        set => SetValue("autoCheckUpdates", value);
+    }
+
+    public DateTimeOffset? LastUpdateCheck
+    {
+        get => DateTimeOffset.TryParse(GetString("lastUpdateCheck", ""), System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var date) ? date : null;
+        set => SetValue("lastUpdateCheck", value?.ToString("o") ?? "");
+    }
+
+    /// <summary>A version the user chose to skip; automatic checks don't offer it.</summary>
+    public string SkippedUpdateVersion
+    {
+        get => GetString("skippedUpdateVersion", "");
+        set => SetValue("skippedUpdateVersion", value);
+    }
+
+    /// <summary>The version being installed when the app quit, to tell after the restart whether it worked.</summary>
+    public string InstallingUpdateVersion
+    {
+        get => GetString("installingUpdateVersion", "");
+        set => SetValue("installingUpdateVersion", value);
+    }
+
     // MARK: Providers
 
     public string ApiKey(ProviderId id)

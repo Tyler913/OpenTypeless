@@ -30,6 +30,7 @@ public sealed class PopoverWindow : Window
     private Win32.RECT _anchor;
     private DateTimeOffset _hiddenAt = DateTimeOffset.MinValue;
     private string? _copiedId;
+    private (Updater.UpdatePhase, bool) _updateState;
 
     public nint Hwnd { get; }
     public bool IsOpen { get; private set; }
@@ -60,6 +61,14 @@ public sealed class PopoverWindow : Window
         };
         _controller.StateChanged += RefreshIfOpen;
         _history.Changed += RefreshIfOpen;
+        // Download progress doesn't show here, so only a new phase (or a pending install) needs a rebuild.
+        Updater.Shared.Changed += () =>
+        {
+            var state = (Updater.Shared.Phase, Updater.Shared.InstallPending);
+            if (state == _updateState) return;
+            _updateState = state;
+            RefreshIfOpen();
+        };
     }
 
     /// <summary>A click on the tray icon: open, or close if it's open (the click itself closes it first).</summary>
@@ -221,7 +230,8 @@ public sealed class PopoverWindow : Window
         }
         if (!Permissions.MicrophoneGranted) items.Add((L("需要麦克风权限", "Microphone permission needed"), SettingsPage.General));
         var failed = FailedRecord();
-        if (items.Count == 0 && failed == null) return null;
+        var update = UpdateBanner();
+        if (items.Count == 0 && failed == null && update == null) return null;
 
         var stack = new StackPanel { Spacing = 8 };
         foreach (var (text, page) in items)
@@ -246,7 +256,35 @@ public sealed class PopoverWindow : Window
             stack.Children.Add(new Banner(Glyphs.Refresh, Tint.Red,
                 L($"上一次转写失败（{duration} 录音已保存）", $"Last dictation failed ({duration} recording saved)"), retry));
         }
+        if (update != null) stack.Children.Add(update);
         return stack;
+    }
+
+    /// <summary>A downloaded update, or one that has to be downloaded by hand.</summary>
+    private Banner? UpdateBanner()
+    {
+        var updater = Updater.Shared;
+        if (updater.Update is not { } update) return null;
+        var version = update.Version.ToString();
+        if (updater.Phase == Updater.UpdatePhase.Ready)
+        {
+            var restart = new Button { Content = L("重启更新", "Restart to update"), IsEnabled = !updater.InstallPending };
+            restart.Click += (_, _) => updater.InstallAndRestart();
+            return new Banner(Glyphs.Download, Tint.Blue, updater.InstallPending
+                ? L($"听写结束后自动更新到 {version}", $"Updates to {version} after this dictation")
+                : L($"新版本 {version} 已就绪", $"Version {version} is ready"), restart);
+        }
+        if (updater.Phase == Updater.UpdatePhase.Available)
+        {
+            var download = new Button { Content = L("下载", "Download") };
+            download.Click += (_, _) =>
+            {
+                Dismiss();
+                Updater.OpenInBrowser(update.PageUrl);
+            };
+            return new Banner(Glyphs.Download, Tint.Blue, L($"有新版本 {version}", $"Version {version} is available"), download);
+        }
+        return null;
     }
 
     private DictationRecord? FailedRecord()

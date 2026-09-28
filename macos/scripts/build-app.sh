@@ -4,6 +4,10 @@
 #   scripts/build-app.sh             build and install into /Applications
 #   scripts/build-app.sh --package   build a distributable zip in dist/ (doesn't touch /Applications)
 #
+# The zip is signed with $OPENTYPELESS_SIGNING_IDENTITY when it's set (the release certificate, set up by CI, see
+# scripts/create-release-cert.sh), and ad hoc otherwise. A stable certificate lets in-app updates keep the
+# Accessibility and Microphone permissions, and lets the updater check that an update was signed by the same key.
+#
 # Keeping the system tidy:
 #   • The .app is assembled in a hidden staging folder (never indexed by Spotlight), moved into
 #     /Applications, and the staging copy is deleted — no second "OpenTypeless" in Launchpad/Spotlight.
@@ -64,9 +68,15 @@ cat > "$STAGED/Contents/Info.plist" <<PLIST
 PLIST
 
 if $PACKAGE; then
-    # Downloads are always signed ad hoc: a local identity means nothing on other Macs.
-    echo "▸ Signing ad-hoc for distribution"
-    codesign --force --deep --sign - "$STAGED"
+    if [[ -n "${OPENTYPELESS_SIGNING_IDENTITY:-}" ]]; then
+        echo "▸ Signing with the release certificate"
+        codesign --force --deep --sign "$OPENTYPELESS_SIGNING_IDENTITY" "$STAGED"
+    else
+        echo "▸ Signing ad-hoc for distribution"
+        codesign --force --deep --sign - "$STAGED"
+    fi
+    codesign --verify --deep --strict "$STAGED"
+    codesign -d -r- "$STAGED" 2>/dev/null | sed -n 's/^#* *designated => /  Requirement: /p'
     mkdir -p dist
     ZIP="dist/$APP_NAME-$VERSION-macOS-arm64.zip"
     rm -f "$ZIP"

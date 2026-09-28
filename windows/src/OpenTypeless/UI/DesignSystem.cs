@@ -91,6 +91,7 @@ public static class Glyphs
     public const string Message = "";
     public const string Record = "";
     public const string Dictionary = "";
+    public const string Download = "";
     public const string TouchPointer = "";
 }
 

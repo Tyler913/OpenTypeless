@@ -66,6 +66,8 @@ struct GeneralPage: View {
                 }
             }
 
+            UpdatesSection(settings: settings)
+
             CardSection(title: L("听写", "Dictation")) {
                 CardRow(icon: "doc.on.clipboard.fill", iconColor: .brown, title: L("恢复剪贴板", "Restore clipboard"),
                         subtitle: L("插入文字后，把剪贴板恢复成原来的内容", "Put your previous clipboard back after inserting")) {
@@ -104,6 +106,77 @@ struct GeneralPage: View {
     private func refreshLaunchState() {
         launchAtLogin = LaunchAtLogin.isEnabled
         launchNeedsApproval = LaunchAtLogin.needsApproval
+    }
+}
+
+/// Current version, update status and the one action that fits it, plus the automatic-check switch.
+private struct UpdatesSection: View {
+    @ObservedObject var settings: AppSettings
+    @ObservedObject var updater = Updater.shared
+
+    var body: some View {
+        CardSection(title: L("更新", "Updates"), footer: updater.manualReason) {
+            CardRow(icon: "arrow.down.circle.fill", iconColor: .indigo,
+                    title: "OpenTypeless \(updater.currentVersionText)", subtitle: status) {
+                action
+            }
+            if let update = updater.update {
+                CardDivider(inset: 50)
+                CardRow(icon: "sparkles", iconColor: .purple, title: L("\(update.version) 更新内容", "What’s new in \(update.version)"),
+                        subtitle: update.notes.isEmpty ? nil : String(update.notes.prefix(280))) {
+                    HStack(spacing: 8) {
+                        if updater.canSkip {
+                            Button(L("跳过此版本", "Skip this version")) { updater.skipUpdate() }.controlSize(.small)
+                        }
+                        Button(L("发布说明", "Release notes")) { NSWorkspace.shared.open(update.pageURL) }.controlSize(.small)
+                    }
+                }
+            }
+            CardDivider(inset: 50)
+            CardRow(icon: "clock.arrow.circlepath", iconColor: .gray, title: L("自动检查更新", "Check automatically"),
+                    subtitle: L("每天一次，在后台下载，由你决定何时安装", "Once a day. Downloads in the background; installs when you choose")) {
+                Toggle("", isOn: $settings.autoCheckUpdates).toggleStyle(.switch).labelsHidden()
+            }
+        }
+    }
+
+    private var status: String {
+        let version = updater.update?.version.description ?? ""
+        switch updater.phase {
+        case .idle:
+            if updater.isDevelopmentBuild { return L("开发版本不会检查更新", "Development builds don’t check for updates") }
+            return updater.lastChecked.map { L("上次检查：", "Last checked ") + $0.shortStamp } ?? L("还没有检查过", "Not checked yet")
+        case .checking: return L("正在检查…", "Checking…")
+        case .upToDate: return L("已是最新版本", "You’re up to date")
+        case .available: return L("有新版本 \(version)", "Version \(version) is available")
+        case let .downloading(progress): return L("正在下载 \(version)… \(Int(progress * 100))%", "Downloading \(version)… \(Int(progress * 100))%")
+        case .ready:
+            return updater.installPending
+                ? L("这次听写结束后自动重启并更新", "Restarts to update when this dictation finishes")
+                : L("\(version) 已下载，重启即可完成更新", "\(version) is downloaded. Restart to finish updating")
+        case .installing: return L("正在重启…", "Restarting…")
+        case let .failed(message): return message
+        }
+    }
+
+    @ViewBuilder private var action: some View {
+        switch updater.phase {
+        case .checking, .downloading, .installing:
+            ProgressView().controlSize(.small)
+        case .ready:
+            Button(L("重启并更新", "Restart to update")) { updater.installAndRelaunch() }
+                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+                .disabled(updater.installPending)
+        case .available:
+            if let update = updater.update {
+                Button(L("前往下载…", "Download…")) { NSWorkspace.shared.open(update.pageURL) }.controlSize(.small)
+            }
+        case .idle, .upToDate, .failed:
+            if !updater.isDevelopmentBuild {
+                Button(L("检查更新", "Check now")) { updater.checkNow() }.controlSize(.small)
+            }
+        }
     }
 }
 

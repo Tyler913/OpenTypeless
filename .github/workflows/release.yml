@@ -21,6 +21,7 @@ jobs:
     name: macOS
     if: ${{ !endsWith(github.ref_name, '-windows') }}
     uses: ./.github/workflows/macos.yml
+    secrets: inherit # the release signing certificate
 
   windows:
     name: Windows

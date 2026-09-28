@@ -191,6 +191,12 @@ public sealed class Updater
         if (update.Sha256 == null) return L("GitHub 没有提供这个文件的校验值", "GitHub published no checksum for this download");
         var folder = InstallDirectory;
         if (!File.Exists(Path.Combine(folder, "OpenTypeless.exe"))) return L("找不到安装位置", "Can't find where OpenTypeless is installed");
+        // The whole folder is replaced, so it must not hold (or be inside) the settings and history.
+        if (UpdateInstaller.Overlaps(folder, AppPaths.Support))
+        {
+            return L($"OpenTypeless 装在了它的数据文件夹里（{folder}），请把它移到别处，比如 %LOCALAPPDATA%\\Programs",
+                     $"OpenTypeless is installed in its own data folder ({folder}); move it elsewhere, such as %LOCALAPPDATA%\\Programs");
+        }
         // The installer renames the install folder, so both it and its parent must be writable.
         if (!IsWritable(folder) || Path.GetDirectoryName(folder) is not { } parent || !IsWritable(parent))
         {

@@ -18,8 +18,9 @@ public static class UpdateInstaller
         if (index < 0 || index + 2 >= args.Length || !int.TryParse(args[index + 1], out var pid)) return 2;
         var target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(args[index + 2]));
         var source = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
-        // Only ever replace a folder that holds OpenTypeless, and never the one this installer runs from.
-        if (!File.Exists(Path.Combine(target, "OpenTypeless.exe")) || string.Equals(target, source, StringComparison.OrdinalIgnoreCase))
+        // Only ever replace a folder that holds OpenTypeless, and never the one this installer runs from or the one
+        // holding settings and history.
+        if (!File.Exists(Path.Combine(target, "OpenTypeless.exe")) || Overlaps(target, source) || Overlaps(target, AppPaths.Support))
         {
             return 2;
         }
@@ -41,6 +42,14 @@ public static class UpdateInstaller
             WorkingDirectory = target,
         })?.Dispose();
         return 0;
+    }
+
+    /// <summary>True if the two folders are the same or one is inside the other.</summary>
+    public static bool Overlaps(string a, string b)
+    {
+        var x = Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)) + Path.DirectorySeparatorChar;
+        var y = Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)) + Path.DirectorySeparatorChar;
+        return x.StartsWith(y, StringComparison.OrdinalIgnoreCase) || y.StartsWith(x, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool WaitForExit(int pid)

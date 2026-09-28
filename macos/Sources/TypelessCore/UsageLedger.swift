@@ -181,6 +181,7 @@ public struct UsageTotals: Equatable, Sendable {
 public struct HeatmapCell: Equatable, Sendable {
     public let date: CalendarDay
     public let words: Int
+    public let dictations: Int
     public let level: Int
     public let isFuture: Bool
 }
@@ -267,8 +268,8 @@ public struct UsageLedger: Equatable, Sendable {
         return (0..<weeks).map { week in
             (0..<7).map { weekday in
                 let index = week * 7 + weekday
-                return HeatmapCell(date: dates[index], words: words[index], level: Self.level(words[index], thresholds: thresholds),
-                                   isFuture: dates[index] > today)
+                return HeatmapCell(date: dates[index], words: words[index], dictations: day(dates[index])?.dictations ?? 0,
+                                   level: Self.level(words[index], thresholds: thresholds), isFuture: dates[index] > today)
             }
         }
     }

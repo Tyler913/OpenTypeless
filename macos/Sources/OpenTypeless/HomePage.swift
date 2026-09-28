@@ -61,12 +61,27 @@ struct HomePage: View {
                 }
             }
 
-            CardSection(title: L("花费", "Spend"), footer: spendFooter) {
-                SpendRow(symbol: "sun.max.fill", color: .blue, title: L("今天", "Today"), totals: todayTotals)
-                CardDivider(inset: 50)
-                SpendRow(symbol: "calendar", color: .teal, title: L("本月", "This month"), totals: month)
-                CardDivider(inset: 50)
-                SpendRow(symbol: "dollarsign", color: .green, title: L("累计", "All time"), totals: all)
+            // Spend takes a third of the width, the activity grid the rest.
+            VStack(alignment: .leading, spacing: 8) {
+                ProportionalRow(ratios: [1, 2], spacing: 14) {
+                    TitledCard(title: L("花费", "Spend")) {
+                        SpendLine(title: L("今天", "Today"), totals: todayTotals)
+                        CardDivider(inset: 14)
+                        SpendLine(title: L("本月", "This month"), totals: month)
+                        CardDivider(inset: 14)
+                        SpendLine(title: L("累计", "All time"), totals: all)
+                    }
+                    TitledCard(title: L("活跃度", "Activity")) {
+                        ActivityHeatmap(ledger: ledger, today: today)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                    }
+                }
+                Text(spendFooter)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 4)
             }
             if all.unpriced > 0 {
                 Banner(symbol: "exclamationmark.triangle.fill", color: .orange,
@@ -74,13 +89,6 @@ struct HomePage: View {
                                "\(all.unpriced) requests used a model with no price, so they aren't in the spend.")) {
                     Button(L("设置价格", "Set prices")) { navigation.page = .models }.controlSize(.small)
                 }
-            }
-
-            CardSection(title: L("活跃度", "Activity"),
-                        footer: L("颜色越深，那天说得越多。", "The darker the square, the more you dictated that day.")) {
-                ActivityHeatmap(ledger: ledger, today: today)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
             }
         }
         .task { prices.refreshIfStale(maxAge: 60 * 60) }
@@ -126,19 +134,79 @@ private struct StatTile: View {
     }
 }
 
-private struct SpendRow: View {
-    let symbol: String
-    let color: Color
+/// One spend figure in the narrow Spend column: label, amount, and the split between the two steps.
+private struct SpendLine: View {
     let title: String
     let totals: UsageTotals
 
     var body: some View {
-        CardRow(icon: symbol, iconColor: color, title: title,
-                subtitle: totals.cost > 0
-                    ? L("语音转文字 \(UsageFormat.money(totals.transcriptionCost)) · 文字整理 \(UsageFormat.money(totals.cleanupCost))",
-                        "Speech-to-text \(UsageFormat.money(totals.transcriptionCost)) · Clean-up \(UsageFormat.money(totals.cleanupCost))")
-                    : nil) {
-            Text(UsageFormat.money(totals.cost)).font(.system(size: 15, weight: .semibold)).monospacedDigit()
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.system(size: 11.5)).foregroundStyle(.secondary)
+            Text(UsageFormat.money(totals.cost))
+                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            if totals.cost > 0 {
+                Text(L("转写 \(UsageFormat.money(totals.transcriptionCost)) · 整理 \(UsageFormat.money(totals.cleanupCost))",
+                       "Speech \(UsageFormat.money(totals.transcriptionCost)) · Clean-up \(UsageFormat.money(totals.cleanupCost))"))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A section title above a card that stretches to the height its row gives it (see `ProportionalRow`).
+private struct TitledCard<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+            Card {
+                VStack(alignment: .leading, spacing: 0) { content }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        }
+    }
+}
+
+/// Children side by side with widths in proportion (1 : 2 gives a third and two thirds), all as tall as the tallest.
+struct ProportionalRow: Layout {
+    var ratios: [CGFloat]
+    var spacing: CGFloat
+
+    private func widths(_ total: CGFloat, count: Int) -> [CGFloat] {
+        guard count > 0 else { return [] }
+        let available = max(0, total - spacing * CGFloat(count - 1))
+        let parts = (0..<count).map { $0 < ratios.count ? ratios[$0] : 1 }
+        let sum = parts.reduce(0, +)
+        return parts.map { available * $0 / sum }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 600
+        let heights = zip(subviews, widths(width, count: subviews.count)).map { subview, width in
+            subview.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        }
+        return CGSize(width: width, height: heights.max() ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        for (subview, width) in zip(subviews, widths(bounds.width, count: subviews.count)) {
+            subview.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading,
+                          proposal: ProposedViewSize(width: width, height: bounds.height))
+            x += width + spacing
         }
     }
 }
@@ -148,6 +216,14 @@ private struct SpendRow: View {
 struct ActivityHeatmap: View {
     let ledger: UsageLedger
     let today: CalendarDay
+    /// The square under the pointer, whose day is shown in a bubble right away (tooltips take a second and are
+    /// easy to miss on squares this small).
+    @State private var hovered: Spot?
+
+    private struct Spot: Equatable {
+        let week: Int
+        let day: Int
+    }
 
     private let cell: CGFloat = 11
     private let gap: CGFloat = 3
@@ -157,7 +233,15 @@ struct ActivityHeatmap: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             GeometryReader { geometry in
-                grid(weeks: max(4, min(53, Int((geometry.size.width - labelWidth) / (cell + gap)))))
+                let weeks = max(4, min(53, Int((geometry.size.width - labelWidth) / (cell + gap))))
+                let firstWeekday = Calendar.current.firstWeekday - 1
+                let columns = ledger.heatmap(today: today, weeks: weeks, firstWeekday: firstWeekday)
+                grid(columns, firstWeekday: firstWeekday)
+                    .overlay(alignment: .topLeading) {
+                        if let hovered, columns.indices.contains(hovered.week) {
+                            bubble(for: columns[hovered.week][hovered.day], at: hovered, width: geometry.size.width)
+                        }
+                    }
             }
             .frame(height: monthRow + 7 * cell + 6 * gap)
             HStack(spacing: 3) {
@@ -171,9 +255,7 @@ struct ActivityHeatmap: View {
         }
     }
 
-    private func grid(weeks: Int) -> some View {
-        let firstWeekday = Calendar.current.firstWeekday - 1
-        let columns = ledger.heatmap(today: today, weeks: weeks, firstWeekday: firstWeekday)
+    private func grid(_ columns: [[HeatmapCell]], firstWeekday: Int) -> some View {
         let months = monthLabels(columns)
         return HStack(alignment: .top, spacing: gap) {
             VStack(alignment: .leading, spacing: gap) {
@@ -198,11 +280,30 @@ struct ActivityHeatmap: View {
                         RoundedRectangle(cornerRadius: 2.5)
                             .fill(item.isFuture ? Color.clear : Self.shade(item.level))
                             .frame(width: cell, height: cell)
-                            .help(item.isFuture ? "" : Self.tooltip(item))
+                            .onHover { inside in
+                                let spot = Spot(week: week, day: day)
+                                if inside, !item.isFuture { hovered = spot } else if hovered == spot { hovered = nil }
+                            }
                     }
                 }
             }
         }
+    }
+
+    /// The hovered day's date, dictations and words, above the square (below it in the top rows).
+    private func bubble(for item: HeatmapCell, at spot: Spot, width: CGFloat) -> some View {
+        let x = labelWidth + CGFloat(spot.week) * (cell + gap) + cell / 2
+        let y = monthRow + CGFloat(spot.day) * (cell + gap) + cell / 2
+        return Text(Self.tooltip(item))
+            .font(.system(size: 11, weight: .medium))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.regularMaterial))
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
+            .shadow(color: .black.opacity(0.15), radius: 4, y: 1)
+            .fixedSize()
+            .position(x: min(max(x, 95), max(95, width - 95)), y: spot.day < 3 ? y + 22 : y - 22)
+            .allowsHitTesting(false)
     }
 
     /// Month names above the first week that starts in that month (skipped when too close to the edge).
@@ -239,8 +340,8 @@ struct ActivityHeatmap: View {
 
     static func tooltip(_ item: HeatmapCell) -> String {
         let date = L("\(item.date.month)月\(item.date.day)日", "\(monthName(item.date.month)) \(item.date.day)")
-        return item.words > 0
-            ? L("\(date)：\(UsageFormat.count(item.words)) 字", "\(date): \(UsageFormat.count(item.words)) words")
-            : L("\(date)：没有听写", "\(date): no dictation")
+        guard item.dictations > 0 else { return L("\(date)：没有听写", "\(date): no dictation") }
+        return L("\(date)：\(item.dictations) 次听写 · \(UsageFormat.count(item.words)) 字",
+                 "\(date): \(item.dictations) \(item.dictations == 1 ? "dictation" : "dictations") · \(UsageFormat.count(item.words)) words")
     }
 }

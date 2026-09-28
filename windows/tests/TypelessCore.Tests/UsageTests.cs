@@ -293,6 +293,8 @@ public class UsageTests
         Assert.True(last[4].IsFuture);
         Assert.Equal([3, 2, 1, 4], last[0..4].Select(c => c.Level)); // 300, 200, 100, 400 words
         Assert.Equal(0, sundayFirst[0][0].Level);
+        Assert.Equal((400, 1), (last[3].Words, last[3].Dictations)); // what hovering a day shows
+        Assert.Equal(0, last[4].Dictations);
 
         var mondayFirst = ledger.Heatmap(today, 1, firstWeekday: 1);
         Assert.Equal(new DateOnly(2026, 9, 28), mondayFirst[0][0].Date);

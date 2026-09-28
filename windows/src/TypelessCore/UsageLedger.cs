@@ -91,7 +91,7 @@ public sealed record UsageTotals(int Words, int Dictations, double SpeakingSecon
     public double? SpeakingWordsPerMinute => SpeakingSeconds >= 1 && Words > 0 ? Words / (SpeakingSeconds / 60) : null;
 }
 
-public sealed record HeatmapCell(DateOnly Date, int Words, int Level, bool IsFuture);
+public sealed record HeatmapCell(DateOnly Date, int Words, int Dictations, int Level, bool IsFuture);
 
 /// <summary>
 /// Daily totals of words, speaking time and spend since the app was first used. Kept in its own file
@@ -212,7 +212,7 @@ public sealed class UsageLedger
             {
                 var index = week * 7 + day;
                 var date = start.AddDays(index);
-                column[day] = new HeatmapCell(date, words[index], Level(words[index], thresholds), date > today);
+                column[day] = new HeatmapCell(date, words[index], Day(date)?.Dictations ?? 0, Level(words[index], thresholds), date > today);
             }
             columns.Add(column);
         }

@@ -186,6 +186,8 @@ import Testing
         #expect(last[3].date == today && !last[3].isFuture && last[4].isFuture)
         #expect(last[0..<4].map(\.level) == [3, 2, 1, 4]) // 300, 200, 100, 400 words
         #expect(sundayFirst[0][0].level == 0)
+        #expect(last[3].words == 400 && last[3].dictations == 1) // what hovering a day shows
+        #expect(last[4].dictations == 0)
 
         let mondayFirst = ledger.heatmap(today: today, weeks: 1, firstWeekday: 1)
         #expect(mondayFirst[0][0].date == CalendarDay(year: 2026, month: 9, day: 28))

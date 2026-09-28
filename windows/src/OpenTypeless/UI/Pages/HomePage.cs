@@ -79,14 +79,26 @@ public sealed class HomePage : PageBase
         explanation.Margin = new Thickness(4, 0, 4, 0);
         Body.Children.Add(new StackPanel { Spacing = 8, Children = { tiles, explanation } });
 
-        // Spend
-        var spend = new CardSection { Title = L("花费", "Spend"), Footer = SpendFooter() };
-        spend.Body.Add(SpendRow(Glyphs.Calendar, Tint.Blue, L("今天", "Today"), todayTotals));
-        spend.Body.Add(new CardDivider());
-        spend.Body.Add(SpendRow(Glyphs.Calendar, Tint.Teal, L("本月", "This month"), month));
-        spend.Body.Add(new CardDivider());
-        spend.Body.Add(SpendRow(Glyphs.Money, Tint.Green, L("累计", "All time"), all));
-        Body.Children.Add(spend);
+        // Spend takes a third of the width, the activity grid the rest; both cards as tall as the taller one.
+        var spend = new StackPanel();
+        spend.Children.Add(SpendLine(L("今天", "Today"), todayTotals));
+        spend.Children.Add(new CardDivider { Inset = 14 });
+        spend.Children.Add(SpendLine(L("本月", "This month"), month));
+        spend.Children.Add(new CardDivider { Inset = 14 });
+        spend.Children.Add(SpendLine(L("累计", "All time"), all));
+        _heatmap.Margin = new Thickness(14, 12, 14, 12);
+        _heatmap.Ledger = ledger;
+        if (_heatmap.Parent is Panel old) old.Children.Remove(_heatmap);
+        var row = new Grid { ColumnSpacing = 14 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+        row.Children.Add(TitledCard(L("花费", "Spend"), spend));
+        var activity = TitledCard(L("活跃度", "Activity"), _heatmap);
+        Grid.SetColumn(activity, 1);
+        row.Children.Add(activity);
+        var footer = Ui.Text(SpendFooter(), 11.5, foreground: Ui.Secondary, wrap: true);
+        footer.Margin = new Thickness(4, 0, 4, 0);
+        Body.Children.Add(new StackPanel { Spacing = 8, Children = { row, footer } });
         if (all.Unpriced > 0)
         {
             var button = new Button { Content = L("设置价格", "Set prices") };
@@ -95,18 +107,22 @@ public sealed class HomePage : PageBase
                 L($"有 {all.Unpriced} 次请求的模型没有价格，没有计入花费。", $"{all.Unpriced} requests used a model with no price, so they aren't in the spend."),
                 button));
         }
+    }
 
-        // Activity
-        var activity = new CardSection
-        {
-            Title = L("活跃度", "Activity"),
-            Footer = L("颜色越深，那天说得越多。", "The darker the square, the more you dictated that day."),
-        };
-        _heatmap.Margin = new Thickness(14, 12, 14, 12);
-        _heatmap.Ledger = ledger;
-        if (_heatmap.Parent is Panel old) old.Children.Remove(_heatmap);
-        activity.Body.Add(_heatmap);
-        Body.Children.Add(activity);
+    /// A section title above a card that fills the rest of its grid cell.
+    private static Grid TitledCard(string title, UIElement content)
+    {
+        var grid = new Grid { RowSpacing = 8 };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        var label = Ui.Text(title, 12, FontWeights.SemiBold, Ui.Secondary);
+        label.Margin = new Thickness(4, 0, 0, 0);
+        grid.Children.Add(label);
+        var card = Card.Make(content);
+        card.VerticalAlignment = VerticalAlignment.Stretch;
+        Grid.SetRow(card, 1);
+        grid.Children.Add(card);
+        return grid;
     }
 
     private static void AddTile(Grid grid, int row, int column, string glyph, Tint tint, string title, string value, string caption)
@@ -134,17 +150,21 @@ public sealed class HomePage : PageBase
         grid.Children.Add(tile);
     }
 
-    private static CardRow SpendRow(string glyph, Tint tint, string title, UsageTotals totals) => new()
+    /// One spend figure in the narrow Spend column: label, amount, and the split between the two steps.
+    private static StackPanel SpendLine(string title, UsageTotals totals)
     {
-        Glyph = glyph,
-        Tint = tint,
-        Title = title,
-        Subtitle = totals.Cost > 0
-            ? L($"语音转文字 {UsageFormat.Money(totals.TranscriptionCost)} · 文字整理 {UsageFormat.Money(totals.CleanupCost)}",
-                $"Speech-to-text {UsageFormat.Money(totals.TranscriptionCost)} · Clean-up {UsageFormat.Money(totals.CleanupCost)}")
-            : null,
-        Trailing = Ui.Text(UsageFormat.Money(totals.Cost), 15, FontWeights.SemiBold),
-    };
+        var amount = Ui.Text(UsageFormat.Money(totals.Cost), 20, FontWeights.SemiBold);
+        amount.TextTrimming = TextTrimming.CharacterEllipsis;
+        var line = new StackPanel { Spacing = 2, Padding = new Thickness(14, 10, 14, 10), Children = { Ui.Text(title, 11.5, foreground: Ui.Secondary), amount } };
+        if (totals.Cost > 0)
+        {
+            line.Children.Add(Ui.Text(
+                L($"转写 {UsageFormat.Money(totals.TranscriptionCost)} · 整理 {UsageFormat.Money(totals.CleanupCost)}",
+                  $"Speech {UsageFormat.Money(totals.TranscriptionCost)} · Clean-up {UsageFormat.Money(totals.CleanupCost)}"),
+                10.5, foreground: Ui.Tertiary, wrap: true));
+        }
+        return line;
+    }
 
     private string SpendFooter()
     {
@@ -166,6 +186,9 @@ internal sealed class ActivityHeatmap : UserControl
     private const double LabelWidth = 30;
     private UsageLedger? _ledger;
     private int _weeks;
+    /// The square under the pointer, whose day is shown in a bubble right away (tooltips take a second and are
+    /// easy to miss on squares this small).
+    private Border? _hovered;
 
     public ActivityHeatmap()
     {
@@ -236,10 +259,14 @@ internal sealed class ActivityHeatmap : UserControl
                 var cell = columns[week][day];
                 if (cell.IsFuture) continue;
                 var square = new Border { CornerRadius = new CornerRadius(2.5), Background = Shade(cell.Level) };
-                ToolTipService.SetToolTip(square, cell.Words > 0
-                    ? L($"{cell.Date.Month}月{cell.Date.Day}日：{UsageFormat.Count(cell.Words)} 字",
-                        $"{MonthName(cell.Date.Month)} {cell.Date.Day}: {UsageFormat.Count(cell.Words)} words")
-                    : L($"{cell.Date.Month}月{cell.Date.Day}日：没有听写", $"{MonthName(cell.Date.Month)} {cell.Date.Day}: no dictation"));
+                var row = day;
+                square.PointerEntered += (_, _) => ShowBubble(square, cell, row);
+                square.PointerExited += (_, _) =>
+                {
+                    if (_hovered != square) return;
+                    _hovered = null;
+                    _bubble.Visibility = Visibility.Collapsed;
+                };
                 Grid.SetRow(square, day + 1);
                 Grid.SetColumn(square, week + 1);
                 grid.Children.Add(square);
@@ -254,7 +281,48 @@ internal sealed class ActivityHeatmap : UserControl
         }
         legend.Children.Add(new TextBlock { Text = L("多", "More"), FontSize = 10, Foreground = Ui.Secondary, Margin = new Thickness(3, 0, 0, 0) });
 
-        Content = new StackPanel { Spacing = 8, Children = { grid, legend } };
+        _bubble.Visibility = Visibility.Collapsed;
+        _hovered = null;
+        if (_overlay.Parent is Panel previous) previous.Children.Remove(_overlay);
+        Content = new StackPanel { Spacing = 8, Children = { new Grid { Children = { grid, _overlay } }, legend } };
+    }
+
+    private readonly TextBlock _bubbleText = new() { FontSize = 11, FontWeight = FontWeights.Medium };
+    private readonly Border _bubble = new()
+    {
+        Padding = new Thickness(8, 4, 8, 5),
+        CornerRadius = new CornerRadius(6),
+        BorderThickness = new Thickness(1),
+        Visibility = Visibility.Collapsed,
+    };
+    private readonly Canvas _overlay = new() { IsHitTestVisible = false };
+
+    /// The hovered day's date, dictations and words, above the square (below it in the top rows).
+    private void ShowBubble(Border square, HeatmapCell cell, int row)
+    {
+        if (_bubble.Child == null)
+        {
+            _bubble.Child = _bubbleText;
+            _bubble.Background = Palette.Resource<Brush>("AcrylicInAppFillColorDefaultBrush", Palette.Theme("CardBackgroundFillColorDefaultBrush"));
+            _bubble.BorderBrush = Palette.Resource<Brush>("SurfaceStrokeColorFlyoutBrush", Palette.Theme("CardStrokeColorDefaultBrush"));
+            _overlay.Children.Add(_bubble);
+        }
+        _hovered = square;
+        _bubbleText.Text = Tooltip(cell);
+        _bubble.Visibility = Visibility.Visible;
+        _bubble.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        var size = _bubble.DesiredSize;
+        var at = square.TransformToVisual(_overlay).TransformPoint(new Windows.Foundation.Point(0, 0));
+        Canvas.SetLeft(_bubble, Math.Clamp(at.X + Cell / 2 - size.Width / 2, 0, Math.Max(0, _overlay.ActualWidth - size.Width)));
+        Canvas.SetTop(_bubble, row < 3 ? at.Y + Cell + 6 : at.Y - size.Height - 6);
+    }
+
+    private static string Tooltip(HeatmapCell cell)
+    {
+        var date = L($"{cell.Date.Month}月{cell.Date.Day}日", $"{MonthName(cell.Date.Month)} {cell.Date.Day}");
+        if (cell.Dictations == 0) return L($"{date}：没有听写", $"{date}: no dictation");
+        return L($"{date}：{cell.Dictations} 次听写 · {UsageFormat.Count(cell.Words)} 字",
+                 $"{date}: {cell.Dictations} {(cell.Dictations == 1 ? "dictation" : "dictations")} · {UsageFormat.Count(cell.Words)} words");
     }
 
     /// <summary>Empty days in neutral grey, busier days in deeper shades of the accent colour.</summary>

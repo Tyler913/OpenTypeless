@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -10,76 +11,60 @@ using TypelessCore;
 
 namespace OpenTypeless.UI;
 
+/// <summary>
+/// Every dictation, newest first and grouped by day, with search; the selected one's text, details and actions on
+/// the right. How long recordings are kept sits in the toolbar.
+/// </summary>
 public sealed class HistoryPage : PageBase
 {
     private readonly HistoryStore _history = HistoryStore.Shared;
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly SessionController _controller;
+    private readonly AutoSuggestBox _search = new()
+    {
+        PlaceholderText = L("搜索听写内容", "Search dictations"),
+        QueryIcon = new SymbolIcon(Symbol.Find),
+        Width = 260,
+    };
+    private readonly TextBlock _storage = Ui.Text("", 12, foreground: Ui.Secondary);
+    private readonly ContentControl _content = new()
+    {
+        HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        VerticalContentAlignment = VerticalAlignment.Stretch,
+    };
     private string? _selection;
-    private CardRow? _retentionRow;
-    private long? _storageBytes;
+    private string? _shownDetail;
 
     public HistoryPage(SessionController controller) : base(SettingsPage.History, scrolls: false)
     {
         _controller = controller;
-        _history.Changed += Render;
+        // The toolbar is built once, so typing in the search box survives new dictations arriving.
+        var grid = new Grid { RowSpacing = 14 };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.Children.Add(Toolbar());
+        Grid.SetRow(_content, 1);
+        grid.Children.Add(_content);
+        Body.Children.Add(grid);
+        _search.TextChanged += (_, _) => Render();
+        _history.Changed += OnHistoryChanged;
         Render();
     }
 
-    protected override void OnClosed() => _history.Changed -= Render;
+    protected override void OnClosed() => _history.Changed -= OnHistoryChanged;
 
-    private string? SelectedId => _selection != null && _history.Records.Any(r => r.Id == _selection) ? _selection : _history.Records.FirstOrDefault()?.Id;
-
-    private void Render()
+    private void OnHistoryChanged()
     {
-        Body.Children.Clear();
-        Body.Children.Add(RetentionCard());
+        Render();
         RefreshStorage();
-        if (_history.Records.Count == 0)
-        {
-            var empty = new StackPanel
-            {
-                Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                Children = { Ui.Icon(Glyphs.Microphone, 36, Ui.Tertiary), Ui.Text(L("还没有听写记录", "No dictations yet"), 13, foreground: Ui.Secondary) },
-            };
-            Body.Children.Add(new Grid { Children = { empty } });
-            return;
-        }
-
-        var selectedId = SelectedId;
-        var detailHost = new ContentControl { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
-        var list = new ListView { SelectionMode = ListViewSelectionMode.Single, Padding = new Thickness(0, 4, 0, 4) };
-        foreach (var record in _history.Records)
-        {
-            var row = Row(record);
-            list.Items.Add(row);
-            if (record.Id == selectedId) list.SelectedItem = row;
-        }
-        list.SelectionChanged += (_, _) =>
-        {
-            if (list.SelectedItem is FrameworkElement { Tag: string id } && id != _shownDetail)
-            {
-                _selection = id;
-                ShowDetail(detailHost);
-            }
-        };
-
-        var grid = new Grid { ColumnSpacing = 14 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.Children.Add(Card.Make(list));
-        Grid.SetColumn(detailHost, 1);
-        grid.Children.Add(detailHost);
-        Body.Children.Add(grid);
-        ShowDetail(detailHost);
     }
 
-    private string? _shownDetail;
+    // MARK: Toolbar
 
-    private FrameworkElement RetentionCard()
+    private Grid Toolbar()
     {
         var options = HistoryRetentionExtensions.All;
-        var picker = new ComboBox { MinWidth = 150 };
+        var picker = new ComboBox { MinWidth = 140 };
         foreach (var option in options) picker.Items.Add(option.Label());
         picker.SelectedIndex = Math.Max(0, Array.IndexOf(options, _settings.HistoryRetention));
         picker.SelectionChanged += (_, _) =>
@@ -89,96 +74,299 @@ public sealed class HistoryPage : PageBase
             _history.ApplyRetention();
             RefreshStorage();
         };
-        _retentionRow = new CardRow
+        var storage = new StackPanel
         {
-            Glyph = Glyphs.Folder, Tint = Tint.Gray, Title = L("录音保存时间", "Keep recordings"),
-            Subtitle = RetentionSubtitle(), Trailing = picker,
+            Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
+            Children = { Ui.Icon(Glyphs.Folder, 12, Ui.Secondary), _storage },
         };
-        return Card.Make(_retentionRow);
+        ToolTipService.SetToolTip(storage, L("录音和转写占用的空间。每分钟录音约 1.9 MB；转写失败的录音会一直保留，方便重试。",
+                                             "Space used by recordings and transcripts. Recordings take about 1.9 MB per minute; failed dictations keep theirs so you can retry."));
+        var trailing = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                storage,
+                new TextBlock { Text = L("保留录音", "Keep recordings"), VerticalAlignment = VerticalAlignment.Center },
+                picker,
+            },
+        };
+        var toolbar = new Grid { ColumnSpacing = 12 };
+        toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        toolbar.Children.Add(_search);
+        Grid.SetColumn(trailing, 2);
+        toolbar.Children.Add(trailing);
+        RefreshStorage();
+        return toolbar;
     }
 
-    /// <summary>Recomputes the space history takes (off the UI thread) and shows it under the retention picker.</summary>
+    /// <summary>Recomputes the space history takes (off the UI thread).</summary>
     private async void RefreshStorage()
     {
-        var row = _retentionRow;
         var bytes = await Task.Run(HistoryStore.StorageBytes);
-        _storageBytes = bytes;
-        if (row != null && row == _retentionRow) row.Subtitle = RetentionSubtitle();
+        _storage.Text = Formatting.Bytes(bytes);
     }
 
-    private string RetentionSubtitle()
+    // MARK: List
+
+    private List<DictationRecord> Filtered
     {
-        var used = _storageBytes is { } bytes ? L("目前占用 ", "Using ") + Formatting.Bytes(bytes) + L("。", ". ") : "";
-        return used + L("每分钟录音约 1.9 MB。转写失败的录音会一直保留，方便重试。",
-                        "Recordings take about 1.9 MB per minute. Failed dictations keep theirs so you can retry.");
+        get
+        {
+            var needle = _search.Text.Trim();
+            if (needle.Length == 0) return _history.Records.ToList();
+            return _history.Records.Where(r => r.FinalText.Contains(needle, StringComparison.CurrentCultureIgnoreCase)
+                                                || r.RawText.Contains(needle, StringComparison.CurrentCultureIgnoreCase)).ToList();
+        }
     }
 
-    private void ShowDetail(ContentControl host)
+    /// <summary>"Today", "Yesterday", "Fri, Sep 26" (with the year when it isn't this year).</summary>
+    private static string DayTitle(DateTime day)
     {
-        var record = _history.Records.FirstOrDefault(r => r.Id == SelectedId);
+        var today = DateTime.Today;
+        if (day == today) return L("今天", "Today");
+        if (day == today.AddDays(-1)) return L("昨天", "Yesterday");
+        var weekday = L("周" + "日一二三四五六"[(int)day.DayOfWeek], CultureInfo.InvariantCulture.DateTimeFormat.AbbreviatedDayNames[(int)day.DayOfWeek]);
+        var month = CultureInfo.InvariantCulture.DateTimeFormat.AbbreviatedMonthNames[day.Month - 1];
+        return day.Year == today.Year
+            ? L($"{day.Month}月{day.Day}日 {weekday}", $"{weekday}, {month} {day.Day}")
+            : L($"{day.Year}年{day.Month}月{day.Day}日", $"{month} {day.Day}, {day.Year}");
+    }
+
+    private void Render()
+    {
+        if (_history.Records.Count == 0)
+        {
+            _shownDetail = null;
+            var hotkey = _settings.Hotkey.DisplayName;
+            _content.Content = new StackPanel
+            {
+                Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                Children =
+                {
+                    Ui.Icon(Glyphs.Microphone, 36, Ui.Tertiary),
+                    Ui.Text(L("还没有听写记录", "No dictations yet"), 14, FontWeights.Medium),
+                    Ui.Text(L($"按住 {hotkey} 说话，每次听写都会保存在这里。", $"Hold {hotkey} and talk. Every dictation is kept here."), 12, foreground: Ui.Secondary),
+                },
+            };
+            return;
+        }
+
+        var records = Filtered;
+        var selectedId = _selection != null && records.Any(r => r.Id == _selection) ? _selection : records.FirstOrDefault()?.Id;
+        var detailHost = new ContentControl { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
+
+        FrameworkElement listContent;
+        if (records.Count == 0)
+        {
+            var none = Ui.Text(L("没有匹配的听写", "No matching dictations"), 12, foreground: Ui.Secondary);
+            none.HorizontalAlignment = HorizontalAlignment.Center;
+            none.VerticalAlignment = VerticalAlignment.Center;
+            listContent = none;
+        }
+        else
+        {
+            var list = new ListView { SelectionMode = ListViewSelectionMode.Single, Padding = new Thickness(0, 4, 0, 4) };
+            DateTime? currentDay = null;
+            foreach (var record in records)
+            {
+                var day = record.Date.LocalDateTime.Date;
+                if (day != currentDay)
+                {
+                    currentDay = day;
+                    // A day header between the rows; it can't be selected or focused.
+                    list.Items.Add(new ListViewItem
+                    {
+                        Content = Ui.Text(DayTitle(day), 11.5, FontWeights.SemiBold, Ui.Secondary),
+                        IsHitTestVisible = false,
+                        IsTabStop = false,
+                        MinHeight = 0,
+                        Padding = new Thickness(12, 10, 12, 2),
+                    });
+                }
+                var row = Row(record);
+                list.Items.Add(row);
+                if (record.Id == selectedId) list.SelectedItem = row;
+            }
+            list.SelectionChanged += (_, _) =>
+            {
+                if (list.SelectedItem is FrameworkElement { Tag: string id } && id != _shownDetail)
+                {
+                    _selection = id;
+                    ShowDetail(detailHost, id);
+                }
+            };
+            listContent = list;
+        }
+
+        var grid = new Grid { ColumnSpacing = 14 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(270) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.Children.Add(Card.Make(listContent));
+        Grid.SetColumn(detailHost, 1);
+        grid.Children.Add(detailHost);
+        _content.Content = grid;
+        _shownDetail = null;
+        ShowDetail(detailHost, selectedId);
+    }
+
+    private void ShowDetail(ContentControl host, string? id)
+    {
+        var record = _history.Records.FirstOrDefault(r => r.Id == id);
         _shownDetail = record?.Id;
-        host.Content = record == null ? null : Detail(record);
+        host.Content = record == null ? Card.Make() : Detail(record);
     }
 
+    private static string Preview(DictationRecord record)
+    {
+        if (record.FinalText.Length > 0) return record.FinalText;
+        return record.Status switch
+        {
+            DictationStatus.Recording => L("正在录音…", "Recording…"),
+            DictationStatus.Processing => L("正在处理…", "Processing…"),
+            _ => record.Error ?? L("（没有文字）", "(no text)"),
+        };
+    }
+
+    /// <summary>A list entry: time, duration and a status badge when it isn't simply done, then the start of the text.</summary>
     private static FrameworkElement Row(DictationRecord record)
     {
         var meta = new Grid();
         meta.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         meta.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        meta.Children.Add(new StackPanel
+        var leading = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6,
-            Children =
-            {
-                new Ellipse { Width = 6, Height = 6, Fill = Palette.Brush(record.Status.Tint()), VerticalAlignment = VerticalAlignment.Center },
-                Ui.Text(Formatting.ShortStamp(record.Date), 11.5, foreground: Ui.Secondary),
-            },
-        });
+            Children = { Ui.Text(record.Date.ToLocalTime().ToString("t"), 11.5, FontWeights.Medium, Ui.Secondary) },
+        };
+        if (record.Status != DictationStatus.Done)
+        {
+            leading.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = Palette.Brush(record.Status.Tint()), VerticalAlignment = VerticalAlignment.Center });
+            leading.Children.Add(Ui.Text(record.Status.Label(), 11, FontWeights.Medium, Palette.Brush(record.Status.Tint())));
+        }
+        meta.Children.Add(leading);
         var duration = Ui.Text(Formatting.DurationLabel(record.Duration), 11.5, foreground: Ui.Tertiary);
         Grid.SetColumn(duration, 1);
         meta.Children.Add(duration);
 
-        var empty = record.FinalText.Length == 0;
-        var text = Ui.Text(empty ? record.Error ?? L("（空）", "(empty)") : record.FinalText, 13, foreground: empty ? Ui.Secondary : null, wrap: true);
+        var text = Ui.Text(Preview(record), 13, foreground: record.FinalText.Length == 0 ? Ui.Secondary : null, wrap: true);
         text.MaxLines = 2;
         text.TextTrimming = TextTrimming.CharacterEllipsis;
-        return new StackPanel { Spacing = 4, Padding = new Thickness(0, 8, 0, 8), Tag = record.Id, Children = { meta, text } };
+        return new StackPanel { Spacing = 3, Padding = new Thickness(0, 7, 0, 7), Tag = record.Id, Children = { meta, text } };
     }
 
+    // MARK: Detail
+
+    /// <summary>
+    /// The selected dictation: when, how long, how many words and what it cost; the text itself; the raw transcript
+    /// behind an expander when it was cleaned up; and the actions.
+    /// </summary>
     private FrameworkElement Detail(DictationRecord record)
     {
-        var header = new Grid();
+        var details = new List<string> { Formatting.DurationLabel(record.Duration) };
+        var words = WordCount.Count(record.FinalText);
+        if (words > 0) details.Add(L($"{UsageFormat.Count(words)} 字", $"{UsageFormat.Count(words)} words"));
+        if (record.Cost is { } cost) details.Add(UsageFormat.Money(cost));
+
+        var header = new Grid { Padding = new Thickness(16) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.Children.Add(new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
+            Spacing = 3,
             Children =
             {
-                Ui.Text(record.Date.ToLocalTime().ToString("g"), 12.5, FontWeights.Medium),
-                Ui.Text("·", 12.5, foreground: Ui.Tertiary),
-                Ui.Text(Formatting.DurationLabel(record.Duration), 12.5, foreground: Ui.Secondary),
+                Ui.Text(record.Date.ToLocalTime().ToString("f"), 14, FontWeights.SemiBold),
+                Ui.Text(string.Join(" · ", details), 11.5, foreground: Ui.Secondary),
             },
         });
-        var pill = new StatusPill(record.Status.Label(), record.Status.Tint());
+        var pill = new StatusPill(record.Status.Label(), record.Status.Tint()) { VerticalAlignment = VerticalAlignment.Top };
         Grid.SetColumn(pill, 1);
         header.Children.Add(pill);
 
-        var texts = new StackPanel { Spacing = 14 };
-        if (record.PolishedText is { } polished) texts.Children.Add(TextBlock(L("整理后", "Cleaned up"), polished));
-        texts.Children.Add(TextBlock(L("原始转写", "Raw transcript"), record.RawText));
+        var body = new StackPanel { Spacing = 14, Padding = new Thickness(16) };
+        if (record.Error is { } error) body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, error));
+        if (record.FinalText.Length == 0 && record.Status is DictationStatus.Recording or DictationStatus.Processing)
+        {
+            body.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 40, 0, 40),
+                Children =
+                {
+                    new ProgressRing { IsActive = true, Width = 16, Height = 16 },
+                    Ui.Text(record.Status == DictationStatus.Recording ? L("正在录音…", "Recording…") : L("正在处理…", "Processing…"),
+                            13, foreground: Ui.Secondary),
+                },
+            });
+        }
+        else
+        {
+            var text = Ui.Text(record.FinalText.Length == 0 ? L("（没有文字）", "(no text)") : record.FinalText, 14,
+                               foreground: record.FinalText.Length == 0 ? Ui.Secondary : null, wrap: true);
+            text.IsTextSelectionEnabled = true;
+            text.LineHeight = 22;
+            body.Children.Add(text);
+            if (record.PolishedText != null && record.RawText.Length > 0)
+            {
+                var raw = Ui.Text(record.RawText, 12.5, foreground: Ui.Secondary, wrap: true);
+                raw.IsTextSelectionEnabled = true;
+                body.Children.Add(new Expander
+                {
+                    Header = L("原始转写", "Raw transcript"),
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                    Content = raw,
+                });
+            }
+        }
+        if (record.Timing?.Summary is { } timing)
+        {
+            // Where the wait after releasing the key went.
+            var line = Ui.Text(timing, 11, foreground: Ui.Tertiary, wrap: true);
+            line.IsTextSelectionEnabled = true;
+            body.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 6,
+                Children = { Ui.Icon(Glyphs.Stopwatch, 11, Ui.Tertiary), line },
+            });
+        }
 
-        var buttons = new Grid { ColumnSpacing = 8 };
+        var buttons = new Grid { ColumnSpacing = 8, Padding = new Thickness(16, 12, 16, 12) };
         buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         buttons.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var leading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        var copy = new Button { Content = L("复制", "Copy"), IsEnabled = record.FinalText.Length > 0 };
-        copy.Click += (_, _) => TextInserter.CopyToClipboard(record.FinalText);
+        var copyLabel = Ui.Text(L("复制", "Copy"), 13);
+        var copyIcon = Ui.Icon(Glyphs.Copy, 13);
+        var copy = new Button
+        {
+            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { copyIcon, copyLabel } },
+            IsEnabled = record.FinalText.Length > 0,
+        };
+        copy.Click += async (_, _) =>
+        {
+            TextInserter.CopyToClipboard(record.FinalText);
+            copyLabel.Text = L("已复制", "Copied");
+            copyIcon.Glyph = Glyphs.CheckMark;
+            await Task.Delay(1500);
+            copyLabel.Text = L("复制", "Copy");
+            copyIcon.Glyph = Glyphs.Copy;
+        };
         leading.Children.Add(copy);
         if (record.HasAudio)
         {
-            var retry = new Button { Content = L("重新转写", "Re-transcribe"), IsEnabled = _controller.State == SessionController.SessionState.Idle };
+            var retry = new Button
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal, Spacing = 6,
+                    Children = { Ui.Icon(Glyphs.Refresh, 13), Ui.Text(L("重新转写", "Re-transcribe"), 13) },
+                },
+                IsEnabled = _controller.State == SessionController.SessionState.Idle,
+            };
             ToolTipService.SetToolTip(retry, L("完成后复制到剪贴板", "Copies the result to the clipboard"));
             retry.Click += (_, _) => _controller.Retry(record, paste: false);
             leading.Children.Add(retry);
@@ -198,55 +386,24 @@ public sealed class HistoryPage : PageBase
         Grid.SetColumn(delete, 2);
         buttons.Children.Add(delete);
 
-        var layout = new Grid { Padding = new Thickness(16), RowSpacing = 14 };
+        var layout = new Grid();
         layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         layout.Children.Add(header);
-        var notes = new StackPanel { Spacing = 8 };
-        if (record.Error is { } error) notes.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, error));
-        var summary = string.Join(" · ", new[] { record.Timing?.Summary, record.Cost is { } cost ? L("花费 ", "Cost ") + UsageFormat.Money(cost) : null }
-            .OfType<string>());
-        if (summary.Length > 0)
-        {
-            // Where the wait after releasing the key went, and what it cost.
-            var line = Ui.Text(summary, 11, foreground: Ui.Secondary, wrap: true);
-            line.IsTextSelectionEnabled = true;
-            notes.Children.Add(line);
-        }
-        if (notes.Children.Count > 0)
-        {
-            Grid.SetRow(notes, 1);
-            layout.Children.Add(notes);
-        }
-        var scroll = new ScrollViewer { Content = texts, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var topDivider = new CardDivider { Inset = 0 };
+        Grid.SetRow(topDivider, 1);
+        layout.Children.Add(topDivider);
+        var scroll = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(scroll, 2);
         layout.Children.Add(scroll);
-        Grid.SetRow(buttons, 3);
+        var bottomDivider = new CardDivider { Inset = 0 };
+        Grid.SetRow(bottomDivider, 3);
+        layout.Children.Add(bottomDivider);
+        Grid.SetRow(buttons, 4);
         layout.Children.Add(buttons);
         return Card.Make(layout);
     }
-
-    private static FrameworkElement TextBlock(string title, string text) => new StackPanel
-    {
-        Spacing = 6,
-        Children =
-        {
-            Ui.Text(title, 11.5, FontWeights.SemiBold, Ui.Secondary),
-            new Border
-            {
-                Padding = new Thickness(10),
-                CornerRadius = new CornerRadius(6),
-                Background = Palette.Theme("ControlFillColorSecondaryBrush"),
-                Child = new Microsoft.UI.Xaml.Controls.TextBlock
-                {
-                    Text = text.Length == 0 ? L("（空）", "(empty)") : text,
-                    FontSize = 13.5,
-                    TextWrapping = TextWrapping.Wrap,
-                    IsTextSelectionEnabled = true,
-                },
-            },
-        },
-    };
 }

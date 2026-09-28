@@ -12,8 +12,11 @@ namespace OpenTypeless.UI;
 public sealed class HistoryPage : PageBase
 {
     private readonly HistoryStore _history = HistoryStore.Shared;
+    private readonly AppSettings _settings = AppSettings.Shared;
     private readonly SessionController _controller;
     private string? _selection;
+    private CardRow? _retentionRow;
+    private long? _storageBytes;
 
     public HistoryPage(SessionController controller) : base(SettingsPage.History, scrolls: false)
     {
@@ -29,6 +32,8 @@ public sealed class HistoryPage : PageBase
     private void Render()
     {
         Body.Children.Clear();
+        Body.Children.Add(RetentionCard());
+        RefreshStorage();
         if (_history.Records.Count == 0)
         {
             var empty = new StackPanel
@@ -69,6 +74,43 @@ public sealed class HistoryPage : PageBase
     }
 
     private string? _shownDetail;
+
+    private FrameworkElement RetentionCard()
+    {
+        var options = HistoryRetentionExtensions.All;
+        var picker = new ComboBox { MinWidth = 150 };
+        foreach (var option in options) picker.Items.Add(option.Label());
+        picker.SelectedIndex = Math.Max(0, Array.IndexOf(options, _settings.HistoryRetention));
+        picker.SelectionChanged += (_, _) =>
+        {
+            if (picker.SelectedIndex < 0 || options[picker.SelectedIndex] == _settings.HistoryRetention) return;
+            _settings.HistoryRetention = options[picker.SelectedIndex];
+            _history.ApplyRetention();
+            RefreshStorage();
+        };
+        _retentionRow = new CardRow
+        {
+            Glyph = Glyphs.Folder, Tint = Tint.Gray, Title = L("录音保存时间", "Keep recordings"),
+            Subtitle = RetentionSubtitle(), Trailing = picker,
+        };
+        return Card.Make(_retentionRow);
+    }
+
+    /// <summary>Recomputes the space history takes (off the UI thread) and shows it under the retention picker.</summary>
+    private async void RefreshStorage()
+    {
+        var row = _retentionRow;
+        var bytes = await Task.Run(HistoryStore.StorageBytes);
+        _storageBytes = bytes;
+        if (row != null && row == _retentionRow) row.Subtitle = RetentionSubtitle();
+    }
+
+    private string RetentionSubtitle()
+    {
+        var used = _storageBytes is { } bytes ? L("目前占用 ", "Using ") + Formatting.Bytes(bytes) + L("。", ". ") : "";
+        return used + L("每分钟录音约 1.9 MB。转写失败的录音会一直保留，方便重试。",
+                        "Recordings take about 1.9 MB per minute. Failed dictations keep theirs so you can retry.");
+    }
 
     private void ShowDetail(ContentControl host)
     {
@@ -161,11 +203,19 @@ public sealed class HistoryPage : PageBase
         layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         layout.Children.Add(header);
-        if (record.Error is { } error)
+        var notes = new StackPanel { Spacing = 8 };
+        if (record.Error is { } error) notes.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, error));
+        if (record.Timing?.Summary is { } timing)
         {
-            var banner = new Banner(Glyphs.Warning, Tint.Orange, error);
-            Grid.SetRow(banner, 1);
-            layout.Children.Add(banner);
+            // Where the wait after releasing the key went.
+            var line = Ui.Text(timing, 11, foreground: Ui.Secondary, wrap: true);
+            line.IsTextSelectionEnabled = true;
+            notes.Children.Add(line);
+        }
+        if (notes.Children.Count > 0)
+        {
+            Grid.SetRow(notes, 1);
+            layout.Children.Add(notes);
         }
         var scroll = new ScrollViewer { Content = texts, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Grid.SetRow(scroll, 2);

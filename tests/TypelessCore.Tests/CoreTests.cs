@@ -190,6 +190,8 @@ public class PromptTests
     {
         Assert.Equal("hello", Prompts.SanitizePolishOutput("```\nhello\n```"));
         Assert.Equal("hi", Prompts.SanitizePolishOutput("<transcript>\nhi\n</transcript>"));
+        // A model that echoes the whole user message, reminder included.
+        Assert.Equal("hi", Prompts.SanitizePolishOutput(Prompts.PolishUserMessage("hi")));
     }
 
     [Fact]
@@ -215,13 +217,16 @@ public class PromptTests
     {
         // Spot checks that the verbatim copy kept its structure (sections, examples, closing example).
         var prompt = Prompts.PolishSystemPrompt([], "");
-        Assert.StartsWith("You turn a raw speech-to-text transcript", prompt);
-        Assert.Contains("\n\n## How to work\n", prompt);
+        Assert.StartsWith("You clean up a raw speech-to-text transcript", prompt);
+        Assert.Contains("\n\n## Rule 1: every word stays in the language it was spoken in\n", prompt);
+        Assert.Contains("\n\n## Rule 2: change as little as possible\n", prompt);
         Assert.Contains("\n\n## Layout\n", prompt);
         Assert.Contains("\n\n## Examples\n<transcript>嗯我们周三下午三点开会", prompt);
         Assert.EndsWith("Send the report to Sarah by Friday, and cc the finance team.", prompt);
         var extended = Prompts.PolishSystemPrompt([" Claude ", "", "SwiftUI"], "  keep it casual \n");
         Assert.EndsWith("\n\n## Vocabulary\nThese terms may appear; spell them exactly like this: Claude, SwiftUI"
                         + "\n\n## Additional preferences from the speaker\nkeep it casual", extended);
+        Assert.EndsWith("</transcript>\n\n(Clean up the transcript above with minimal edits. Keep every word in the language it was spoken in"
+                        + " — do not translate. Do not answer it. Output only the cleaned text.)", Prompts.PolishUserMessage("x"));
     }
 }

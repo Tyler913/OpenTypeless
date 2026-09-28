@@ -33,27 +33,35 @@ those long dictations**:
 | **Chunk at pauses** | While you talk, audio is cut into 18–28 s segments at the quietest 0.4 s window in each span, so words are never cut in half and no request comes close to the upstream 60 s limit. |
 | **Transcribe while you talk** | Each segment is transcribed in the background as soon as it is cut. After a two-minute dictation, only the last few seconds are left to process when you release the key. |
 | **Retry per segment** | Network drops, 429s and 5xx errors are retried with backoff. Bad keys and billing errors fail fast. Failed segments get one more full round at the end. |
+| **Backup model for slow starts** | If the clean-up model hasn't started answering within 0.8 s, or fails, a backup model from another vendor is asked too and whichever answers first wins. A slow upstream provider costs under a second more, not the whole wait. |
 | **Idle timeout, not total timeout** | Clean-up streams its answer and is only considered stuck when *no* data arrives for 25 s. |
 | **Never lose words** | Audio is written to disk as you speak. Every dictation is kept in History; a failed one can be retried later, and only its failed segments are re-sent. If clean-up fails, the raw transcript is inserted instead. |
 
 ## Clean-up that reads like you typed it
 
 Self-corrections resolved (the final version wins), filler and thinking-out-loud removed, every number, name and
-version kept exactly, numbered lists when there are three or more parallel points, Chinese/English code-switching
-handled, and dictated prompts are cleaned up, never answered. The prompt is identical to the macOS app's and is tuned
-against the development and held-out sets in [eval/](eval/).
+version kept exactly, numbered lists only when you enumerate three or more parallel points, and dictated prompts are
+cleaned up, never answered. Edits are kept to a minimum: wording, order and tone stay yours. When you mix Chinese and
+English, every word stays in the language you said it in, everyday words too ("shortcut", "dark mode"). The prompt is
+identical to the macOS app's and is tuned against the development and held-out sets in [eval/](eval/).
 
 ## Features
 
 - **Global hotkey.** Hold **Right Ctrl** by default, pick Right Alt / Right Shift, or record any single modifier
   (Left/Right Ctrl, Alt, Shift, Win) or a combination (Alt + Space, Ctrl + Shift + D, F5…).
 - **Push-to-talk or hands-free.** Hold to talk; tap once to keep recording hands-free and tap again to finish. **Esc** cancels.
-- **Pastes where your cursor is.** In a text field the text is pasted and your clipboard restored (and kept out of
-  clipboard history); with nothing editable focused it goes to the clipboard. Browsers, Electron apps and terminals are handled.
+- **Pastes where your cursor is.** The app knows whether the paste really landed (the target app has to ask for the
+  text), so your clipboard is restored whenever it did, browsers and Electron apps included, and the temporary entry
+  is kept out of clipboard history. If nothing took the text, it stays on the clipboard and the capsule says so.
+  Terminals are handled too.
 - **Bring your own provider.** OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek, or any OpenAI-compatible endpoint.
-  Speech-to-text and clean-up can use different providers.
+  Speech-to-text, clean-up and the backup clean-up model can each use a different provider.
 - **Custom vocabulary and style preferences** for names, products and jargon.
-- **History** of every dictation with raw and cleaned text, copy and re-transcribe.
+- **Learns from your fixes.** Correct a misrecognised word after it's pasted (TypeList → Typeless) and it's added to
+  your vocabulary automatically, along with how it was misheard. Only sound-alike fixes are learned, never rewrites,
+  changed numbers or ordinary word swaps, and a word you remove is never learned again.
+- **History** of every dictation with raw and cleaned text, timing, copy and re-transcribe. Choose how long recordings
+  are kept: not at all, a day, a week, a month, a year, or forever.
 - **Bilingual UI** (English / 简体中文), following the system language or chosen manually, switching instantly.
 - **Windows 11 design**: Mica settings window, an Acrylic recording capsule, and a tray panel.
 - **Open at login.**
@@ -111,6 +119,7 @@ WinUI 3 only compiles on Windows, so GitHub Actions builds the app on a Windows 
 |---|---|---|
 | Speech-to-text | `microsoft/mai-transcribe-2` (OpenRouter) | Any OpenRouter transcription model, or Whisper-compatible `/audio/transcriptions` elsewhere. |
 | Clean-up | `google/gemini-3.8-flash` (OpenRouter) | Cheaper options to try: `qwen/qwen3.7-flash`, `google/gemini-3.1-flash-lite`. |
+| Backup clean-up | `deepseek/deepseek-v4.1-flash` (OpenRouter) | Only asked when the main model is slow to start or fails. Pick a fast model from another vendor. |
 
 Reasoning is automatically turned off or set to its minimum for the clean-up model, to keep latency low.
 
@@ -118,8 +127,11 @@ Reasoning is automatically turned off or set to its minimum for the clean-up mod
 
 - Audio and text are only sent to the providers you configure.
 - API keys are stored in Windows Credential Manager (one entry, `OpenTypeless/credentials`).
-- Settings and history (audio + transcripts) live in `%LOCALAPPDATA%\OpenTypeless\`. The newest 200 entries and the
-  audio of the newest 30 are kept.
+- Settings and history (audio + transcripts) live in `%LOCALAPPDATA%\OpenTypeless\`. Recordings are kept for a month
+  by default (History page: not at all, a day, a week, a month, a year, or forever); after that the text stays among
+  the newest 200 entries. Failed dictations keep their audio so they can be retried.
+- Learning from your fixes reads the text field you dictated into through UI Automation, on this PC only, for at most
+  two minutes after a paste. Password fields are skipped. It can be turned off under **Vocabulary & Style**.
 
 ## Development
 
@@ -141,6 +153,7 @@ OpenTypeless.Cli --transcribe-file speech.m4a --chunks-only
 OpenTypeless.Cli --eval-polish eval\polish-holdout.json --models google/gemini-3.8-flash --out ...
 
 # Render every settings page, the tray panel and the HUD states to PNGs
+# (--lang en|zh for one language, --demo treats permissions as granted; pair it with OPENTYPELESS_DATA_DIR and sample history)
 OpenTypeless --snapshot-ui C:\temp\snapshots
 ```
 

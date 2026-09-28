@@ -12,7 +12,9 @@ public sealed record PolishOptions(
     /// <summary>OpenRouter model metadata from <c>/models</c>, used to switch reasoning off (or to its minimum).</summary>
     ModelInfo? ModelInfo = null,
     /// <summary>Replaces the built-in system prompt (used by the prompt evaluation tool).</summary>
-    string? SystemPromptOverride = null);
+    string? SystemPromptOverride = null,
+    /// <summary>Earlier recognition errors the user fixed by hand, shown to the model as hints.</summary>
+    IReadOnlyList<Correction>? Misheard = null);
 
 public static class ReasoningConfig
 {
@@ -90,6 +92,17 @@ public sealed record PolishResult(string Text, bool Truncated);
 public sealed partial class ApiClient
 {
     /// <summary>
+    /// Clean-up output is short, so the wait is mostly time to first token: prefer the lowest-latency
+    /// provider, but push ones that stream slowly (under 50 tokens/s at the median) to the back.
+    /// </summary>
+    internal static JsonObject PolishRouting() => new()
+    {
+        ["sort"] = "latency",
+        ["preferred_min_throughput"] = new JsonObject { ["p50"] = 50 },
+        ["allow_fallbacks"] = true,
+    };
+
+    /// <summary>
     /// Builds the chat request body. Optional tuning parameters are only sent where they're known to
     /// be accepted: OpenRouter normalises them for every model, while e.g. OpenAI's reasoning models
     /// reject <c>temperature</c>.
@@ -106,7 +119,7 @@ public sealed partial class ApiClient
                 {
                     ["role"] = "system",
                     ["content"] = options.SystemPromptOverride
-                        ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions),
+                        ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard),
                 },
                 new JsonObject { ["role"] = "user", ["content"] = Prompts.PolishUserMessage(transcript) },
             },
@@ -115,7 +128,7 @@ public sealed partial class ApiClient
         if (IsOpenRouter)
         {
             body["max_tokens"] = Math.Max(1024, TextMetrics.CharacterCount(transcript) * 3);
-            body["provider"] = new JsonObject { ["sort"] = "throughput", ["allow_fallbacks"] = true };
+            body["provider"] = PolishRouting();
             if (ReasoningConfig.Body(options.ModelInfo) is { } reasoning) body["reasoning"] = reasoning;
             if (options.ModelInfo?.SupportedParameters.Contains("temperature") ?? true) body["temperature"] = 0.2;
         }

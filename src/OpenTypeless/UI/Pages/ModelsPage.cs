@@ -11,15 +11,17 @@ namespace OpenTypeless.UI;
 public sealed class ModelsPage : PageBase
 {
     private static readonly HashSet<string> StructuralProperties =
-        [nameof(AppSettings.SttProvider), nameof(AppSettings.PolishProvider), nameof(AppSettings.PolishEnabled), "ApiKeys", "BaseUrls"];
+        [nameof(AppSettings.SttProvider), nameof(AppSettings.PolishProvider), nameof(AppSettings.PolishEnabled),
+         nameof(AppSettings.PolishBackupEnabled), nameof(AppSettings.PolishBackupProvider), "ApiKeys", "BaseUrls"];
 
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly SettingsWindow _window;
     private readonly SessionController _controller;
     private readonly ModelField _sttField = new(speech: true);
     private readonly ModelField _chatField = new(speech: false);
-    private string? _sttKey, _chatKey;
-    private CardRow? _sttRow, _chatRow;
+    private readonly ModelField _backupField = new(speech: false);
+    private string? _sttKey, _chatKey, _backupKey;
+    private CardRow? _sttRow, _chatRow, _backupRow;
 
     public ModelsPage(SettingsWindow window, SessionController controller) : base(SettingsPage.Models)
     {
@@ -29,6 +31,11 @@ public sealed class ModelsPage : PageBase
         _chatField.TextChanged = text =>
         {
             _settings.PolishModel = text;
+            _controller.RefreshModelInfo();
+        };
+        _backupField.TextChanged = text =>
+        {
+            _settings.PolishBackupModel = text;
             _controller.RefreshModelInfo();
         };
         _settings.PropertyChanged += OnSettingsChanged;
@@ -48,9 +55,12 @@ public sealed class ModelsPage : PageBase
         // The model fields survive re-renders (they keep focus and caret); release them from their old rows first.
         if (_sttRow != null) _sttRow.Trailing = null;
         if (_chatRow != null) _chatRow.Trailing = null;
+        if (_backupRow != null) _backupRow.Trailing = null;
         _chatRow = null;
+        _backupRow = null;
         _sttField.Text = _settings.SttModel;
         _chatField.Text = _settings.PolishModel;
+        _backupField.Text = _settings.PolishBackupModel;
 
         var stt = new CardSection
         {
@@ -110,9 +120,54 @@ public sealed class ModelsPage : PageBase
                 Trailing = _chatField,
             };
             polish.Body.Add(_chatRow);
+
+            polish.Body.Add(new CardDivider());
+            var backup = new ToggleSwitch { IsOn = _settings.PolishBackupEnabled, OnContent = "", OffContent = "", MinWidth = 0 };
+            backup.Toggled += (_, _) =>
+            {
+                _settings.PolishBackupEnabled = backup.IsOn;
+                _controller.RefreshModelInfo();
+            };
+            var delay = HedgedPolish.DefaultHedgeDelay.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + L(" 秒", " s");
+            polish.Body.Add(new CardRow
+            {
+                Glyph = Glyphs.Lightning, Tint = Tint.Orange, Title = L("备用模型", "Backup model"),
+                Subtitle = L($"首选模型 {delay} 内还没开始输出、或请求失败时，同时请求备用模型，用先出字的那个",
+                             $"If the main model hasn't started answering within {delay}, or fails, the backup is asked too and the first to answer wins"),
+                Trailing = backup,
+            });
+            if (_settings.PolishBackupEnabled)
+            {
+                polish.Body.Add(new CardDivider());
+                polish.Body.Add(new CardRow
+                {
+                    Glyph = Glyphs.Cloud, Tint = Tint.Indigo, Title = L("备用服务商", "Backup provider"),
+                    Trailing = ProviderPicker(_settings.PolishBackupProvider, ProviderIdExtensions.All, id =>
+                    {
+                        _settings.SelectPolishBackupProvider(id);
+                        _controller.RefreshModelInfo();
+                    }),
+                });
+                polish.Body.Add(new CardDivider());
+                _backupRow = new CardRow
+                {
+                    Glyph = Glyphs.Component, Tint = Tint.Pink, Title = L("备用模型 ID", "Backup model ID"),
+                    Subtitle = L("选一个不同厂商的快速模型，两边不容易同时变慢", "Pick a fast model from another vendor so both are rarely slow at once"),
+                    Trailing = _backupField,
+                };
+                polish.Body.Add(_backupRow);
+            }
         }
         Body.Children.Add(polish);
-        if (_settings.PolishEnabled && !_settings.IsConfigured(_settings.PolishProvider)) Body.Children.Add(SetupBanner(_settings.PolishProvider));
+        if (_settings.PolishEnabled && !_settings.IsConfigured(_settings.PolishProvider))
+        {
+            Body.Children.Add(SetupBanner(_settings.PolishProvider));
+        }
+        else if (_settings.PolishEnabled && _settings.PolishBackupEnabled && _settings.PolishBackupProvider != _settings.PolishProvider
+                 && !_settings.IsConfigured(_settings.PolishBackupProvider))
+        {
+            Body.Children.Add(SetupBanner(_settings.PolishBackupProvider));
+        }
 
         LoadModelsIfNeeded();
     }
@@ -155,6 +210,13 @@ public sealed class ModelsPage : PageBase
             _chatKey = chatKey;
             _chatField.SetModels([]);
             _ = Load(_settings.PolishProvider, false, chatKey, () => _chatKey, _chatField);
+        }
+        var backupKey = $"{_settings.PolishBackupProvider.RawValue()}|{_settings.ApiKey(_settings.PolishBackupProvider).Length}|{_settings.BaseUrl(_settings.PolishBackupProvider)}";
+        if (_settings.PolishBackupEnabled && backupKey != _backupKey)
+        {
+            _backupKey = backupKey;
+            _backupField.SetModels([]);
+            _ = Load(_settings.PolishBackupProvider, false, backupKey, () => _backupKey, _backupField);
         }
     }
 

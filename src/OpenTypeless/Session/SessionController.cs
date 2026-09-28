@@ -40,6 +40,7 @@ public sealed class SessionController
     public string? LastError { get; private set; }
 
     public HudController Hud { get; } = new();
+    private readonly EditWatcher _editWatcher = new();
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly HistoryStore _history = HistoryStore.Shared;
     private readonly AudioRecorder _recorder = new();
@@ -62,6 +63,16 @@ public sealed class SessionController
 
     public SessionController()
     {
+        _editWatcher.OnCorrections = (corrections, quiet) =>
+        {
+            if (!_settings.LearnFromEdits) return;
+            var added = _settings.Learn(corrections);
+            Note($"learned from edits: {string.Join(", ", corrections.Select(c => $"{c.Heard} → {c.Corrected}"))}, new: {string.Join(", ", added)}");
+            if (added.Count > 0 && !quiet && State == SessionState.Idle)
+            {
+                Hud.Show(new HudPhase.Learned(string.Join(L("、", ", "), added)), 2.5);
+            }
+        };
         _recorder.OnFailure = error => _dispatcher.TryEnqueue(() =>
             Abort(L("录音中断：", "Recording interrupted: ") + error.Message));
     }
@@ -134,6 +145,9 @@ public sealed class SessionController
                                           "Microphone access needed: Settings → Privacy & security → Microphone")), 4);
             return;
         }
+
+        // Whatever the user did to the previous dictation is final now.
+        _editWatcher.Finish(quiet: true);
 
         var record = _history.Create();
         record.Status = DictationStatus.Recording;
@@ -244,9 +258,11 @@ public sealed class SessionController
 
     private async Task Process(DictationRecord record, TranscriptionPipeline pipeline, CancellationToken token)
     {
+        var started = Stopwatch.StartNew();
         try
         {
             var raw = await pipeline.Finish();
+            record.Timing = new DictationTiming { Transcription = started.Elapsed.TotalSeconds };
             record.ChunkTexts = pipeline.CompletedTranscripts();
             record.RawText = raw;
             record.Error = null;
@@ -290,7 +306,16 @@ public sealed class SessionController
         {
             try
             {
-                var result = await Polish(record.RawText, token);
+                var outcome = await Polish(record.RawText, token);
+                var result = outcome.Result;
+                if (record.Timing is { } timing)
+                {
+                    timing.PolishFirstToken = outcome.FirstTokenSeconds;
+                    timing.Polish = outcome.TotalSeconds;
+                    timing.PolishModel = outcome.Model;
+                    timing.UsedBackup = outcome.UsedBackup;
+                }
+                Note($"polish: {outcome.Model}{(outcome.UsedBackup ? " (backup)" : "")}, first token {outcome.FirstTokenSeconds:0.00}s, total {outcome.TotalSeconds:0.00}s");
                 if (result.Truncated || Prompts.LooksLikeAnAnswer(record.RawText, result.Text))
                 {
                     notice = L("未整理，已插入原文", "Inserted without clean-up");
@@ -323,49 +348,55 @@ public sealed class SessionController
     }
 
     /// <summary>
-    /// Pastes at the cursor when a text input has focus; otherwise leaves the text on the clipboard.
-    /// When focus can't be determined (apps without UI Automation info) it pastes *and* keeps the
-    /// text on the clipboard, so nothing is lost either way.
+    /// Pastes at the cursor unless focus is clearly not a text input. Whether the paste actually landed is
+    /// detected from the target app reading the clipboard: if it did, the user's previous clipboard is restored;
+    /// if not, the text stays on the clipboard and the HUD says so.
     /// </summary>
     private async Task Deliver(string text, string? notice)
     {
         var target = _deliverByPaste ? await FocusProbe.FocusedTarget() : FocusProbe.Target.NotEditable;
-        Note($"deliver → {target}");
         if (target == FocusProbe.Target.NotEditable)
         {
+            Note("deliver → clipboard (focus not editable)");
             TextInserter.CopyToClipboard(text);
             Finish(notice is { } n ? new HudPhase.Error(n) : new HudPhase.Copied(), 1.6);
             return;
         }
-        var inserted = await TextInserter.Insert(text, restoreClipboard: target == FocusProbe.Target.Editable && _settings.RestoreClipboard);
-        if (!inserted)
+        var outcome = await TextInserter.Insert(text, _settings.RestoreClipboard);
+        Note($"deliver → {outcome} (focus {target})");
+        switch (outcome)
         {
-            TextInserter.CopyToClipboard(text);
-            Finish(new HudPhase.Copied(), 1.6);
-        }
-        else if (notice != null)
-        {
-            Finish(new HudPhase.Error(notice), 3);
-        }
-        else
-        {
-            Finish(new HudPhase.Hidden(), 0);
+            case TextInserter.Outcome.Pasted:
+                Finish(notice is { } message ? new HudPhase.Error(message) : new HudPhase.Hidden(), notice != null ? 3 : 0);
+                if (_settings.LearnFromEdits) _editWatcher.Watch(text);
+                break;
+            default:
+                Finish(new HudPhase.Copied(), 1.6);
+                break;
         }
     }
 
-    private async Task<PolishResult> Polish(string raw, CancellationToken token)
+    private async Task<HedgedPolishResult> Polish(string raw, CancellationToken token)
     {
         if (_settings.PolishEndpoint is not { } endpoint || !_settings.IsConfigured(_settings.PolishProvider))
         {
             throw ApiException.MissingApiKey(_settings.PolishProvider.DisplayName());
         }
-        var options = new PolishOptions(
-            _settings.PolishModel,
+        var primary = Route(endpoint, _settings.PolishModel);
+        var backup = _settings.PolishBackupEndpoint is { } backupEndpoint ? Route(backupEndpoint, _settings.PolishBackupModel) : null;
+        return await new RetryPolicy(MaxAttempts: 2).Run((_, ct) => HedgedPolish.Run(raw, primary, backup, cancellationToken: ct),
+                                                         cancellationToken: token);
+    }
+
+    private PolishRoute Route(ProviderEndpoint endpoint, string model)
+    {
+        model = model.Trim();
+        return new PolishRoute(new ApiClient(endpoint), new PolishOptions(
+            model,
             _settings.VocabularyList,
             _settings.ExtraInstructions,
-            endpoint.Id == ProviderId.OpenRouter ? _modelInfo.GetValueOrDefault(_settings.PolishModel) : null);
-        var client = new ApiClient(endpoint);
-        return await new RetryPolicy(MaxAttempts: 2).Run((_, ct) => client.Polish(raw, options, cancellationToken: ct), cancellationToken: token);
+            endpoint.Id == ProviderId.OpenRouter ? _modelInfo.GetValueOrDefault(model) : null,
+            Misheard: _settings.MisheardHints));
     }
 
     // MARK: - Retry / cancel
@@ -457,10 +488,12 @@ public sealed class SessionController
 
     // MARK: - Misc
 
-    /// <summary>OpenRouter model metadata, used to turn reasoning off for the clean-up model.</summary>
+    /// <summary>OpenRouter model metadata, used to turn reasoning off for the clean-up models.</summary>
     public void RefreshModelInfo()
     {
-        if (_settings.PolishProvider != ProviderId.OpenRouter || _settings.PolishEndpoint is not { } endpoint) return;
+        var usesOpenRouter = _settings.PolishProvider == ProviderId.OpenRouter
+            || (_settings.PolishBackupEnabled && _settings.PolishBackupProvider == ProviderId.OpenRouter);
+        if (!usesOpenRouter || _settings.Endpoint(ProviderId.OpenRouter) is not { } endpoint) return;
         _ = Load();
 
         async Task Load()

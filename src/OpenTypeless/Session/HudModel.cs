@@ -8,6 +8,8 @@ public abstract record HudPhase
     public sealed record Working : HudPhase;
     /// <summary>Nothing to paste into, so the text went to the clipboard.</summary>
     public sealed record Copied : HudPhase;
+    /// <summary>New words were learned from the user's fixes to the last dictation.</summary>
+    public sealed record Learned(string Terms) : HudPhase;
     public sealed record Error(string Message) : HudPhase;
 }
 

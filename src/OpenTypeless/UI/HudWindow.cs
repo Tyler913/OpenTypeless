@@ -150,6 +150,15 @@ public sealed class HudWindow : Window
                 row.Children.Add(Ui.Icon(Glyphs.Paste, 14, Ui.Secondary));
                 row.Children.Add(Label(L("已复制到剪贴板", "Copied to clipboard")));
                 break;
+            case HudPhase.Learned learned:
+                row.Spacing = 8;
+                row.Children.Add(Ui.Icon(Glyphs.Dictionary, 14, Palette.Theme("AccentTextFillColorPrimaryBrush")));
+                var terms = Label(L("已加入词汇表：", "Added to vocabulary: ") + learned.Terms);
+                terms.MaxWidth = 340;
+                terms.TextTrimming = TextTrimming.CharacterEllipsis;
+                terms.TextWrapping = TextWrapping.NoWrap;
+                row.Children.Add(terms);
+                break;
             case HudPhase.Error error:
                 row.Spacing = 8;
                 row.Children.Add(Ui.Icon(Glyphs.Warning, 14, Palette.Brush(Tint.Orange)));
@@ -207,6 +216,7 @@ public sealed class HudWindow : Window
         HudPhase.Recording => 160,
         HudPhase.Working => 110,
         HudPhase.Copied => 170,
+        HudPhase.Learned l => Math.Min(372, 150 + l.Terms.Length * 9),
         HudPhase.Error e => Math.Min(372, 40 + e.Message.Length * 13),
         _ => 120,
     };

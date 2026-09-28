@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.UI.Dispatching;
 
 namespace OpenTypeless.Services;
 
@@ -19,6 +20,7 @@ public sealed class DictationRecord
     [JsonPropertyName("error")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Error { get; set; }
     /// <summary>Per-chunk transcripts, so a retry only re-sends the chunks that failed.</summary>
     [JsonPropertyName("chunkTexts")] public Dictionary<int, string> ChunkTexts { get; set; } = new();
+    [JsonPropertyName("timing")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public DictationTiming? Timing { get; set; }
 
     /// <summary>What was (or would be) inserted.</summary>
     [JsonIgnore] public string FinalText => PolishedText ?? RawText;
@@ -32,6 +34,7 @@ public sealed class DictationRecord
     {
         var copy = (DictationRecord)MemberwiseClone();
         copy.ChunkTexts = new Dictionary<int, string>(ChunkTexts);
+        copy.Timing = Timing?.Copy();
         return copy;
     }
 
@@ -68,8 +71,45 @@ public sealed class DictationRecord
     }
 }
 
+/// <summary>Where the wait after the key was released went, in seconds.</summary>
+public sealed class DictationTiming
+{
+    /// <summary>Release → complete raw transcript (only the last chunk is usually left by then).</summary>
+    [JsonPropertyName("transcription")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Transcription { get; set; }
+    [JsonPropertyName("polishFirstToken")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? PolishFirstToken { get; set; }
+    [JsonPropertyName("polish")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Polish { get; set; }
+    [JsonPropertyName("polishModel")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? PolishModel { get; set; }
+    [JsonPropertyName("usedBackup")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? UsedBackup { get; set; }
+
+    public DictationTiming Copy() => (DictationTiming)MemberwiseClone();
+
+    /// <summary>"转写 0.8 秒 · 整理 1.2 秒（首字 0.4 秒，备用 deepseek/…）"</summary>
+    [JsonIgnore]
+    public string? Summary
+    {
+        get
+        {
+            static string Secs(double value) => value.ToString("0.0", CultureInfo.InvariantCulture) + L(" 秒", " s");
+            var parts = new List<string>();
+            if (Transcription is { } transcription) parts.Add(L("转写 ", "Transcription ") + Secs(transcription));
+            if (Polish is { } polish)
+            {
+                var detail = new List<string>();
+                if (PolishFirstToken is { } firstToken) detail.Add(L("首字 ", "first token ") + Secs(firstToken));
+                if (PolishModel is { } model) detail.Add((UsedBackup == true ? L("备用 ", "backup ") : "") + model);
+                parts.Add(L("整理 ", "Clean-up ") + Secs(polish)
+                          + (detail.Count == 0 ? "" : L("（", " (") + string.Join(L("，", ", "), detail) + L("）", ")")));
+            }
+            return parts.Count == 0 ? null : string.Join(" · ", parts);
+        }
+    }
+}
+
 /// <summary>
-/// Every dictation is saved (audio + transcripts) so nothing is ever lost to a failure.
+/// Every dictation is saved (audio + transcripts) so nothing is ever lost to a failure. Finished
+/// dictations older than the retention setting lose their recording; their text stays in History
+/// among the newest <see cref="MinimumTextRecords"/>, and older ones are removed entirely. Failed dictations
+/// keep everything until retried or deleted, so they can always be re-sent.
 /// UI-thread only, like the macOS <c>@MainActor</c> store.
 /// </summary>
 public sealed class HistoryStore
@@ -81,8 +121,8 @@ public sealed class HistoryStore
     private readonly List<DictationRecord> _records = new();
     public IReadOnlyList<DictationRecord> Records => _records;
 
-    private const int KeepRecords = 200;
-    private const int KeepAudioRecords = 30;
+    private const int MinimumTextRecords = 200;
+    private readonly DispatcherQueueTimer? _retentionTimer;
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -93,6 +133,14 @@ public sealed class HistoryStore
     private HistoryStore()
     {
         Load();
+        // Expiry is by age, so a tray app that runs for days has to check on its own.
+        _retentionTimer = DispatcherQueue.GetForCurrentThread()?.CreateTimer();
+        if (_retentionTimer != null)
+        {
+            _retentionTimer.Interval = TimeSpan.FromHours(1);
+            _retentionTimer.Tick += (_, _) => ApplyRetention();
+            _retentionTimer.Start();
+        }
     }
 
     public DictationRecord Create()
@@ -114,6 +162,7 @@ public sealed class HistoryStore
         if (index >= 0) _records[index] = stored; else _records.Insert(0, stored);
         Save(stored);
         Changed?.Invoke();
+        if (record.Status is DictationStatus.Done or DictationStatus.PolishFailed) ApplyRetention();
     }
 
     public void Delete(DictationRecord record)
@@ -159,23 +208,59 @@ public sealed class HistoryStore
             Save(record);
         }
         _records.AddRange(loaded);
-        Prune();
+        ApplyRetention();
     }
 
-    private void Prune()
+    /// <summary>Deletes what the retention setting says has expired.</summary>
+    public void ApplyRetention()
     {
+        var maxAge = AppSettings.Shared.HistoryRetention.MaxAge();
+        var now = DateTimeOffset.Now;
+        var kept = new List<DictationRecord>();
+        var changed = false;
         for (var index = 0; index < _records.Count; index++)
         {
             var record = _records[index];
-            if (index >= KeepRecords)
+            var finished = record.Status is DictationStatus.Done or DictationStatus.PolishFailed;
+            var expired = maxAge is { } age && now - record.Date >= age;
+            if (!finished || !expired)
+            {
+                kept.Add(record);
+                continue;
+            }
+            if (index >= MinimumTextRecords)
             {
                 try { Directory.Delete(record.Folder, recursive: true); } catch { }
+                changed = true;
             }
-            else if (index >= KeepAudioRecords && record.Status is DictationStatus.Done or DictationStatus.PolishFailed)
+            else
             {
-                try { File.Delete(record.AudioPath); } catch { }
+                if (record.HasAudio)
+                {
+                    try { File.Delete(record.AudioPath); } catch { }
+                    changed = true;
+                }
+                kept.Add(record);
             }
         }
-        if (_records.Count > KeepRecords) _records.RemoveRange(KeepRecords, _records.Count - KeepRecords);
+        _records.Clear();
+        _records.AddRange(kept);
+        if (changed) Changed?.Invoke();
+    }
+
+    /// <summary>Bytes used by every saved dictation (recordings and transcripts). Safe to call off the UI thread.</summary>
+    public static long StorageBytes()
+    {
+        try
+        {
+            return new DirectoryInfo(AppPaths.Sessions).EnumerateFiles("*", SearchOption.AllDirectories).Sum(file =>
+            {
+                try { return file.Length; } catch (IOException) { return 0; }
+            });
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return 0;
+        }
     }
 }

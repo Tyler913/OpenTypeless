@@ -35,7 +35,9 @@ public static class PolishEval
         [property: JsonPropertyName("reservationID")] string ReservationId,
         [property: JsonPropertyName("parameters")] EvaluationPlan Parameters,
         [property: JsonPropertyName("attempt")] EvaluationAttempt Attempt,
-        [property: JsonPropertyName("failures")] List<string> Failures);
+        [property: JsonPropertyName("failures")] List<string> Failures,
+        [property: JsonPropertyName("latinRetention")] double? LatinRetention,
+        [property: JsonPropertyName("similarity")] double? Similarity);
 
     private static readonly JsonSerializerOptions OutputJson = new()
     {
@@ -111,6 +113,12 @@ public static class PolishEval
             var catalog = (JsonNode.Parse(catalogData) as JsonObject)?["data"] as JsonArray ?? [];
             var prompt = Value("--prompt-file") is { } promptFile ? await File.ReadAllTextAsync(promptFile) : null;
             var providerTag = Value("--provider-tag");
+            JsonObject? providerRouting = null;
+            if (Value("--provider-routing") is { } routing)
+            {
+                try { providerRouting = JsonNode.Parse(routing) as JsonObject; } catch (JsonException) { }
+                if (providerRouting == null) throw ApiException.BadResponse("--provider-routing must be a JSON object");
+            }
             JsonObject? endpointQuote = null;
             if (providerTag != null)
             {
@@ -166,7 +174,7 @@ public static class PolishEval
                     {
                         var model = models[(i + offset) % models.Count];
                         var price = prices[model];
-                        var plan = client.EvaluationPlan(c.Input, options[model], price.Prompt, price.Completion, providerTag);
+                        var plan = client.EvaluationPlan(c.Input, options[model], price.Prompt, price.Completion, providerTag, providerRouting);
                         if (tierThresholds.TryGetValue(model, out var threshold) && plan.InputTokenBound >= threshold)
                         {
                             throw ApiException.BadResponse("input crosses unbudgeted price tier");
@@ -205,18 +213,48 @@ public static class PolishEval
                 if (Prompts.LooksLikeAnAnswer(c.Input, attempt.Output)) failures.Add("looks like an answer");
                 if (attempt.Truncated) failures.Add("truncated");
                 if (attempt.Error != null) failures.Add("request error; see private attempt");
-                results.Add(new Result(c.Id, job.Round, job.Plan.Model, reservation, job.Plan, attempt, failures));
+                var ok = attempt.Error == null && attempt.Output.Length > 0;
+                results.Add(new Result(c.Id, job.Round, job.Plan.Model, reservation, job.Plan, attempt, failures,
+                                       ok ? PolishMetrics.LatinRetention(c.Input, attempt.Output, c.MustNotContain) : null,
+                                       ok ? PolishMetrics.Similarity(c.Input, attempt.Output) : null));
                 Save(results, outPath);
                 budget.Settle(reservation, attempt.Usage?.Cost, attempt.RequestId);
                 Cli.Log($"{results.Count}/{jobs.Count} {job.Plan.Model} r{job.Round} {(failures.Count == 0 ? "PASS" : "FAIL")} {attempt.Seconds:0.00}s" +
                         $" · paid ${budget.State.Spent:0.000000} · unresolved ${budget.State.Reserved:0.000000}");
             }
+            Summarize(results, models);
             return results.All(x => x.Failures.Count == 0) ? 0 : 2;
         }
         catch (Exception error)
         {
             Cli.Log($"evaluation stopped: {error.Message}");
             return 1;
+        }
+    }
+
+    /// <summary>
+    /// Per-model totals: checks passed, how much of the speaker's English and wording survived, and
+    /// first-token / total latency percentiles.
+    /// </summary>
+    private static void Summarize(List<Result> results, List<string> models)
+    {
+        static string Mean(List<double> xs) => xs.Count == 0 ? "-" : xs.Average().ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+        static string Pct(List<double> xs, double p)
+        {
+            if (xs.Count == 0) return "-";
+            var sorted = xs.Order().ToList();
+            return sorted[Math.Min(sorted.Count - 1, (int)(sorted.Count * p))].ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + "s";
+        }
+        foreach (var model in models)
+        {
+            var rows = results.Where(r => r.Model == model).ToList();
+            var ttft = rows.Select(r => r.Attempt.FirstTokenSeconds).OfType<double>().ToList();
+            var total = rows.Where(r => r.Attempt.Error == null).Select(r => r.Attempt.Seconds).ToList();
+            Cli.Log($"{model}: pass {rows.Count(r => r.Failures.Count == 0)}/{rows.Count}"
+                    + $" · English kept {Mean(rows.Select(r => r.LatinRetention).OfType<double>().ToList())}"
+                    + $" · similarity {Mean(rows.Select(r => r.Similarity).OfType<double>().ToList())}"
+                    + $" · first token p50 {Pct(ttft, 0.5)} p90 {Pct(ttft, 0.9)}"
+                    + $" · total p50 {Pct(total, 0.5)} p90 {Pct(total, 0.9)}");
         }
     }
 

@@ -65,7 +65,8 @@ public static class Cli
         var client = new ApiClient(sttEndpoint);
         Log($"🎧 {Path.GetFileName(path)}: {duration:0.0} s");
         Log($"   STT: {settings.SttProvider.DisplayName()} / {settings.SttModel}"
-            + (polish ? $"; clean-up: {settings.PolishProvider.DisplayName()} / {settings.PolishModel}" : ""));
+            + (polish ? $"; clean-up: {settings.PolishProvider.DisplayName()} / {settings.PolishModel}" : "")
+            + (polish && settings.PolishBackupEndpoint != null ? $" (backup {settings.PolishBackupProvider.DisplayName()} / {settings.PolishBackupModel})" : ""));
 
         var start = Stopwatch.StartNew();
         var pipeline = new TranscriptionPipeline(
@@ -118,17 +119,25 @@ public static class Cli
             Log("❌ The clean-up provider's base URL is invalid");
             return 3;
         }
-        var polishClient = new ApiClient(polishEndpoint);
         var polishStart = Stopwatch.StartNew();
         try
         {
-            ModelInfo? info = null;
-            if (polishEndpoint.Id == ProviderId.OpenRouter)
+            var backupEndpoint = settings.PolishBackupEndpoint;
+            List<ModelInfo>? models = null;
+            if ((polishEndpoint.Id == ProviderId.OpenRouter || backupEndpoint?.Id == ProviderId.OpenRouter)
+                && settings.Endpoint(ProviderId.OpenRouter) is { } openRouter)
             {
-                try { info = (await polishClient.ListModels()).FirstOrDefault(m => m.Id == settings.PolishModel); } catch { }
+                try { models = await new ApiClient(openRouter).ListModels(); } catch { }
             }
-            var result = await polishClient.Polish(raw, new PolishOptions(settings.PolishModel, settings.VocabularyList, settings.ExtraInstructions, info));
-            Log($"⏱  Clean-up took {polishStart.Elapsed.TotalSeconds:0.0} s{(result.Truncated ? " (truncated)" : "")}");
+            PolishRoute Route(ProviderEndpoint endpoint, string model) => new(new ApiClient(endpoint), new PolishOptions(
+                model, settings.VocabularyList, settings.ExtraInstructions,
+                endpoint.Id == ProviderId.OpenRouter ? models?.FirstOrDefault(m => m.Id == model) : null,
+                Misheard: settings.MisheardHints));
+            var outcome = await HedgedPolish.Run(raw, Route(polishEndpoint, settings.PolishModel.Trim()),
+                                                 backupEndpoint is null ? null : Route(backupEndpoint, settings.PolishBackupModel.Trim()));
+            var result = outcome.Result;
+            Log($"⏱  Clean-up took {polishStart.Elapsed.TotalSeconds:0.0} s (first token {outcome.FirstTokenSeconds:0.00} s, "
+                + $"{(outcome.UsedBackup ? "backup " : "")}{outcome.Model}){(result.Truncated ? " (truncated)" : "")}");
             if (Prompts.LooksLikeAnAnswer(raw, result.Text))
             {
                 Log("⚠️ Output is much longer than the input; the app would fall back to the raw transcript");

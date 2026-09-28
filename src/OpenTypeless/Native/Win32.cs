@@ -142,6 +142,9 @@ public static partial class Win32
 
     public const uint CF_UNICODETEXT = 13;
     public const uint GMEM_MOVEABLE = 0x0002;
+    public const uint WM_RENDERFORMAT = 0x0305;
+    public const uint WM_RENDERALLFORMATS = 0x0306;
+    public const uint WM_DESTROYCLIPBOARD = 0x0307;
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool OpenClipboard(nint hWndNewOwner);
@@ -166,6 +169,12 @@ public static partial class Win32
 
     [DllImport("user32.dll")]
     public static extern uint GetClipboardSequenceNumber();
+
+    [DllImport("user32.dll")]
+    public static extern nint GetClipboardOwner();
+
+    [DllImport("user32.dll")]
+    public static extern bool IsClipboardFormatAvailable(uint format);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern nint GlobalAlloc(uint uFlags, nuint dwBytes);

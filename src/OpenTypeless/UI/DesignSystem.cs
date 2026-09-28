@@ -90,6 +90,7 @@ public static class Glyphs
     public const string Code = "";
     public const string Message = "";
     public const string Record = "";
+    public const string Dictionary = "";
     public const string TouchPointer = "";
 }
 
@@ -476,5 +477,20 @@ public static class Formatting
     {
         var s = (int)Math.Round(seconds, MidpointRounding.AwayFromZero);
         return s >= 60 ? $"{s / 60}:{s % 60:00}" : $"{s}s";
+    }
+
+    /// <summary>"820 KB", "12.4 MB", "1.3 GB" (decimal units, like File Explorer's size column but 1000-based as on macOS).</summary>
+    public static string Bytes(long bytes)
+    {
+        if (bytes < 1000) return $"{bytes} B";
+        string[] units = ["KB", "MB", "GB", "TB"];
+        double value = bytes;
+        var unit = -1;
+        do
+        {
+            value /= 1000;
+            unit++;
+        } while (value >= 1000 && unit < units.Length - 1);
+        return value.ToString(value < 10 ? "0.#" : "0", System.Globalization.CultureInfo.InvariantCulture) + " " + units[unit];
     }
 }

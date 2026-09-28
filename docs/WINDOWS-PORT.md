@@ -24,10 +24,12 @@ failure handling. Only the system-integration layer and the look differ.
 | `Retry.swift` | `ApiError.cs`, `RetryPolicy.cs` | Same error kinds and messages, retryable = network/timeout/badResponse/408/409/425/429/5xx; 1 s·2ⁿ ±20 % jitter; `WithTimeout`. |
 | `Providers.swift` | `Providers.cs` | Same 6 providers, URLs, default models, key placeholders, STT format. |
 | `APIClient.swift` | `ApiClient.cs` | One shared `HttpClient` (connection reuse, 6 per host), OpenRouter JSON vs multipart STT, per-attempt timeout `clamp(2×len+15, 30…90)`, 200-with-error handling, `/models`, `/key` check, attribution headers. |
-| `PolishClient.swift` | `PolishClient.cs` | Streaming SSE, **idle** timeout 25 s + 240 s runaway guard, reasoning off/minimum, provider sort by throughput, retry without optional params on 400/422, `finish_reason=length` → truncated. |
-| `Prompts.swift` | `Prompts.cs` | Prompt text copied verbatim; `SanitizePolishOutput`, `LooksLikeAnAnswer`. |
+| `PolishClient.swift` | `PolishClient.cs` | Streaming SSE, **idle** timeout 25 s + 240 s runaway guard, reasoning off/minimum, OpenRouter providers sorted by latency with a 50 tok/s throughput floor, retry without optional params on 400/422, `finish_reason=length` → truncated. |
+| `HedgedPolish.swift` | `HedgedPolish.cs` | Backup model raced after a fixed 0.8 s without a first token (or at once if the primary fails); first stream to produce a token wins, the other is cancelled. A `Channel` of events instead of an `AsyncStream`. |
+| `Prompts.swift` | `Prompts.cs` | Prompt text and post-transcript reminder copied verbatim (the minimal-edit, keep-every-word's-language prompt); misheard-term hints; `SanitizePolishOutput`, `LooksLikeAnAnswer`. |
+| `CorrectionLearner.swift` | `CorrectionLearner.cs`, `Transliteration.cs` | Same diff (LCS over Latin words / CJK characters) and the same filters. Foundation's `.toLatin` transform becomes ICU's `Any-Latin; Latin-ASCII` called from the OS's own ICU (`icu.dll`, Windows 10 1903+), so 逻辑 / 罗技 compare as the same pinyin. Chinese numerals count as digits, like Swift's `Character.isNumber`. |
 | `TranscriptionPipeline.swift` | `TranscriptionPipeline.cs` | Transcribe while talking, ≤ 3 concurrent, skip silent / < 0.3 s chunks, preset transcripts for retries, one extra round for transient failures, `PipelineFailure` with partial text. |
-| `PolishEvaluation.swift` | `PolishEvaluation.cs` | Evaluation-only accounting, durable budget ledger with an exclusive lock file. |
+| `PolishEvaluation.swift` | `PolishEvaluation.cs` | Evaluation-only accounting, durable budget ledger with an exclusive lock file, first-token time, `--provider-routing`, `PolishMetrics` (English kept, similarity). |
 | `Localization.swift` | `Localization.cs` | Inline `L("中文", "English")`, `system / zh / en`, switchable at runtime. |
 
 ## System integration — macOS API → Windows API
@@ -42,10 +44,11 @@ failure handling. Only the system-integration layer and the look differ.
 | Recording | `AVAudioEngine` → 16 kHz Int16, rebuilt on route change | WASAPI shared-mode capture with `AUTOCONVERTPCM` (system resampler → 16 kHz mono Int16), event-driven thread; rebuilt on default-device change or device loss so long dictations survive a headset connecting. |
 | Keys | Keychain (one item) | Windows Credential Manager, one generic credential `OpenTypeless/credentials` holding all keys (JSON), legacy import not needed. `OPENROUTER_API_KEY` env override kept. |
 | Preferences | `UserDefaults` | `%LOCALAPPDATA%\OpenTypeless\settings.json` with the same keys and defaults. |
-| History | `~/Library/Application Support/OpenTypeless/Sessions/<id>/` | `%LOCALAPPDATA%\OpenTypeless\Sessions\<id>\` with the same `audio.wav` + `session.json` schema (keep 200 / audio of newest 30, interrupted → failed & retryable). |
+| History | `~/Library/Application Support/OpenTypeless/Sessions/<id>/` | `%LOCALAPPDATA%\OpenTypeless\Sessions\<id>\` with the same `audio.wav` + `session.json` schema, including per-dictation `timing`. Recordings expire by the retention setting (none / 1 day / 7 days / 1 month / 1 year / forever); expired text stays among the newest 200; failed dictations are never expired; interrupted → failed & retryable. Expiry runs at launch, after each dictation, on a setting change and hourly (a `DispatcherQueueTimer`). |
 | Focus probe | Accessibility API roles | UI Automation (`IUIAutomation`, run off the UI thread with a 0.5 s budget) + `GetGUIThreadInfo` caret: editable → paste & restore clipboard; clearly not editable (desktop, lists, buttons) → clipboard; unknown (browsers/Electron/CEF) → paste *and* keep text on clipboard. |
-| Paste | `⌘V` via `CGEvent`, pasteboard snapshot/restore, `TransientType` | `Ctrl+V` via `SendInput`; Win32 clipboard snapshot/restore of every HGLOBAL format; `ExcludeClipboardContentFromMonitorProcessing` + `CanIncludeInClipboardHistory=0` so clipboard history/managers skip the temporary entry; restore only if the sequence number is unchanged. |
-| HUD | Non-activating click-through glass capsule | Topmost, non-activating, click-through tool window (`WS_EX_NOACTIVATE`/`TOOLWINDOW`), Acrylic backdrop kept "active" so it never greys out; bottom-centre of the monitor under the mouse. Same phases: recording (red dot, 18 level bars, timer), working, copied, error. |
+| Paste | `⌘V` via `CGEvent`; the text is a *promised* pasteboard item, so the app learns whether the target read it; snapshot/restore, `TransientType` | `Ctrl+V` via `SendInput`; the text is offered with **delayed rendering** (`SetClipboardData(CF_UNICODETEXT, NULL)`), and the tray window renders it on `WM_RENDERFORMAT`, which tells us the paste landed. Landed → the Win32 snapshot of every HGLOBAL format is restored; nothing read it within 1.2 s → the text stays on the clipboard as a plain copy and the HUD says "Copied". `ExcludeClipboardContentFromMonitorProcessing` + `CanIncludeInClipboardHistory=0` keep clipboard history and managers from reading (and recording) the temporary entry; restore only if the sequence number is unchanged. |
+| Learning from corrections | `EditWatcher` reads the focused field's `AXValue` twice a second; `NSSpellChecker` for "ordinary English word" | `EditWatcher` reads the focused element through UI Automation (Value pattern, or the Text pattern's document range for editors like Word) on the thread pool with a 0.4 s budget; password fields skipped; same end conditions (focus left, field sent/cleared, next dictation, 2 minutes). The Windows Spell Checking API (`ISpellCheckerFactory`, en-US) answers "ordinary English word". |
+| HUD | Non-activating click-through glass capsule | Topmost, non-activating, click-through tool window (`WS_EX_NOACTIVATE`/`TOOLWINDOW`), Acrylic backdrop kept "active" so it never greys out; bottom-centre of the monitor under the mouse. Same phases: recording (red dot, 18 level bars, timer), working, copied, learned ("Added to vocabulary: …"), error. |
 | Sounds | `Tink` / `Pop` at 0.35 volume | Short soft chimes synthesised in-process (no bundled assets), played at the same low volume. |
 | Permissions | Microphone (TCC), Accessibility | Microphone: read the privacy consent store (`ConsentStore\microphone` + `NonPackaged`), link to `ms-settings:privacy-microphone`. Accessibility: not required on Windows (row explains the one exception: apps running as administrator). |
 | Launch at login | `SMAppService` | `HKCU\…\Run`; "needs approval" = disabled in Task Manager (`StartupApproved\Run`). Enabled once by default for installed (non-dev) builds. |
@@ -80,10 +83,11 @@ These follow from how Windows works rather than from missing features:
 
 ## Verification
 
-- `tests/TypelessCore.Tests`: 34 xUnit tests, all Swift test cases ported (WAV, chunker, joiner, SSE, retry
+- `tests/TypelessCore.Tests`: xUnit tests, all Swift test cases ported (WAV, chunker, joiner, SSE, retry
   classification, timeout, prompt sanitising, reasoning config, mock-server pipeline with a 130 s recording whose every
   chunk fails once, permanent failures, silence skipping, multipart, custom endpoints, polish fallbacks, evaluation
-  ledger), plus retry reuse of finished chunks, idle-timeout handling and a prompt-integrity check.
+  ledger, hedged clean-up against a per-model fake server, clean-up metrics, the correction learner), plus retry reuse
+  of finished chunks, idle-timeout handling, a prompt-integrity check and a check that Windows' ICU provides pinyin.
 - End to end against a local OpenAI-compatible mock server, with the app itself and a real WinForms text box as the
   target: hold-to-talk, tap for hands-free, Esc cancel, injected keys ignored while holding, a combination hotkey
   (Alt + Space, keystrokes swallowed), a 35 s dictation whose first chunk was transcribed during recording, a failure
@@ -99,7 +103,7 @@ These follow from how Windows works rather than from missing features:
 - **General**: permissions, language (System / 简体中文 / English), open at login (+ error / approval footer), restore clipboard, sounds, maximum recording (1–60 min).
 - **Shortcut**: current keys (large key caps), record / cancel, presets, how it works, warnings.
 - **Providers**: six expandable cards: usage tags, configured pill, API key (password box + Paste), Base URL (+ Reset), get-a-key link, Test connection.
-- **Models**: STT provider / model (free text + browse, grouped by vendor when > 40) / spoken language; clean-up toggle / provider / model; missing-key banners.
-- **Vocabulary & Style**: vocabulary and preferences editors.
-- **History**: list + detail (status, error, cleaned + raw text, Copy, Re-transcribe, Show in Explorer, Delete).
+- **Models**: STT provider / model (free text + browse, grouped by vendor when > 40) / spoken language; clean-up toggle / provider / model; backup model toggle / provider / model; missing-key banners.
+- **Vocabulary & Style**: vocabulary editor, "Learn from my corrections" with the learned terms (heard as…, date, remove = never learn again), preferences editor.
+- **History**: recording retention picker with the space used; list + detail (status, error, timing, cleaned + raw text, Copy, Re-transcribe, Show in Explorer, Delete).
 - Bilingual UI switching instantly, Esc cancel, max-duration auto stop, < 0.4 s accidental tap discarded, "No speech detected", truncation / answer detection fallbacks.

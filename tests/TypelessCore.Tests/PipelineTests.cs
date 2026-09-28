@@ -234,6 +234,9 @@ public class PipelineTests
         var options = new PolishOptions("m");
         var openRouter = new ApiClient(Endpoint(ProviderId.OpenRouter)).PolishBody("x", options, true);
         Assert.True(openRouter.ContainsKey("provider") && openRouter.ContainsKey("temperature") && openRouter.ContainsKey("max_tokens"));
+        // Clean-up waits on the first token: lowest latency first, slow streamers (under 50 tok/s) last.
+        Assert.Equal("latency", (string?)openRouter["provider"]!["sort"]);
+        Assert.Equal(50, (int)openRouter["provider"]!["preferred_min_throughput"]!["p50"]!);
         var openAI = new ApiClient(Endpoint(ProviderId.OpenAI)).PolishBody("x", options, true);
         Assert.False(openAI.ContainsKey("temperature") || openAI.ContainsKey("provider") || openAI.ContainsKey("reasoning"));
         var deepSeek = new ApiClient(Endpoint(ProviderId.DeepSeek)).PolishBody("x", options, true);

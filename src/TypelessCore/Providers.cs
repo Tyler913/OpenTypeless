@@ -72,6 +72,16 @@ public static class ProviderIdExtensions
         _ => "",
     };
 
+    /// <summary>
+    /// A fast model from a different vendor, so a slow or failing primary rarely drags it down too.
+    /// Empty where the user has to pick one.
+    /// </summary>
+    public static string DefaultBackupChatModel(this ProviderId id) => id switch
+    {
+        ProviderId.OpenRouter => "deepseek/deepseek-v4.1-flash",
+        _ => "",
+    };
+
     public static string KeyPlaceholder(this ProviderId id) => id switch
     {
         ProviderId.OpenRouter => "sk-or-v1-…",

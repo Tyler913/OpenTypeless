@@ -10,6 +10,9 @@ namespace OpenTypeless.Services;
 /// </summary>
 public static class Permissions
 {
+    /// <summary>Set by <c>--snapshot-ui --demo</c> so screenshots show a set-up app.</summary>
+    public static bool AssumeGranted { get; set; }
+
     private const string ConsentStore = @"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone";
 
     /// <summary>
@@ -17,7 +20,8 @@ public static class Permissions
     /// "Microphone access" for this user, or "Let desktop apps access your microphone".
     /// </summary>
     public static bool MicrophoneGranted =>
-        !IsDenied(Registry.LocalMachine, ConsentStore)
+        AssumeGranted
+        || !IsDenied(Registry.LocalMachine, ConsentStore)
         && !IsDenied(Registry.CurrentUser, ConsentStore)
         && !IsDenied(Registry.CurrentUser, ConsentStore + @"\NonPackaged");
 

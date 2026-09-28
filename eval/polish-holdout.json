@@ -186,5 +186,140 @@
       "5.1",
       "3.8"
     ]
+  },
+  {
+    "id": "h-lang-everyday",
+    "input": "嗯我想在设置页加一个 toggle，然后用户可以在 light mode 和 dark mode 之间切换，默认的话就跟随 system",
+    "mustContain": [
+      "toggle",
+      "light mode",
+      "dark mode",
+      "system"
+    ],
+    "mustNotContain": [
+      "浅色",
+      "深色",
+      "开关"
+    ]
+  },
+  {
+    "id": "h-lang-situation",
+    "input": "我们先看一下现在这个 situation 到底是什么样的，然后再决定要不要 rollback",
+    "mustContain": [
+      "situation",
+      "rollback"
+    ],
+    "mustNotContain": [
+      "回滚",
+      "情况"
+    ]
+  },
+  {
+    "id": "h-lang-casual",
+    "input": "bro 这个动画真的太 fancy 了，我觉得 user 应该会很喜欢",
+    "mustContain": [
+      "fancy",
+      "user"
+    ],
+    "mustNotContain": [
+      "用户",
+      "兄弟"
+    ],
+    "anyOf": [
+      [
+        "bro",
+        "Bro"
+      ]
+    ]
+  },
+  {
+    "id": "h-lang-english-host",
+    "input": "um so the 支付 flow is broken again, I think the 回调 from the server never arrives",
+    "mustContain": [
+      "支付",
+      "回调"
+    ],
+    "mustNotContain": [
+      "payment",
+      "callback"
+    ]
+  },
+  {
+    "id": "h-lang-meta-terms",
+    "input": "你看一下它加的 punctuation 是不是太多了，还有那个 spacing 也有点问题",
+    "mustContain": [
+      "punctuation",
+      "spacing"
+    ],
+    "mustNotContain": [
+      "标点",
+      "间距"
+    ]
+  },
+  {
+    "id": "h-lang-shortcut",
+    "input": "有没有办法设置一个 shortcut，就是按一下就能把所有的 notification 都 mute 掉",
+    "mustContain": [
+      "shortcut",
+      "notification",
+      "mute"
+    ],
+    "mustNotContain": [
+      "快捷",
+      "通知",
+      "静音"
+    ]
+  },
+  {
+    "id": "h-lang-units",
+    "input": "现在这个安装包有两百兆，我想想办法把它压到五十兆以内",
+    "mustContain": [
+      "兆"
+    ],
+    "mustNotContain": [
+      "MB"
+    ]
+  },
+  {
+    "id": "h-minimal-no-steps",
+    "input": "我建议你先把这个 repo 的代码全部过一遍，就是每个文件都看一下，因为不看的话你不会有完整的理解。然后你先出一个方案给我看，我确认了之后你再开始改",
+    "mustContain": [
+      "每个文件",
+      "方案",
+      "确认"
+    ],
+    "mustNotContain": [
+      "1.",
+      "请",
+      "步骤"
+    ]
+  },
+  {
+    "id": "h-minimal-no-additions",
+    "input": "这个功能其实不急啊，下个月再做也行，主要是现在人手不太够",
+    "mustContain": [
+      "不急",
+      "下个月",
+      "人手"
+    ],
+    "mustNotContain": [
+      "因此",
+      "综上",
+      "建议",
+      "请"
+    ]
+  },
+  {
+    "id": "h-minimal-voice",
+    "input": "我觉得你可以先试一下用 Redis 做缓存，不行的话我们再换别的",
+    "mustContain": [
+      "我觉得",
+      "你可以",
+      "Redis",
+      "我们再换"
+    ],
+    "mustNotContain": [
+      "请"
+    ]
   }
 ]

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -30,6 +31,8 @@ public sealed class EvaluationAttempt
     [JsonPropertyName("rawOutput")] public string RawOutput { get; set; } = "";
     [JsonPropertyName("output")] public string Output { get; set; } = "";
     [JsonPropertyName("seconds")] public double Seconds { get; set; }
+    /// <summary>Time to the first content token: what a hedged request waits on.</summary>
+    [JsonPropertyName("firstTokenSeconds")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? FirstTokenSeconds { get; set; }
     [JsonPropertyName("retryCount")] public int RetryCount { get; set; }
     [JsonPropertyName("receivedDone")] public bool ReceivedDone { get; set; }
     [JsonIgnore] public bool Truncated => FinishReason == "length";
@@ -105,7 +108,8 @@ public sealed record EvaluationPlan(
 public sealed partial class ApiClient
 {
     /// <summary>Reuses the production prompt/body, adding only evaluation routing price/supported-parameter guards.</summary>
-    public EvaluationPlan EvaluationPlan(string transcript, PolishOptions options, double promptPrice, double completionPrice, string? providerTag = null)
+    public EvaluationPlan EvaluationPlan(string transcript, PolishOptions options, double promptPrice, double completionPrice, string? providerTag = null,
+                                         JsonObject? providerRouting = null)
     {
         if (!IsOpenRouter || !double.IsFinite(promptPrice) || !double.IsFinite(completionPrice) || promptPrice < 0 || completionPrice < 0
             || options.ModelInfo?.SupportedParameters.Contains("max_tokens") != true)
@@ -117,6 +121,11 @@ public sealed partial class ApiClient
         var body = PolishBody(transcript, options, includeOptional: true);
         // Byte-level upper estimate plus ample chat-template overhead; 20% billing safety margin.
         var messages = (JsonArray)body["messages"]!;
+        if (providerRouting != null)
+        {
+            // Comparing routing preferences (e.g. sorting by latency vs throughput).
+            body["provider"] = providerRouting.DeepClone();
+        }
         if (providerTag != null)
         {
             // Explicitly benchmarking a single upstream provider.
@@ -168,6 +177,7 @@ public sealed partial class ApiClient
             while (await idle.Run(t => reader.ReadLineAsync(t).AsTask()).ConfigureAwait(false) is { } line)
             {
                 result.Consume(line);
+                if (result.FirstTokenSeconds == null && result.RawOutput.Length > 0) result.FirstTokenSeconds = clock.Elapsed.TotalSeconds;
                 if (result.ReceivedDone) break;
             }
             if (!result.ReceivedDone && result.Error == null) result.Error = "stream ended without DONE";
@@ -316,5 +326,95 @@ public sealed class EvaluationBudget : IDisposable
         entry.RequestId = requestId;
         Save();
         if (cost is { } billed && billed > entry.UpperBound) throw ApiException.BadResponse("billing exceeded conservative bound; stop and audit");
+    }
+}
+
+/// <summary>Case-independent measures of how much a clean-up changed the speaker's text.</summary>
+public static class PolishMetrics
+{
+    /// <summary>Fillers and correction phrases the clean-up is supposed to remove.</summary>
+    internal static readonly HashSet<string> RemovableLatin =
+    [
+        "um", "uh", "umm", "uhh", "er", "ah", "oh", "like", "so", "ok", "okay", "yeah", "well",
+        "actually", "basically", "mean", "you", "know", "wait", "no", "sorry", "scratch", "that",
+    ];
+
+    /// <summary>
+    /// Share of the English words in a mostly-Chinese input that survive in the output. Translating
+    /// "dark mode" to 深色模式 lowers it; recognition fixes like "swift UI" → SwiftUI don't.
+    /// Returns null when the input is mostly English or has no English words worth checking.
+    /// </summary>
+    public static double? LatinRetention(string input, string output, IEnumerable<string>? ignoring = null)
+    {
+        // A Chinese character is roughly one word: compare counts to find the host language.
+        var cjk = input.EnumerateRunes().Count(TranscriptJoiner.IsCJK);
+        if (cjk < LatinWords(input).Count) return null;
+        var ignored = (ignoring ?? []).SelectMany(LatinWords).ToHashSet();
+        var words = LatinWords(input).ToHashSet();
+        words.ExceptWith(RemovableLatin);
+        words.ExceptWith(ignored);
+        words.RemoveWhere(w => w.Length <= 1);
+        if (words.Count == 0) return null;
+        var haystack = new string(output.ToLowerInvariant().Where(c => !char.IsWhiteSpace(c) && c != '-').ToArray());
+        return (double)words.Count(w => haystack.Contains(w, StringComparison.Ordinal)) / words.Count;
+    }
+
+    /// <summary>
+    /// Character-level similarity (1 − normalised edit distance) after dropping whitespace and
+    /// punctuation, so spacing and punctuation fixes don't count as edits.
+    /// </summary>
+    public static double Similarity(string a, string b)
+    {
+        var x = Normalized(a);
+        var y = Normalized(b);
+        if (x.Count == 0 || y.Count == 0) return x.Count == y.Count ? 1 : 0;
+        return 1 - (double)EditDistance(x, y) / Math.Max(x.Count, y.Count);
+    }
+
+    internal static int EditDistance<T>(IReadOnlyList<T> x, IReadOnlyList<T> y)
+    {
+        var comparer = EqualityComparer<T>.Default;
+        var previous = Enumerable.Range(0, y.Count + 1).ToArray();
+        for (var i = 1; i <= x.Count; i++)
+        {
+            var current = new int[y.Count + 1];
+            current[0] = i;
+            for (var j = 1; j <= y.Count; j++)
+            {
+                current[j] = comparer.Equals(x[i - 1], y[j - 1])
+                    ? previous[j - 1]
+                    : 1 + Math.Min(previous[j - 1], Math.Min(previous[j], current[j - 1]));
+            }
+            previous = current;
+        }
+        return previous[y.Count];
+    }
+
+    internal static List<string> LatinWords(string text) =>
+        text.ToLowerInvariant()
+            .Split(c => !(char.IsAscii(c) && char.IsLetterOrDigit(c)))
+            .Where(w => w.Length > 0 && char.IsLetter(w[0]))
+            .ToList();
+
+    internal static List<Rune> Normalized(string text) =>
+        text.ToLowerInvariant().EnumerateRunes().Where(r => !Rune.IsWhiteSpace(r) && Rune.GetUnicodeCategory(r) switch
+        {
+            UnicodeCategory.ConnectorPunctuation or UnicodeCategory.DashPunctuation or UnicodeCategory.OpenPunctuation
+                or UnicodeCategory.ClosePunctuation or UnicodeCategory.InitialQuotePunctuation or UnicodeCategory.FinalQuotePunctuation
+                or UnicodeCategory.OtherPunctuation or UnicodeCategory.MathSymbol or UnicodeCategory.CurrencySymbol
+                or UnicodeCategory.ModifierSymbol or UnicodeCategory.OtherSymbol => false,
+            _ => true,
+        }).ToList();
+
+    /// <summary>Splits wherever <paramref name="separator"/> matches, like Swift's <c>split(whereSeparator:)</c>.</summary>
+    internal static IEnumerable<string> Split(this string text, Func<char, bool> separator)
+    {
+        var start = 0;
+        for (var i = 0; i <= text.Length; i++)
+        {
+            if (i < text.Length && !separator(text[i])) continue;
+            if (i > start) yield return text[start..i];
+            start = i + 1;
+        }
     }
 }

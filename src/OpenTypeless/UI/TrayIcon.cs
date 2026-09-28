@@ -7,7 +7,8 @@ namespace OpenTypeless.UI;
 
 /// <summary>
 /// The notification-area icon: the Windows counterpart of the macOS menu-bar status item.
-/// A hidden top-level window receives its clicks (and doubles as the clipboard owner); it is top-level rather
+/// A hidden top-level window receives its clicks (and doubles as the clipboard owner, rendering pasted text on
+/// request); it is top-level rather
 /// than message-only so it also hears "TaskbarCreated" when Explorer restarts, and re-adds the icon.
 /// </summary>
 public sealed class TrayIcon : IDisposable
@@ -126,6 +127,7 @@ public sealed class TrayIcon : IDisposable
             Add(); // Explorer restarted
             return 0;
         }
+        if (Input.TextInserter.HandleClipboardMessage(hwnd, msg, wParam)) return 0;
         if (msg is WM_SETTINGCHANGE or WM_DPICHANGED or WM_DISPLAYCHANGE)
         {
             Update(Win32.NIM_MODIFY); // light/dark taskbar or scale changed

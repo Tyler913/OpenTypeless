@@ -2,7 +2,7 @@
 # for x64 and ARM64 (download them from the run's Artifacts).
 #
 #   ci.yml calls it          when a push or pull request changes windows/
-#   release.yml calls it     for a tag like `1.0.2-windows`
+#   release.yml calls it     for a version tag like `1.0.2` (together with the macOS build)
 #   Actions tab → Windows build → Run workflow   a manual run
 name: Windows build
 

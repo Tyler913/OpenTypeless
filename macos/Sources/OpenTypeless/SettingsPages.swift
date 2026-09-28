@@ -64,6 +64,12 @@ struct GeneralPage: View {
                     .toggleStyle(.switch)
                     .labelsHidden()
                 }
+                CardDivider(inset: 50)
+                CardRow(icon: "house.fill", iconColor: .blue, title: L("自动启动时打开主页", "Show Home when opened at login"),
+                        subtitle: L("关闭时开机后只在菜单栏待命；手动打开应用总会显示主页",
+                                    "Off: it waits in the menu bar after you log in. Opening the app yourself always shows Home")) {
+                    Toggle("", isOn: $settings.showHomeAtLogin).toggleStyle(.switch).labelsHidden()
+                }
             }
 
             UpdatesSection(settings: settings)
@@ -83,6 +89,17 @@ struct GeneralPage: View {
                         subtitle: L("到时间会自动结束并处理", "Stops and processes automatically at the limit")) {
                     Stepper(L("\(settings.maxRecordingMinutes) 分钟", "\(settings.maxRecordingMinutes) min"),
                             value: $settings.maxRecordingMinutes, in: 1...60)
+                        .fixedSize()
+                }
+            }
+
+            CardSection(title: L("主页统计", "Home stats"),
+                        footer: L("「节省的时间」= 按这个速度打出同样的字所需的时间 − 实际说话的时间。",
+                                  "“Time saved” is how long typing the same words at this speed would take, minus the time you spent talking.")) {
+                CardRow(icon: "keyboard.fill", iconColor: .indigo, title: L("你的打字速度", "Your typing speed"),
+                        subtitle: L("用来计算节省的时间（默认每分钟 100 字）", "Used to work out the time saved (100 wpm by default)")) {
+                    Stepper(L("\(settings.typingWordsPerMinute) 字/分钟", "\(settings.typingWordsPerMinute) wpm"),
+                            value: $settings.typingWordsPerMinute, in: 10...300, step: 5)
                         .fixedSize()
                 }
             }
@@ -611,6 +628,8 @@ struct ModelsPage: View {
                     ModelField(text: $settings.sttModel, models: sttModels)
                 }
                 CardDivider(inset: 50)
+                PriceRow(settings: settings, provider: settings.sttProvider, model: settings.sttModel, speech: true)
+                CardDivider(inset: 50)
                 CardRow(icon: "character.bubble.fill", iconColor: .teal, title: L("说话语言", "Spoken language"),
                         subtitle: L("固定语言可以提高准确率；中英混说请选自动", "Fixing it can help accuracy; use Auto for mixed speech")) {
                     Picker("", selection: $settings.sttLanguage) {
@@ -646,6 +665,8 @@ struct ModelsPage: View {
                         ModelField(text: $settings.polishModel, models: chatModels)
                     }
                     CardDivider(inset: 50)
+                    PriceRow(settings: settings, provider: settings.polishProvider, model: settings.polishModel, speech: false)
+                    CardDivider(inset: 50)
                     CardRow(icon: "arrow.triangle.branch", iconColor: .orange, title: L("备用模型", "Backup model"),
                             subtitle: L("首选模型 \(hedgeDelayLabel) 内还没开始输出、或请求失败时，同时请求备用模型，用先出字的那个",
                                         "If the main model hasn't started answering within \(hedgeDelayLabel), or fails, the backup is asked too and the first to answer wins")) {
@@ -662,6 +683,8 @@ struct ModelsPage: View {
                                 subtitle: L("选一个不同厂商的快速模型，两边不容易同时变慢", "Pick a fast model from another vendor so both are rarely slow at once")) {
                             ModelField(text: $settings.polishBackupModel, models: backupChatModels)
                         }
+                        CardDivider(inset: 50)
+                        PriceRow(settings: settings, provider: settings.polishBackupProvider, model: settings.polishBackupModel, speech: false)
                     }
                 }
             }
@@ -681,6 +704,7 @@ struct ModelsPage: View {
         .task(id: "\(settings.polishBackupProvider.rawValue)|\(settings.apiKey(for: settings.polishBackupProvider).count)") {
             backupChatModels = await loadModels(settings.polishBackupProvider, speech: false)
         }
+        .task { PriceStore.shared.refreshIfStale() }
         .onChange(of: settings.polishModel) { controller.refreshModelInfo() }
         .onChange(of: settings.polishProvider) { controller.refreshModelInfo() }
         .onChange(of: settings.polishBackupProvider) { controller.refreshModelInfo() }
@@ -732,6 +756,76 @@ private struct ProviderPicker: View {
             Text(selection.displayName)
         }
         .fixedSize()
+    }
+}
+
+/// A model's price, next to where it's chosen: OpenRouter's live price (read-only), or fields to enter the price for
+/// any other provider, so the Home page can count what it costs.
+private struct PriceRow: View {
+    @ObservedObject var settings: AppSettings
+    @ObservedObject var prices = PriceStore.shared
+    let provider: ProviderID
+    let model: String
+    let speech: Bool
+
+    var body: some View {
+        CardRow(icon: "dollarsign", iconColor: .green, title: L("价格", "Price"), subtitle: subtitle) {
+            if provider == .openrouter {
+                Text(openRouterPrice).font(.system(size: 12)).foregroundStyle(.secondary)
+            } else if speech {
+                HStack(spacing: 6) {
+                    field(\.perMinute)
+                    Text(L("美元/分钟", "$/min")).font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+                .disabled(trimmedModel.isEmpty)
+            } else {
+                HStack(spacing: 6) {
+                    Text(L("输入", "In")).font(.system(size: 12)).foregroundStyle(.secondary)
+                    field(\.inputPerMillion)
+                    Text(L("输出", "Out")).font(.system(size: 12)).foregroundStyle(.secondary)
+                    field(\.outputPerMillion)
+                }
+                .disabled(trimmedModel.isEmpty)
+            }
+        }
+    }
+
+    private var trimmedModel: String { model.trimmingCharacters(in: .whitespaces) }
+
+    private var subtitle: String {
+        guard provider == .openrouter else {
+            return speech
+                ? L("按录音时长计费，美元 / 分钟。留空则不计入花费。", "Per minute of audio, in USD. Leave empty to leave it out of the spend.")
+                : L("美元 / 百万 token（服务商不返回用量时按字数估算）。留空则不计入花费。",
+                    "USD per million tokens (estimated from the text when the server doesn't say). Leave empty to leave it out of the spend.")
+        }
+        if prices.catalog.isEmpty { return L("正在从 OpenRouter 获取最新价格…", "Getting the latest prices from OpenRouter…") }
+        return L("OpenRouter 实时价格，更新于 \(prices.catalog.fetchedAt.shortStamp)。实际按每次请求的扣费计算。",
+                 "Live from OpenRouter, updated \(prices.catalog.fetchedAt.shortStamp). Each request counts what OpenRouter billed.")
+    }
+
+    private var openRouterPrice: String {
+        if speech { return L("按实际扣费", "As billed") }
+        guard let price = prices.catalog.price(trimmedModel) else {
+            return trimmedModel.isEmpty ? "—" : L("OpenRouter 没有列出这个模型", "Not listed on OpenRouter")
+        }
+        let input = UsageFormat.rate(price.inputPerMillion ?? 0)
+        let output = UsageFormat.rate(price.outputPerMillion ?? 0)
+        return L("输入 \(input) · 输出 \(output) / 百万 token", "In \(input) · Out \(output) / 1M tokens")
+    }
+
+    private func field(_ keyPath: WritableKeyPath<ModelPrice, Double?>) -> some View {
+        TextField("$", value: Binding<Double?>(
+            get: { settings.customPrice(provider, model)?[keyPath: keyPath] },
+            set: { value in
+                var price = settings.customPrice(provider, model) ?? ModelPrice()
+                price[keyPath: keyPath] = value.map { max(0, $0) }
+                settings.setCustomPrice(provider, model, price)
+            }
+        ), format: .number.precision(.fractionLength(0...6)))
+        .textFieldStyle(.roundedBorder)
+        .multilineTextAlignment(.trailing)
+        .frame(width: 80)
     }
 }
 
@@ -953,8 +1047,11 @@ private struct HistoryDetail: View {
                 if let error = record.error {
                     Banner(symbol: "exclamationmark.triangle.fill", color: .orange, text: error) { EmptyView() }
                 }
-                if let timing = record.timing?.summary {
-                    Text(timing).font(.system(size: 11)).foregroundStyle(.secondary).textSelection(.enabled)
+                // Where the wait after releasing the key went, and what it cost.
+                let summary = [record.timing?.summary, record.cost.map { L("花费 ", "Cost ") + UsageFormat.money($0) }]
+                    .compactMap { $0 }.joined(separator: " · ")
+                if !summary.isEmpty {
+                    Text(summary).font(.system(size: 11)).foregroundStyle(.secondary).textSelection(.enabled)
                 }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {

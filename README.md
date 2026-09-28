@@ -74,6 +74,8 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 - **Bring your own provider.** OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek, or any OpenAI-compatible endpoint. Speech-to-text, clean-up and the backup clean-up model can each use a different provider.
 - **Custom vocabulary and style preferences** for names, products and jargon.
 - **Learns from your fixes.** Correct a misrecognised word after it's pasted (TypeList → Typeless) and it's added to your vocabulary automatically, along with how it was misheard. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps, and a word you remove is never learned again.
+- **Home page** with what voice typing has done for you: words dictated, time saved against typing (100 wpm by default, adjustable), your speaking speed, what it cost today, this month and in total, and a GitHub-style activity heatmap with streaks. It opens when you launch the app yourself; at login it stays out of the way unless you turn on **Show Home when opened at login**.
+- **Know what you spend.** OpenRouter requests count exactly what OpenRouter billed for them, and its live price list is shown next to each model. For any other provider or a custom endpoint, enter the model's price under **Models** (per million tokens, or per minute of audio for speech-to-text).
 - **History** of every dictation with raw and cleaned text, timing, copy and re-transcribe. Choose how long recordings are kept: not at all, a day, a week, a month, a year, or forever.
 - **Bilingual UI** (English / 简体中文), following the system language or chosen manually.
 - **Native design.** Liquid Glass on macOS 26+ with a menu-bar panel; Mica and Acrylic on Windows 11 with a tray panel. Both show a small recording capsule while you talk.
@@ -192,6 +194,7 @@ Reasoning is automatically turned off or set to its minimum for the clean-up mod
 
 - Audio and text are only sent to the providers you configure.
 - API keys are stored in the macOS Keychain, or in Windows Credential Manager (one entry, `OpenTypeless/credentials`).
+- Usage totals for the Home page (words, speaking time and cost per day, no text) are kept in `usage.json` in the same folder as the settings and history. The OpenRouter price list is downloaded from its public model list (no key, nothing about you) a few times a day.
 - History (audio + transcripts) lives in `~/Library/Application Support/OpenTypeless/Sessions/` on macOS and `%LOCALAPPDATA%\OpenTypeless\` on Windows. Recordings are kept for a month by default (History page: not at all, a day, a week, a month, a year, or forever); after that the text stays among the newest 200 entries. Failed dictations keep their audio so they can be retried.
 - Update checks send one request a day to `api.github.com` (no account, nothing about you or your dictations); turn them off under **Settings → General → Updates**.
 - Learning from your fixes reads the text field you dictated into, on your computer only, for at most two minutes after a paste. Password fields are skipped. It can be turned off under **Vocabulary & Style**.
@@ -291,6 +294,7 @@ GitHub Actions ([`.github/workflows/`](.github/workflows/)) builds only the app 
 |---|---|
 | `macos/**` | **macOS build** on a macOS runner: the tests, then the app zip. |
 | `windows/**` | **Windows build** on a Windows runner: the tests, then the x64 and ARM64 zips. |
+| `testdata/**` | Both builds: the shared test cases (word counts, prices, time saved) that both test suites read, so the two apps agree. |
 | Only `docs/`, `eval/`, `README.md` | Nothing to build. |
 
 Download the zips from a run's **Artifacts** section on the Actions tab. **Actions → macOS build / Windows build → Run workflow** starts a build by hand.

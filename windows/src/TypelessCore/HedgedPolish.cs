@@ -14,7 +14,9 @@ public sealed record HedgedPolishResult(
     bool UsedBackup,
     /// <summary>From the start of the call until the winning stream's first token.</summary>
     double FirstTokenSeconds,
-    double TotalSeconds);
+    double TotalSeconds,
+    /// <summary>The provider that answered, to price the answer.</summary>
+    ProviderId Provider = ProviderId.OpenRouter);
 
 /// <summary>
 /// Hedged clean-up: the primary route starts alone; if it hasn't produced its first token after
@@ -98,7 +100,8 @@ public static class HedgedPolish
                         if (winner != null && winner != index) break;
                         var now = clock.Elapsed.TotalSeconds;
                         return new HedgedPolishResult(result, routes[index].Options.Model, UsedBackup: index != 0,
-                                                      FirstTokenSeconds: firstTokenAt ?? now, TotalSeconds: now);
+                                                      FirstTokenSeconds: firstTokenAt ?? now, TotalSeconds: now,
+                                                      Provider: routes[index].Client.Endpoint.Id);
                     case Event.Finished(var index, null, { } error):
                         // The chosen stream broke mid-way: its partial text is useless, so give up this round.
                         if (winner == index) ExceptionDispatchInfo.Throw(error);

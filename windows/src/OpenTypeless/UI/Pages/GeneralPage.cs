@@ -76,6 +76,13 @@ public sealed class GeneralPage : PageBase
             Subtitle = L("登录后在任务栏通知区域待命", "Waits in the notification area after you sign in"),
             Trailing = _launchToggle,
         });
+        _startup.Body.Add(new CardDivider());
+        _startup.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Home, Tint = Tint.Blue, Title = L("自动启动时打开主页", "Show Home when opened at login"),
+            Subtitle = L("关闭时开机后只在后台待命；手动打开应用总会显示主页", "Off: it waits quietly after you sign in. Opening the app yourself always shows Home"),
+            Trailing = Toggle(_settings.ShowHomeAtLogin, on => _settings.ShowHomeAtLogin = on),
+        });
         Body.Children.Add(_startup);
 
         // Updates
@@ -122,6 +129,37 @@ public sealed class GeneralPage : PageBase
             },
         });
         Body.Children.Add(dictation);
+
+        // Home
+        var home = new CardSection
+        {
+            Title = L("主页统计", "Home stats"),
+            Footer = L("「节省的时间」= 按这个速度打出同样的字所需的时间 − 实际说话的时间。",
+                       "“Time saved” is how long typing the same words at this speed would take, minus the time you spent talking."),
+        };
+        var typing = new NumberBox
+        {
+            Minimum = 10, Maximum = 300, SmallChange = 5, LargeChange = 20,
+            Value = _settings.TypingWordsPerMinute,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+            MinWidth = 120,
+        };
+        typing.ValueChanged += (_, e) =>
+        {
+            if (!double.IsNaN(e.NewValue)) _settings.TypingWordsPerMinute = (int)Math.Round(e.NewValue);
+            else typing.Value = _settings.TypingWordsPerMinute;
+        };
+        home.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Keyboard, Tint = Tint.Indigo, Title = L("你的打字速度", "Your typing speed"),
+            Subtitle = L("用来计算节省的时间（默认每分钟 100 字）", "Used to work out the time saved (100 wpm by default)"),
+            Trailing = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 8,
+                Children = { typing, new TextBlock { Text = L("字/分钟", "wpm"), VerticalAlignment = VerticalAlignment.Center } },
+            },
+        });
+        Body.Children.Add(home);
 
         RefreshPermissions();
         RefreshLaunchState();

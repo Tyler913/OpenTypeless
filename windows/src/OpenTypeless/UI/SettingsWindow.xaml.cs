@@ -18,7 +18,7 @@ public sealed partial class SettingsWindow : Window
     private readonly SessionController _controller;
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly DispatcherQueueTimer _refresh;
-    private SettingsPage _page = SettingsPage.General;
+    private SettingsPage _page = SettingsPage.Home;
     private AppLanguage _language;
     private bool _allowClose;
 
@@ -117,6 +117,7 @@ public sealed partial class SettingsWindow : Window
     {
         PageHost.Content = page switch
         {
+            SettingsPage.Home => new HomePage(this),
             SettingsPage.General => new GeneralPage(),
             SettingsPage.Shortcut => new ShortcutPage(this),
             SettingsPage.Providers => new ProvidersPage(),

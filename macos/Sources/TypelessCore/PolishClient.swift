@@ -48,6 +48,8 @@ public struct SSEParser {
         case finished(reason: String?)
         case done
         case error(String)
+        /// The token counts (and on OpenRouter the cost), sent in the last chunk.
+        case usage(RequestUsage)
     }
 
     public init() {}
@@ -64,6 +66,7 @@ public struct SSEParser {
             return [.error(APIClient.errorMessage(from: data))]
         }
         var events: [Event] = []
+        if let usage = RequestUsage.parse(object["usage"]) { events.append(.usage(usage)) }
         if let choices = object["choices"] as? [[String: Any]], let choice = choices.first {
             if let delta = choice["delta"] as? [String: Any], let content = delta["content"] as? String,
                !content.isEmpty {
@@ -82,6 +85,8 @@ extension APIClient {
     public struct PolishResult: Sendable {
         public let text: String
         public let truncated: Bool
+        /// What the request used: as reported, or estimated from the text when the server said nothing.
+        public var usage: RequestUsage? = nil
     }
 
     /// Clean-up output is short, so the wait is mostly time to first token: prefer the lowest-latency
@@ -114,6 +119,10 @@ extension APIClient {
         } else if endpoint.id != .openai {
             body["temperature"] = 0.2
         }
+        if !isOpenRouter {
+            // OpenAI-compatible servers only report token counts on a stream when asked (OpenRouter always does).
+            body["stream_options"] = ["include_usage": true]
+        }
         return body
     }
 
@@ -133,7 +142,8 @@ extension APIClient {
         } catch let APIError.http(status, message) where status == 400 || status == 422 {
             // A server rejecting an optional parameter: retry with the bare minimum request.
             let lower = message.lowercased()
-            guard ["temperature", "max_tokens", "reasoning", "provider", "unsupported", "unrecognized", "unknown"]
+            guard ["temperature", "max_tokens", "reasoning", "provider", "stream_options", "include_usage",
+                   "unsupported", "unrecognized", "unknown"]
                 .contains(where: lower.contains) else { throw APIError.http(status: status, message: message) }
             return try await streamPolish(transcript: transcript, options: options, includeOptional: false,
                                           idleTimeout: idleTimeout, totalTimeout: totalTimeout, onPartial: onPartial)
@@ -146,8 +156,9 @@ extension APIClient {
     ) async throws -> PolishResult {
         var request = try request(path: "chat/completions", idleTimeout: idleTimeout)
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        request.httpBody = try JSONSerialization.data(
-            withJSONObject: polishBody(transcript: transcript, options: options, includeOptional: includeOptional))
+        let body = polishBody(transcript: transcript, options: options, includeOptional: includeOptional)
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let messages = (body["messages"] as? [[String: String]] ?? []).compactMap { $0["content"] }
         let session = self.session
 
         return try await withTimeout(totalTimeout) { [request] in
@@ -161,6 +172,7 @@ extension APIClient {
             let parser = SSEParser()
             var text = ""
             var finishReason: String?
+            var usage: RequestUsage?
             loop: for try await line in bytes.lines {
                 for event in parser.parse(line: line) {
                     switch event {
@@ -171,6 +183,8 @@ extension APIClient {
                         finishReason = reason
                     case .done:
                         break loop
+                    case let .usage(reported):
+                        usage = reported
                     case let .error(message):
                         throw APIError.http(status: 502, message: message)
                     }
@@ -178,7 +192,18 @@ extension APIClient {
             }
             let cleaned = Prompts.sanitizePolishOutput(text)
             guard !cleaned.isEmpty else { throw APIError.badResponse(L("模型返回了空内容", "the model returned nothing")) }
-            return PolishResult(text: cleaned, truncated: finishReason == "length")
+            if usage == nil || (usage?.inputTokens == nil && usage?.outputTokens == nil && usage?.cost == nil) {
+                usage = APIClient.estimatedUsage(messages: messages, output: text)
+            }
+            return PolishResult(text: cleaned, truncated: finishReason == "length", usage: usage)
         }
+    }
+}
+
+extension APIClient {
+    /// Token counts guessed from the messages sent and the text received, for servers that report none.
+    static func estimatedUsage(messages: [String], output: String) -> RequestUsage {
+        let input = messages.reduce(0) { $0 + TokenEstimate.count($1) + 4 }
+        return RequestUsage(inputTokens: input, outputTokens: TokenEstimate.count(output), estimated: true)
     }
 }

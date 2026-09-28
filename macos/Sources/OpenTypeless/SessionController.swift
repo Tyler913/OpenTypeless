@@ -241,17 +241,19 @@ final class SessionController: ObservableObject {
             record.error = nil
             guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 record.status = .done
+                account(&record, pipeline: pipeline, polished: nil)
                 history.update(record)
                 finish(showing: .error(L("没有识别到语音", "No speech detected")), hideAfter: 2)
                 return
             }
             history.update(record)
-            await polishAndDeliver(record: &record)
+            await polishAndDeliver(record: &record, pipeline: pipeline)
         } catch let failure as PipelineFailure {
             record.chunkTexts = pipeline.completedTranscripts()
             record.rawText = failure.partialText
             record.status = .failed
             record.error = failure.localizedDescription
+            account(&record, pipeline: pipeline, polished: nil)
             history.update(record)
             lastError = failure.localizedDescription
             finish(showing: .error(L("转写失败，可在菜单栏重试", "Failed — retry from the menu bar")), hideAfter: 4)
@@ -259,19 +261,22 @@ final class SessionController: ObservableObject {
             if APIError.from(error) == .cancelled { return }
             record.status = .failed
             record.error = error.localizedDescription
+            account(&record, pipeline: pipeline, polished: nil)
             history.update(record)
             lastError = error.localizedDescription
             finish(showing: .error(error.localizedDescription), hideAfter: 5)
         }
     }
 
-    private func polishAndDeliver(record: inout DictationRecord) async {
+    private func polishAndDeliver(record: inout DictationRecord, pipeline: TranscriptionPipeline) async {
         var text = record.rawText
         var notice: String?
+        var polished: HedgedPolishResult?
 
         if settings.polishEnabled {
             do {
                 let outcome = try await polish(record.rawText)
+                polished = outcome
                 let result = outcome.result
                 record.timing?.polishFirstToken = outcome.firstTokenSeconds
                 record.timing?.polish = outcome.totalSeconds
@@ -300,6 +305,7 @@ final class SessionController: ObservableObject {
             record.status = .done
         }
         if record.status == .polishFailed { record.polishedText = nil }
+        account(&record, pipeline: pipeline, polished: polished)
         history.update(record)
 
         guard !Task.isCancelled else { return }
@@ -353,6 +359,28 @@ final class SessionController: ObservableObject {
             extraInstructions: settings.extraInstructions,
             modelInfo: endpoint.id == .openrouter ? modelInfo[model] : nil
         ))
+    }
+
+    /// Prices what this run's requests used (the speech-to-text of every chunk sent, and the clean-up answer that was
+    /// kept) and adds it, with the dictation's words once it's finished, to the Home page totals.
+    private func account(_ record: inout DictationRecord, pipeline: TranscriptionPipeline, polished: HedgedPolishResult?) {
+        let prices = PriceStore.shared
+        let transcription = CostEstimator.transcriptions(pipeline.requestUsages(),
+                                                         price: prices.price(settings.sttProvider, settings.sttModel),
+                                                         preferReported: settings.sttProvider == .openrouter)
+        var unpriced = transcription.unpriced
+        var cleanup = 0.0
+        if let polished, let usage = polished.result.usage {
+            if let cost = CostEstimator.chat(usage, price: prices.price(polished.provider, polished.model),
+                                             preferReported: polished.provider == .openrouter) {
+                cleanup = cost
+            } else {
+                unpriced += 1
+            }
+        }
+        if transcription.cost + cleanup > 0 { record.cost = (record.cost ?? 0) + transcription.cost + cleanup }
+        note(String(format: "cost: transcription $%.6f, clean-up $%.6f, unpriced requests %d", transcription.cost, cleanup, unpriced))
+        UsageStore.shared.record(&record, transcriptionCost: transcription.cost, cleanupCost: cleanup, unpriced: unpriced)
     }
 
     // MARK: - Retry / cancel

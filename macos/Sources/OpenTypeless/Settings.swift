@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Security
 import ServiceManagement
@@ -30,6 +31,10 @@ final class AppSettings: ObservableObject {
     @AppStorage("historyRetention") var historyRetention: HistoryRetention = .month
     /// Look for a new release once a day and download it in the background (see Updater).
     @AppStorage("autoCheckUpdates") var autoCheckUpdates: Bool = true
+    /// Open the Home page when the app starts at login (a manual launch always shows it).
+    @AppStorage("showHomeAtLogin") var showHomeAtLogin: Bool = false
+    /// The typing speed "time saved" on the Home page is measured against.
+    @AppStorage("typingWordsPerMinute") var typingWordsPerMinute: Int = UsageTotals.defaultTypingWordsPerMinute
 
     /// Learn vocabulary from the fixes the user makes to dictated text (see EditWatcher).
     @AppStorage("learnFromEdits") var learnFromEdits: Bool = true
@@ -39,6 +44,8 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var apiKeys: [String: String]
     @Published private(set) var baseURLs: [String: String]
+    /// Prices the user entered for models of providers other than OpenRouter (whose prices are live), by `ModelPrice.key`.
+    @Published private(set) var modelPrices: [String: ModelPrice]
 
     private init() {
         // In CLI mode with OPENROUTER_API_KEY set, don't touch the keychain (avoids an access prompt).
@@ -48,6 +55,8 @@ final class AppSettings: ObservableObject {
         learnedTerms = UserDefaults.standard.data(forKey: "learnedVocabulary")
             .flatMap { try? JSONDecoder().decode([LearnedTerm].self, from: $0) } ?? []
         forgottenTerms = Set(UserDefaults.standard.stringArray(forKey: "forgottenVocabulary") ?? [])
+        modelPrices = UserDefaults.standard.data(forKey: "modelPrices")
+            .flatMap { try? JSONDecoder().decode([String: ModelPrice].self, from: $0) } ?? [:]
     }
 
     // MARK: Hotkey
@@ -134,6 +143,19 @@ final class AppSettings: ObservableObject {
         polishBackupModel = id.defaultBackupChatModel
     }
 
+    // MARK: Model prices
+
+    func customPrice(_ provider: ProviderID, _ model: String) -> ModelPrice? {
+        modelPrices[ModelPrice.key(provider, model)]
+    }
+
+    func setCustomPrice(_ provider: ProviderID, _ model: String, _ price: ModelPrice?) {
+        guard !model.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        let key = ModelPrice.key(provider, model)
+        if let price, !price.isEmpty { modelPrices[key] = price } else { modelPrices[key] = nil }
+        UserDefaults.standard.set(try? JSONEncoder().encode(modelPrices), forKey: "modelPrices")
+    }
+
     // MARK: Learned vocabulary
 
     /// Adds what the user's corrections taught to the vocabulary. Returns the terms that are new.
@@ -202,6 +224,20 @@ struct LearnedTerm: Codable, Identifiable, Equatable {
 enum LaunchAtLogin {
     static var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
     static var needsApproval: Bool { SMAppService.mainApp.status == .requiresApproval }
+
+    /// Whether this launch came from the login item rather than the user. macOS marks login-item launches in the
+    /// open-application Apple event; as a fallback, a launch within two minutes of the user logging in (when the
+    /// Dock started) counts too. Call it while the app is finishing launching, when that event is current.
+    static func wasLaunchedAtLogin() -> Bool {
+        // 'oapp' event, 'prdt' parameter, 'lgit' value (kAEOpenApplication, keyAEPropData, keyAELaunchedAsLogInItem).
+        if let event = NSAppleEventManager.shared().currentAppleEvent, event.eventID == 0x6F61_7070,
+           event.paramDescriptor(forKeyword: 0x7072_6474)?.enumCodeValue == 0x6C67_6974 {
+            return true
+        }
+        guard isEnabled else { return false }
+        let loggedIn = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first?.launchDate
+        return (loggedIn.map { Date().timeIntervalSince($0) } ?? ProcessInfo.processInfo.systemUptime) < 120
+    }
 
     static func set(_ enabled: Bool) throws {
         if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }

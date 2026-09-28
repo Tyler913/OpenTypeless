@@ -19,6 +19,8 @@ public struct HedgedPolishResult: Sendable {
     /// From the start of the call until the winning stream's first token.
     public let firstTokenSeconds: Double
     public let totalSeconds: Double
+    /// The provider that answered, to price the answer.
+    public var provider: ProviderID = .openrouter
 }
 
 /// Hedged clean-up: the primary route starts alone; if it hasn't produced its first token after
@@ -91,7 +93,7 @@ public enum HedgedPolish {
                     let now = ProcessInfo.processInfo.systemUptime - start
                     return HedgedPolishResult(result: result, model: routes[index].options.model,
                                               usedBackup: index != 0, firstTokenSeconds: firstTokenAt ?? now,
-                                              totalSeconds: now)
+                                              totalSeconds: now, provider: routes[index].client.endpoint.id)
                 case let .finished(index, .failure(error)):
                     // The chosen stream broke mid-way: its partial text is useless, so give up this round.
                     if winner == index { throw error }

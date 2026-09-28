@@ -62,12 +62,14 @@ public partial class App : Application
         };
         _controller.OpenSettingsRequested += page => ShowSettings(SettingsPageInfo.Parse(page));
         var dispatcher = DispatcherQueue.GetForCurrentThread();
-        // Launching the app again (Start menu, Explorer) shows the settings, like reopening it on macOS.
-        Program.ActivationRequested += () => dispatcher.TryEnqueue(() => ShowSettings(null));
+        // Launching the app again (Start menu, Explorer) shows Home, like reopening it on macOS.
+        Program.ActivationRequested += () => dispatcher.TryEnqueue(() => ShowSettings(SettingsPage.Home));
 
         _controller.RefreshModelInfo();
         LaunchAtLogin.RefreshPathIfRegistered();
         LaunchAtLogin.EnableByDefaultOnce(_settings);
+        _ = UsageStore.Shared; // counts the dictations History already has, the first time
+        PriceStore.Shared.RefreshIfStale();
         Updater.Shared.CanInstallNow = () => _controller.State == SessionController.SessionState.Idle;
         Updater.Shared.Quit = Quit;
         Updater.Shared.Start();
@@ -75,8 +77,9 @@ public partial class App : Application
         // First run: ask for what we need up front, so the first dictation just works.
         if (!Permissions.MicrophoneGranted) ShowSettings(SettingsPage.General);
         else if (!_settings.IsConfigured(_settings.SttProvider)) ShowSettings(SettingsPage.Providers);
-        // New tray icons start hidden in the overflow area, so a manual launch shows the window rather than nothing.
-        else if (!Program.LaunchedAtLogin) ShowSettings(null);
+        // A manual launch opens Home (new tray icons start hidden in the overflow area, so it also shows the app is
+        // running); starting at sign-in stays in the tray unless the user asked for Home then too.
+        else if (!Program.LaunchedAtLogin || _settings.ShowHomeAtLogin) ShowSettings(SettingsPage.Home);
     }
 
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)

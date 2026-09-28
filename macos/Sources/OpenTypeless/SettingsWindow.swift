@@ -3,12 +3,13 @@ import SwiftUI
 import TypelessCore
 
 enum SettingsPage: String, CaseIterable, Identifiable {
-    case general, shortcut, providers, models, style, history
+    case home, general, shortcut, providers, models, style, history
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .home: return L("主页", "Home")
         case .general: return L("通用", "General")
         case .shortcut: return L("快捷键", "Shortcut")
         case .providers: return L("服务商", "Providers")
@@ -20,6 +21,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
+        case .home: return L("你用语音写了多少、省了多少时间、花了多少钱", "What you've dictated, the time it saved and what it cost")
         case .general: return L("界面语言、开机启动与系统权限", "Language, startup and system permissions")
         case .shortcut: return L("选择用来开始听写的按键", "Choose the key that starts dictation")
         case .providers: return L("填写 API Key。语音转文字和文字整理可以使用不同的服务商。",
@@ -32,6 +34,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .home: return "house.fill"
         case .general: return "gearshape.fill"
         case .shortcut: return "keyboard.fill"
         case .providers: return "key.fill"
@@ -43,6 +46,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
+        case .home: return .blue
         case .general: return .gray
         case .shortcut: return .blue
         case .providers: return .orange
@@ -55,7 +59,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
 @MainActor
 final class SettingsNavigation: ObservableObject {
-    @Published var page: SettingsPage = .general
+    @Published var page: SettingsPage = .home
 }
 
 /// The page area to the right of the sidebar.
@@ -74,6 +78,7 @@ struct SettingsDetailView: View {
 
     @ViewBuilder private var content: some View {
         switch navigation.page {
+        case .home: HomePage(settings: settings, navigation: navigation)
         case .general: GeneralPage(settings: settings)
         case .shortcut: ShortcutPage(settings: settings)
         case .providers: ProvidersPage(settings: settings)

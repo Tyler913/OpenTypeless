@@ -16,6 +16,10 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     /// Per-chunk transcripts, so a retry only re-sends the chunks that failed.
     var chunkTexts: [Int: String] = [:]
     var timing: Timing?
+    /// What processing it cost so far in USD, retries included (nil when nothing could be priced).
+    var cost: Double?
+    /// Its words are in the usage totals (so re-transcribing it doesn't count them twice).
+    var counted: Bool?
 
     /// Where the wait after the key was released went, in seconds.
     struct Timing: Codable, Equatable {

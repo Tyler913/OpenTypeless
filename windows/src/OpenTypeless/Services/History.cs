@@ -21,6 +21,10 @@ public sealed class DictationRecord
     /// <summary>Per-chunk transcripts, so a retry only re-sends the chunks that failed.</summary>
     [JsonPropertyName("chunkTexts")] public Dictionary<int, string> ChunkTexts { get; set; } = new();
     [JsonPropertyName("timing")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public DictationTiming? Timing { get; set; }
+    /// <summary>What processing it cost so far in USD, retries included (null when nothing could be priced).</summary>
+    [JsonPropertyName("cost")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Cost { get; set; }
+    /// <summary>Its words are in the usage totals (so re-transcribing it doesn't count them twice).</summary>
+    [JsonPropertyName("counted")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Counted { get; set; }
 
     /// <summary>What was (or would be) inserted.</summary>
     [JsonIgnore] public string FinalText => PolishedText ?? RawText;

@@ -1,0 +1,118 @@
+namespace TypelessCore;
+
+public sealed record AudioChunk(int Index, int StartSample, short[] Samples)
+{
+    public double Duration => AudioFormat.Seconds(Samples.Length);
+    public double StartTime => AudioFormat.Seconds(StartSample);
+}
+
+/// <summary>
+/// Splits a live PCM stream into chunks that are each short enough for a single STT request.
+///
+/// Once the pending audio reaches <see cref="Config.MaxSeconds"/>, it cuts at the centre of the quietest
+/// <see cref="Config.WindowSeconds"/> window found between <see cref="Config.MinSeconds"/> and <see cref="Config.MaxSeconds"/>,
+/// i.e. at a pause, so words are not sliced in half. No thresholds to tune: the quietest spot always wins.
+/// </summary>
+public sealed class Chunker
+{
+    public sealed record Config(double MinSeconds = 18, double MaxSeconds = 28, double WindowSeconds = 0.4);
+
+    private readonly Config _config;
+    private readonly List<short> _pending = new();
+    private int _pendingStart;
+    private int _nextIndex;
+
+    public Chunker(Config? config = null)
+    {
+        _config = config ?? new Config();
+    }
+
+    /// <summary>Appends samples and returns any chunks that became ready.</summary>
+    public List<AudioChunk> Append(ReadOnlySpan<short> samples)
+    {
+        _pending.AddRange(samples);
+        var ready = new List<AudioChunk>();
+        var maxSamples = AudioFormat.SampleCount(_config.MaxSeconds);
+        while (_pending.Count >= maxSamples)
+        {
+            var cut = QuietestCutPoint();
+            ready.Add(Emit(cut));
+        }
+        return ready;
+    }
+
+    /// <summary>Flushes whatever audio is left as the final chunk (null when nothing is left).</summary>
+    public AudioChunk? Finish() => _pending.Count == 0 ? null : Emit(_pending.Count);
+
+    private AudioChunk Emit(int cut)
+    {
+        var chunk = new AudioChunk(_nextIndex, _pendingStart, _pending.GetRange(0, cut).ToArray());
+        _pending.RemoveRange(0, cut);
+        _pendingStart += cut;
+        _nextIndex += 1;
+        return chunk;
+    }
+
+    private int QuietestCutPoint()
+    {
+        var lower = AudioFormat.SampleCount(_config.MinSeconds);
+        var upper = Math.Min(_pending.Count, AudioFormat.SampleCount(_config.MaxSeconds));
+        var window = Math.Max(1, AudioFormat.SampleCount(_config.WindowSeconds));
+        var hop = Math.Max(1, AudioFormat.SampleCount(0.02));
+        if (upper - lower <= window) return upper;
+
+        // Sliding sum of squares over the window, sampled every `hop` samples.
+        var bestStart = lower;
+        var bestEnergy = double.MaxValue;
+        var start = lower;
+        var energy = 0.0;
+        for (var i = start; i < start + window; i++) energy += (double)_pending[i] * _pending[i];
+        while (start + window <= upper)
+        {
+            if (energy < bestEnergy)
+            {
+                bestEnergy = energy;
+                bestStart = start;
+            }
+            var next = start + hop;
+            if (next + window > upper) break;
+            for (var i = start; i < next; i++) energy -= (double)_pending[i] * _pending[i];
+            for (var i = start + window; i < next + window; i++) energy += (double)_pending[i] * _pending[i];
+            start = next;
+        }
+        return bestStart + window / 2;
+    }
+}
+
+public static class AudioLevel
+{
+    /// <summary>RMS of the samples normalised to 0...1.</summary>
+    public static float Rms(ReadOnlySpan<short> samples)
+    {
+        if (samples.IsEmpty) return 0;
+        float sum = 0;
+        foreach (var s in samples)
+        {
+            var v = s / 32768f;
+            sum += v * v;
+        }
+        return MathF.Sqrt(sum / samples.Length);
+    }
+
+    /// <summary>
+    /// True when no 30 ms frame rises above <paramref name="threshold"/> RMS. Such chunks are skipped because
+    /// STT models tend to hallucinate text ("Thanks for watching!") on pure silence.
+    /// </summary>
+    public static bool IsSilent(ReadOnlySpan<short> samples, float threshold = 0.004f)
+    {
+        var frame = AudioFormat.SampleCount(0.03);
+        var i = 0;
+        while (i < samples.Length)
+        {
+            var end = Math.Min(i + frame, samples.Length);
+            if (Rms(samples[i..end]) > threshold) return false;
+            i = end;
+        }
+        return true;
+    }
+}

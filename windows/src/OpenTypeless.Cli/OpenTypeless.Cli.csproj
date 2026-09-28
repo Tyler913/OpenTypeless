@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The command-line modes of the macOS binary (a WinUI app has no console, so they live in this sibling exe):
+      transcribe-file, chunks-only, realtime, no-polish, eval-polish.
+    Shares settings and API keys with the app.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>OpenTypeless.Cli</RootNamespace>
+    <AssemblyName>OpenTypeless.Cli</AssemblyName>
+    <Platforms>x64;ARM64</Platforms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\OpenTypeless\Native\Win32.cs" Link="Shared\Win32.cs" />
+    <Compile Include="..\OpenTypeless\Input\Hotkey.cs" Link="Shared\Hotkey.cs" />
+    <Compile Include="..\OpenTypeless\Services\AppPaths.cs" Link="Shared\AppPaths.cs" />
+    <Compile Include="..\OpenTypeless\Services\AppSettings.cs" Link="Shared\AppSettings.cs" />
+    <Compile Include="..\OpenTypeless\Services\Credentials.cs" Link="Shared\Credentials.cs" />
+    <Using Include="TypelessCore.Localization" Static="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TypelessCore\TypelessCore.csproj" />
+  </ItemGroup>
+</Project>

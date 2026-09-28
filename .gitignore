@@ -1,7 +1,4 @@
 .DS_Store
-.build/
-.build-tests/
-.swiftpm/
-build/
-*.xcodeproj/xcuserdata/
-dist/
+# Build output left at the root from before the apps moved into macos/ and windows/.
+/.build/
+/dist/

@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>1.0.1</Version>
+    <Product>OpenTypeless</Product>
+    <Company>OpenTypeless</Company>
+    <Copyright>Copyright (c) 2026 TylerHong</Copyright>
+  </PropertyGroup>
+</Project>

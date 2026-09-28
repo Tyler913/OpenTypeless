@@ -1,0 +1,6 @@
+.build/
+.build-tests/
+.swiftpm/
+build/
+*.xcodeproj/xcuserdata/
+dist/

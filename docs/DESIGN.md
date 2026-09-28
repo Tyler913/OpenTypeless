@@ -4,7 +4,9 @@
 
 Hold a key, speak for anywhere from two seconds to several minutes, and get the text you would have typed, inserted at the cursor. Long dictation has to be as reliable as short dictation. That is the main reason this project exists.
 
-Out of scope: translation, rewriting selected text, voice Q&A, cross-platform support, accounts and sync.
+Out of scope: translation, rewriting selected text, voice Q&A, accounts and sync.
+
+This document describes the macOS app; file names below are under `macos/Sources/`. The Windows app follows the same design with Windows APIs. [WINDOWS-PORT.md](WINDOWS-PORT.md) maps each file and system API to its Windows counterpart.
 
 ## Why other tools fail on long dictation
 

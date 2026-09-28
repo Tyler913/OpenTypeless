@@ -1,0 +1,53 @@
+# Builds the Windows app in the cloud, since WinUI 3 only compiles on Windows: runs the tests, then zips
+# for x64 and ARM64 (download them from the run's Artifacts).
+#
+#   ci.yml calls it          when a push or pull request changes windows/
+#   release.yml calls it     for a tag like `1.0.2-windows`
+#   Actions tab → Windows build → Run workflow   a manual run
+name: Windows build
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      # The same script used locally: runs the tests, publishes the app and CLI self-contained, zips them.
+      - name: Test, build and package
+        shell: pwsh
+        run: scripts/build.ps1 -Package -Arch ${{ matrix.arch }} *>&1 | Tee-Object -FilePath build.log
+
+      # Job logs need a GitHub sign-in to read, but annotations show on the run page for everyone.
+      - name: Show the end of the build output on the run page
+        if: failure()
+        shell: pwsh
+        run: |
+          $tail = (Get-Content build.log -Tail 80 -ErrorAction SilentlyContinue) -join "`n"
+          $escaped = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+          Write-Output "::error title=Build (${{ matrix.arch }}) failed::$escaped"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OpenTypeless-windows-${{ matrix.arch }}
+          path: windows/dist/*.zip
+          if-no-files-found: error
+          compression-level: 0 # already a zip

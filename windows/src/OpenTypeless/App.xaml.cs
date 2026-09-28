@@ -55,7 +55,11 @@ public partial class App : Application
         _hotkey.Start();
 
         _settings.PropertyChanged += OnSettingsChanged;
-        _controller.StateChanged += () => _tray.SetState(_controller.State);
+        _controller.StateChanged += () =>
+        {
+            _tray.SetState(_controller.State);
+            if (_controller.State == SessionController.SessionState.Idle) Updater.Shared.SessionBecameIdle();
+        };
         _controller.OpenSettingsRequested += page => ShowSettings(SettingsPageInfo.Parse(page));
         var dispatcher = DispatcherQueue.GetForCurrentThread();
         // Launching the app again (Start menu, Explorer) shows the settings, like reopening it on macOS.
@@ -64,6 +68,9 @@ public partial class App : Application
         _controller.RefreshModelInfo();
         LaunchAtLogin.RefreshPathIfRegistered();
         LaunchAtLogin.EnableByDefaultOnce(_settings);
+        Updater.Shared.CanInstallNow = () => _controller.State == SessionController.SessionState.Idle;
+        Updater.Shared.Quit = Quit;
+        Updater.Shared.Start();
 
         // First run: ask for what we need up front, so the first dictation just works.
         if (!Permissions.MicrophoneGranted) ShowSettings(SettingsPage.General);

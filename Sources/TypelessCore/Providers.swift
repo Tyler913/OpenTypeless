@@ -61,6 +61,15 @@ public enum ProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
+    /// A fast model from a different vendor, so a slow or failing primary rarely drags it down too.
+    /// Empty where the user has to pick one.
+    public var defaultBackupChatModel: String {
+        switch self {
+        case .openrouter: return "deepseek/deepseek-v4.1-flash"
+        default: return ""
+        }
+    }
+
     public var keyPlaceholder: String {
         switch self {
         case .openrouter: return "sk-or-v1-…"

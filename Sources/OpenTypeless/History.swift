@@ -15,6 +15,32 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var error: String?
     /// Per-chunk transcripts, so a retry only re-sends the chunks that failed.
     var chunkTexts: [Int: String] = [:]
+    var timing: Timing?
+
+    /// Where the wait after the key was released went, in seconds.
+    struct Timing: Codable, Equatable {
+        /// Release → complete raw transcript (only the last chunk is usually left by then).
+        var transcription: Double?
+        var polishFirstToken: Double?
+        var polish: Double?
+        var polishModel: String?
+        var usedBackup: Bool?
+
+        /// "转写 0.8 秒 · 整理 1.2 秒（首字 0.4 秒，备用 deepseek/…）"
+        var summary: String? {
+            func secs(_ value: Double) -> String { String(format: "%.1f", value) + L(" 秒", " s") }
+            var parts: [String] = []
+            if let transcription { parts.append(L("转写 ", "Transcription ") + secs(transcription)) }
+            if let polish {
+                var detail: [String] = []
+                if let polishFirstToken { detail.append(L("首字 ", "first token ") + secs(polishFirstToken)) }
+                if let polishModel { detail.append((usedBackup == true ? L("备用 ", "backup ") : "") + polishModel) }
+                parts.append(L("整理 ", "Clean-up ") + secs(polish)
+                             + (detail.isEmpty ? "" : L("（", " (") + detail.joined(separator: L("，", ", ")) + L("）", ")")))
+            }
+            return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        }
+    }
 
     /// What was (or would be) inserted.
     var finalText: String { polishedText ?? rawText }

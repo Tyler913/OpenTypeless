@@ -34,6 +34,7 @@ OpenTypeless is built around that problem.
 | **Chunk at pauses** | While you talk, audio is cut into 18–28 s segments at the quietest 0.4 s window in each span, so words are never cut in half and no request comes close to the upstream 60 s limit. |
 | **Transcribe while you talk** | Each segment is transcribed in the background as soon as it is cut. After a two-minute dictation, only the last few seconds are left to process when you release the key. |
 | **Retry per segment** | Network drops, 429s and 5xx errors are retried with backoff. Bad keys and billing errors fail fast. One failed segment never affects the others, and failed segments get one more full round at the end. |
+| **Backup model for slow starts** | If the clean-up model hasn't started answering within 0.8 s, or fails, a backup model from another vendor is asked too and whichever answers first wins. A slow upstream provider costs under a second more, not the whole wait. |
 | **Idle timeout, not total timeout** | The clean-up step streams its answer, and is only considered stuck when *no* data arrives for 25 s, so long outputs are never cut off. |
 | **Never lose words** | Audio is written to disk as you speak. Every dictation is kept in History; a failed one can be retried later, and only its failed segments are re-sent. If clean-up fails, the raw transcript is inserted instead. |
 
@@ -48,7 +49,7 @@ Raw speech-to-text is messy: fillers, restarts, "no wait, I mean…", thinking o
 - **Nothing real is lost.** Numbers, versions, names and comparisons are kept exactly. The model is told that products newer than it knows are real, so "Gemini 3.5" never becomes "Gemini 2.5".
 - **Structure when it helps.** Three or more parallel points become a numbered list; everything else stays as plain paragraphs.
 - **Never answers you.** Dictated prompts ("can you explain why…") are cleaned up, not answered or executed.
-- **Mixed language.** Chinese/English code-switching is handled, with technical terms kept in the language you used and spacing between CJK and Latin text.
+- **Your words, your languages.** Edits are kept to a minimum: wording, order and tone stay yours. When you mix Chinese and English, every word stays in the language you said it in, everyday words too ("shortcut", "dark mode"), with spacing between CJK and Latin text.
 
 The prompt is tuned against development and held-out test sets (see [eval/](eval/)), including real dictations.
 
@@ -57,7 +58,7 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 - **Global hotkey.** Hold **Fn** by default, or record any single modifier (right ⌘, right ⌥, …) or a combination (⌥ Space, F5, …).
 - **Push-to-talk or hands-free.** Hold to talk; tap once to keep recording hands-free and tap again to finish. **Esc** cancels.
 - **Pastes where your cursor is.** In a text field the text is pasted and your clipboard restored; with no text field focused it goes to the clipboard. Browsers and Electron apps are handled too.
-- **Bring your own provider.** OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek, or any OpenAI-compatible endpoint. Speech-to-text and clean-up can use different providers.
+- **Bring your own provider.** OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek, or any OpenAI-compatible endpoint. Speech-to-text, clean-up and the backup clean-up model can each use a different provider.
 - **Custom vocabulary and style preferences** for names, products and jargon.
 - **History** of every dictation with raw and cleaned text, copy and re-transcribe.
 - **Bilingual UI** (English / 简体中文), following the system language or chosen manually.

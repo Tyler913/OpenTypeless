@@ -522,6 +522,7 @@ struct ModelsPage: View {
     let controller: SessionController
     @State private var sttModels: [APIClient.ModelInfo] = []
     @State private var chatModels: [APIClient.ModelInfo] = []
+    @State private var backupChatModels: [APIClient.ModelInfo] = []
 
     var body: some View {
         PageScaffold(page: .models) {
@@ -571,10 +572,31 @@ struct ModelsPage: View {
                                 ? L("推理会自动关闭或降到最低，以减少延迟", "Reasoning is turned off or minimised for speed") : nil) {
                         ModelField(text: $settings.polishModel, models: chatModels)
                     }
+                    CardDivider(inset: 50)
+                    CardRow(icon: "arrow.triangle.branch", iconColor: .orange, title: L("备用模型", "Backup model"),
+                            subtitle: L("首选模型 \(hedgeDelayLabel) 内还没开始输出、或请求失败时，同时请求备用模型，用先出字的那个",
+                                        "If the main model hasn't started answering within \(hedgeDelayLabel), or fails, the backup is asked too and the first to answer wins")) {
+                        Toggle("", isOn: $settings.polishBackupEnabled).toggleStyle(.switch).labelsHidden()
+                    }
+                    if settings.polishBackupEnabled {
+                        CardDivider(inset: 50)
+                        CardRow(icon: "building.2", iconColor: .indigo, title: L("备用服务商", "Backup provider")) {
+                            ProviderPicker(selection: settings.polishBackupProvider, options: ProviderID.allCases,
+                                           settings: settings) { settings.selectPolishBackupProvider($0) }
+                        }
+                        CardDivider(inset: 50)
+                        CardRow(icon: "cpu", iconColor: .pink, title: L("备用模型 ID", "Backup model ID"),
+                                subtitle: L("选一个不同厂商的快速模型，两边不容易同时变慢", "Pick a fast model from another vendor so both are rarely slow at once")) {
+                            ModelField(text: $settings.polishBackupModel, models: backupChatModels)
+                        }
+                    }
                 }
             }
             if settings.polishEnabled, !settings.isConfigured(settings.polishProvider) {
                 setupBanner(for: settings.polishProvider)
+            } else if settings.polishEnabled, settings.polishBackupEnabled, settings.polishBackupProvider != settings.polishProvider,
+                      !settings.isConfigured(settings.polishBackupProvider) {
+                setupBanner(for: settings.polishBackupProvider)
             }
         }
         .task(id: "\(settings.sttProvider.rawValue)|\(settings.apiKey(for: settings.sttProvider).count)") {
@@ -583,8 +605,17 @@ struct ModelsPage: View {
         .task(id: "\(settings.polishProvider.rawValue)|\(settings.apiKey(for: settings.polishProvider).count)") {
             chatModels = await loadModels(settings.polishProvider, speech: false)
         }
+        .task(id: "\(settings.polishBackupProvider.rawValue)|\(settings.apiKey(for: settings.polishBackupProvider).count)") {
+            backupChatModels = await loadModels(settings.polishBackupProvider, speech: false)
+        }
         .onChange(of: settings.polishModel) { controller.refreshModelInfo() }
         .onChange(of: settings.polishProvider) { controller.refreshModelInfo() }
+        .onChange(of: settings.polishBackupProvider) { controller.refreshModelInfo() }
+        .onChange(of: settings.polishBackupEnabled) { controller.refreshModelInfo() }
+    }
+
+    private var hedgeDelayLabel: String {
+        HedgedPolish.defaultHedgeDelay.formatted(.number.precision(.fractionLength(0...1))) + L(" 秒", " s")
     }
 
     private func setupBanner(for id: ProviderID) -> some View {
@@ -790,6 +821,9 @@ private struct HistoryDetail: View {
                 }
                 if let error = record.error {
                     Banner(symbol: "exclamationmark.triangle.fill", color: .orange, text: error) { EmptyView() }
+                }
+                if let timing = record.timing?.summary {
+                    Text(timing).font(.system(size: 11)).foregroundStyle(.secondary).textSelection(.enabled)
                 }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {

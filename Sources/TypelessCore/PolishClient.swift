@@ -81,6 +81,14 @@ extension APIClient {
         public let truncated: Bool
     }
 
+    /// Clean-up output is short, so the wait is mostly time to first token: prefer the lowest-latency
+    /// provider, but push ones that stream slowly (under 50 tokens/s at the median) to the back.
+    static let polishRouting: [String: Any] = [
+        "sort": "latency",
+        "preferred_min_throughput": ["p50": 50],
+        "allow_fallbacks": true,
+    ]
+
     /// Builds the chat request body. Optional tuning parameters are only sent where they're known to
     /// be accepted: OpenRouter normalises them for every model, while e.g. OpenAI's reasoning models
     /// reject `temperature`.
@@ -97,7 +105,7 @@ extension APIClient {
         guard includeOptional else { return body }
         if isOpenRouter {
             body["max_tokens"] = max(1024, transcript.count * 3)
-            body["provider"] = ["sort": "throughput", "allow_fallbacks": true]
+            body["provider"] = Self.polishRouting
             if let reasoning = ReasoningConfig.body(for: options.modelInfo) { body["reasoning"] = reasoning }
             if options.modelInfo?.supportedParameters.contains("temperature") ?? true { body["temperature"] = 0.2 }
         } else if endpoint.id != .openai {

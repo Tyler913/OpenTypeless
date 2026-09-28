@@ -22,6 +22,8 @@ public struct EvaluationAttempt: Codable, Sendable {
     public var rawOutput = ""
     public var output = ""
     public var seconds = 0.0
+    /// Time to the first content token: what a hedged request waits on.
+    public var firstTokenSeconds: Double?
     public var retryCount = 0
     public var receivedDone = false
     public var truncated: Bool { finishReason == "length" }
@@ -68,7 +70,8 @@ public struct EvaluationPlan: Codable, Sendable {
 extension APIClient {
     /// Reuses production prompt/body, adding only evaluation routing price/supported-parameter guards.
     public func evaluationPlan(transcript: String, options: PolishOptions,
-                               promptPrice: Double, completionPrice: Double, providerTag: String? = nil) throws -> EvaluationPlan {
+                               promptPrice: Double, completionPrice: Double, providerTag: String? = nil,
+                               providerRouting: [String: Any]? = nil) throws -> EvaluationPlan {
         guard isOpenRouter, promptPrice.isFinite, completionPrice.isFinite,
               promptPrice >= 0, completionPrice >= 0,
               options.modelInfo?.supportedParameters.contains("max_tokens") == true else {
@@ -79,6 +82,10 @@ extension APIClient {
         var body = polishBody(transcript: transcript, options: options, includeOptional: true)
         // Byte-level upper estimate plus ample chat-template overhead; 20% billing safety margin.
         let messages = body["messages"] as! [[String: String]]
+        if let providerRouting {
+            // Comparing routing preferences (e.g. sorting by latency vs throughput).
+            body["provider"] = providerRouting
+        }
         if let providerTag {
             // Explicitly benchmarking a single upstream provider.
             body["provider"] = ["only": [providerTag], "allow_fallbacks": false]
@@ -110,6 +117,9 @@ extension APIClient {
             }
             for try await line in bytes.lines {
                 result.consume(line)
+                if result.firstTokenSeconds == nil, !result.rawOutput.isEmpty {
+                    result.firstTokenSeconds = ProcessInfo.processInfo.systemUptime - start
+                }
                 if result.receivedDone { break }
             }
             if !result.receivedDone && result.error == nil { result.error = "stream ended without DONE" }
@@ -207,5 +217,58 @@ public final class EvaluationBudget {
         if let cost, cost > state.entries[i].upperBound {
             throw APIError.badResponse("billing exceeded conservative bound; stop and audit")
         }
+    }
+}
+
+/// Case-independent measures of how much a clean-up changed the speaker's text.
+public enum PolishMetrics {
+    /// Fillers and correction phrases the clean-up is supposed to remove.
+    static let removableLatin: Set<String> = [
+        "um", "uh", "umm", "uhh", "er", "ah", "oh", "like", "so", "ok", "okay", "yeah", "well",
+        "actually", "basically", "mean", "you", "know", "wait", "no", "sorry", "scratch", "that",
+    ]
+
+    /// Share of the English words in a mostly-Chinese input that survive in the output. Translating
+    /// "dark mode" to 深色模式 lowers it; recognition fixes like "swift UI" → SwiftUI don't.
+    /// Returns nil when the input is mostly English or has no English words worth checking.
+    public static func latinRetention(input: String, output: String, ignoring: [String] = []) -> Double? {
+        // A Chinese character is roughly one word: compare counts to find the host language.
+        let cjk = input.unicodeScalars.filter(TranscriptJoiner.isCJK).count
+        guard cjk >= latinWords(input).count else { return nil }
+        let ignored = Set(ignoring.flatMap(latinWords))
+        let words = Set(latinWords(input)).subtracting(removableLatin).subtracting(ignored).filter { $0.count > 1 }
+        guard !words.isEmpty else { return nil }
+        let haystack = output.lowercased().filter { !$0.isWhitespace && $0 != "-" }
+        return Double(words.filter { haystack.contains($0) }.count) / Double(words.count)
+    }
+
+    /// Character-level similarity (1 − normalised edit distance) after dropping whitespace and
+    /// punctuation, so spacing and punctuation fixes don't count as edits.
+    public static func similarity(_ a: String, _ b: String) -> Double {
+        let x = Array(normalized(a)), y = Array(normalized(b))
+        if x.isEmpty || y.isEmpty { return x.count == y.count ? 1 : 0 }
+        var previous = Array(0...y.count)
+        for i in 1...x.count {
+            var current = [i] + [Int](repeating: 0, count: y.count)
+            for j in 1...y.count {
+                current[j] = x[i - 1] == y[j - 1]
+                    ? previous[j - 1]
+                    : 1 + min(previous[j - 1], previous[j], current[j - 1])
+            }
+            previous = current
+        }
+        return 1 - Double(previous[y.count]) / Double(max(x.count, y.count))
+    }
+
+    static func latinWords(_ text: String) -> [String] {
+        text.lowercased().split { !($0.isASCII && ($0.isLetter || $0.isNumber)) }.map(String.init)
+            .filter { $0.first?.isLetter == true }
+    }
+
+    static func normalized(_ text: String) -> String {
+        String(text.lowercased().unicodeScalars.filter {
+            !CharacterSet.whitespacesAndNewlines.contains($0) && !CharacterSet.punctuationCharacters.contains($0)
+                && !CharacterSet.symbols.contains($0)
+        }.map(Character.init))
     }
 }

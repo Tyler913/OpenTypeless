@@ -40,11 +40,14 @@ Once pending audio reaches 28 s, it slides a 0.4 s window over the 18–28 s spa
 - After the first pass, chunks that failed with a *transient* error get one more full round.
 - Transcripts are joined in order, with no space between CJK fragments and a space between Latin ones.
 
-### Clean-up (`TypelessCore/PolishClient.swift`, `Prompts.swift`)
+### Clean-up (`TypelessCore/PolishClient.swift`, `HedgedPolish.swift`, `Prompts.swift`)
 - Streaming chat completion with an **idle** timeout (25 s without data) plus a 240 s runaway guard.
-- On OpenRouter: reasoning is disabled or set to its minimum based on `/models` metadata, and providers are sorted by throughput.
+- On OpenRouter: reasoning is disabled or set to its minimum based on `/models` metadata, and providers are sorted by latency, with those under 50 tokens/s at the median moved to the back.
+- **Hedged requests.** An optional backup model (by default a fast model from another vendor) starts when the main model has produced no token after a fixed 0.8 s, or fails before that. Whichever streams its first token first is kept and the other request is cancelled, so a slow upstream costs about 0.8 s plus the backup's own first-token time instead of the whole wait, and the extra spend is limited to that slow tail. The delay is a constant rather than learned at runtime because flash-class first-token latency is stable (see [eval/README.md](../eval/README.md)).
+- Each dictation records where the wait went (transcription tail, clean-up first token and total, which model answered) in `session.json`, shown in History.
 - If a server rejects an optional parameter (e.g. `temperature` on reasoning models), the request is retried with the bare minimum.
 - Safety nets: echoed wrappers are stripped, and an output far longer than the input (the model *answered* the prompt instead of rewriting it) falls back to the raw transcript.
+- The prompt asks for **minimal edits**: only self-corrections, speech noise, recognition errors, punctuation and explicit enumerations are touched; wording, order, tone, pronouns and every word's language are kept. Mixed Chinese/English is preserved word by word (an earlier, more ambitious prompt translated about a third of the English words in real mixed dictations). A one-line reminder after the transcript restates the two rules models drift from most.
 - The prompt uses few-shot examples, which proved far more effective than extra rules. It is tuned with `--eval-polish` against a development set, a held-out set and real dictations.
 
 ### Delivery (`OpenTypeless/FocusProbe.swift`, `TextInserter.swift`)

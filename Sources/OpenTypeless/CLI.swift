@@ -73,17 +73,25 @@ enum CLI {
             log("❌ The clean-up provider's base URL is invalid")
             return 3
         }
-        let polishClient = APIClient(endpoint: polishEndpoint)
         let polishStart = Date()
         do {
-            let models = polishEndpoint.id == .openrouter ? try? await polishClient.listModels() : nil
-            let info = models?.first { $0.id == settings.polishModel }
-            let result = try await polishClient.polish(
+            let usesOpenRouter = polishEndpoint.id == .openrouter || settings.polishBackupEndpoint?.id == .openrouter
+            var models: [APIClient.ModelInfo]?
+            if usesOpenRouter, let endpoint = settings.endpoint(for: .openrouter) {
+                models = try? await APIClient(endpoint: endpoint).listModels()
+            }
+            func route(_ endpoint: ProviderEndpoint, _ model: String) -> PolishRoute {
+                PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
+                    model: model, vocabulary: settings.vocabularyList, extraInstructions: settings.extraInstructions,
+                    modelInfo: endpoint.id == .openrouter ? models?.first { $0.id == model } : nil))
+            }
+            let outcome = try await HedgedPolish.run(
                 transcript: raw,
-                options: PolishOptions(model: settings.polishModel, vocabulary: settings.vocabularyList,
-                                       extraInstructions: settings.extraInstructions, modelInfo: info)
-            )
-            log(String(format: "⏱  Clean-up took %.1f s%@", Date().timeIntervalSince(polishStart),
+                primary: route(polishEndpoint, settings.polishModel),
+                backup: settings.polishBackupEndpoint.map { route($0, settings.polishBackupModel) })
+            let result = outcome.result
+            log(String(format: "⏱  Clean-up took %.1f s (first token %.2f s, %@%@)%@", Date().timeIntervalSince(polishStart),
+                       outcome.firstTokenSeconds, outcome.usedBackup ? "backup " : "", outcome.model,
                        result.truncated ? " (truncated)" : ""))
             if Prompts.looksLikeAnAnswer(input: raw, output: result.text) {
                 log("⚠️ Output is much longer than the input; the app would fall back to the raw transcript")

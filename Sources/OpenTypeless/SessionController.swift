@@ -220,8 +220,10 @@ final class SessionController: ObservableObject {
 
     private func process(record initial: DictationRecord, pipeline: TranscriptionPipeline) async {
         var record = initial
+        let started = ProcessInfo.processInfo.systemUptime
         do {
             let raw = try await pipeline.finish()
+            record.timing = DictationRecord.Timing(transcription: ProcessInfo.processInfo.systemUptime - started)
             record.chunkTexts = pipeline.completedTranscripts()
             record.rawText = raw
             record.error = nil
@@ -257,7 +259,14 @@ final class SessionController: ObservableObject {
 
         if settings.polishEnabled {
             do {
-                let result = try await polish(record.rawText)
+                let outcome = try await polish(record.rawText)
+                let result = outcome.result
+                record.timing?.polishFirstToken = outcome.firstTokenSeconds
+                record.timing?.polish = outcome.totalSeconds
+                record.timing?.polishModel = outcome.model
+                record.timing?.usedBackup = outcome.usedBackup
+                note(String(format: "polish: %@%@, first token %.2fs, total %.2fs", outcome.model,
+                            outcome.usedBackup ? " (backup)" : "", outcome.firstTokenSeconds, outcome.totalSeconds))
                 if result.truncated {
                     notice = L("未整理，已插入原文", "Inserted without clean-up")
                     record.status = .polishFailed
@@ -311,20 +320,25 @@ final class SessionController: ObservableObject {
 
     private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
 
-    private func polish(_ raw: String) async throws -> APIClient.PolishResult {
+    private func polish(_ raw: String) async throws -> HedgedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
-        let options = PolishOptions(
-            model: settings.polishModel,
+        let primary = route(endpoint, model: settings.polishModel)
+        let backup = settings.polishBackupEndpoint.map { route($0, model: settings.polishBackupModel) }
+        return try await RetryPolicy(maxAttempts: 2).run { _ in
+            try await HedgedPolish.run(transcript: raw, primary: primary, backup: backup)
+        }
+    }
+
+    private func route(_ endpoint: ProviderEndpoint, model: String) -> PolishRoute {
+        let model = model.trimmingCharacters(in: .whitespaces)
+        return PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
+            model: model,
             vocabulary: settings.vocabularyList,
             extraInstructions: settings.extraInstructions,
-            modelInfo: endpoint.id == .openrouter ? modelInfo[settings.polishModel] : nil
-        )
-        let client = APIClient(endpoint: endpoint)
-        return try await RetryPolicy(maxAttempts: 2).run { _ in
-            try await client.polish(transcript: raw, options: options)
-        }
+            modelInfo: endpoint.id == .openrouter ? modelInfo[model] : nil
+        ))
     }
 
     // MARK: - Retry / cancel
@@ -396,9 +410,11 @@ final class SessionController: ObservableObject {
 
     // MARK: - Misc
 
-    /// OpenRouter model metadata, used to turn reasoning off for the clean-up model.
+    /// OpenRouter model metadata, used to turn reasoning off for the clean-up models.
     func refreshModelInfo() {
-        guard settings.polishProvider == .openrouter, let endpoint = settings.polishEndpoint else { return }
+        let usesOpenRouter = settings.polishProvider == .openrouter
+            || (settings.polishBackupEnabled && settings.polishBackupProvider == .openrouter)
+        guard usesOpenRouter, let endpoint = settings.endpoint(for: .openrouter) else { return }
         Task { [weak self] in
             guard let models = try? await APIClient(endpoint: endpoint).listModels() else { return }
             self?.modelInfo = Dictionary(models.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })

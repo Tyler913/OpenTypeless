@@ -16,6 +16,10 @@ final class AppSettings: ObservableObject {
     @AppStorage("polishProvider") var polishProvider: ProviderID = .openrouter
     @AppStorage("polishModel") var polishModel: String = ProviderID.openrouter.defaultChatModel
     @AppStorage("polishEnabled") var polishEnabled: Bool = true
+    /// A second clean-up model that races the first when it is slow to start (see HedgedPolish).
+    @AppStorage("polishBackupEnabled") var polishBackupEnabled: Bool = true
+    @AppStorage("polishBackupProvider") var polishBackupProvider: ProviderID = .openrouter
+    @AppStorage("polishBackupModel") var polishBackupModel: String = ProviderID.openrouter.defaultBackupChatModel
     /// Spoken-language hint for STT; "" = auto-detect. (Key predates the UI language setting.)
     @AppStorage("language") var sttLanguage: String = ""
     @AppStorage("vocabulary") var vocabulary: String = "Claude, OpenRouter, SwiftUI, GitHub, Typeless"
@@ -91,6 +95,14 @@ final class AppSettings: ObservableObject {
     var sttEndpoint: ProviderEndpoint? { endpoint(for: sttProvider) }
     var polishEndpoint: ProviderEndpoint? { endpoint(for: polishProvider) }
 
+    /// The backup route, when switched on, configured, and actually different from the primary.
+    var polishBackupEndpoint: ProviderEndpoint? {
+        let model = polishBackupModel.trimmingCharacters(in: .whitespaces)
+        guard polishBackupEnabled, !model.isEmpty, isConfigured(polishBackupProvider),
+              polishBackupProvider != polishProvider || model != polishModel else { return nil }
+        return endpoint(for: polishBackupProvider)
+    }
+
     /// Switching provider swaps in that provider's default model, since model IDs aren't portable.
     func selectSTTProvider(_ id: ProviderID) {
         guard id != sttProvider else { return }
@@ -102,6 +114,12 @@ final class AppSettings: ObservableObject {
         guard id != polishProvider else { return }
         polishProvider = id
         polishModel = id.defaultChatModel
+    }
+
+    func selectPolishBackupProvider(_ id: ProviderID) {
+        guard id != polishBackupProvider else { return }
+        polishBackupProvider = id
+        polishBackupModel = id.defaultBackupChatModel
     }
 
     var vocabularyList: [String] {

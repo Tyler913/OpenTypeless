@@ -24,6 +24,8 @@ enum PolishEval {
         let parameters: EvaluationPlan
         let attempt: EvaluationAttempt
         let failures: [String]
+        var latinRetention: Double?
+        var similarity: Double?
     }
     static func run() async -> Int32 {
         let args = CommandLine.arguments
@@ -78,6 +80,12 @@ enum PolishEval {
             let catalog = (try JSONSerialization.jsonObject(with: catalogData) as? [String: Any])?["data"] as? [[String: Any]] ?? []
             let prompt = try value("--prompt-file").map { try String(contentsOfFile: $0, encoding: .utf8) }
             let providerTag = value("--provider-tag")
+            let providerRouting = try value("--provider-routing").map { json -> [String: Any] in
+                guard let object = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else {
+                    throw APIError.badResponse("--provider-routing must be a JSON object")
+                }
+                return object
+            }
             var endpointQuote: [String: Any]?
             if let providerTag {
                 guard models.count == 1, let path = value("--endpoint-catalog"),
@@ -117,7 +125,8 @@ enum PolishEval {
                     for i in 0..<models.count {
                         let model = models[(i + offset) % models.count], price = prices[model]!
                         let plan = try client.evaluationPlan(transcript: c.input, options: options[model]!,
-                                                            promptPrice: price.0, completionPrice: price.1, providerTag: providerTag)
+                                                            promptPrice: price.0, completionPrice: price.1, providerTag: providerTag,
+                                                            providerRouting: providerRouting)
                         if let threshold = tierThresholds[model], plan.inputTokenBound >= threshold {
                             throw APIError.badResponse("input crosses unbudgeted price tier")
                         }
@@ -154,18 +163,44 @@ enum PolishEval {
                 if Prompts.looksLikeAnAnswer(input: c.input, output: attempt.output) { failures.append("looks like an answer") }
                 if attempt.truncated { failures.append("truncated") }
                 if attempt.error != nil { failures.append("request error; see private attempt") }
+                let ok = attempt.error == nil && !attempt.output.isEmpty
                 results.append(Result(id: c.id, round: job.round, model: job.plan.model, reservationID: reservation,
-                                      parameters: job.plan, attempt: attempt, failures: failures))
+                                      parameters: job.plan, attempt: attempt, failures: failures,
+                                      latinRetention: ok ? PolishMetrics.latinRetention(
+                                          input: c.input, output: attempt.output, ignoring: c.mustNotContain ?? []) : nil,
+                                      similarity: ok ? PolishMetrics.similarity(c.input, attempt.output) : nil))
                 try save(results, at: outPath)
                 try budget.settle(reservation, cost: attempt.usage?.cost, requestID: attempt.requestID)
                 CLI.log(String(format: "%d/%d %@ r%d %@ %.2fs · paid $%.6f · unresolved $%.6f",
                                results.count, jobs.count, job.plan.model, job.round,
                                failures.isEmpty ? "PASS" : "FAIL", attempt.seconds, budget.state.spent, budget.state.reserved))
             }
+            summarize(results, models: models)
             return results.allSatisfy { $0.failures.isEmpty } ? 0 : 2
         } catch {
             CLI.log("evaluation stopped: \(error.localizedDescription)")
             return 1
+        }
+    }
+
+    /// Per-model totals: checks passed, how much of the speaker's English and wording survived, and
+    /// first-token / total latency percentiles.
+    static func summarize(_ results: [Result], models: [String]) {
+        func mean(_ xs: [Double]) -> String { xs.isEmpty ? "-" : String(format: "%.3f", xs.reduce(0, +) / Double(xs.count)) }
+        func pct(_ xs: [Double], _ p: Double) -> String {
+            guard !xs.isEmpty else { return "-" }
+            let sorted = xs.sorted()
+            return String(format: "%.2fs", sorted[min(sorted.count - 1, Int(Double(sorted.count) * p))])
+        }
+        for model in models {
+            let rows = results.filter { $0.model == model }
+            let ttft = rows.compactMap(\.attempt.firstTokenSeconds)
+            let total = rows.filter { $0.attempt.error == nil }.map(\.attempt.seconds)
+            CLI.log("\(model): pass \(rows.filter { $0.failures.isEmpty }.count)/\(rows.count)"
+                + " · English kept \(mean(rows.compactMap(\.latinRetention)))"
+                + " · similarity \(mean(rows.compactMap(\.similarity)))"
+                + " · first token p50 \(pct(ttft, 0.5)) p90 \(pct(ttft, 0.9))"
+                + " · total p50 \(pct(total, 0.5)) p90 \(pct(total, 0.9))")
         }
     }
 }

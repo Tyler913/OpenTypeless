@@ -47,6 +47,8 @@ public abstract record SseEvent
     public sealed record Finished(string? Reason) : SseEvent;
     public sealed record Done : SseEvent;
     public sealed record Error(string Message) : SseEvent;
+    /// <summary>The token counts (and on OpenRouter the cost), sent in the last chunk.</summary>
+    public sealed record Usage(RequestUsage Value) : SseEvent;
 }
 
 /// <summary>Parses an OpenAI-style SSE stream for chat completions.</summary>
@@ -72,6 +74,7 @@ public sealed class SseParser
             events.Add(new SseEvent.Error(ApiClient.ErrorMessage(Encoding.UTF8.GetBytes(payload))));
             return events;
         }
+        if (RequestUsage.Parse(obj["usage"]) is { } usage) events.Add(new SseEvent.Usage(usage));
         if (obj["choices"] is JsonArray { Count: > 0 } choices && choices[0] is JsonObject choice)
         {
             if (choice["delta"] is JsonObject delta && ApiClient.TryString(delta["content"], out var content) && content.Length > 0)
@@ -87,7 +90,8 @@ public sealed class SseParser
     }
 }
 
-public sealed record PolishResult(string Text, bool Truncated);
+/// <param name="Usage">What the request used: as reported, or estimated from the text when the server said nothing.</param>
+public sealed record PolishResult(string Text, bool Truncated, RequestUsage? Usage = null);
 
 public sealed partial class ApiClient
 {
@@ -136,6 +140,11 @@ public sealed partial class ApiClient
         {
             body["temperature"] = 0.2;
         }
+        if (!IsOpenRouter)
+        {
+            // OpenAI-compatible servers only report token counts on a stream when asked (OpenRouter always does).
+            body["stream_options"] = new JsonObject { ["include_usage"] = true };
+        }
         return body;
     }
 
@@ -155,7 +164,8 @@ public sealed partial class ApiClient
         {
             // A server rejecting an optional parameter: retry with the bare minimum request.
             var lower = error.Detail.ToLowerInvariant();
-            if (!new[] { "temperature", "max_tokens", "reasoning", "provider", "unsupported", "unrecognized", "unknown" }.Any(lower.Contains)) throw;
+            if (!new[] { "temperature", "max_tokens", "reasoning", "provider", "stream_options", "include_usage", "unsupported", "unrecognized", "unknown" }
+                    .Any(lower.Contains)) throw;
             return await StreamPolish(transcript, options, false, idleTimeout, totalTimeout, onPartial, cancellationToken).ConfigureAwait(false);
         }
     }
@@ -164,7 +174,8 @@ public sealed partial class ApiClient
                                                   double idleTimeout, double totalTimeout, Action<string>? onPartial,
                                                   CancellationToken cancellationToken)
     {
-        var request = Request("chat/completions", JsonContent(PolishBody(transcript, options, includeOptional)));
+        var body = PolishBody(transcript, options, includeOptional);
+        var request = Request("chat/completions", JsonContent(body));
         request.Headers.TryAddWithoutValidation("Accept", "text/event-stream");
 
         return await Timeouts.WithTimeout(totalTimeout, async ct =>
@@ -190,6 +201,7 @@ public sealed partial class ApiClient
                 var parser = new SseParser();
                 var text = new StringBuilder();
                 string? finishReason = null;
+                RequestUsage? usage = null;
                 while (await idle.Run(t => reader.ReadLineAsync(t).AsTask()).ConfigureAwait(false) is { } line)
                 {
                     var done = false;
@@ -207,6 +219,9 @@ public sealed partial class ApiClient
                             case SseEvent.Done:
                                 done = true;
                                 break;
+                            case SseEvent.Usage u:
+                                usage = u.Value;
+                                break;
                             case SseEvent.Error err:
                                 throw ApiException.Http(502, err.Message);
                         }
@@ -216,9 +231,27 @@ public sealed partial class ApiClient
                 }
                 var cleaned = Prompts.SanitizePolishOutput(text.ToString());
                 if (cleaned.Length == 0) throw ApiException.BadResponse(L("模型返回了空内容", "the model returned nothing"));
-                return new PolishResult(cleaned, finishReason == "length");
+                if (usage is null || (usage.InputTokens == null && usage.OutputTokens == null && usage.Cost == null))
+                {
+                    usage = EstimatedUsage(body, text.ToString());
+                }
+                return new PolishResult(cleaned, finishReason == "length", usage);
             }
         }, cancellationToken).ConfigureAwait(false);
+    }
+}
+
+public sealed partial class ApiClient
+{
+    /// <summary>Token counts guessed from the messages sent and the text received, for servers that report none.</summary>
+    internal static RequestUsage EstimatedUsage(JsonObject body, string output)
+    {
+        var input = 0;
+        foreach (var message in body["messages"] as JsonArray ?? [])
+        {
+            if (TryString(message?["content"], out var content)) input += TokenEstimate.Count(content) + 4;
+        }
+        return new RequestUsage(input, TokenEstimate.Count(output), Estimated: true);
     }
 }
 

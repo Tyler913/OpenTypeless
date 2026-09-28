@@ -74,8 +74,19 @@ extension APIClient {
         }
     }
 
+    /// A transcript and what producing it used, when the server said.
+    public struct TranscriptionResult: Sendable {
+        public let text: String
+        public let usage: RequestUsage?
+    }
+
     /// One STT call for a single chunk (no retries — see `transcribeWithRetry`).
     public func transcribe(wav: Data, options: TranscriptionOptions, timeout: Double) async throws -> String {
+        try await transcribeDetailed(wav: wav, options: options, timeout: timeout).text
+    }
+
+    /// `transcribe`, plus the `usage` the server reported (OpenRouter includes the cost).
+    public func transcribeDetailed(wav: Data, options: TranscriptionOptions, timeout: Double) async throws -> TranscriptionResult {
         var request: URLRequest
         switch endpoint.id.sttFormat {
         case .openRouterJSON:
@@ -102,7 +113,7 @@ extension APIClient {
         }
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             // `response_format=text` servers reply with the bare transcript.
-            if let text = String(data: data, encoding: .utf8), !text.hasPrefix("<") { return text }
+            if let text = String(data: data, encoding: .utf8), !text.hasPrefix("<") { return TranscriptionResult(text: text, usage: nil) }
             throw APIError.badResponse(String(data: data.prefix(200), encoding: .utf8) ?? "")
         }
         if object["error"] != nil {
@@ -112,7 +123,7 @@ extension APIClient {
         guard let text = object["text"] as? String else {
             throw APIError.badResponse("missing \"text\" field")
         }
-        return text
+        return TranscriptionResult(text: text, usage: RequestUsage.parse(object["usage"]))
     }
 
     /// Per-attempt timeout scales with chunk length but stays under the ~60 s upstream limit for typical
@@ -123,12 +134,24 @@ extension APIClient {
         policy: RetryPolicy = RetryPolicy(),
         onRetry: ((Int, APIError) -> Void)? = nil
     ) async throws -> String {
+        try await transcribeDetailedWithRetry(samples: samples, options: options, policy: policy, onRetry: onRetry).text
+    }
+
+    /// `transcribeWithRetry`, plus the usage of the attempt that succeeded (audio length filled in).
+    public func transcribeDetailedWithRetry(
+        samples: [Int16],
+        options: TranscriptionOptions,
+        policy: RetryPolicy = RetryPolicy(),
+        onRetry: ((Int, APIError) -> Void)? = nil
+    ) async throws -> TranscriptionResult {
         let wav = WAV.encode(samples: samples)
         let seconds = AudioFormat.seconds(forSampleCount: samples.count)
         let timeout = max(30, min(90, seconds * 2 + 15))
-        return try await policy.run(onRetry: onRetry) { _ in
-            try await transcribe(wav: wav, options: options, timeout: timeout)
+        let result = try await policy.run(onRetry: onRetry) { _ in
+            try await transcribeDetailed(wav: wav, options: options, timeout: timeout)
         }
+        return TranscriptionResult(text: result.text,
+                                   usage: (result.usage ?? RequestUsage(estimated: true)).withAudioSeconds(seconds))
     }
 }
 

@@ -269,12 +269,13 @@ public sealed class SessionController
             if (raw.Trim().Length == 0)
             {
                 record.Status = DictationStatus.Done;
+                Account(record, pipeline, null);
                 _history.Update(record);
                 Finish(new HudPhase.Error(L("没有识别到语音", "No speech detected")), 2);
                 return;
             }
             _history.Update(record);
-            await PolishAndDeliver(record, token);
+            await PolishAndDeliver(record, pipeline, token);
         }
         catch (PipelineFailure failure)
         {
@@ -282,6 +283,7 @@ public sealed class SessionController
             record.RawText = failure.PartialText;
             record.Status = DictationStatus.Failed;
             record.Error = failure.Message;
+            Account(record, pipeline, null);
             _history.Update(record);
             LastError = failure.Message;
             Finish(new HudPhase.Error(L("转写失败，可在托盘菜单重试", "Failed — retry from the tray menu")), 4);
@@ -291,22 +293,25 @@ public sealed class SessionController
             if (ApiException.From(error).IsCancelled) return;
             record.Status = DictationStatus.Failed;
             record.Error = error.Message;
+            Account(record, pipeline, null);
             _history.Update(record);
             LastError = error.Message;
             Finish(new HudPhase.Error(error.Message), 5);
         }
     }
 
-    private async Task PolishAndDeliver(DictationRecord record, CancellationToken token)
+    private async Task PolishAndDeliver(DictationRecord record, TranscriptionPipeline pipeline, CancellationToken token)
     {
         var text = record.RawText;
         string? notice = null;
+        HedgedPolishResult? polished = null;
 
         if (_settings.PolishEnabled)
         {
             try
             {
                 var outcome = await Polish(record.RawText, token);
+                polished = outcome;
                 var result = outcome.Result;
                 if (record.Timing is { } timing)
                 {
@@ -341,6 +346,7 @@ public sealed class SessionController
             record.Status = DictationStatus.Done;
         }
         if (record.Status == DictationStatus.PolishFailed) record.PolishedText = null;
+        Account(record, pipeline, polished);
         _history.Update(record);
 
         if (token.IsCancellationRequested) return;
@@ -397,6 +403,26 @@ public sealed class SessionController
             _settings.ExtraInstructions,
             endpoint.Id == ProviderId.OpenRouter ? _modelInfo.GetValueOrDefault(model) : null,
             Misheard: _settings.MisheardHints));
+    }
+
+    /// <summary>
+    /// Prices what this run's requests used (the speech-to-text of every chunk sent, and the clean-up answer that was
+    /// kept) and adds it, with the dictation's words once it's finished, to the Home page totals.
+    /// </summary>
+    private void Account(DictationRecord record, TranscriptionPipeline pipeline, HedgedPolishResult? polished)
+    {
+        var prices = PriceStore.Shared;
+        var (transcription, unpriced) = CostEstimator.Transcriptions(
+            pipeline.Usages(), prices.Price(_settings.SttProvider, _settings.SttModel), _settings.SttProvider == ProviderId.OpenRouter);
+        var cleanup = 0.0;
+        if (polished?.Result.Usage is { } usage)
+        {
+            var cost = CostEstimator.Chat(usage, prices.Price(polished.Provider, polished.Model), polished.Provider == ProviderId.OpenRouter);
+            if (cost is { } c) cleanup = c; else unpriced++;
+        }
+        if (transcription + cleanup > 0) record.Cost = (record.Cost ?? 0) + transcription + cleanup;
+        Note($"cost: transcription ${transcription:0.######}, clean-up ${cleanup:0.######}, unpriced requests {unpriced}");
+        UsageStore.Shared.Record(record, transcription, cleanup, unpriced);
     }
 
     // MARK: - Retry / cancel

@@ -22,27 +22,54 @@ public sealed class ModelsPage : PageBase
     private readonly ModelField _backupField = new(speech: false);
     private string? _sttKey, _chatKey, _backupKey;
     private CardRow? _sttRow, _chatRow, _backupRow;
+    private readonly PriceEditor _sttPrice = new(speech: true);
+    private readonly PriceEditor _chatPrice = new(speech: false);
+    private readonly PriceEditor _backupPrice = new(speech: false);
 
     public ModelsPage(SettingsWindow window, SessionController controller) : base(SettingsPage.Models)
     {
         _window = window;
         _controller = controller;
-        _sttField.TextChanged = text => _settings.SttModel = text;
+        _sttField.TextChanged = text =>
+        {
+            _settings.SttModel = text;
+            _sttPrice.Show(_settings.SttProvider, text);
+        };
         _chatField.TextChanged = text =>
         {
             _settings.PolishModel = text;
+            _chatPrice.Show(_settings.PolishProvider, text);
             _controller.RefreshModelInfo();
         };
         _backupField.TextChanged = text =>
         {
             _settings.PolishBackupModel = text;
+            _backupPrice.Show(_settings.PolishBackupProvider, text);
             _controller.RefreshModelInfo();
         };
         _settings.PropertyChanged += OnSettingsChanged;
+        PriceStore.Shared.Changed += OnPricesChanged;
         Render();
+        PriceStore.Shared.RefreshIfStale();
     }
 
-    protected override void OnClosed() => _settings.PropertyChanged -= OnSettingsChanged;
+    protected override void OnClosed()
+    {
+        _settings.PropertyChanged -= OnSettingsChanged;
+        PriceStore.Shared.Changed -= OnPricesChanged;
+    }
+
+    private void OnPricesChanged() => DispatcherQueue.TryEnqueue(ShowPrices);
+
+    private void ShowPrices()
+    {
+        _sttPrice.Show(_settings.SttProvider, _settings.SttModel);
+        _chatPrice.Show(_settings.PolishProvider, _settings.PolishModel);
+        _backupPrice.Show(_settings.PolishBackupProvider, _settings.PolishBackupModel);
+    }
+
+    private static CardRow PriceRow(PriceEditor editor) =>
+        new() { Glyph = Glyphs.Money, Tint = Tint.Green, Title = L("价格", "Price"), Trailing = editor };
 
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -56,6 +83,11 @@ public sealed class ModelsPage : PageBase
         if (_sttRow != null) _sttRow.Trailing = null;
         if (_chatRow != null) _chatRow.Trailing = null;
         if (_backupRow != null) _backupRow.Trailing = null;
+        foreach (var editor in new[] { _sttPrice, _chatPrice, _backupPrice })
+        {
+            if (editor.Row != null) editor.Row.Trailing = null;
+            editor.Row = null;
+        }
         _chatRow = null;
         _backupRow = null;
         _sttField.Text = _settings.SttModel;
@@ -76,6 +108,10 @@ public sealed class ModelsPage : PageBase
         stt.Body.Add(new CardDivider());
         _sttRow = new CardRow { Glyph = Glyphs.Microphone, Tint = Tint.Blue, Title = L("模型", "Model"), Trailing = _sttField };
         stt.Body.Add(_sttRow);
+        stt.Body.Add(new CardDivider());
+        var sttPriceRow = PriceRow(_sttPrice);
+        _sttPrice.Row = sttPriceRow;
+        stt.Body.Add(sttPriceRow);
         stt.Body.Add(new CardDivider());
         var language = new ComboBox { MinWidth = 140 };
         (string Code, string Name)[] languages = [("", L("自动检测", "Auto-detect")), ("zh", "中文"), ("en", "English"), ("ja", "日本語"), ("ko", "한국어")];
@@ -120,6 +156,10 @@ public sealed class ModelsPage : PageBase
                 Trailing = _chatField,
             };
             polish.Body.Add(_chatRow);
+            polish.Body.Add(new CardDivider());
+            var chatPriceRow = PriceRow(_chatPrice);
+            _chatPrice.Row = chatPriceRow;
+            polish.Body.Add(chatPriceRow);
 
             polish.Body.Add(new CardDivider());
             var backup = new ToggleSwitch { IsOn = _settings.PolishBackupEnabled, OnContent = "", OffContent = "", MinWidth = 0 };
@@ -156,6 +196,10 @@ public sealed class ModelsPage : PageBase
                     Trailing = _backupField,
                 };
                 polish.Body.Add(_backupRow);
+                polish.Body.Add(new CardDivider());
+                var backupPriceRow = PriceRow(_backupPrice);
+                _backupPrice.Row = backupPriceRow;
+                polish.Body.Add(backupPriceRow);
             }
         }
         Body.Children.Add(polish);
@@ -169,6 +213,7 @@ public sealed class ModelsPage : PageBase
             Body.Children.Add(SetupBanner(_settings.PolishBackupProvider));
         }
 
+        ShowPrices();
         LoadModelsIfNeeded();
     }
 
@@ -315,5 +360,122 @@ internal sealed class ModelField : UserControl
             _text.Text = model.Id; // raises TextChanged → saved
         };
         return item;
+    }
+}
+
+/// <summary>
+/// A model's price, next to where it's chosen: OpenRouter's live price (read-only), or fields to enter the price
+/// for any other provider, so the Home page can count what it costs.
+/// </summary>
+internal sealed class PriceEditor : UserControl
+{
+    private readonly bool _speech;
+    private readonly AppSettings _settings = AppSettings.Shared;
+    private string? _shown;
+
+    /// <summary>The row the editor sits in, whose subtitle says where the price comes from.</summary>
+    public CardRow? Row
+    {
+        get => _row;
+        set
+        {
+            _row = value;
+            _shown = null; // the new row needs its subtitle
+        }
+    }
+
+    private CardRow? _row;
+
+    public PriceEditor(bool speech)
+    {
+        _speech = speech;
+    }
+
+    public void Show(ProviderId provider, string model)
+    {
+        model = model.Trim();
+        var catalog = PriceStore.Shared.Catalog;
+        var key = $"{provider.RawValue()}|{model}|{catalog.FetchedAt:o}";
+        if (key == _shown) return;
+        _shown = key;
+
+        if (provider == ProviderId.OpenRouter)
+        {
+            var price = catalog.Price(model);
+            if (Row != null)
+            {
+                Row.Subtitle = catalog.IsEmpty
+                    ? L("正在从 OpenRouter 获取最新价格…", "Getting the latest prices from OpenRouter…")
+                    : L($"OpenRouter 实时价格，更新于 {Formatting.ShortStamp(catalog.FetchedAt)}。实际按每次请求的扣费计算。",
+                        $"Live from OpenRouter, updated {Formatting.ShortStamp(catalog.FetchedAt)}. Each request counts what OpenRouter billed.");
+            }
+            string text;
+            if (_speech) text = L("按实际扣费", "As billed");
+            else if (price is { } p)
+                text = L($"输入 {UsageFormat.Rate(p.InputPerMillion ?? 0)} · 输出 {UsageFormat.Rate(p.OutputPerMillion ?? 0)} / 百万 token",
+                         $"In {UsageFormat.Rate(p.InputPerMillion ?? 0)} · Out {UsageFormat.Rate(p.OutputPerMillion ?? 0)} / 1M tokens");
+            else text = model.Length == 0 ? "—" : L("OpenRouter 没有列出这个模型", "Not listed on OpenRouter");
+            Content = Ui.Text(text, 12.5, foreground: Ui.Secondary);
+            IsEnabled = true;
+            return;
+        }
+
+        if (Row != null)
+        {
+            Row.Subtitle = _speech
+                ? L("按录音时长计费，美元 / 分钟。留空则不计入花费。", "Per minute of audio, in USD. Leave empty to leave it out of the spend.")
+                : L("美元 / 百万 token（服务商不返回用量时按字数估算）。留空则不计入花费。",
+                    "USD per million tokens (estimated from the text when the server doesn't say). Leave empty to leave it out of the spend.");
+        }
+        var current = _settings.CustomPrice(provider, model);
+        if (_speech)
+        {
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children =
+                {
+                    Box(current?.PerMinute, value => Save(provider, model, (current ?? new ModelPrice()) with { PerMinute = value }, v => current = v)),
+                    new TextBlock { Text = L("美元/分钟", "$/min"), VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Secondary },
+                },
+            };
+        }
+        else
+        {
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children =
+                {
+                    new TextBlock { Text = L("输入", "In"), VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Secondary },
+                    Box(current?.InputPerMillion, value => Save(provider, model, (current ?? new ModelPrice()) with { InputPerMillion = value }, v => current = v)),
+                    new TextBlock { Text = L("输出", "Out"), VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Secondary },
+                    Box(current?.OutputPerMillion, value => Save(provider, model, (current ?? new ModelPrice()) with { OutputPerMillion = value }, v => current = v)),
+                },
+            };
+        }
+        IsEnabled = model.Length > 0;
+    }
+
+    private void Save(ProviderId provider, string model, ModelPrice price, Action<ModelPrice> remember)
+    {
+        _settings.SetCustomPrice(provider, model, price);
+        remember(price);
+    }
+
+    private static NumberBox Box(double? value, Action<double?> changed)
+    {
+        var box = new NumberBox
+        {
+            Width = 92,
+            Minimum = 0,
+            Value = value ?? double.NaN,
+            PlaceholderText = "$",
+            NumberFormatter = new Windows.Globalization.NumberFormatting.DecimalFormatter { FractionDigits = 0, IsDecimalPointAlwaysDisplayed = false },
+        };
+        box.ValueChanged += (_, e) => changed(double.IsNaN(e.NewValue) ? null : Math.Max(0, e.NewValue));
+        return box;
     }
 }

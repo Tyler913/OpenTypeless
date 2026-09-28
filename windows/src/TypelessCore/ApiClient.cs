@@ -106,10 +106,18 @@ public sealed partial class ApiClient
 
 public sealed record TranscriptionOptions(string Model, string? Language = null);
 
+/// <summary>A transcript and what producing it used, when the server said.</summary>
+public sealed record TranscriptionResult(string Text, RequestUsage? Usage);
+
 public sealed partial class ApiClient
 {
     /// <summary>One STT call for a single chunk (no retries; see <see cref="TranscribeWithRetry"/>).</summary>
-    public async Task<string> Transcribe(byte[] wav, TranscriptionOptions options, double timeout, CancellationToken cancellationToken = default)
+    public async Task<string> Transcribe(byte[] wav, TranscriptionOptions options, double timeout, CancellationToken cancellationToken = default) =>
+        (await TranscribeDetailed(wav, options, timeout, cancellationToken).ConfigureAwait(false)).Text;
+
+    /// <summary><see cref="Transcribe"/>, plus the <c>usage</c> the server reported (OpenRouter includes the cost).</summary>
+    public async Task<TranscriptionResult> TranscribeDetailed(byte[] wav, TranscriptionOptions options, double timeout,
+                                                              CancellationToken cancellationToken = default)
     {
         HttpRequestMessage BuildRequest()
         {
@@ -149,7 +157,7 @@ public sealed partial class ApiClient
         {
             // `response_format=text` servers reply with the bare transcript.
             var text = Utf8Prefix(data, int.MaxValue);
-            if (text != null && !text.StartsWith('<')) return text;
+            if (text != null && !text.StartsWith('<')) return new TranscriptionResult(text, null);
             throw ApiException.BadResponse(Utf8Prefix(data, 200) ?? "");
         }
         if (obj.ContainsKey("error"))
@@ -157,7 +165,10 @@ public sealed partial class ApiClient
             // Some upstream failures arrive as 200 + error body.
             throw ApiException.Http(502, ErrorMessage(data));
         }
-        if (obj["text"] is JsonValue value && value.TryGetValue<string>(out var transcript)) return transcript;
+        if (obj["text"] is JsonValue value && value.TryGetValue<string>(out var transcript))
+        {
+            return new TranscriptionResult(transcript, RequestUsage.Parse(obj["usage"]));
+        }
         throw ApiException.BadResponse("missing \"text\" field");
     }
 
@@ -165,13 +176,21 @@ public sealed partial class ApiClient
     /// Per-attempt timeout scales with chunk length but stays under the ~60 s upstream limit for typical
     /// chunks; retries cover transient provider/network failures.
     /// </summary>
-    public Task<string> TranscribeWithRetry(short[] samples, TranscriptionOptions options, RetryPolicy? policy = null,
-                                            Action<int, ApiException>? onRetry = null, CancellationToken cancellationToken = default)
+    public async Task<string> TranscribeWithRetry(short[] samples, TranscriptionOptions options, RetryPolicy? policy = null,
+                                                  Action<int, ApiException>? onRetry = null, CancellationToken cancellationToken = default) =>
+        (await TranscribeDetailedWithRetry(samples, options, policy, onRetry, cancellationToken).ConfigureAwait(false)).Text;
+
+    /// <summary><see cref="TranscribeWithRetry"/>, plus the usage of the attempt that succeeded (audio length filled in).</summary>
+    public async Task<TranscriptionResult> TranscribeDetailedWithRetry(short[] samples, TranscriptionOptions options, RetryPolicy? policy = null,
+                                                                       Action<int, ApiException>? onRetry = null,
+                                                                       CancellationToken cancellationToken = default)
     {
         var wav = Wav.Encode(samples);
         var seconds = AudioFormat.Seconds(samples.Length);
         var timeout = Math.Max(30, Math.Min(90, seconds * 2 + 15));
-        return (policy ?? new RetryPolicy()).Run((_, ct) => Transcribe(wav, options, timeout, ct), onRetry, cancellationToken);
+        var result = await (policy ?? new RetryPolicy()).Run((_, ct) => TranscribeDetailed(wav, options, timeout, ct), onRetry, cancellationToken)
+            .ConfigureAwait(false);
+        return result with { Usage = (result.Usage ?? new RequestUsage(Estimated: true)).WithAudioSeconds(seconds) };
     }
 }
 

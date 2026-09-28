@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Shapes;
 using OpenTypeless.Input;
 using OpenTypeless.Services;
 using OpenTypeless.Session;
+using TypelessCore;
 
 namespace OpenTypeless.UI;
 
@@ -205,10 +206,12 @@ public sealed class HistoryPage : PageBase
         layout.Children.Add(header);
         var notes = new StackPanel { Spacing = 8 };
         if (record.Error is { } error) notes.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, error));
-        if (record.Timing?.Summary is { } timing)
+        var summary = string.Join(" · ", new[] { record.Timing?.Summary, record.Cost is { } cost ? L("花费 ", "Cost ") + UsageFormat.Money(cost) : null }
+            .OfType<string>());
+        if (summary.Length > 0)
         {
-            // Where the wait after releasing the key went.
-            var line = Ui.Text(timing, 11, foreground: Ui.Secondary, wrap: true);
+            // Where the wait after releasing the key went, and what it cost.
+            var line = Ui.Text(summary, 11, foreground: Ui.Secondary, wrap: true);
             line.IsTextSelectionEnabled = true;
             notes.Children.Add(line);
         }

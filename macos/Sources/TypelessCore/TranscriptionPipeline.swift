@@ -62,6 +62,8 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     /// Chunks whose last failure was permanent (bad key, no credit…): not worth another round.
     private var permanentFailures: Set<Int> = []
     private var tasks: [Int: Task<Void, Never>] = [:]
+    /// Usage of every successful request, retries of the same chunk included (each one was billed).
+    private var usages: [RequestUsage] = []
     private var finished = false
     private var cancelled = false
 
@@ -129,6 +131,11 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         return results.compactMapValues { if case let .done(text) = $0 { return text } else { return nil } }
     }
 
+    /// What the requests so far used, one entry per successful request.
+    public func requestUsages() -> [RequestUsage] {
+        lock.withLock { usages }
+    }
+
     // MARK: - Private
 
     private var isCancelled: Bool {
@@ -178,7 +185,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         if Task.isCancelled { return (.failed(APIError.cancelled.localizedDescription), true) }
         observer?(chunk.index, .transcribing(attempt: 1))
         do {
-            let text = try await client.transcribeWithRetry(
+            let result = try await client.transcribeDetailedWithRetry(
                 samples: chunk.samples, options: options, policy: policy,
                 onRetry: { [observer] attempt, error in
                     if ProcessInfo.processInfo.environment["OPENTYPELESS_DEBUG"] != nil {
@@ -187,7 +194,8 @@ public final class TranscriptionPipeline: @unchecked Sendable {
                     observer?(chunk.index, .transcribing(attempt: attempt + 1))
                 }
             )
-            return (.done(text), false)
+            if let usage = result.usage { lock.withLock { usages.append(usage) } }
+            return (.done(result.text), false)
         } catch {
             let apiError = APIError.from(error)
             return (.failed(apiError.localizedDescription), !apiError.isRetryable)

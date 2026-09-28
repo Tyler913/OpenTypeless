@@ -54,6 +54,7 @@ public struct EvaluationAttempt: Codable, Sendable {
             case let .finished(reason): finishReason = reason
             case let .error(message): error = message
             case .done: receivedDone = true
+            case .usage: break // read from the raw chunk above, with the evaluation's own fields
             }
         }
     }

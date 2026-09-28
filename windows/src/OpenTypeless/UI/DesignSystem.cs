@@ -93,6 +93,10 @@ public static class Glyphs
     public const string Dictionary = "";
     public const string Download = "";
     public const string TouchPointer = "";
+    public const string Home = "\uE80F";
+    public const string Money = "\uE8C7";
+    public const string Calendar = "\uE787";
+    public const string Speech = "\uE720";
 }
 
 public static class Ui

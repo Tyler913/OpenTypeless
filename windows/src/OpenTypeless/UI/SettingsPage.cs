@@ -5,12 +5,12 @@ using OpenTypeless.Services;
 
 namespace OpenTypeless.UI;
 
-public enum SettingsPage { General, Shortcut, Providers, Models, Style, History }
+public enum SettingsPage { Home, General, Shortcut, Providers, Models, Style, History }
 
 public static class SettingsPageInfo
 {
     public static readonly SettingsPage[] All =
-        [SettingsPage.General, SettingsPage.Shortcut, SettingsPage.Providers, SettingsPage.Models, SettingsPage.Style, SettingsPage.History];
+        [SettingsPage.Home, SettingsPage.General, SettingsPage.Shortcut, SettingsPage.Providers, SettingsPage.Models, SettingsPage.Style, SettingsPage.History];
 
     public static string RawValue(this SettingsPage page) => page.ToString().ToLowerInvariant();
 
@@ -18,6 +18,7 @@ public static class SettingsPageInfo
 
     public static string Title(this SettingsPage page) => page switch
     {
+        SettingsPage.Home => L("主页", "Home"),
         SettingsPage.General => L("通用", "General"),
         SettingsPage.Shortcut => L("快捷键", "Shortcut"),
         SettingsPage.Providers => L("服务商", "Providers"),
@@ -28,6 +29,7 @@ public static class SettingsPageInfo
 
     public static string Subtitle(this SettingsPage page) => page switch
     {
+        SettingsPage.Home => L("你用语音写了多少、省了多少时间、花了多少钱", "What you've dictated, the time it saved and what it cost"),
         SettingsPage.General => L("界面语言、开机启动与系统权限", "Language, startup and system permissions"),
         SettingsPage.Shortcut => L("选择用来开始听写的按键", "Choose the key that starts dictation"),
         SettingsPage.Providers => L("填写 API Key。语音转文字和文字整理可以使用不同的服务商。",
@@ -39,6 +41,7 @@ public static class SettingsPageInfo
 
     public static string Glyph(this SettingsPage page) => page switch
     {
+        SettingsPage.Home => Glyphs.Home,
         SettingsPage.General => Glyphs.Settings,
         SettingsPage.Shortcut => Glyphs.Keyboard,
         SettingsPage.Providers => Glyphs.Key,
@@ -49,6 +52,7 @@ public static class SettingsPageInfo
 
     public static Tint Tint(this SettingsPage page) => page switch
     {
+        SettingsPage.Home => UI.Tint.Blue,
         SettingsPage.General => UI.Tint.Gray,
         SettingsPage.Shortcut => UI.Tint.Blue,
         SettingsPage.Providers => UI.Tint.Orange,

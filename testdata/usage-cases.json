@@ -1,0 +1,36 @@
+{
+  "_comment": "Shared by the macOS (swift-testing) and Windows (xUnit) test suites, so both apps count words, price requests and work out time saved the same way.",
+  "wordCounts": [
+    { "text": "", "words": 0 },
+    { "text": "   ... — !! ", "words": 0 },
+    { "text": "Hello world", "words": 2 },
+    { "text": "你好世界", "words": 4 },
+    { "text": "我用 Claude Code 写了 3.5 个 feature", "words": 9 },
+    { "text": "don't stop — it's e-mail time.", "words": 5 },
+    { "text": "今天是2026年9月28日", "words": 9 },
+    { "text": "こんにちは world", "words": 6 },
+    { "text": "안녕하세요 세계", "words": 2 },
+    { "text": "1,000 dollars, then more", "words": 4 },
+    { "text": "café naïve", "words": 2 },
+    { "text": "Multi-line\ntext here", "words": 3 },
+    { "text": "1. 第一点\n2. Second point", "words": 7 }
+  ],
+  "costs": [
+    { "kind": "chat", "usage": { "input": 1000, "output": 500, "cost": 0.0021 }, "price": { "input": 0.75, "output": 3.75 }, "preferReported": true, "expected": 0.0021 },
+    { "kind": "chat", "usage": { "input": 1000, "output": 500, "cost": 0.0021 }, "price": { "input": 0.75, "output": 3.75 }, "preferReported": false, "expected": 0.002625 },
+    { "kind": "chat", "usage": { "input": 1000, "output": 500 }, "price": null, "preferReported": false, "expected": null },
+    { "kind": "chat", "usage": { "input": 1000, "output": 500, "cost": 0.003 }, "price": null, "preferReported": false, "expected": 0.003 },
+    { "kind": "chat", "usage": { "input": 2000000, "output": 0 }, "price": { "input": 0.5 }, "preferReported": true, "expected": 1.0 },
+    { "kind": "transcription", "usage": { "seconds": 30, "cost": 0.0005 }, "price": null, "preferReported": true, "expected": 0.0005 },
+    { "kind": "transcription", "usage": { "seconds": 30 }, "price": { "minute": 0.006 }, "preferReported": false, "expected": 0.003 },
+    { "kind": "transcription", "usage": { "seconds": 30, "estimated": true }, "price": { "input": 2.5, "output": 10 }, "preferReported": false, "expected": null },
+    { "kind": "transcription", "usage": { "seconds": 30, "input": 1000, "output": 100 }, "price": { "input": 2.5, "output": 10 }, "preferReported": false, "expected": 0.0035 },
+    { "kind": "transcription", "usage": { "seconds": 30 }, "price": null, "preferReported": true, "expected": null }
+  ],
+  "timeSaved": [
+    { "words": 1000, "seconds": 300, "typingWPM": 100, "typingSeconds": 600, "savedSeconds": 300, "speakingWPM": 200 },
+    { "words": 50, "seconds": 60, "typingWPM": 100, "typingSeconds": 30, "savedSeconds": 0, "speakingWPM": 50 },
+    { "words": 0, "seconds": 0, "typingWPM": 100, "typingSeconds": 0, "savedSeconds": 0, "speakingWPM": null },
+    { "words": 450, "seconds": 90, "typingWPM": 60, "typingSeconds": 450, "savedSeconds": 360, "speakingWPM": 300 }
+  ]
+}

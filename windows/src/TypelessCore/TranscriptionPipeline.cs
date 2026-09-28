@@ -50,6 +50,8 @@ public sealed class TranscriptionPipeline
     /// <summary>Chunks whose last failure was permanent (bad key, no credit…): not worth another round.</summary>
     private readonly HashSet<int> _permanentFailures = new();
     private readonly Dictionary<int, Task> _tasks = new();
+    /// <summary>Usage of every successful request, retries of the same chunk included (each one was billed).</summary>
+    private readonly List<RequestUsage> _usages = new();
     private bool _finished;
     private bool _cancelled;
 
@@ -122,6 +124,12 @@ public sealed class TranscriptionPipeline
         {
             return _results.Where(r => r.Value is ChunkState.Done).ToDictionary(r => r.Key, r => ((ChunkState.Done)r.Value).Text);
         }
+    }
+
+    /// <summary>What the requests so far used, one entry per successful request.</summary>
+    public List<RequestUsage> Usages()
+    {
+        lock (_lock) return new List<RequestUsage>(_usages);
     }
 
     // MARK: - Private
@@ -208,7 +216,7 @@ public sealed class TranscriptionPipeline
         _observer?.Invoke(chunk.Index, new ChunkState.Transcribing(1));
         try
         {
-            var text = await _client.TranscribeWithRetry(
+            var result = await _client.TranscribeDetailedWithRetry(
                 chunk.Samples, _options, _policy,
                 onRetry: (attempt, error) =>
                 {
@@ -219,7 +227,11 @@ public sealed class TranscriptionPipeline
                     _observer?.Invoke(chunk.Index, new ChunkState.Transcribing(attempt + 1));
                 },
                 cancellationToken: token).ConfigureAwait(false);
-            return (new ChunkState.Done(text), false);
+            if (result.Usage is { } usage)
+            {
+                lock (_lock) _usages.Add(usage);
+            }
+            return (new ChunkState.Done(result.Text), false);
         }
         catch (Exception error)
         {

@@ -177,6 +177,20 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("learnFromEdits", value);
     }
 
+    /// <summary>Open the Home page when the app starts at sign-in (a manual launch always shows it).</summary>
+    public bool ShowHomeAtLogin
+    {
+        get => GetBool("showHomeAtLogin", false);
+        set => SetValue("showHomeAtLogin", value);
+    }
+
+    /// <summary>The typing speed "time saved" on the Home page is measured against.</summary>
+    public int TypingWordsPerMinute
+    {
+        get => Math.Clamp(GetInt("typingWordsPerMinute", UsageTotals.DefaultTypingWordsPerMinute), 10, 300);
+        set => SetValue("typingWordsPerMinute", Math.Clamp(value, 10, 300));
+    }
+
     public bool DidEnableLaunchAtLoginByDefault
     {
         get => GetBool("didEnableLaunchAtLoginByDefault", false);
@@ -305,6 +319,31 @@ public sealed class AppSettings : INotifyPropertyChanged
         if (id == PolishBackupProvider) return;
         PolishBackupProvider = id;
         PolishBackupModel = id.DefaultBackupChatModel();
+    }
+
+    // MARK: Model prices
+
+    /// <summary>The price the user entered for a model of a provider other than OpenRouter (whose prices are live).</summary>
+    public ModelPrice? CustomPrice(ProviderId provider, string model)
+    {
+        lock (_lock) return ModelPrice.FromJson((_store["modelPrices"] as JsonObject)?[ModelPrice.Key(provider, model)]);
+    }
+
+    public void SetCustomPrice(ProviderId provider, string model, ModelPrice? price)
+    {
+        if (model.Trim().Length == 0) return;
+        lock (_lock)
+        {
+            if (_store["modelPrices"] is not JsonObject prices)
+            {
+                prices = new JsonObject();
+                _store["modelPrices"] = prices;
+            }
+            var key = ModelPrice.Key(provider, model);
+            if (price is null || price.IsEmpty) prices.Remove(key); else prices[key] = price.ToJson();
+            Save();
+        }
+        Raise("ModelPrices");
     }
 
     // MARK: Learned vocabulary

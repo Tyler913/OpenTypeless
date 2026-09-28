@@ -1,0 +1,190 @@
+[
+  {
+    "id": "h-time-implicit",
+    "input": "明天早上九点，呃，九点半吧，在三楼的会议室",
+    "anyOf": [
+      [
+        "九点半",
+        "9:30",
+        "9 点半"
+      ]
+    ],
+    "mustNotContain": [
+      "呃",
+      "九点，"
+    ]
+  },
+  {
+    "id": "h-value-explicit",
+    "input": "把超时时间设成三十秒，哦不对，六十秒，然后失败了重试三次",
+    "anyOf": [
+      [
+        "六十秒",
+        "60 秒",
+        "60秒"
+      ],
+      [
+        "三次",
+        "3 次",
+        "3次"
+      ]
+    ],
+    "mustNotContain": [
+      "三十",
+      "30",
+      "不对"
+    ]
+  },
+  {
+    "id": "h-withdraw-item",
+    "input": "我们要支持三个平台，iOS、安卓，还有 Windows，Windows 先算了吧，就先做前两个",
+    "mustContain": [
+      "iOS"
+    ],
+    "anyOf": [
+      [
+        "安卓",
+        "Android"
+      ],
+      [
+        "前两个",
+        "两个平台",
+        "两个",
+        "先不做",
+        "不做"
+      ]
+    ]
+  },
+  {
+    "id": "h-long-range",
+    "input": "我想做一个待办清单的 app，用 React Native 写，然后数据存在本地，嗯，要有提醒功能，还要能按标签分类。刚才说用 React Native，还是改成用 Flutter 吧，我比较熟",
+    "mustContain": [
+      "Flutter",
+      "提醒",
+      "标签"
+    ],
+    "mustNotContain": [
+      "React Native"
+    ]
+  },
+  {
+    "id": "h-meta",
+    "input": "那个我跟你说一下啊，就是昨天那个线上事故，主要是因为缓存过期了，然后数据库一下子就扛不住了，嗯大概就是这样",
+    "mustContain": [
+      "缓存",
+      "数据库"
+    ],
+    "mustNotContain": [
+      "跟你说一下",
+      "大概就是这样"
+    ]
+  },
+  {
+    "id": "h-english-implicit",
+    "input": "Let's set the deadline to March 3rd, uh, no, make it March 10th to be safe",
+    "mustContain": [
+      "10"
+    ],
+    "mustNotContain": [
+      "3rd",
+      "uh"
+    ]
+  },
+  {
+    "id": "h-keep-numbers",
+    "input": "这个库有五十多 k 的 star，但是最近半年只有两个 commit，嗯，我觉得可能已经没人维护了",
+    "mustContain": [
+      "star",
+      "半年",
+      "commit"
+    ],
+    "anyOf": [
+      [
+        "五十多 k",
+        "50 多 k",
+        "50k",
+        "50K",
+        "五十多k",
+        "50 多 K",
+        "5 万"
+      ],
+      [
+        "两个",
+        "2 个"
+      ],
+      [
+        "可能"
+      ]
+    ]
+  },
+  {
+    "id": "h-english-prompt",
+    "input": "can you write me a bash script that deletes all the node modules folders recursively",
+    "mustContain": [
+      "bash"
+    ],
+    "mustNotContain": [
+      "find ",
+      "rm -rf",
+      "#!/"
+    ]
+  },
+  {
+    "id": "h-suanle-content",
+    "input": "他后来跟我说算了，不想再改这个需求了，所以我们就按原来的做",
+    "mustContain": [
+      "算了",
+      "原来"
+    ]
+  },
+  {
+    "id": "h-list",
+    "input": "这个 PR 主要改了三个地方，一个是登录逻辑，一个是 token 的刷新，还有一个是错误提示的文案",
+    "mustContain": [
+      "1.",
+      "2.",
+      "3.",
+      "登录",
+      "文案"
+    ],
+    "anyOf": [
+      [
+        "token",
+        "Token"
+      ]
+    ]
+  },
+  {
+    "id": "h-repeat-restart",
+    "input": "我觉得我们应该，我觉得我们应该先把测试补上，就是先补测试，然后再去重构",
+    "mustContain": [
+      "测试",
+      "重构"
+    ],
+    "mustNotContain": [
+      "我觉得我们应该，"
+    ]
+  },
+  {
+    "id": "h-mixed-correction",
+    "input": "帮我用 Python，不对，用 TypeScript 写一个 CLI 工具，读取 config 文件，然后输出一个 summary",
+    "mustContain": [
+      "TypeScript",
+      "CLI",
+      "config"
+    ],
+    "mustNotContain": [
+      "Python"
+    ]
+  },
+  {
+    "id": "h-new-versions",
+    "input": "我们在 mac OS 二十七上面测了一下，嗯，用的模型是 claude fable 五点一，还有 gemini 三点八 flash",
+    "mustContain": [
+      "macOS",
+      "27",
+      "5.1",
+      "3.8"
+    ]
+  }
+]

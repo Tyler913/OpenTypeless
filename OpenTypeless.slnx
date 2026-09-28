@@ -1,0 +1,18 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="ARM64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/OpenTypeless.Cli/OpenTypeless.Cli.csproj" />
+    <Project Path="src/OpenTypeless/OpenTypeless.csproj" />
+    <Project Path="src/TypelessCore/TypelessCore.csproj">
+      <Platform Project="Any CPU" />
+    </Project>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TypelessCore.Tests/TypelessCore.Tests.csproj">
+      <Platform Project="Any CPU" />
+    </Project>
+  </Folder>
+</Solution>

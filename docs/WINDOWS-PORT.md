@@ -31,13 +31,15 @@ failure handling. Only the system-integration layer and the look differ.
 | `TranscriptionPipeline.swift` | `TranscriptionPipeline.cs` | Transcribe while talking, ≤ 3 concurrent, skip silent / < 0.3 s chunks, preset transcripts for retries, one extra round for transient failures, `PipelineFailure` with partial text. |
 | `PolishEvaluation.swift` | `PolishEvaluation.cs` | Evaluation-only accounting, durable budget ledger with an exclusive lock file, first-token time, `--provider-routing`, `PolishMetrics` (English kept, similarity). |
 | `Localization.swift` | `Localization.cs` | Inline `L("中文", "English")`, `system / zh / en`, switchable at runtime. |
+| `Usage.swift` | `Usage.cs` | `RequestUsage` from STT / SSE `usage`, token estimate, `ModelPrice`, `CostEstimator` (reported cost vs. price), OpenRouter `PriceCatalog`, `UsageFormat`. |
+| `UsageLedger.swift` | `UsageLedger.cs` | `WordCount`, per-day `usage.json`, totals, time saved, streaks, heatmap quartiles. `CalendarDay` on macOS is `DateOnly` on Windows. Both suites run `testdata/usage-cases.json`. |
 | `UpdateCheck.swift` | `UpdateCheck.cs` | GitHub release list → newest non-draft, non-prerelease zip named `OpenTypeless-<version>-<platform>.zip` for this platform, numeric version order, `sha256:` digest. |
 
 ## System integration — macOS API → Windows API
 
 | Concern | macOS | Windows |
 |---|---|---|
-| App shell | `LSUIElement` menu-bar app | No main window; notification-area (tray) icon via `Shell_NotifyIcon`. Single instance (named mutex); launching again opens Settings, like reopening from Finder. |
+| App shell | `LSUIElement` menu-bar app | No main window; notification-area (tray) icon via `Shell_NotifyIcon`. Single instance (named mutex); launching again opens Home, like reopening from Finder. |
 | Tray icon states | SF Symbols `waveform` / `waveform.circle.fill` / `ellipsis.circle` | Same three glyphs rasterised at runtime for the current DPI and taskbar theme (light/dark). |
 | Menu-bar popover | `NSPopover` sized before showing | Borderless WinUI window anchored above the tray, sized to its content before it is shown, closes when it loses focus. |
 | Global hotkey | `CGEventTap` (flagsChanged/keyDown/keyUp) | `WH_KEYBOARD_LL` hook on a dedicated thread with its own message loop (never blocked by UI). Same rules: modifier-only keys, combos swallowed, tap < 0.35 s → hands-free, Esc cancels, another *physical* key within 1 s cancels (injected keys are ignored, like the Logi Options+ case). Alt/Win hotkeys get a masking key so Windows doesn't open the menu bar / Start. |
@@ -54,7 +56,8 @@ failure handling. Only the system-integration layer and the look differ.
 | Permissions | Microphone (TCC), Accessibility | Microphone: read the privacy consent store (`ConsentStore\microphone` + `NonPackaged`), link to `ms-settings:privacy-microphone`. Accessibility: not required on Windows (row explains the one exception: apps running as administrator). |
 | Updates | `Updater`: download to `~/Library/Caches/OpenTypeless/Updates`, check SHA-256, unpack with `ditto`, check bundle ID, version and signature (same certificate as the running copy unless it's ad hoc); a helper script swaps `/Applications/OpenTypeless.app` after the app quits and reopens it | `Updater`: download to `%LOCALAPPDATA%\OpenTypeless\Updates`, check SHA-256, unzip, check the version of `OpenTypeless.dll`; the *new* `OpenTypeless.exe --apply-update <pid> <folder>` waits for the old copy to exit, renames the install folder to `.old`, copies itself in (renaming `.old` back if that fails) and starts the app. Picks the x64 or ARM64 zip by process architecture. The paths don't change, so the login entry and Start menu shortcut keep working. |
 | Launch at login | `SMAppService` | `HKCU\…\Run`; "needs approval" = disabled in Task Manager (`StartupApproved\Run`). Enabled once by default for installed (non-dev) builds. |
-| Settings window | `NSSplitViewController` + Liquid Glass sidebar | `NavigationView` sidebar on a Mica window with a custom title bar. Same six pages and contents. |
+| Settings window | `NSSplitViewController` + Liquid Glass sidebar | `NavigationView` sidebar on a Mica window with a custom title bar. Same seven pages (Home first) and contents. |
+| Home page | `HomePage.swift`, `UsageStore.swift` (SwiftUI `Grid` of stat tiles, heatmap in a `GeometryReader`) | `HomePage.cs`, `UsageStore.cs` (a two-by-two `Grid` of cards; the heatmap re-renders when its width fits a different number of weeks). Login launch: `--autostart` in the Run entry instead of the Apple event. |
 | Keyboard settings hint (Fn → emoji) | Banner on the Shortcut page | Windows equivalents: an AltGr notice when Right Alt is the hotkey, and a warning when a combination shadows a common `Ctrl+key` shortcut. |
 
 ## Hotkey on Windows

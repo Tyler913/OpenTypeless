@@ -125,6 +125,16 @@ public enum CostEstimator {
         return usage.cost
     }
 
+    /// All the speech-to-text requests of one dictation: their total cost, and how many had no price.
+    public static func transcriptions(_ usages: [RequestUsage], price: ModelPrice?, preferReported: Bool) -> (cost: Double, unpriced: Int) {
+        var total = 0.0
+        var unpriced = 0
+        for usage in usages {
+            if let cost = transcription(usage, price: price, preferReported: preferReported) { total += cost } else { unpriced += 1 }
+        }
+        return (total, unpriced)
+    }
+
     private static func fromTokens(_ usage: RequestUsage, _ price: ModelPrice) -> Double {
         let input = Double(usage.inputTokens ?? 0) * (price.inputPerMillion ?? 0)
         let output = Double(usage.outputTokens ?? 0) * (price.outputPerMillion ?? 0)
@@ -201,4 +211,53 @@ public struct PriceCatalog: Sendable, Equatable, Codable {
         guard let decoded = try? decoder.decode(PriceCatalog.self, from: jsonData) else { return nil }
         self = decoded
     }
+}
+
+/// How the Home page writes money, durations and counts.
+public enum UsageFormat {
+    /// Fixed-point with `digits` decimals, then trailing zeros dropped down to `minimumDigits`; "," groups thousands.
+    private static func format(_ value: Double, digits: Int, minimumDigits: Int? = nil, grouping: Bool = true) -> String {
+        var text = String(format: "%.\(digits)f", value)
+        if let minimumDigits, let dot = text.firstIndex(of: ".") {
+            while text.last == "0", text.distance(from: dot, to: text.endIndex) - 1 > minimumDigits { text.removeLast() }
+            if text.last == "." { text.removeLast() }
+        }
+        guard grouping else { return text }
+        let integer = text.prefix { $0 != "." }
+        let fraction = text.dropFirst(integer.count)
+        var grouped = ""
+        for (i, digit) in integer.enumerated() {
+            if i > 0, (integer.count - i) % 3 == 0 { grouped.append(",") }
+            grouped.append(digit)
+        }
+        return grouped + fraction
+    }
+
+    /// "$0", "< $0.0001", "$0.0042", "$0.034", "$1.20", "$1,234.50": enough digits to see small amounts.
+    public static func money(_ usd: Double) -> String {
+        if usd <= 0 { return "$0" }
+        if usd < 0.0001 { return "< $0.0001" }
+        let digits = usd < 0.01 ? 4 : usd < 1 ? 3 : 2
+        return "$" + format(usd, digits: digits)
+    }
+
+    /// A price per million tokens or per minute: "$0.75", "$0.006", "$15" (no rounding up to cents).
+    public static func rate(_ usd: Double) -> String {
+        "$" + (usd >= 1 ? format(usd, digits: 2, minimumDigits: 0) : format(usd, digits: 6, minimumDigits: 0, grouping: false))
+    }
+
+    /// "45 s", "12 min", "3 h 12 min", "26 h" (Chinese: "45 秒", "12 分钟", "3 小时 12 分钟").
+    public static func duration(_ seconds: Double) -> String {
+        let total = Int(max(0, seconds).rounded())
+        if total < 60 { return L("\(total) 秒", "\(total) s") }
+        let minutes = total / 60
+        if minutes < 60 { return L("\(minutes) 分钟", "\(minutes) min") }
+        let hours = minutes / 60
+        let rest = minutes % 60
+        if hours >= 24 || rest == 0 { return L("\(hours) 小时", "\(hours) h") }
+        return L("\(hours) 小时 \(rest) 分钟", "\(hours) h \(rest) min")
+    }
+
+    /// "12,345"
+    public static func count(_ value: Int) -> String { format(Double(value), digits: 0) }
 }

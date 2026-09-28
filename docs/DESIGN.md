@@ -81,6 +81,19 @@ A session found in `recording`/`processing` state at launch is marked failed-but
 
 Retention is a user setting: don't keep recordings, 1 day, 7 days, 1 month (default), 1 year, or forever. Recordings are about 1.9 MB per minute of 16 kHz WAV; transcripts are a few KB. When a finished dictation expires, its `audio.wav` is deleted, and the whole folder goes too once it is also outside the newest 200 dictations. Failed dictations are never expired, so they can always be retried. Expiry runs at launch, after every dictation, when the setting changes, and hourly.
 
+## Home page and usage accounting
+
+The Home page (`OpenTypeless/HomePage.swift`, the first sidebar page) shows words dictated, time saved, speaking speed, spend and a daily activity heatmap. The numbers come from `TypelessCore/UsageLedger.swift` and `Usage.swift`, which the Windows app ports line by line; `testdata/usage-cases.json` holds cases both test suites read, so the two apps count and price the same way.
+
+- **Words.** Every Han character and Japanese kana is a word; every run of letters or digits in other scripts is one word, with `'`, `-`, `.`, `,` joining a word only when a letter or digit follows ("don't", "e-mail", "3.5").
+- **Time saved** = the time typing the same words would take at the user's typing speed (100 wpm by default, set under General) − the time spent recording (pauses included), never below zero. **Speaking speed** = words ÷ recording minutes.
+- **Usage per request.** OpenRouter reports `usage` (tokens, audio seconds and the billed `cost` in USD) with every transcription and in the last chunk of every streamed completion. OpenAI-compatible servers are asked for stream usage with `stream_options.include_usage` (dropped like any other optional parameter if the server rejects it). When a server reports nothing, tokens are estimated from the text (one per CJK character, one per four other characters) and transcription is measured by the chunk's audio length.
+- **Cost.** OpenRouter requests count the `cost` OpenRouter reported. Other providers are priced from what the user entered under Models: USD per million input/output tokens for clean-up, USD per minute of audio (or per token when the server counts tokens) for speech-to-text. Requests that can't be priced are counted, and the Home page says how many. Every successful speech-to-text request counts (a retried chunk is billed again), plus the clean-up answer that was kept; the losing request of a hedged clean-up is cancelled after its first tokens and isn't counted.
+- **Price list.** `PriceCatalog` reads OpenRouter's public `/models` and `/models?output_modalities=transcription` lists (USD per token, stored per million; negative "varies" prices skipped), cached in `openrouter-prices.json` and refreshed when older than six hours (checked at launch, hourly, and when Home or Models opens). The Models page shows each OpenRouter model's current price.
+- **Ledger.** Per-day totals (words, dictations, recording seconds, speech-to-text cost, clean-up cost, unpriced requests) live in `usage.json`, keyed by the local date, so they outlive History's retention and deletions. A dictation's words are added once, when it first finishes (`counted` in `session.json`), dated by when it was recorded; costs are added whenever requests are made, dated today. On the first launch of a version with the ledger it is filled from the dictations History still has.
+- **Heatmap.** As many weeks as fit the page width (up to 53), starting on the locale's first weekday; empty days are grey and busy days take one of four shades of the accent colour by quartile of the days shown. Streaks count consecutive days with a dictation, still alive until today ends.
+- **Launch.** Opening the app by hand (or again from Finder / the Start menu) shows Home. A launch at login shows nothing unless **Show Home when opened at login** is on (off by default). macOS recognises a login launch from the open-application Apple event, or a launch within two minutes of the Dock starting; Windows from the `--autostart` argument of its Run entry.
+
 ## Updates
 
 `TypelessCore/UpdateCheck.swift` reads the repository's GitHub release list (no sign-in; the unauthenticated limit of 60 requests an hour is far above one check a day) and picks the newest published, non-prerelease release that carries this platform's zip. Releases are matched by the zip's file name, `OpenTypeless-<version>-macOS-arm64.zip`, not by tag, so a release may hold one app or both.
@@ -99,6 +112,6 @@ Releases are signed in CI with a stable self-signed certificate (`scripts/create
 ## UI
 
 - **Menu-bar app** (`LSUIElement`) with a popover. The popover is sized from its SwiftUI content *before* being shown; letting it resize while on screen made it re-anchor off-screen.
-- **Settings window:** an `NSSplitViewController` whose sidebar item gets the system Liquid Glass sidebar, with SwiftUI pages.
+- **Settings window:** an `NSSplitViewController` whose sidebar item gets the system Liquid Glass sidebar, with SwiftUI pages. Home comes first and is where the window opens.
 - **HUD:** a non-activating, click-through glass capsule that shows recording (level + timer), working, copied, or a short error.
 - **Localization:** inline `L("中文", "English")` strings, switchable at runtime without string tables.

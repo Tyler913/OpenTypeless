@@ -203,6 +203,29 @@ import Testing
     }
 }
 
+@Suite struct UsageFormatTests {
+    @Test func money() {
+        #expect(UsageFormat.money(0) == "$0")
+        #expect(UsageFormat.money(0.00004) == "< $0.0001")
+        #expect(UsageFormat.money(0.0042) == "$0.0042")
+        #expect(UsageFormat.money(0.0341) == "$0.034")
+        #expect(UsageFormat.money(1.2) == "$1.20")
+        #expect(UsageFormat.money(1234.5) == "$1,234.50")
+        #expect(UsageFormat.rate(0.75) == "$0.75")
+        #expect(UsageFormat.rate(0.006) == "$0.006")
+        #expect(UsageFormat.rate(15) == "$15")
+        #expect(UsageFormat.count(12345) == "12,345")
+    }
+
+    @Test func transcriptionsSumAndCountUnpriced() {
+        let usages = [RequestUsage(audioSeconds: 30, cost: 0.001), RequestUsage(audioSeconds: 30), RequestUsage(audioSeconds: 60, cost: 0.002)]
+        let reported = CostEstimator.transcriptions(usages, price: nil, preferReported: true)
+        #expect(abs(reported.cost - 0.003) < 1e-9 && reported.unpriced == 1)
+        let perMinute = CostEstimator.transcriptions(usages, price: ModelPrice(perMinute: 0.006), preferReported: false)
+        #expect(abs(perMinute.cost - 0.012) < 1e-9 && perMinute.unpriced == 0)
+    }
+}
+
 // These share MockOpenRouter.handler with the pipeline tests, so they must run in the same serialized suite.
 extension PipelineTests {
     @Test func transcriptionReportsUsageAndAudioLength() async throws {

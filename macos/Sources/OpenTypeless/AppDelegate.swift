@@ -14,6 +14,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: StatusPopover!
     private var cancellables: Set<AnyCancellable> = []
     private var menuLanguage: AppLanguage?
+    private var launchedAtLogin = false
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // The open-application event that says "login item" is only current while launching.
+        launchedAtLogin = LaunchAtLogin.wasLaunchedAtLogin()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setUpMainMenu()
@@ -49,6 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         controller.refreshModelInfo()
+        _ = UsageStore.shared // counts the dictations History already has, the first time
+        PriceStore.shared.refreshIfStale()
         LaunchAtLogin.enableByDefaultOnce()
         updater.canInstallNow = { [weak self] in self?.controller.state == .idle }
         updater.start()
@@ -60,12 +68,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow.show(page: .general)
         } else if !settings.isConfigured(settings.sttProvider) {
             settingsWindow.show(page: .providers)
+        } else if !(launchedAtLogin || LaunchAtLogin.wasLaunchedAtLogin()) || settings.showHomeAtLogin {
+            // A manual launch opens Home; starting at login stays in the menu bar unless the user asked for Home then too.
+            settingsWindow.show(page: .home)
         }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        // Opening the app again from Finder/Spotlight shows the settings.
-        settingsWindow.show()
+        // Opening the app again from Finder/Spotlight shows Home.
+        settingsWindow.show(page: .home)
         return false
     }
 

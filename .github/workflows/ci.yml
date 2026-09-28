@@ -2,6 +2,7 @@
 #
 #   macos/**     macOS build: tests, then the app zip
 #   windows/**   Windows build: tests, then the x64 and ARM64 zips
+#   testdata/**  both: the test cases both apps' test suites read, so they count and price the same way
 #
 # Changes to shared files only (docs/, eval/, README.md) build nothing. A change to a workflow file builds
 # the app it belongs to; a change to this file builds both.
@@ -42,10 +43,12 @@ jobs:
           filters: |
             macos:
               - 'macos/**'
+              - 'testdata/**'
               - '.github/workflows/macos.yml'
               - '.github/workflows/ci.yml'
             windows:
               - 'windows/**'
+              - 'testdata/**'
               - '.gitattributes'
               - '.github/workflows/windows.yml'
               - '.github/workflows/ci.yml'

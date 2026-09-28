@@ -1,0 +1,11 @@
+Target dependency graph (4 targets)
+Target 'AllIncludingTests' in project 'Aggregate'
+➜ Explicit dependency on target 'TypelessCoreTests-product' in project 'OpenTypeless'
+➜ Dependency on target 'TypelessCoreTests-product' in project 'OpenTypeless' via transitive dependency through 'TypelessCoreTests-test-runner'
+➜ Explicit dependency on target 'OpenTypeless-product' in project 'OpenTypeless'
+➜ Explicit dependency on target 'TypelessCore' in project 'OpenTypeless'
+Target 'OpenTypeless-product' in project 'OpenTypeless'
+➜ Explicit dependency on target 'TypelessCore' in project 'OpenTypeless'
+Target 'TypelessCoreTests-product' in project 'OpenTypeless'
+➜ Explicit dependency on target 'TypelessCore' in project 'OpenTypeless'
+Target 'TypelessCore' in project 'OpenTypeless' (no dependencies)

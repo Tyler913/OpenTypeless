@@ -1,0 +1,111 @@
+{
+  "" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless-primary.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless-primary.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless-primary.dia",
+    "emit-module-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless-primary-emit-module.dia",
+    "pch" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless-primary.swiftdeps"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/AppDelegate.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/AppDelegate.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/AppDelegate.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/AppDelegate.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/AudioRecorder.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/AudioRecorder.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/AudioRecorder.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/AudioRecorder.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/CLI.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/CLI.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/CLI.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/CLI.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/DesignSystem.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/DesignSystem.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/DesignSystem.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/DesignSystem.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/EditWatcher.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/EditWatcher.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/EditWatcher.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/EditWatcher.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/FocusProbe.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/FocusProbe.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/FocusProbe.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/FocusProbe.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/HUD.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/HUD.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/HUD.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/HUD.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/History.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/History.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/History.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/History.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/Hotkey.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/Hotkey.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/Hotkey.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/Hotkey.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/MenuPopover.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/MenuPopover.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/MenuPopover.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/MenuPopover.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/Permissions.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/Permissions.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/Permissions.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/Permissions.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/PolishEval.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/PolishEval.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/PolishEval.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/PolishEval.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/SessionController.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/SessionController.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/SessionController.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/SessionController.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/Settings.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/Settings.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/Settings.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/Settings.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/SettingsPages.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/SettingsPages.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/SettingsPages.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/SettingsPages.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/SettingsWindow.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/SettingsWindow.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/SettingsWindow.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/SettingsWindow.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/StatusPopover.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/StatusPopover.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/StatusPopover.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/StatusPopover.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/TextInserter.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/TextInserter.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/TextInserter.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/TextInserter.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/UISnapshots.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/UISnapshots.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/UISnapshots.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/UISnapshots.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/main.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/main.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/main.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/main.o"
+  }
+}

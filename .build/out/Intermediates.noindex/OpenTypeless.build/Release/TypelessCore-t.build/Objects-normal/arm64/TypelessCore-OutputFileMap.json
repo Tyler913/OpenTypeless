@@ -1,0 +1,76 @@
+{
+  "" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TypelessCore-primary.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TypelessCore-primary.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TypelessCore-primary.dia",
+    "emit-module-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TypelessCore-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TypelessCore-primary-emit-module.dia",
+    "pch" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TypelessCore-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TypelessCore-primary.swiftdeps"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/APIClient.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/APIClient.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/APIClient.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/APIClient.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Chunker.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Chunker.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Chunker.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Chunker.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/CorrectionLearner.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/CorrectionLearner.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/CorrectionLearner.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/CorrectionLearner.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/HedgedPolish.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/HedgedPolish.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/HedgedPolish.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/HedgedPolish.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Localization.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Localization.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Localization.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Localization.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/PolishClient.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/PolishClient.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/PolishClient.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/PolishClient.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/PolishEvaluation.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/PolishEvaluation.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/PolishEvaluation.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/PolishEvaluation.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Prompts.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Prompts.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Prompts.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Prompts.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Providers.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Providers.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Providers.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Providers.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Retry.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Retry.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Retry.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/Retry.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/TranscriptJoiner.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TranscriptJoiner.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TranscriptJoiner.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TranscriptJoiner.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/TranscriptionPipeline.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TranscriptionPipeline.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TranscriptionPipeline.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/TranscriptionPipeline.o"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/WAV.swift" : {
+    "index-unit-output-path" : "/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/WAV.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/WAV.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/TypelessCore-t.build/Objects-normal/arm64/WAV.o"
+  }
+}

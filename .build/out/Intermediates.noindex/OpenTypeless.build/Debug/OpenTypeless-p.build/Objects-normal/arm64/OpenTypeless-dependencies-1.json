@@ -1,0 +1,770 @@
+[
+  {
+    "isFramework" : true,
+    "moduleName" : "AVFAudio",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/AVFAudio-AILAOD3IRXP0.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "AVFoundation",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/AVFoundation-2R7WKI8T5N6PF.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "Accessibility",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Accessibility-3GJPEFT5FEH1.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "AppKit",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/AppKit-IANGJZLTJYK2.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "AudioToolbox",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/AudioToolbox-26D6F2HHFR6W2.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "ColorSync",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/ColorSync-ARSPAMEEI9DF.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "Combine",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Combine-QPR7S42X02AV.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "CoreAudio",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreAudio-36ACYV7UBFUPK.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "CoreData",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreData-19PJU4AR66WDR.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "CoreFoundation",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreFoundation-A87NZSK4NSJ6.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "CoreGraphics",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreGraphics-TG7ZSSCNFJO0.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "CoreImage",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreImage-37Y7X8CN21K1.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "CoreMIDI",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreMIDI-2NV3QJU5GCYUQ.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "CoreMedia",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreMedia-36EC5UV0P3UC2.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "CoreText",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreText-2H6R11C7WUEOV.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "CoreTransferable",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreTransferable-22W8CQ8N24RJS.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "CoreVideo",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreVideo-1COU3GY4QSYAM.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "Darwin",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Darwin-2YJC63AZN1BGF.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "DataDetection",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/DataDetection-1G6IXVV2J0J5O.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "DeveloperToolsSupport",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/DeveloperToolsSupport-1DGBJJ8O53LPR.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "Dispatch",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Dispatch-TXB9WFB0STNA.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "Foundation",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Foundation-3LLT8A6VUCS2W.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "IOKit",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/IOKit-NGZDTLKO6EG.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "ImageIO",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/ImageIO-1MHLBS2YEYMUS.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "MediaToolbox",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/MediaToolbox-UT39GBFMFVN.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "Metal",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Metal-Y01NX1KFL7YY.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "OSLog",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/OSLog-31579C1PF4M39.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "ObjectiveC",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/ObjectiveC-1FZ8TNBPTS8DN.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "Observation",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Observation-1QLNJ8914WV0R.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "QuartzCore",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/QuartzCore-1F2FR5UIQSEUH.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "Spatial",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Spatial-3CSAADEIKZV4.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "Swift",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Swift-314LKB00D5XNR.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "SwiftOnoneSupport",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/SwiftOnoneSupport-1IFMLR6CQB8IL.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "SwiftUI",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/SwiftUI-3V4WNVG5AEBH8.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "SwiftUICore",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/SwiftUICore-27R4XOKCC99KQ.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "Symbols",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Symbols-FPZOMJCFSMPC.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "Synchronization",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Synchronization-20ZFVYS89HO50.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "System",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/System-ZGU0NIZBMHC4.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "TypelessCore",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/Products\/Debug\/TypelessCore.swiftmodule\/arm64-apple-macos.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "UniformTypeIdentifiers",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/UniformTypeIdentifiers-24BLM9Z153HEU.swiftmodule"
+  },
+  {
+    "isFramework" : true,
+    "moduleName" : "VideoToolbox",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/VideoToolbox-33QFY6BKP7VEF.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "XPC",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/XPC-1LKVA6YDIUFZG.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "_Builtin_float",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_float-8WW6HQZF8WIR.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "_Concurrency",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_Concurrency-2ZGGBML39KQ8S.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "_DarwinFoundation1",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation1-2WRAZRT3MJOXN.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "_DarwinFoundation2",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation2-1ACIF6SOPRG4O.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "_DarwinFoundation3",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation3-TK11QZULSS2L.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "_StringProcessing",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_StringProcessing-4L6Q5M22LF61.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "os",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/os-MLSU2UKOUTSX.swiftmodule"
+  },
+  {
+    "isFramework" : false,
+    "moduleName" : "simd",
+    "modulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/simd-241MKNX6B8UHR.swiftmodule"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/AVFAudio.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/AVFAudio-1K60HNKYPE486ZTY4FY0XQVF4.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "AVFAudio"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/AVFoundation.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/AVFoundation-3ESAZIGW5O6BHIVB0VTCI4L5O.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "AVFoundation"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/Accessibility.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Accessibility-D0M6CILTCLP46507RXJRMJ0JW.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Accessibility"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/AppKit.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/AppKit-8CYXT4EH4CNBYV08N0RZI7CPQ.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "AppKit"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/ApplicationServices.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/ApplicationServices-ECG1B91J424CXN9MGR47KYHMH.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "ApplicationServices"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/AudioToolbox.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/AudioToolbox-AOHD32WXUG6XJGFSST4EQCL5M.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "AudioToolbox"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CFNetwork.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CFNetwork-B2O66KA3ZCNY0ZTP0L8KFHQXB.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CFNetwork"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/cups.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CUPS-A4KRR1PIQS3V3FEHPEM9DQ6W6.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CUPS"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/Carbon.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Carbon-1QKDHTSIMOZSM6Y5KWRVUW90L.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Carbon"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/ColorSync.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/ColorSync-7YILROR8EQRFV7AMIPG4EZ9PZ.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "ColorSync"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreAudio.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreAudio-2VGVBC5RHDZ2EQGMWCI0G6MWG.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreAudio"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreAudioTypes.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreAudioTypes-ESGL86JHM17TGPKMZLW9UHXDU.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreAudioTypes"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreData.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreData-DBSQMD3CHLZEDX22CC9T9YIEZ.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreData"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreFoundation.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreFoundation-AI617PSDQPM38JFC0QYRZ1M74.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreFoundation"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreGraphics.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreGraphics-5W72Y717CB0D1VTS7SC4FBZPW.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreGraphics"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreImage.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreImage-ANIAYYHDC09F6YJXDRFDRW71S.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreImage"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreMIDI.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreMIDI-9P01V8HT45W2VD9WCP6KU2SQA.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreMIDI"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreMedia.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreMedia-12WNA0NYL29UXHY155GS85VJG.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreMedia"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreServices.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreServices-AYE8ND76JH7UHD7YCEMOJST4K.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreServices"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreText.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreText-9JC00GYKIHS1HM9A62QQTY9QD.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreText"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreTransferable.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreTransferable-6HQN7KPQ2LRP1L91M4BPIOIL0.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreTransferable"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/CoreVideo.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/CoreVideo-19FJJ8IJ28UCG13TR068EIL9T.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "CoreVideo"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/Darwin.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Darwin-2J5UZ6F1JUU22EDUIEK43NJWT.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Darwin"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/DataDetection.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/DataDetection-112N0T2BDPW6ULSXQRIX2HIRN.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "DataDetection"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/DeveloperToolsSupport.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/DeveloperToolsSupport-D0FYQ8D7RD065KLBNNWV3JY3R.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "DeveloperToolsSupport"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/DiskArbitration.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/DiskArbitration-DTN06CFBFGQ5NX0TOIZT35PH9.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "DiskArbitration"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/dispatch.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Dispatch-DZKLWI9GPO683BE1NV6QVKT17.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Dispatch"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/Foundation.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Foundation-1RYIH2MDFLQ7M859QCA8W258.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Foundation"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/IOKit.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/IOKit-1QWNEHDLTWTDLPFIOP3S844X.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "IOKit"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/IOSurface.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/IOSurface-734SMO8WNT9MHIE1SCGD5Y324.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "IOSurface"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/ImageIO.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/ImageIO-CNBRSGA4RX0X66IM7AXAFSKGO.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "ImageIO"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinBasic.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/MachO-B5F3M5A1B1JVQNZTH6OR8VH57.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "MachO"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/MediaToolbox.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/MediaToolbox-E79097UYNE1TPHINRD0YCMMSV.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "MediaToolbox"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/Metal.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Metal-74RBYA9UBZB2VHUOXL2JEZY69.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Metal"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/OSLog.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/OSLog-AWH3N7UL5U2DTCE2OBOMEMEFJ.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "OSLog"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/ObjectiveC.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/ObjectiveC-8TDAQQQ4RNO35RVAX3XX9V245.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "ObjectiveC"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/OpenGL.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/OpenGL-4DYMKS4DGFXZY2NZMVQIE2EQL.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "OpenGL"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/QuartzCore.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/QuartzCore-9YDPL1UVQCJLB6SO0BRRZ72VV.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "QuartzCore"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/Security.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Security-DK717QMUZ7W312HYHSLMUE0YQ.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Security"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/ServiceManagement.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/ServiceManagement-E7LAONYGD0IOWD6MSU7K5DVAD.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "ServiceManagement"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/Spatial\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Spatial-889WSRA27PU3V2VRQ3O4X7O0N.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Spatial"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/lib\/swift\/shims\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/SwiftShims-6SRKK6JH18R6TB171MDQCN0X9.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "SwiftShims"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/SwiftUI.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/SwiftUI-EV3H30UZ0V51QCGI2LITR5UZJ.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "SwiftUI"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/SwiftUICore.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/SwiftUICore-7H5J7KS9SA3POCK2OLYCTZDCD.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "SwiftUICore"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/Symbols.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/Symbols-3110OUAPR1VIMPIYMB6O0EA9Q.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "Symbols"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/UniformTypeIdentifiers.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/UniformTypeIdentifiers-2DTN4TE1FG2M6PF2VOOWXLJZ4.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "UniformTypeIdentifiers"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/System\/Library\/Frameworks\/VideoToolbox.framework\/Modules\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/VideoToolbox-D25Z2BWTL70X6X2H1ZDI5DYD2.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "VideoToolbox"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/xpc.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/XPC-BMYDLPHPC9A3KUVFHWDKX73N.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "XPC"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation1.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_AvailabilityInternal-D81JZ5PAVVJ5J6J38Q3TLG8MI.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_AvailabilityInternal"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_float-DMI5XIIB64ZC25CIDJYOIYNUM.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_float"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_intrinsics-CHH1GELTF1K99GGFU32YYZTW1.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_intrinsics"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_inttypes-4L072M6EIRQKPSTDL674JHM79.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_inttypes"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_limits-3AV2HVS3FA93J79T72TRSGJZE.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_limits"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdarg-6S2A44QXJ3CIU2ZNHO17GHLNW.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_stdarg"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdatomic-AHRPGR722NIJJIN52UHU91EZO.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_stdatomic"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdbool-9T2AIDC7RLHB6171OJMY8UDKS.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_stdbool"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stddef-CFTW9696B67J7NGKQAR2U0I4J.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_stddef"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_stdint-1LIMQZFN9GYY00L6M2F5DWINC.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_stdint"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_Builtin_tgmath-6Z7P770SV90FW0VW347JU8UDS.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_Builtin_tgmath"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation1.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation1-5AJV6Q5C1RDVKAX79BAX8F076.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_DarwinFoundation1"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation2.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation2-BCYZV87BMQRLZGR2YLL1PEMKF.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_DarwinFoundation2"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation3.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_DarwinFoundation3-MGFCPSRNO1RE34D05OTN5GQ7.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_DarwinFoundation3"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/lib\/swift\/shims\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/_SwiftConcurrencyShims-7T6EO10ZU2KISFODQVQZT38Z3.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "_SwiftConcurrencyShims"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/launch.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/launch-F0N7YFOOXMUT9WT9XNVFG8P9R.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "launch"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/libDER\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/libDER-A9X2PPV274YWYN801BYGQS8RA.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "libDER"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/libkern.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/libkern-CIS677A7M4NBU0XDCUOIZ7SEE.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "libkern"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/os.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/os-3W2TZIFW1MXLT82FC077EQZ9N.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "os"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/os.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/os_object-4SFCIPH98RU3R4OG3IB8GCQ2E.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "os_object"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/os.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/os_workgroup-4XQWSDNB0L7OC8CAZVK850BSU.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "os_workgroup"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/ptrauth-4QFGX8W99SN9C9D94EIK5C0JT.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "ptrauth"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/usr\/lib\/clang\/21\/include\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/ptrcheck-AV1GZUKK8KYX1GPLZ3EE868R2.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "ptrcheck"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/simd\/module.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/simd-70Z6F5VLIQMMOXR7ZO496CGLN.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "simd"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/c_standard_library.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/string_h-9AA2DH18Z2RVGWLRIO5RZYDZS.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "string_h"
+  },
+  {
+    "clangModuleMapPath" : "\/Library\/Developer\/CommandLineTools\/SDKs\/MacOSX27.0.sdk\/usr\/include\/DarwinFoundation2.modulemap",
+    "clangModulePath" : "\/Users\/tyler\/Documents\/Development\/OpenTypeless\/.build\/out\/SDKExplicitPrecompiledModules\/sys_types-9R6ARMRWBBNKKSSD7YE0FA59.pcm",
+    "isBridgingHeaderDependency" : false,
+    "isFramework" : false,
+    "moduleName" : "sys_types"
+  }
+]

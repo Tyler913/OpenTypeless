@@ -1,0 +1,11 @@
+{
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/OpenTypeless/AppDelegate.swift" : {
+    "abi-baseline-json" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless.abi.json",
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless-primary.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless-primary.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless-primary.dia",
+    "swiftdoc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless.swiftdoc",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless.swiftmodule",
+    "swiftsourceinfo" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Release/OpenTypeless-p.build/Objects-normal/arm64/OpenTypeless.swiftsourceinfo"
+  }
+}

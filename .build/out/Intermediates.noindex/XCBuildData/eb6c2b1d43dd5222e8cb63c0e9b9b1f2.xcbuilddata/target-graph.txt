@@ -1,0 +1,4 @@
+Target dependency graph (2 targets)
+Target 'OpenTypeless-product' in project 'OpenTypeless'
+➜ Explicit dependency on target 'TypelessCore' in project 'OpenTypeless'
+Target 'TypelessCore' in project 'OpenTypeless' (no dependencies)

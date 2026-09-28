@@ -1,0 +1,139 @@
+{
+  "" : {
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TypelessCore-primary.dia",
+    "emit-module-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TypelessCore-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TypelessCore-primary-emit-module.dia",
+    "pch" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TypelessCore-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TypelessCore-primary.swiftdeps"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/APIClient.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/APIClient.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/APIClient.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/APIClient.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/APIClient.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/APIClient.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/APIClient.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/APIClient.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/APIClient~partial.swiftmodule"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Chunker.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Chunker.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Chunker.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Chunker.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Chunker.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Chunker.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Chunker.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Chunker.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Chunker~partial.swiftmodule"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/CorrectionLearner.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/CorrectionLearner.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/CorrectionLearner.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/CorrectionLearner.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/CorrectionLearner.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/CorrectionLearner.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/CorrectionLearner.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/CorrectionLearner.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/CorrectionLearner~partial.swiftmodule"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/HedgedPolish.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/HedgedPolish.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/HedgedPolish.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/HedgedPolish.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/HedgedPolish.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/HedgedPolish.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/HedgedPolish.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/HedgedPolish.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/HedgedPolish~partial.swiftmodule"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Localization.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Localization.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Localization.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Localization.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Localization.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Localization.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Localization.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Localization.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Localization~partial.swiftmodule"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/PolishClient.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishClient.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishClient.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishClient.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishClient.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishClient.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishClient.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishClient.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishClient~partial.swiftmodule"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/PolishEvaluation.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishEvaluation.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishEvaluation.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishEvaluation.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishEvaluation.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishEvaluation.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishEvaluation.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishEvaluation.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/PolishEvaluation~partial.swiftmodule"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Prompts.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Prompts.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Prompts.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Prompts.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Prompts.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Prompts.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Prompts.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Prompts.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Prompts~partial.swiftmodule"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Providers.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Providers.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Providers.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Providers.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Providers.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Providers.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Providers.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Providers.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Providers~partial.swiftmodule"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Retry.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Retry.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Retry.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Retry.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Retry.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Retry.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Retry.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Retry.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/Retry~partial.swiftmodule"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/TranscriptJoiner.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptJoiner.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptJoiner.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptJoiner.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptJoiner.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptJoiner.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptJoiner.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptJoiner.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptJoiner~partial.swiftmodule"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/TranscriptionPipeline.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptionPipeline.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptionPipeline.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptionPipeline.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptionPipeline.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptionPipeline.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptionPipeline.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptionPipeline.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/TranscriptionPipeline~partial.swiftmodule"
+  },
+  "/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/WAV.swift" : {
+    "const-values" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/WAV.swiftconstvalues",
+    "dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/WAV.d",
+    "diagnostics" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/WAV.dia",
+    "index-unit-output-path" : "/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/WAV.o",
+    "llvm-bc" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/WAV.bc",
+    "object" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/WAV.o",
+    "swift-dependencies" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/WAV.swiftdeps",
+    "swiftmodule" : "/Users/tyler/Documents/Development/OpenTypeless/.build/out/Intermediates.noindex/OpenTypeless.build/Debug/TypelessCore-t.build/Objects-normal/arm64/WAV~partial.swiftmodule"
+  }
+}

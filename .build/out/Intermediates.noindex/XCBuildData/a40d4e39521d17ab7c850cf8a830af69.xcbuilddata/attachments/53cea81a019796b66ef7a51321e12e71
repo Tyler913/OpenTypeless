@@ -1,0 +1,13 @@
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/APIClient.swift
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Chunker.swift
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/CorrectionLearner.swift
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/HedgedPolish.swift
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Localization.swift
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/PolishClient.swift
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/PolishEvaluation.swift
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Prompts.swift
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Providers.swift
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/Retry.swift
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/TranscriptJoiner.swift
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/TranscriptionPipeline.swift
+/Users/tyler/Documents/Development/OpenTypeless/Sources/TypelessCore/WAV.swift

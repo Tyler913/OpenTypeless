@@ -1,0 +1,7 @@
+Target dependency graph (3 targets)
+Target 'AllExcludingTests' in project 'Aggregate'
+➜ Explicit dependency on target 'OpenTypeless-product' in project 'OpenTypeless'
+➜ Explicit dependency on target 'TypelessCore' in project 'OpenTypeless'
+Target 'OpenTypeless-product' in project 'OpenTypeless'
+➜ Explicit dependency on target 'TypelessCore' in project 'OpenTypeless'
+Target 'TypelessCore' in project 'OpenTypeless' (no dependencies)

@@ -68,7 +68,8 @@ public static class PolishEval
                 throw ApiException.BadResponse("required: --eval-polish CASES --models IDS --out PRIVATE_PATH; OpenRouter only");
             }
             // All detailed artifacts must live outside the working repository, because they can contain your text.
-            var repository = Path.GetFullPath(Path.Combine(SourceDirectory(), "..", ".."));
+            // This file is windows/src/OpenTypeless.Cli/PolishEval.cs, three folders below the repository root.
+            var repository = Path.GetFullPath(Path.Combine(SourceDirectory(), "..", "..", ".."));
             foreach (var path in new[] { outPath, Value("--budget-ledger") }.OfType<string>())
             {
                 var resolved = ResolveLinks(Path.GetFullPath(path));

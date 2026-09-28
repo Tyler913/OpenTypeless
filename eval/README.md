@@ -1,6 +1,6 @@
 # Clean-up evaluation
 
-The clean-up prompt lives in `Sources/TypelessCore/Prompts.swift`. Don't tune it by feel: change it, run these sets, and compare.
+The clean-up prompt lives in `macos/Sources/TypelessCore/Prompts.swift` and `windows/src/TypelessCore/Prompts.cs`. The two are byte-identical, so these sets and their results apply to both apps: change the prompt in both places, run the sets on either platform, and compare. Don't tune it by feel.
 
 ## Test sets
 
@@ -24,10 +24,14 @@ Automatic checks aren't the whole story: always read the outputs for long, real 
 
 ## Running
 
+Run from the repository root.
+
+macOS:
+
 ```bash
-swift build
+swift build --package-path macos
 mkdir -p /tmp/opentypeless-eval
-.build/debug/OpenTypeless --eval-polish eval/polish-holdout.json \
+macos/.build/debug/OpenTypeless --eval-polish eval/polish-holdout.json \
     --models google/gemini-3.8-flash,qwen/qwen3.7-flash \
     --rounds 3 \
     --key-from-keychain \
@@ -35,12 +39,25 @@ mkdir -p /tmp/opentypeless-eval
     --out /tmp/opentypeless-eval/holdout.json
 ```
 
-- **API key:** `--key-from-keychain` uses the OpenRouter key saved by the app; otherwise set `OPENROUTER_API_KEY`. Only OpenRouter is supported.
+Windows:
+
+```powershell
+dotnet build windows\src\OpenTypeless.Cli -p:Platform=x64
+New-Item -ItemType Directory -Force $env:TEMP\opentypeless-eval | Out-Null
+windows\src\OpenTypeless.Cli\bin\x64\Debug\net10.0-windows10.0.22621.0\OpenTypeless.Cli.exe --eval-polish eval\polish-holdout.json `
+    --models google/gemini-3.8-flash,qwen/qwen3.7-flash `
+    --rounds 3 `
+    --key-from-credential-store `
+    --budget-ledger $env:TEMP\opentypeless-eval\budget.json --budget-usd 1 `
+    --out $env:TEMP\opentypeless-eval\holdout.json
+```
+
+- **API key:** `--key-from-keychain` (on Windows also `--key-from-credential-store`) uses the OpenRouter key saved by the app; otherwise set `OPENROUTER_API_KEY`. Only OpenRouter is supported.
 - **Output location:** `--out` and `--budget-ledger` must be outside the repository, because outputs can contain your text.
 - **Routing:** requests are identical to the app's, same body and same provider routing, so latency and reliability match real use. Add `--provider-tag <tag> --endpoint-catalog <file>` to benchmark a single upstream provider.
 - **Budget:** every request is costed from OpenRouter's `usage.cost` (falling back to the generation API), recorded in the ledger, and checked against `--budget-usd` before it is sent. Use `--dry-run` to see the request count and a conservative cost bound without spending anything.
 - **Prompt experiments:** `--prompt-file new-prompt.txt` replaces the built-in prompt for the run.
-- **Routing experiments:** `--provider-routing '{"sort":"latency"}'` replaces OpenRouter's `provider` object for the run.
+- **Routing experiments:** `--provider-routing '{"sort":"latency"}'` replaces OpenRouter's `provider` object for the run (in PowerShell, escape the inner quotes: `'{\"sort\":\"latency\"}'`).
 - **Latency:** each attempt records time to first token and total time; the summary prints p50/p90 for both.
 - **Rounds:** models are non-deterministic, so use `--rounds 3` before drawing conclusions. Models are interleaved per case and round.
 
@@ -48,7 +65,7 @@ Stderr shows a line per request (pass/fail, latency, running cost); the `--out` 
 
 ## Reference numbers (Sep 2026)
 
-Holdout set, 2 rounds, current prompt, requests sent from the client exactly as the app sends them. First-token and total times are client-side.
+Measured with the macOS app on the holdout set, 2 rounds, current prompt, requests sent from the client exactly as the app sends them (the Windows app sends the same requests). First-token and total times are client-side.
 
 | Model | Checks passed | First token p50 / p90 | Total p50 / p90 | Cost per request |
 |---|---|---|---|---|
@@ -61,6 +78,6 @@ Holdout set, 2 rounds, current prompt, requests sent from the client exactly as 
 
 ¹ A temporary slowdown at its provider; two reruns an hour later had p90 0.25–0.27 s.
 
-The mean first-token time across these models is 0.85 s, and OpenRouter's own per-provider P50 latency for flash models is about 1 s. That is where the fixed 0.8 s hedge delay (`HedgedPolish.defaultHedgeDelay`) comes from.
+The mean first-token time across these models is 0.85 s, and OpenRouter's own per-provider P50 latency for flash models is about 1 s. That is where the fixed 0.8 s hedge delay (`HedgedPolish.defaultHedgeDelay` in Swift, `HedgedPolish.DefaultHedgeDelay` in C#) comes from.
 
 Prompt change, gemini-3.1-flash-lite: the minimal-edit prompt raised English kept on 63 real mixed-language dictations from 0.65 to 0.96, and similarity from 0.54 to 0.82. Holdout checks went from 58/69 to 46/46, dev checks from 44/54 to 36/36.

@@ -87,6 +87,17 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Package   # writes d
 `build.ps1` keeps exactly one installed copy: it stops the running app, replaces the install folder, refreshes the
 Start menu shortcut and launches the new build. Add `-Arch arm64` for Windows on ARM.
 
+### Build in the cloud (from any computer)
+
+WinUI 3 only compiles on Windows, so GitHub Actions builds the app on a Windows runner
+([`.github/workflows/windows.yml`](.github/workflows/windows.yml)). No Windows PC is needed to develop this branch:
+
+- **Every push or pull request to `windows`** runs the tests and builds both `x64` and `arm64` zips. Download them
+  from the run's **Artifacts** section on the Actions tab.
+- **Pushing a tag like `1.0.1-windows`** also creates a **draft** GitHub Release with both zips attached. Review it
+  and publish it by hand; it is never marked as the repository's latest release, which stays the macOS one.
+- **Actions → Windows build → Run workflow** starts a build manually.
+
 ## First run
 
 1. Add an API key under **Settings → Providers**.

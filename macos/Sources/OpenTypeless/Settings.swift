@@ -28,6 +28,8 @@ final class AppSettings: ObservableObject {
     @AppStorage("restoreClipboard") var restoreClipboard: Bool = true
     @AppStorage("maxRecordingMinutes") var maxRecordingMinutes: Int = 20
     @AppStorage("historyRetention") var historyRetention: HistoryRetention = .month
+    /// Look for a new release once a day and download it in the background (see Updater).
+    @AppStorage("autoCheckUpdates") var autoCheckUpdates: Bool = true
 
     /// Learn vocabulary from the fixes the user makes to dictated text (see EditWatcher).
     @AppStorage("learnFromEdits") var learnFromEdits: Bool = true

@@ -50,18 +50,59 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var hasAudio: Bool { FileManager.default.fileExists(atPath: audioURL.path) }
 }
 
-/// Every dictation is saved (audio + transcripts) so nothing is ever lost to a failure.
+/// How long finished dictations are kept. The recording is the big part (about 1.9 MB per minute
+/// of 16 kHz WAV); the text is a few KB.
+enum HistoryRetention: String, CaseIterable, Identifiable {
+    case none, day, week, month, year, forever
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .none: return L("不保存录音", "Don't keep recordings")
+        case .day: return L("保存 1 天", "1 day")
+        case .week: return L("保存 7 天", "7 days")
+        case .month: return L("保存 1 个月", "1 month")
+        case .year: return L("保存 1 年", "1 year")
+        case .forever: return L("永不删除", "Forever")
+        }
+    }
+
+    /// nil = never expires.
+    var maxAge: TimeInterval? {
+        let day: TimeInterval = 24 * 60 * 60
+        switch self {
+        case .none: return 0
+        case .day: return day
+        case .week: return 7 * day
+        case .month: return 30 * day
+        case .year: return 365 * day
+        case .forever: return nil
+        }
+    }
+}
+
+/// Every dictation is saved (audio + transcripts) so nothing is ever lost to a failure. Finished
+/// dictations older than the retention setting lose their recording; their text stays in History
+/// among the newest `minimumTextRecords`, and older ones are removed entirely. Failed dictations
+/// keep everything until retried or deleted, so they can always be re-sent.
 @MainActor
 final class HistoryStore: ObservableObject {
     static let shared = HistoryStore()
 
     @Published private(set) var records: [DictationRecord] = []
+    /// Bumped whenever files are written or removed, so views can refresh the storage figure.
+    @Published private(set) var changeCount = 0
 
-    private let keepRecords = 200
-    private let keepAudioRecords = 30
+    private let minimumTextRecords = 200
+    private var retentionTimer: Timer?
 
     private init() {
         load()
+        // Expiry is by age, so a menu-bar app that runs for days has to check on its own.
+        retentionTimer = Timer.scheduledTimer(withTimeInterval: 60 * 60, repeats: true) { _ in
+            Task { @MainActor in HistoryStore.shared.applyRetention() }
+        }
     }
 
     func create() -> DictationRecord {
@@ -82,11 +123,14 @@ final class HistoryStore: ObservableObject {
             records.insert(record, at: 0)
         }
         save(record)
+        changeCount += 1
+        if record.status == .done || record.status == .polishFailed { applyRetention() }
     }
 
     func delete(_ record: DictationRecord) {
         records.removeAll { $0.id == record.id }
         try? FileManager.default.removeItem(at: record.folder)
+        changeCount += 1
     }
 
     private func save(_ record: DictationRecord) {
@@ -115,17 +159,39 @@ final class HistoryStore: ObservableObject {
             save(loaded[index])
         }
         records = loaded
-        prune()
+        applyRetention()
     }
 
-    private func prune() {
+    /// Deletes what the retention setting says has expired.
+    func applyRetention() {
+        let retention = AppSettings.shared.historyRetention
+        let now = Date()
+        var kept: [DictationRecord] = []
         for (index, record) in records.enumerated() {
-            if index >= keepRecords {
+            let finished = record.status == .done || record.status == .polishFailed
+            let expired = retention.maxAge.map { now.timeIntervalSince(record.date) >= $0 } ?? false
+            guard finished, expired else { kept.append(record); continue }
+            if index >= minimumTextRecords {
                 try? FileManager.default.removeItem(at: record.folder)
-            } else if index >= keepAudioRecords, record.status == .done || record.status == .polishFailed {
-                try? FileManager.default.removeItem(at: record.audioURL)
+            } else {
+                if record.hasAudio { try? FileManager.default.removeItem(at: record.audioURL) }
+                kept.append(record)
             }
         }
-        if records.count > keepRecords { records.removeLast(records.count - keepRecords) }
+        records = kept
+        changeCount += 1
+    }
+
+    /// Bytes used by every saved dictation (recordings and transcripts).
+    nonisolated static func storageBytes() -> Int64 {
+        let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .isRegularFileKey]
+        guard let files = FileManager.default.enumerator(at: AppPaths.sessions, includingPropertiesForKeys: Array(keys))
+        else { return 0 }
+        var total: Int64 = 0
+        for case let url as URL in files {
+            guard let values = try? url.resourceValues(forKeys: keys), values.isRegularFile == true else { continue }
+            total += Int64(values.totalFileAllocatedSize ?? 0)
+        }
+        return total
     }
 }

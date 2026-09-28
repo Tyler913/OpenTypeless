@@ -734,11 +734,28 @@ struct StylePage: View {
 
 struct HistoryPage: View {
     @ObservedObject var history: HistoryStore
+    @ObservedObject var settings: AppSettings
     let controller: SessionController
     @State private var selection: DictationRecord.ID?
+    @State private var storageBytes: Int64?
 
     var body: some View {
         PageScaffold(page: .history, scrolls: false) {
+            Card {
+                CardRow(icon: "externaldrive.fill", iconColor: .gray, title: L("录音保存时间", "Keep recordings"),
+                        subtitle: retentionSubtitle) {
+                    Picker("", selection: $settings.historyRetention) {
+                        ForEach(HistoryRetention.allCases) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+            }
+            .onChange(of: settings.historyRetention) { history.applyRetention() }
+            .task(id: history.changeCount) {
+                storageBytes = await Task.detached { HistoryStore.storageBytes() }.value
+            }
+
             if history.records.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "waveform.badge.mic").font(.system(size: 36)).foregroundStyle(.tertiary)
@@ -769,6 +786,14 @@ struct HistoryPage: View {
     }
 
     private var selectedID: DictationRecord.ID? { selection ?? history.records.first?.id }
+
+    private var retentionSubtitle: String {
+        let used = storageBytes.map {
+            L("目前占用 ", "Using ") + ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) + L("。", ". ")
+        } ?? ""
+        return used + L("每分钟录音约 1.9 MB。转写失败的录音会一直保留，方便重试。",
+                        "Recordings take about 1.9 MB per minute. Failed dictations keep theirs so you can retry.")
+    }
 }
 
 private struct HistoryRow: View {

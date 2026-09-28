@@ -79,7 +79,7 @@ struct SettingsDetailView: View {
         case .providers: ProvidersPage(settings: settings)
         case .models: ModelsPage(settings: settings, navigation: navigation, controller: controller)
         case .style: StylePage(settings: settings)
-        case .history: HistoryPage(history: HistoryStore.shared, controller: controller)
+        case .history: HistoryPage(history: HistoryStore.shared, settings: settings, controller: controller)
         }
     }
 }

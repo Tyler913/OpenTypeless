@@ -27,6 +27,7 @@ final class AppSettings: ObservableObject {
     @AppStorage("playSounds") var playSounds: Bool = true
     @AppStorage("restoreClipboard") var restoreClipboard: Bool = true
     @AppStorage("maxRecordingMinutes") var maxRecordingMinutes: Int = 20
+    @AppStorage("historyRetention") var historyRetention: HistoryRetention = .month
 
     @Published private(set) var apiKeys: [String: String]
     @Published private(set) var baseURLs: [String: String]

@@ -1,0 +1,6 @@
+# LF everywhere, whatever the checkout's core.autocrlf says. The clean-up prompt is a C# raw string
+# literal, so a CRLF checkout (the default on Windows, including GitHub's runners) would put "\r" into
+# the prompt sent to the model.
+* text=auto eol=lf
+*.png binary
+*.ico binary

@@ -44,7 +44,8 @@ enum PolishEval {
                 throw APIError.badResponse("required: --eval-polish CASES --models IDS --out PRIVATE_PATH; OpenRouter only")
             }
             // All detailed artifacts must live outside the working repository, including symlinks.
-            let cwd = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().resolvingSymlinksInPath().path
+            // This file is macos/Sources/OpenTypeless/PolishEval.swift, four levels below the repository root.
+            let cwd = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().resolvingSymlinksInPath().path
             for path in [outPath, value("--budget-ledger")].compactMap({ $0 }) {
                 let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
                 guard !resolved.hasPrefix(cwd + "/"), resolved != cwd else {

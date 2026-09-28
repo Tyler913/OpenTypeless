@@ -6,3 +6,4 @@ dist/
 *.user
 *.suo
 TestResults/
+build.log

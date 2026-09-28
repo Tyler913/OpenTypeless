@@ -1,24 +1,17 @@
-# Builds the Windows app in the cloud, since WinUI 3 only compiles on Windows.
+# Builds the Windows app in the cloud, since WinUI 3 only compiles on Windows: runs the tests, then zips
+# for x64 and ARM64 (download them from the run's Artifacts).
 #
-#   push / pull request to `windows`  tests, then zips for x64 and ARM64 (download them from the run's Artifacts)
-#   push a tag like `1.0.1-windows`   the same, then a draft GitHub Release with both zips attached
-#   Actions tab → Run workflow        a manual run
+#   ci.yml calls it          when a push or pull request changes windows/
+#   release.yml calls it     for a tag like `1.0.2-windows`
+#   Actions tab → Windows build → Run workflow   a manual run
 name: Windows build
 
 on:
-  push:
-    branches: [windows]
-    tags: ['*-windows']
-  pull_request:
-    branches: [windows]
+  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: windows-build-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -28,6 +21,9 @@ jobs:
       fail-fast: false
       matrix:
         arch: [x64, arm64]
+    defaults:
+      run:
+        working-directory: windows
     steps:
       - uses: actions/checkout@v7
 
@@ -52,27 +48,6 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: OpenTypeless-windows-${{ matrix.arch }}
-          path: dist/*.zip
+          path: windows/dist/*.zip
           if-no-files-found: error
           compression-level: 0 # already a zip
-
-  release:
-    name: Draft release
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          path: dist
-          merge-multiple: true
-
-      # A draft, so nothing is public until it's reviewed; never marked "latest", which belongs to the macOS release.
-      - uses: softprops/action-gh-release@v3
-        with:
-          draft: true
-          make_latest: 'false'
-          files: dist/*.zip
-          fail_on_unmatched_files: true

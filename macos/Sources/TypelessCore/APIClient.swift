@@ -265,4 +265,43 @@ extension APIClient {
         let models = try await listModels()
         return L("连接正常，\(models.count) 个模型可用", "Connected — \(models.count) models available")
     }
+
+    /// `verifyCredentials` a few times in a row, timing each round trip. The first one also pays for setting up
+    /// the connection, so the median is what a request costs once the app is running.
+    public func checkConnection(attempts: Int = 3) async throws -> ConnectionCheck {
+        var message = ""
+        var times: [Double] = []
+        for _ in 0..<max(1, attempts) {
+            let start = ProcessInfo.processInfo.systemUptime
+            message = try await verifyCredentials()
+            times.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
+        }
+        return ConnectionCheck(message: message, milliseconds: ConnectionCheck.median(times))
+    }
+}
+
+/// A working connection and how long a round trip to the provider takes.
+public struct ConnectionCheck: Sendable, Equatable {
+    public enum Speed: Sendable { case fast, fine, slow }
+
+    public let message: String
+    public let milliseconds: Double
+
+    public init(message: String, milliseconds: Double) {
+        self.message = message
+        self.milliseconds = milliseconds
+    }
+
+    /// Under 300 ms is fast, under a second fine, anything longer slow.
+    public var speed: Speed { milliseconds < 300 ? .fast : milliseconds < 1000 ? .fine : .slow }
+
+    /// "Key is valid · 182 ms"
+    public var summary: String { message + " · \(Int(milliseconds.rounded())) ms" }
+
+    public static func median(_ values: [Double]) -> Double {
+        let sorted = values.sorted()
+        guard !sorted.isEmpty else { return 0 }
+        let mid = sorted.count / 2
+        return sorted.count % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+    }
 }

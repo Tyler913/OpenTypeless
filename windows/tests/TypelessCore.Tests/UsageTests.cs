@@ -358,3 +358,44 @@ public class CancelPolicyTests
         Assert.True(CancelPolicy.IsExpired(at, at.AddHours(24)));
     }
 }
+
+[Collection("MockServer")]
+public class ConnectionCheckTests
+{
+    [Fact]
+    public async Task TimesSeveralRoundTrips()
+    {
+        var calls = 0;
+        MockOpenRouter.Handler = (request, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            Assert.EndsWith("/key", request.RequestUri!.AbsolutePath);
+            return (200, MockOpenRouter.Utf8("""{"data":{}}"""));
+        };
+        var check = await new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client()).CheckConnection();
+        Assert.Equal(3, calls);
+        Assert.StartsWith(L("Key 有效", "Key is valid"), check.Summary);
+        Assert.EndsWith(" ms", check.Summary);
+        Assert.True(check.Milliseconds >= 0);
+    }
+
+    [Fact]
+    public async Task FailsOnABadKey()
+    {
+        MockOpenRouter.Handler = (_, _) => (401, MockOpenRouter.Utf8("""{"error":{"message":"No auth credentials found"}}"""));
+        var error = await Assert.ThrowsAsync<ApiException>(() => new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client()).CheckConnection());
+        Assert.Equal(401, error.Status);
+    }
+
+    [Fact]
+    public void MedianAndSpeed()
+    {
+        Assert.Equal(120, ConnectionCheck.Median([900, 120, 100]));
+        Assert.Equal(150, ConnectionCheck.Median([100, 200]));
+        Assert.Equal(0, ConnectionCheck.Median([]));
+        Assert.Equal(ConnectionCheck.SpeedRating.Fast, new ConnectionCheck("", 299).Speed);
+        Assert.Equal(ConnectionCheck.SpeedRating.Fine, new ConnectionCheck("", 300).Speed);
+        Assert.Equal(ConnectionCheck.SpeedRating.Slow, new ConnectionCheck("", 1000).Speed);
+        Assert.Equal("ok · 183 ms", new ConnectionCheck("ok", 182.6).Summary);
+    }
+}

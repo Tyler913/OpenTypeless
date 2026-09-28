@@ -235,6 +235,7 @@ internal sealed class ProviderCard : UserControl
         bottom.Children.Add(_testResult);
         _test.Content = L("测试连接", "Test");
         _test.Click += (_, _) => Test();
+        ToolTipService.SetToolTip(_test, L("检查 API Key，并测三次往返延迟取中位数", "Checks the API key and times three round trips (median)"));
         Grid.SetColumn(_test, 2);
         bottom.Children.Add(_test);
         _details.Children.Add(bottom);
@@ -269,18 +270,25 @@ internal sealed class ProviderCard : UserControl
         _test.Content = L("测试中…", "Testing…");
         _testResult.Children.Clear();
         RefreshHeader();
-        (bool Ok, string Text) result;
+        (bool Ok, string Text, Tint Tint) result;
         try
         {
-            result = (true, await new ApiClient(endpoint).VerifyCredentials());
+            // Three round trips; the median latency shows how quickly this provider answers from here.
+            var check = await new ApiClient(endpoint).CheckConnection();
+            result = (true, check.Summary, check.Speed switch
+            {
+                ConnectionCheck.SpeedRating.Fast => Tint.Green,
+                ConnectionCheck.SpeedRating.Fine => Tint.Orange,
+                _ => Tint.Red,
+            });
         }
         catch (Exception error)
         {
-            result = (false, ApiException.From(error).Message);
+            result = (false, ApiException.From(error).Message, Tint.Red);
         }
         _testing = false;
         _test.Content = L("测试连接", "Test");
-        var tint = result.Ok ? Tint.Green : Tint.Red;
+        var tint = result.Tint;
         var text = Ui.Text(result.Text, 12, foreground: Palette.Brush(tint));
         text.MaxLines = 2;
         text.TextWrapping = TextWrapping.Wrap;

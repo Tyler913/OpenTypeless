@@ -228,6 +228,18 @@ import Testing
     }
 }
 
+@Suite struct ConnectionCheckTests {
+    @Test func medianAndSpeed() {
+        #expect(ConnectionCheck.median([900, 120, 100]) == 120)
+        #expect(ConnectionCheck.median([100, 200]) == 150)
+        #expect(ConnectionCheck.median([]) == 0)
+        #expect(ConnectionCheck(message: "", milliseconds: 299).speed == .fast)
+        #expect(ConnectionCheck(message: "", milliseconds: 300).speed == .fine)
+        #expect(ConnectionCheck(message: "", milliseconds: 1000).speed == .slow)
+        #expect(ConnectionCheck(message: "ok", milliseconds: 182.6).summary == "ok · 183 ms")
+    }
+}
+
 @Suite struct CancelPolicyTests {
     @Test func keepsLongRecordingsForADay() {
         #expect(!CancelPolicy.keeps(recordedSeconds: 9.9))
@@ -307,6 +319,23 @@ extension PipelineTests {
         #expect(usages.count >= 3)
         #expect(usages.allSatisfy { $0.cost == 0.001 })
         #expect(abs(usages.reduce(0) { $0 + ($1.audioSeconds ?? 0) } - 65) < 0.5)
+    }
+
+    @Test func connectionCheckTimesSeveralRoundTrips() async throws {
+        var calls = 0
+        MockOpenRouter.handler = { request, _ in
+            calls += 1
+            #expect(request.url?.path.hasSuffix("/key") == true)
+            return (200, Data(#"{"data":{}}"#.utf8))
+        }
+        let check = try await APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session()).checkConnection()
+        #expect(calls == 3)
+        #expect(check.summary.hasPrefix(L("Key 有效", "Key is valid")) && check.summary.hasSuffix(" ms"))
+
+        MockOpenRouter.handler = { _, _ in (401, Data(#"{"error":{"message":"No auth credentials found"}}"#.utf8)) }
+        await #expect(throws: APIError.self) {
+            _ = try await APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session()).checkConnection()
+        }
     }
 
     @Test func fetchesBothOpenRouterModelLists() async throws {

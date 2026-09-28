@@ -477,7 +477,7 @@ private struct ProviderCard: View {
     @ObservedObject var settings: AppSettings
     let id: ProviderID
     @Binding var expanded: Bool
-    @State private var testResult: (ok: Bool, text: String)?
+    @State private var testResult: (ok: Bool, text: String, color: Color)?
     @State private var testing = false
 
     var body: some View {
@@ -554,11 +554,12 @@ private struct ProviderCard: View {
                         if let testResult {
                             Label(testResult.text, systemImage: testResult.ok ? "checkmark.circle.fill" : "xmark.octagon.fill")
                                 .font(.system(size: 11.5))
-                                .foregroundStyle(testResult.ok ? .green : .red)
+                                .foregroundStyle(testResult.color)
                                 .lineLimit(2)
                                 .help(testResult.text)
                         }
                         Button(testing ? L("测试中…", "Testing…") : L("测试连接", "Test")) { test() }
+                            .help(L("检查 API Key，并测三次往返延迟取中位数", "Checks the API key and times three round trips (median)"))
                             .disabled(testing || settings.endpoint(for: id) == nil)
                     }
                 }
@@ -581,9 +582,16 @@ private struct ProviderCard: View {
         Task {
             defer { testing = false }
             do {
-                testResult = (true, try await APIClient(endpoint: endpoint).verifyCredentials())
+                // Three round trips; the median latency shows how quickly this provider answers from here.
+                let check = try await APIClient(endpoint: endpoint).checkConnection()
+                let color: Color = switch check.speed {
+                case .fast: .green
+                case .fine: .orange
+                case .slow: .red
+                }
+                testResult = (true, check.summary, color)
             } catch {
-                testResult = (false, APIError.from(error).localizedDescription)
+                testResult = (false, APIError.from(error).localizedDescription, .red)
             }
         }
     }

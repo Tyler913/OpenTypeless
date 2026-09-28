@@ -1,0 +1,74 @@
+# Runs on every push to main and every pull request into it, but only builds the app whose folder changed:
+#
+#   macos/**     macOS build: tests, then the app zip
+#   windows/**   Windows build: tests, then the x64 and ARM64 zips
+#
+# Changes to shared files only (docs/, eval/, README.md) build nothing. A change to a workflow file builds
+# the app it belongs to; a change to this file builds both.
+#
+# "CI passed" is the one check to require in branch protection. It fails if any build that ran failed, and
+# passes when no build needed to run, so a macOS-only pull request isn't left waiting for a Windows build.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      macos: ${{ steps.filter.outputs.macos }}
+      windows: ${{ steps.filter.outputs.windows }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            macos:
+              - 'macos/**'
+              - '.github/workflows/macos.yml'
+              - '.github/workflows/ci.yml'
+            windows:
+              - 'windows/**'
+              - '.gitattributes'
+              - '.github/workflows/windows.yml'
+              - '.github/workflows/ci.yml'
+
+  macos:
+    name: macOS
+    needs: changes
+    if: needs.changes.outputs.macos == 'true'
+    uses: ./.github/workflows/macos.yml
+
+  windows:
+    name: Windows
+    needs: changes
+    if: needs.changes.outputs.windows == 'true'
+    uses: ./.github/workflows/windows.yml
+
+  passed:
+    name: CI passed
+    needs: [changes, macos, windows]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that every build that ran succeeded
+        run: |
+          echo "macOS: ${{ needs.macos.result }}, Windows: ${{ needs.windows.result }}"
+          [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "false" ]]

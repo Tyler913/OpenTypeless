@@ -1,0 +1,46 @@
+# Builds the macOS app on a macOS runner: runs the tests, then packages the ad-hoc-signed app zip
+# (download it from the run's Artifacts).
+#
+#   ci.yml calls it          when a push or pull request changes macos/
+#   release.yml calls it     for a tag like `1.0.2`
+#   Actions tab → macOS build → Run workflow   a manual run
+name: macOS build
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (arm64)
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: macos
+    steps:
+      - uses: actions/checkout@v7
+
+      # Package.swift borrows Xcode's macro plugins when DEVELOPER_DIR is unset and the Command Line Tools
+      # are installed, which is the case on the runner. Point it at the selected Xcode instead.
+      - name: Use the runner's Xcode
+        run: |
+          echo "DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          xcodebuild -version
+          swift --version
+
+      # The same scripts used locally.
+      - name: Test
+        run: scripts/test.sh
+
+      - name: Build and package
+        run: scripts/build-app.sh --package
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OpenTypeless-macos-arm64
+          path: macos/dist/*.zip
+          if-no-files-found: error
+          compression-level: 0 # already a zip

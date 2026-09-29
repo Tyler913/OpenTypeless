@@ -439,21 +439,21 @@ public class TranscriptionLatencyTests
     public void DelayFollowsTheFittedLineAndTheRouteSpeed()
     {
         var latency = new TranscriptionLatency();
-        // No data yet: 0.39 s + 0.02 s per audio second, plus the 2 s margin.
-        Assert.Equal(2.43, latency.HedgeDelay(2), 6);
-        Assert.Equal(2.95, latency.HedgeDelay(28), 6);
+        // No data yet: 0.39 s + 0.02 s per audio second, plus the 0.2 s margin.
+        Assert.Equal(0.63, latency.HedgeDelay(2), 6);
+        Assert.Equal(1.15, latency.HedgeDelay(28), 6);
         latency.Record(1.59, 10); // 1 s above the line
         latency.Record(1.79, 20); // 1 s above
         latency.Record(30, 5);    // an outlier, which the median ignores
         Assert.Equal(3, latency.Samples);
         Assert.Equal(1, latency.Shift, 6);
         Assert.Equal(1.79, latency.Expected(20), 6);
-        Assert.Equal(3.79, latency.HedgeDelay(20), 6);
+        Assert.Equal(1.99, latency.HedgeDelay(20), 6);
         for (var i = 0; i < 3; i++) latency.Record(500, 1);
         Assert.Equal(25, latency.HedgeDelay(28), 6); // never above the maximum
         var fast = new TranscriptionLatency();
         for (var i = 0; i < 3; i++) fast.Record(0, 28);
-        Assert.Equal(1.5, fast.HedgeDelay(1), 6); // nor below the minimum
+        Assert.Equal(0.5, fast.HedgeDelay(1), 6); // nor below the minimum
     }
 }
 

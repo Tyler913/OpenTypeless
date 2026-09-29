@@ -276,21 +276,21 @@ import Testing
 @Suite struct TranscriptionLatencyTests {
     @Test func delayFollowsTheFittedLineAndTheRouteSpeed() {
         let latency = TranscriptionLatency()
-        // No data yet: 0.39 s + 0.02 s per audio second, plus the 2 s margin.
-        #expect(abs(latency.hedgeDelay(forAudioSeconds: 2) - 2.43) < 1e-6)
-        #expect(abs(latency.hedgeDelay(forAudioSeconds: 28) - 2.95) < 1e-6)
+        // No data yet: 0.39 s + 0.02 s per audio second, plus the 0.2 s margin.
+        #expect(abs(latency.hedgeDelay(forAudioSeconds: 2) - 0.63) < 1e-6)
+        #expect(abs(latency.hedgeDelay(forAudioSeconds: 28) - 1.15) < 1e-6)
         latency.record(latency: 1.59, audioSeconds: 10) // 1 s above the line
         latency.record(latency: 1.79, audioSeconds: 20) // 1 s above
         latency.record(latency: 30, audioSeconds: 5)    // an outlier, which the median ignores
         #expect(latency.samples == 3)
         #expect(abs(latency.shift - 1) < 1e-6)
         #expect(abs(latency.expected(forAudioSeconds: 20) - 1.79) < 1e-6)
-        #expect(abs(latency.hedgeDelay(forAudioSeconds: 20) - 3.79) < 1e-6)
+        #expect(abs(latency.hedgeDelay(forAudioSeconds: 20) - 1.99) < 1e-6)
         for _ in 0..<3 { latency.record(latency: 500, audioSeconds: 1) }
         #expect(latency.hedgeDelay(forAudioSeconds: 28) == 25) // never above the maximum
         let fast = TranscriptionLatency()
         for _ in 0..<3 { fast.record(latency: 0, audioSeconds: 28) }
-        #expect(fast.hedgeDelay(forAudioSeconds: 1) == 1.5) // nor below the minimum
+        #expect(fast.hedgeDelay(forAudioSeconds: 1) == 0.5) // nor below the minimum
     }
 }
 

@@ -5,16 +5,17 @@ namespace TypelessCore;
 ///
 /// Fitted on 128 timed dictations (microsoft/mai-transcribe-2 through OpenRouter, 1–27 s chunks): the wait barely
 /// grows with the length of the audio, about 0.39 s plus 0.02 s per second of audio (a Theil–Sen line through the
-/// chunks left after dropping those more than three MADs above it). Every ordinary answer, including a slower mode
-/// around 1.6–2.3 s, came back within 2 s of that line; the few that didn't (4.7–10.6 s) are what the backup is for.
-/// So the backup is asked once a chunk is <see cref="Margin"/> past the line. A route that is slower or faster across
-/// the board shifts the line by the median of its recent residuals, which the odd very late answer doesn't move.
+/// chunks left after dropping those more than three MADs above it). Most answers land on that line; a slower mode
+/// around 1.6–2.3 s and the odd 4.7–10.6 s answer don't. Only the last chunk is usually waited on, and speech-to-text
+/// is cheap next to the wait, so the backup is asked as soon as a chunk is <see cref="Margin"/> (0.2 s) past the line:
+/// about 40% of last chunks in that data. A route that is slower or faster across the board shifts the line by the
+/// median of its recent residuals, which the odd very late answer doesn't move.
 /// </summary>
-public sealed class TranscriptionLatency(int window = 20, double minimumDelay = 1.5, double maximumDelay = 25)
+public sealed class TranscriptionLatency(int window = 20, double minimumDelay = 0.5, double maximumDelay = 25)
 {
     public const double BaseSeconds = 0.39;
     public const double SecondsPerAudioSecond = 0.02;
-    public const double Margin = 2.0;
+    public const double Margin = 0.2;
 
     private readonly object _lock = new();
     private readonly List<double> _residuals = new();

@@ -248,17 +248,25 @@ public enum PolishMetrics {
     public static func similarity(_ a: String, _ b: String) -> Double {
         let x = Array(normalized(a)), y = Array(normalized(b))
         if x.isEmpty || y.isEmpty { return x.count == y.count ? 1 : 0 }
-        var previous = Array(0...y.count)
-        for i in 1...x.count {
-            var current = [i] + [Int](repeating: 0, count: y.count)
-            for j in 1...y.count {
-                current[j] = x[i - 1] == y[j - 1]
+        // A shared start and end never change the distance, and after a small fix to a long text they are nearly all
+        // of it: only the part in between needs the quadratic table (the learner runs this on the main thread).
+        var start = 0
+        while start < x.count, start < y.count, x[start] == y[start] { start += 1 }
+        var end = 0
+        while end < x.count - start, end < y.count - start, x[x.count - 1 - end] == y[y.count - 1 - end] { end += 1 }
+        let n = x.count - start - end, m = y.count - start - end
+        var previous = Array(0...m)
+        var current = [Int](repeating: 0, count: m + 1)
+        for i in stride(from: 1, through: n, by: 1) {
+            current[0] = i
+            for j in stride(from: 1, through: m, by: 1) {
+                current[j] = x[start + i - 1] == y[start + j - 1]
                     ? previous[j - 1]
                     : 1 + min(previous[j - 1], previous[j], current[j - 1])
             }
-            previous = current
+            swap(&previous, &current)
         }
-        return 1 - Double(previous[y.count]) / Double(max(x.count, y.count))
+        return 1 - Double(previous[m]) / Double(max(x.count, y.count))
     }
 
     static func latinWords(_ text: String) -> [String] {
@@ -266,10 +274,10 @@ public enum PolishMetrics {
             .filter { $0.first?.isLetter == true }
     }
 
+    /// Built once: fetching the three sets again for every character was most of the time spent comparing long texts.
+    private static let ignored = CharacterSet.whitespacesAndNewlines.union(.punctuationCharacters).union(.symbols)
+
     static func normalized(_ text: String) -> String {
-        String(text.lowercased().unicodeScalars.filter {
-            !CharacterSet.whitespacesAndNewlines.contains($0) && !CharacterSet.punctuationCharacters.contains($0)
-                && !CharacterSet.symbols.contains($0)
-        }.map(Character.init))
+        String(text.lowercased().unicodeScalars.filter { !ignored.contains($0) }.map(Character.init))
     }
 }

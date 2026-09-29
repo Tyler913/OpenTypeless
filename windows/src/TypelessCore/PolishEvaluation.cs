@@ -374,20 +374,27 @@ public static class PolishMetrics
     internal static int EditDistance<T>(IReadOnlyList<T> x, IReadOnlyList<T> y)
     {
         var comparer = EqualityComparer<T>.Default;
-        var previous = Enumerable.Range(0, y.Count + 1).ToArray();
-        for (var i = 1; i <= x.Count; i++)
+        // A shared start and end never change the distance, and after a small fix to a long text they are nearly all
+        // of it: only the part in between needs the quadratic table (the learner runs this on the UI thread).
+        var start = 0;
+        while (start < x.Count && start < y.Count && comparer.Equals(x[start], y[start])) start++;
+        var end = 0;
+        while (end < x.Count - start && end < y.Count - start && comparer.Equals(x[x.Count - 1 - end], y[y.Count - 1 - end])) end++;
+        int n = x.Count - start - end, m = y.Count - start - end;
+        var previous = Enumerable.Range(0, m + 1).ToArray();
+        var current = new int[m + 1];
+        for (var i = 1; i <= n; i++)
         {
-            var current = new int[y.Count + 1];
             current[0] = i;
-            for (var j = 1; j <= y.Count; j++)
+            for (var j = 1; j <= m; j++)
             {
-                current[j] = comparer.Equals(x[i - 1], y[j - 1])
+                current[j] = comparer.Equals(x[start + i - 1], y[start + j - 1])
                     ? previous[j - 1]
                     : 1 + Math.Min(previous[j - 1], Math.Min(previous[j], current[j - 1]));
             }
-            previous = current;
+            (previous, current) = (current, previous);
         }
-        return previous[y.Count];
+        return previous[m];
     }
 
     internal static List<string> LatinWords(string text) =>

@@ -361,18 +361,25 @@ public sealed class HudWindow : Window
             var height = (int)Math.Round(heightDips * scale);
             _centerX = (work.Left + work.Right) / 2;
             _bottom = work.Bottom - (int)Math.Round(BottomMarginDips * scale);
-            WindowHelpers.PlaceClient(this, new RectInt32(_centerX - width / 2, _bottom - height, width, height));
+            _placed = new RectInt32(_centerX - width / 2, _bottom - height, width, height);
+            WindowHelpers.PlaceClient(this, _placed);
         }
         else
         {
             var scale = WindowHelpers.Scale(Hwnd);
             var width = (int)Math.Round(widthDips * scale);
             var height = (int)Math.Round(heightDips * scale);
-            WindowHelpers.PlaceClient(this, new RectInt32(_centerX - width / 2, _bottom - height, width, height));
+            var rect = new RectInt32(_centerX - width / 2, _bottom - height, width, height);
+            // The live preview lands here several times a second, mostly without changing the size: moving the window
+            // onto itself would still cost a round of window messages and layout.
+            if (rect.Equals(_placed)) return;
+            _placed = rect;
+            WindowHelpers.PlaceClient(this, rect);
         }
     }
 
     private int _bottom;
+    private RectInt32 _placed;
 
     private double EstimatedWidth() => _model.Phase switch
     {

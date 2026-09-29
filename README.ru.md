@@ -248,6 +248,7 @@ docs/images/                Скриншоты для README
 cd macos
 swift build
 scripts/test.sh                  # модульные тесты, включая mock-сервер, который вносит сбои в 130-секундную запись
+scripts/perf.sh                  # бюджеты производительности в release-сборке (аудиотракт, работа в главном потоке); CI тоже их запускает
 ```
 
 Полезные режимы командной строки собранного бинарного файла (из `macos/`):
@@ -273,6 +274,7 @@ OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapsh
 cd windows
 dotnet build OpenTypeless.slnx
 scripts\test.ps1       # модульные тесты, включая mock-сервер, который вносит сбои в 130-секундную запись
+scripts\perf.ps1       # бюджеты производительности в Release-сборке (аудиотракт, работа в потоке интерфейса); CI тоже их запускает
 ```
 
 Инструменты командной строки (`OpenTypeless.Cli.exe` поставляется вместе с приложением и использует его настройки и ключи):

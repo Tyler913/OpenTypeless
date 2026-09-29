@@ -248,6 +248,7 @@ Os dois apps incorporam o arquivo na compilação, e um texto sem tradução apa
 cd macos
 swift build
 scripts/test.sh                  # testes unitários, incluindo um servidor simulado que injeta falhas em uma gravação de 130 s
+scripts/perf.sh                  # orçamentos de desempenho em um build de release (caminho do áudio, trabalho na thread principal); a CI também os executa
 ```
 
 Modos úteis de linha de comando do binário compilado (a partir de `macos/`):
@@ -273,6 +274,7 @@ OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapsh
 cd windows
 dotnet build OpenTypeless.slnx
 scripts\test.ps1       # testes unitários, incluindo um servidor simulado que injeta falhas em uma gravação de 130 s
+scripts\perf.ps1       # orçamentos de desempenho em um build Release (caminho do áudio, trabalho na thread da interface); a CI também os executa
 ```
 
 Ferramentas de linha de comando (`OpenTypeless.Cli.exe`, distribuída junto com o app; usa as configurações e chaves do app):

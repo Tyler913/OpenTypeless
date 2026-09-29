@@ -248,6 +248,7 @@ docs/images/                README のスクリーンショット
 cd macos
 swift build
 scripts/test.sh                  # ユニットテスト（130 秒の録音に障害を注入するモックサーバーを含む）
+scripts/perf.sh                  # リリースビルドでのパフォーマンス予算（音声処理・メインスレッドの処理）。CI でも実行
 ```
 
 ビルドしたバイナリの便利なコマンドラインモード（`macos/` で実行）：
@@ -273,6 +274,7 @@ OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapsh
 cd windows
 dotnet build OpenTypeless.slnx
 scripts\test.ps1       # ユニットテスト（130 秒の録音に障害を注入するモックサーバーを含む）
+scripts\perf.ps1       # リリースビルドでのパフォーマンス予算（音声処理・UI スレッドの処理）。CI でも実行
 ```
 
 コマンドラインツール（`OpenTypeless.Cli.exe`。アプリと一緒に配布され、アプリの設定とキーを使います）：

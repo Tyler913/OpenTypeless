@@ -248,6 +248,7 @@ docs/images/                README 스크린샷
 cd macos
 swift build
 scripts/test.sh                  # 단위 테스트(130초 녹음에 장애를 주입하는 모의 서버 포함)
+scripts/perf.sh                  # 릴리스 빌드에서의 성능 예산(오디오 처리, 메인 스레드 작업). CI에서도 실행
 ```
 
 빌드한 바이너리의 유용한 명령줄 모드(`macos/`에서 실행):
@@ -273,6 +274,7 @@ OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapsh
 cd windows
 dotnet build OpenTypeless.slnx
 scripts\test.ps1       # 단위 테스트(130초 녹음에 장애를 주입하는 모의 서버 포함)
+scripts\perf.ps1       # 릴리스 빌드에서의 성능 예산(오디오 처리, UI 스레드 작업). CI에서도 실행
 ```
 
 명령줄 도구(`OpenTypeless.Cli.exe`, 앱과 함께 배포되며 앱의 설정과 키를 사용):

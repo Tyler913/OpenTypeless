@@ -73,7 +73,7 @@ public struct CalendarDay: Hashable, Comparable, Sendable, CustomStringConvertib
         self.init(year: parts.year ?? 1970, month: parts.month ?? 1, day: parts.day ?? 1)
     }
 
-    /// Day arithmetic happens in UTC, where every day is 24 hours.
+    /// UTC, where every day is 24 hours: the fallback when a day has no midnight in the user's time zone.
     private static let utc: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
@@ -82,12 +82,34 @@ public struct CalendarDay: Hashable, Comparable, Sendable, CustomStringConvertib
 
     private var utcDate: Date { Self.utc.date(from: DateComponents(year: year, month: month, day: day))! }
 
-    public func adding(days: Int) -> CalendarDay {
-        CalendarDay(Self.utc.date(byAdding: .day, value: days, to: utcDate)!, calendar: Self.utc)
+    public func adding(days: Int) -> CalendarDay { CalendarDay(daysSince1970: daysSince1970 + days) }
+
+    /// 0 = Sunday … 6 = Saturday (1 January 1970 was a Thursday).
+    public var weekday: Int { ((daysSince1970 + 4) % 7 + 7) % 7 }
+
+    /// Days since 1 January 1970 in the Gregorian calendar, as plain arithmetic (Howard Hinnant's days_from_civil,
+    /// the way .NET's DateOnly counts): the Home page steps through every day of a streak and every square of the
+    /// activity grid each time it's drawn, and asking Calendar for each step made that take tens of milliseconds.
+    private var daysSince1970: Int {
+        let y = month <= 2 ? year - 1 : year
+        let era = (y >= 0 ? y : y - 399) / 400
+        let yearOfEra = y - era * 400
+        let dayOfYear = (153 * (month > 2 ? month - 3 : month + 9) + 2) / 5 + day - 1
+        let dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear
+        return era * 146_097 + dayOfEra - 719_468
     }
 
-    /// 0 = Sunday … 6 = Saturday.
-    public var weekday: Int { Self.utc.component(.weekday, from: utcDate) - 1 }
+    private init(daysSince1970 days: Int) {
+        let z = days + 719_468
+        let era = (z >= 0 ? z : z - 146_096) / 146_097
+        let dayOfEra = z - era * 146_097
+        let yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36524 - dayOfEra / 146_096) / 365
+        let dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100)
+        let shiftedMonth = (5 * dayOfYear + 2) / 153
+        let month = shiftedMonth < 10 ? shiftedMonth + 3 : shiftedMonth - 9
+        self.init(year: yearOfEra + era * 400 + (month <= 2 ? 1 : 0), month: month,
+                  day: dayOfYear - (153 * shiftedMonth + 2) / 5 + 1)
+    }
 
     public var firstOfMonth: CalendarDay { CalendarDay(year: year, month: month, day: 1) }
 
@@ -97,7 +119,15 @@ public struct CalendarDay: Hashable, Comparable, Sendable, CustomStringConvertib
     }
 
     /// "2026-09-28"
-    public var key: String { String(format: "%04d-%02d-%02d", year, month, day) }
+    public var key: String {
+        // By hand rather than String(format:), which was most of a Home page redraw: it looks up hundreds of days.
+        guard year >= 0, month >= 0, day >= 0 else { return String(format: "%04d-%02d-%02d", year, month, day) }
+        func padded(_ value: Int, _ width: Int) -> String {
+            let digits = String(value)
+            return digits.count < width ? String(repeating: "0", count: width - digits.count) + digits : digits
+        }
+        return padded(year, 4) + "-" + padded(month, 2) + "-" + padded(day, 2)
+    }
 
     public init?(key: String) {
         let parts = key.split(separator: "-").compactMap { Int($0) }
@@ -217,9 +247,10 @@ public struct UsageLedger: Equatable, Sendable {
     /// Totals from `from` to `to`, inclusive; nil ends are open.
     public func totals(from: CalendarDay? = nil, to: CalendarDay? = nil) -> UsageTotals {
         var totals = UsageTotals()
+        let fromKey = from?.key, toKey = to?.key
         for (key, day) in days {
-            if let from, key < from.key { continue }
-            if let to, key > to.key { continue }
+            if let fromKey, key < fromKey { continue }
+            if let toKey, key > toKey { continue }
             totals.words += day.words
             totals.dictations += day.dictations
             totals.speakingSeconds += day.speakingSeconds

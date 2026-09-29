@@ -1,5 +1,5 @@
-# Builds the Windows app in the cloud, since WinUI 3 only compiles on Windows: runs the tests, then zips
-# for x64 and ARM64 (download them from the run's Artifacts).
+# Builds the Windows app in the cloud, since WinUI 3 only compiles on Windows: runs the tests and the
+# performance budgets, then zips for x64 and ARM64 (download them from the run's Artifacts).
 #
 #   ci.yml calls it          when a push or pull request changes windows/
 #   release.yml calls it     for a version tag like `1.0.2` (together with the macOS build)
@@ -33,17 +33,26 @@ jobs:
 
       # The same script used locally: runs the tests, publishes the app and CLI self-contained, zips them.
       - name: Test, build and package
+        id: build
         shell: pwsh
         run: scripts/build.ps1 -Package -Arch ${{ matrix.arch }} *>&1 | Tee-Object -FilePath build.log
 
       # Job logs need a GitHub sign-in to read, but annotations show on the run page for everyone.
       - name: Show the end of the build output on the run page
-        if: failure()
+        if: failure() && steps.build.outcome == 'failure'
         shell: pwsh
         run: |
           $tail = (Get-Content build.log -Tail 80 -ErrorAction SilentlyContinue) -join "`n"
           $escaped = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
           Write-Output "::error title=Build (${{ matrix.arch }}) failed::$escaped"
+
+      # Time budgets for the work that runs while you dictate and on the UI thread, in a Release build like the app's
+      # (tests/TypelessCore.Tests/PerformanceTests.cs). The timings are on the run's summary page. Once is enough:
+      # both builds run on the same x64 machine.
+      - name: Performance
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: scripts/perf.ps1
 
       - uses: actions/upload-artifact@v7
         with:

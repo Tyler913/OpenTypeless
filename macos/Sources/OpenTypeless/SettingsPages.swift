@@ -816,7 +816,7 @@ struct ModelsPage: View {
     }
 
     private var hedgeDelayLabel: String {
-        HedgedPolish.defaultHedgeDelay.formatted(.number.precision(.fractionLength(0...1))) + L(" 秒", " s")
+        HedgedPolish.defaultHedgeDelay.formatted(.number.precision(.fractionLength(0...2))) + L(" 秒", " s")
     }
 
     private func setupBanner(for id: ProviderID) -> some View {

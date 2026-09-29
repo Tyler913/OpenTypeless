@@ -8,6 +8,14 @@ public struct AudioChunk: Sendable, Equatable {
 
     public var duration: Double { AudioFormat.seconds(forSampleCount: samples.count) }
     public var startTime: Double { AudioFormat.seconds(forSampleCount: startSample) }
+
+    /// This chunk without the silence before and after the speech (see `VoiceActivity.speechBounds`): less to upload
+    /// and transcribe, and nothing for the model to hallucinate on. Itself when there is nothing to trim.
+    public func trimmed() -> AudioChunk {
+        let (start, end) = VoiceActivity.speechBounds(samples)
+        if start == 0, end == samples.count { return self }
+        return AudioChunk(index: index, startSample: startSample + start, samples: Array(samples[start..<end]))
+    }
 }
 
 /// Splits a live PCM stream into chunks that are each short enough for a single STT request.
@@ -30,7 +38,10 @@ public final class Chunker {
 
     private let config: Config
     private var pending: [Int16] = []
-    private var pendingStart = 0
+    /// How much of the front of `pending` this append has already handed out as chunks (always 0 between calls).
+    private var emitted = 0
+    /// Where the audio not yet cut into a chunk starts, in samples from the start of the recording.
+    public private(set) var pendingStart = 0
     private var nextIndex = 0
 
     public init(config: Config = Config()) {
@@ -42,28 +53,46 @@ public final class Chunker {
         pending.append(contentsOf: samples)
         var ready: [AudioChunk] = []
         let maxSamples = AudioFormat.sampleCount(forSeconds: config.maxSeconds)
-        while pending.count >= maxSamples {
+        while pending.count - emitted >= maxSamples {
             let cut = quietestCutPoint()
             ready.append(emit(upTo: cut))
         }
+        dropEmitted()
         return ready
     }
 
     /// Flushes whatever audio is left as the final chunk (nil when nothing is left).
     public func finish() -> AudioChunk? {
         guard !pending.isEmpty else { return nil }
+        defer { dropEmitted() }
         return emit(upTo: pending.count)
     }
 
+    /// The chunk `finish` would flush now, left in place (nil when nothing is pending).
+    public func peek() -> AudioChunk? {
+        pending.isEmpty ? nil : AudioChunk(index: nextIndex, startSample: pendingStart, samples: pending)
+    }
+
     private func emit(upTo cut: Int) -> AudioChunk {
-        let chunk = AudioChunk(index: nextIndex, startSample: pendingStart, samples: Array(pending[0..<cut]))
-        pending.removeFirst(cut)
+        let chunk = AudioChunk(index: nextIndex, startSample: pendingStart, samples: Array(pending[emitted..<(emitted + cut)]))
+        emitted += cut
         pendingStart += cut
         nextIndex += 1
         return chunk
     }
 
+    /// Removes what `emit` handed out, once per call rather than once per chunk: removing each chunk from the front
+    /// moved all the audio after it, so re-transcribing a long recording (appended in one go) was quadratic.
+    private func dropEmitted() {
+        pending.removeFirst(emitted)
+        emitted = 0
+    }
+
     private func quietestCutPoint() -> Int {
+        pending.withUnsafeBufferPointer { all in quietestCutPoint(in: UnsafeBufferPointer(rebasing: all[emitted...])) }
+    }
+
+    private func quietestCutPoint(in pending: UnsafeBufferPointer<Int16>) -> Int {
         let lower = AudioFormat.sampleCount(forSeconds: config.minSeconds)
         let upper = min(pending.count, AudioFormat.sampleCount(forSeconds: config.maxSeconds))
         let window = max(1, AudioFormat.sampleCount(forSeconds: config.windowSeconds))

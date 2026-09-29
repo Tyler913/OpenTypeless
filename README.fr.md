@@ -47,7 +47,7 @@ OpenTypeless est construit autour de ce problème.
 | **Découpe aux pauses** | Pendant que vous parlez, l’audio est découpé en segments de 18 à 28 s, au niveau de la fenêtre de 0,4 s la plus silencieuse de chaque portion : aucun mot n’est coupé en deux et aucune requête n’approche la limite de 60 s du fournisseur. |
 | **Transcrit pendant que vous parlez** | Chaque segment est transcrit en arrière-plan dès qu’il est découpé. Après une dictée de deux minutes, il ne reste que les dernières secondes à traiter quand vous relâchez la touche. |
 | **Réessaie segment par segment** | Coupures réseau, 429 et erreurs 5xx sont réessayés avec un délai croissant. Clés invalides et problèmes de facturation échouent immédiatement. Un segment en échec n’affecte jamais les autres, et les segments en échec ont droit à une tournée complète de plus à la fin. |
-| **Modèle de secours en cas de démarrage lent** | Si le modèle de nettoyage n’a pas commencé à répondre en 0,8 s, ou échoue, un modèle de secours d’un autre éditeur est aussi sollicité et le premier à répondre l’emporte. Un fournisseur lent coûte moins d’une seconde de plus, pas toute l’attente. |
+| **Modèle de secours en cas de démarrage lent** | Si le modèle de nettoyage n’a pas commencé à répondre en 0,55 s, ou échoue, un modèle de secours d’un autre éditeur est aussi sollicité et le premier à répondre l’emporte. Un fournisseur lent coûte moins d’une seconde de plus, pas toute l’attente. |
 | **Délai d’inactivité, pas délai total** | Le nettoyage reçoit sa réponse en streaming et n’est considéré comme bloqué que si *aucune* donnée n’arrive pendant 25 s : les longues sorties ne sont jamais tronquées. |
 | **Aucun mot perdu** | L’audio est écrit sur le disque pendant que vous parlez. Chaque dictée est conservée dans l’historique ; une dictée en échec peut être relancée plus tard, et seuls ses segments en échec sont renvoyés. Si le nettoyage échoue, la transcription brute est insérée à la place. |
 
@@ -248,6 +248,7 @@ Les deux apps intègrent ce fichier à la compilation, et un texte sans traducti
 cd macos
 swift build
 scripts/test.sh                  # tests unitaires, dont un serveur simulé qui injecte des pannes dans un enregistrement de 130 s
+scripts/perf.sh                  # budgets de performance dans un build release (chemin audio, travail sur le thread principal) ; la CI les exécute aussi
 ```
 
 Modes en ligne de commande utiles du binaire compilé (depuis `macos/`) :
@@ -273,6 +274,7 @@ OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapsh
 cd windows
 dotnet build OpenTypeless.slnx
 scripts\test.ps1       # tests unitaires, dont un serveur simulé qui injecte des pannes dans un enregistrement de 130 s
+scripts\perf.ps1       # budgets de performance dans un build Release (chemin audio, travail sur le thread d’interface) ; la CI les exécute aussi
 ```
 
 Outils en ligne de commande (`OpenTypeless.Cli.exe`, livré avec l’app ; il utilise les réglages et les clés de l’app) :

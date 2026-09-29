@@ -178,11 +178,13 @@ final class HistoryStore: ObservableObject {
         let retention = AppSettings.shared.historyRetention
         let now = Date()
         var kept: [DictationRecord] = []
+        var changed = false
         for (index, record) in records.enumerated() {
             if record.status == .cancelled {
                 // A cancelled dictation is only a safety net: it goes a day after it was made, whatever the setting.
                 if CancelPolicy.isExpired(recordedAt: record.date, now: now) {
                     try? FileManager.default.removeItem(at: record.folder)
+                    changed = true
                 } else {
                     kept.append(record)
                 }
@@ -193,11 +195,18 @@ final class HistoryStore: ObservableObject {
             guard finished, expired else { kept.append(record); continue }
             if index >= minimumTextRecords {
                 try? FileManager.default.removeItem(at: record.folder)
+                changed = true
             } else {
-                if record.hasAudio { try? FileManager.default.removeItem(at: record.audioURL) }
+                if record.hasAudio {
+                    try? FileManager.default.removeItem(at: record.audioURL)
+                    changed = true
+                }
                 kept.append(record)
             }
         }
+        // Runs after every dictation and hourly: publishing when nothing expired would redraw History and walk every
+        // recording again to measure the storage.
+        guard changed else { return }
         records = kept
         changeCount += 1
     }

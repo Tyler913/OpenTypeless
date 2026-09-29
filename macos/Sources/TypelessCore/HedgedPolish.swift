@@ -29,21 +29,23 @@ public struct HedgedPolishResult: Sendable {
 /// first-token time, while the extra spend is limited to the slow tail.
 public enum HedgedPolish {
     /// Fixed on purpose rather than learned at runtime, since flash-model first-token latency is
-    /// stable. Measured from the client (Sep 2026): the flash models we tried average 0.85 s to the
-    /// first token, and OpenRouter's per-provider P50 is about 1 s; the default clean-up model stays
-    /// under 0.6 s, so 0.8 s means the backup only runs when something is actually wrong.
-    public static let defaultHedgeDelay: Double = 0.8
+    /// stable. Measured from the client (Sep 2026): gemini-3.1-flash-lite, the fastest clean-up model,
+    /// has its first token at 0.41 s at the median and 0.49 s at p90, so a first token still missing at
+    /// 0.55 s is already in the slow tail and the backup is worth asking.
+    public static let defaultHedgeDelay: Double = 0.55
 
     public static func run(
         transcript: String,
         primary: PolishRoute,
         backup: PolishRoute?,
-        hedgeDelay: Double = defaultHedgeDelay
+        hedgeDelay: Double = defaultHedgeDelay,
+        onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> HedgedPolishResult {
         let routes = [primary] + (backup.map { [$0] } ?? [])
         let start = ProcessInfo.processInfo.systemUptime
         let (events, continuation) = AsyncStream<Event>.makeStream()
         let firstToken = FirstTokenLatch()
+        let leader = Leader()
         var tasks: [Int: Task<Void, Never>] = [:]
 
         func launch(_ index: Int) {
@@ -53,8 +55,10 @@ public enum HedgedPolish {
                 do {
                     let result = try await route.client.polish(
                         transcript: transcript, options: route.options,
-                        onPartial: { _ in
+                        onPartial: { text in
                             if firstToken.mark(index) { continuation.yield(.firstToken(index)) }
+                            // Only the stream that answered first is passed on.
+                            if leader.claim(index) { onPartial?(text) }
                         })
                     continuation.yield(.finished(index, .success(result)))
                 } catch {
@@ -115,6 +119,19 @@ public enum HedgedPolish {
         case hedgeTimer
         case firstToken(Int)
         case finished(Int, Result<APIClient.PolishResult, Error>)
+    }
+}
+
+/// The route that streamed first.
+private final class Leader: @unchecked Sendable {
+    private let lock = NSLock()
+    private var index: Int?
+
+    func claim(_ candidate: Int) -> Bool {
+        lock.withLock { () -> Bool in
+            if index == nil { index = candidate }
+            return index == candidate
+        }
     }
 }
 

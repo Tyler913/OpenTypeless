@@ -1,5 +1,5 @@
-# Builds the macOS app on a macOS runner: runs the tests, then packages the ad-hoc-signed app zip
-# (download it from the run's Artifacts).
+# Builds the macOS app on a macOS runner: runs the tests and the performance budgets, then packages the
+# ad-hoc-signed app zip (download it from the run's Artifacts).
 #
 #   ci.yml calls it          when a push or pull request changes macos/
 #   release.yml calls it     for a tag like `1.0.2`
@@ -34,6 +34,11 @@ jobs:
       # The same scripts used locally.
       - name: Test
         run: scripts/test.sh
+
+      # Time budgets for the work that runs while you dictate and on the main thread, in a release build like the
+      # app's (Tests/TypelessCoreTests/PerformanceTests.swift). The timings are on the run's summary page.
+      - name: Performance
+        run: scripts/perf.sh
 
       # Releases are signed with a stable self-signed certificate so that in-app updates keep macOS permissions
       # (see scripts/create-release-cert.sh). Without the secrets, e.g. for pull requests, the zip is signed ad hoc.

@@ -216,7 +216,7 @@ public sealed class ModelsPage : PageBase
                 _settings.PolishBackupEnabled = backup.IsOn;
                 _controller.RefreshModelInfo();
             };
-            var delay = HedgedPolish.DefaultHedgeDelay.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + L(" 秒", " s");
+            var delay = HedgedPolish.DefaultHedgeDelay.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + L(" 秒", " s");
             polish.Body.Add(new CardRow
             {
                 Glyph = Glyphs.Lightning, Tint = Tint.Orange, Title = L("备用模型", "Backup model"),

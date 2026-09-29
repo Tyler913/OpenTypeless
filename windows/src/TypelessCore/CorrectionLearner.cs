@@ -86,16 +86,28 @@ public static class CorrectionLearner
     {
         var a = Tokens(original);
         var b = Tokens(edited);
-        // Longest common subsequence over token text.
+        // Longest common subsequence over token text. The tokens both texts start and end with are left out of the
+        // table: after a small fix to a long dictation they are nearly all of it, and this runs on the UI thread.
         int n = a.Count, m = b.Count;
-        var lcs = new int[n + 1, m + 1];
-        for (var i = n - 1; i >= 0; i--)
+        var start = 0;
+        while (start < n && start < m && a[start].Text == b[start].Text) start++;
+        var end = 0;
+        while (end < n - start && end < m - start && a[n - 1 - end].Text == b[m - 1 - end].Text) end++;
+        int endA = n - end, endB = m - end;
+        var lcs = new int[endA - start + 1, endB - start + 1];
+        for (var i = endA - start - 1; i >= 0; i--)
         {
-            for (var j = m - 1; j >= 0; j--)
+            for (var j = endB - start - 1; j >= 0; j--)
             {
-                lcs[i, j] = a[i].Text == b[j].Text ? lcs[i + 1, j + 1] + 1 : Math.Max(lcs[i + 1, j], lcs[i, j + 1]);
+                lcs[i, j] = a[start + i].Text == b[start + j].Text ? lcs[i + 1, j + 1] + 1 : Math.Max(lcs[i + 1, j], lcs[i, j + 1]);
             }
         }
+        // Whether the walk below skips an edited token rather than an original one, as a table over every token would
+        // decide. Inside the table it is the usual comparison (the shared end adds the same to both sides); past its
+        // edge only the shared end is left, and the full table skips on the side that is less far into it.
+        bool SkipEdited(int x, int y) => x >= endA || y >= endB
+            ? x - endA > y - endB
+            : lcs[x - start, y + 1 - start] >= lcs[x + 1 - start, y - start];
         // Hunks as token index ranges [start, end), and which original token each unchanged edited token matches.
         var hunks = new List<(int A0, int A1, int B0, int B1)>();
         var matchOf = new int[m];
@@ -116,7 +128,7 @@ public static class CorrectionLearner
                 startA = x;
                 startB = y;
             }
-            else if (y < m && (x == n || lcs[x, y + 1] >= lcs[x + 1, y]))
+            else if (y < m && SkipEdited(x, y))
             {
                 y++;
             }

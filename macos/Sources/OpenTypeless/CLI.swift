@@ -65,7 +65,8 @@ enum CLI {
             return 2
         }
         log(String(format: "⏱  Transcribed: %.1f s after release (%.1f s total)",
-                   Date().timeIntervalSince(released), Date().timeIntervalSince(start)))
+                   Date().timeIntervalSince(released), Date().timeIntervalSince(start))
+            + (pipeline.tailWasSpeculative ? "; the last segment was transcribed ahead of time, at the final pause" : ""))
         print("\n===== Raw transcript (\(raw.count) chars) =====\n\(raw)\n")
 
         guard polish else { return 0 }

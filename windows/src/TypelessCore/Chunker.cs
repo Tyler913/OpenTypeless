@@ -1,9 +1,21 @@
+using System.Runtime.InteropServices;
+
 namespace TypelessCore;
 
 public sealed record AudioChunk(int Index, int StartSample, short[] Samples)
 {
     public double Duration => AudioFormat.Seconds(Samples.Length);
     public double StartTime => AudioFormat.Seconds(StartSample);
+
+    /// <summary>
+    /// This chunk without the silence before and after the speech (see <see cref="VoiceActivity.SpeechBounds"/>): less to
+    /// upload and transcribe, and nothing for the model to hallucinate on. Itself when there is nothing to trim.
+    /// </summary>
+    public AudioChunk Trimmed()
+    {
+        var (start, end) = VoiceActivity.SpeechBounds(Samples);
+        return start == 0 && end == Samples.Length ? this : this with { StartSample = StartSample + start, Samples = Samples[start..end] };
+    }
 }
 
 /// <summary>
@@ -19,6 +31,8 @@ public sealed class Chunker
 
     private readonly Config _config;
     private readonly List<short> _pending = new();
+    /// <summary>How much of the front of <see cref="_pending"/> this append has already handed out as chunks.</summary>
+    private int _emitted;
     private int _pendingStart;
     private int _nextIndex;
 
@@ -33,30 +47,56 @@ public sealed class Chunker
         _pending.AddRange(samples);
         var ready = new List<AudioChunk>();
         var maxSamples = AudioFormat.SampleCount(_config.MaxSeconds);
-        while (_pending.Count >= maxSamples)
+        while (_pending.Count - _emitted >= maxSamples)
         {
             var cut = QuietestCutPoint();
             ready.Add(Emit(cut));
         }
+        DropEmitted();
         return ready;
     }
 
     /// <summary>Flushes whatever audio is left as the final chunk (null when nothing is left).</summary>
-    public AudioChunk? Finish() => _pending.Count == 0 ? null : Emit(_pending.Count);
+    public AudioChunk? Finish()
+    {
+        if (_pending.Count == 0) return null;
+        var chunk = Emit(_pending.Count);
+        DropEmitted();
+        return chunk;
+    }
+
+    /// <summary>The chunk <see cref="Finish"/> would flush now, left in place (null when nothing is pending).</summary>
+    public AudioChunk? Peek() => _pending.Count == 0 ? null : new AudioChunk(_nextIndex, _pendingStart, _pending.ToArray());
+
+    /// <summary>Where the audio not yet cut into a chunk starts, in samples from the start of the recording.</summary>
+    public int PendingStart => _pendingStart;
 
     private AudioChunk Emit(int cut)
     {
-        var chunk = new AudioChunk(_nextIndex, _pendingStart, _pending.GetRange(0, cut).ToArray());
-        _pending.RemoveRange(0, cut);
+        // Copied straight from the list's storage: GetRange would copy it once more, and a chunk is ~1 MB allocated on the
+        // audio thread.
+        var chunk = new AudioChunk(_nextIndex, _pendingStart, CollectionsMarshal.AsSpan(_pending).Slice(_emitted, cut).ToArray());
+        _emitted += cut;
         _pendingStart += cut;
         _nextIndex += 1;
         return chunk;
     }
 
+    /// <summary>
+    /// Removes what <see cref="Emit"/> handed out, once per call rather than once per chunk: removing each chunk from
+    /// the front moved all the audio after it, so re-transcribing a long recording (appended in one go) was quadratic.
+    /// </summary>
+    private void DropEmitted()
+    {
+        _pending.RemoveRange(0, _emitted);
+        _emitted = 0;
+    }
+
     private int QuietestCutPoint()
     {
+        var pending = CollectionsMarshal.AsSpan(_pending)[_emitted..];
         var lower = AudioFormat.SampleCount(_config.MinSeconds);
-        var upper = Math.Min(_pending.Count, AudioFormat.SampleCount(_config.MaxSeconds));
+        var upper = Math.Min(pending.Length, AudioFormat.SampleCount(_config.MaxSeconds));
         var window = Math.Max(1, AudioFormat.SampleCount(_config.WindowSeconds));
         var hop = Math.Max(1, AudioFormat.SampleCount(0.02));
         if (upper - lower <= window) return upper;
@@ -66,7 +106,7 @@ public sealed class Chunker
         var bestEnergy = double.MaxValue;
         var start = lower;
         var energy = 0.0;
-        for (var i = start; i < start + window; i++) energy += (double)_pending[i] * _pending[i];
+        for (var i = start; i < start + window; i++) energy += (double)pending[i] * pending[i];
         while (start + window <= upper)
         {
             if (energy < bestEnergy)
@@ -76,8 +116,8 @@ public sealed class Chunker
             }
             var next = start + hop;
             if (next + window > upper) break;
-            for (var i = start; i < next; i++) energy -= (double)_pending[i] * _pending[i];
-            for (var i = start + window; i < next + window; i++) energy += (double)_pending[i] * _pending[i];
+            for (var i = start; i < next; i++) energy -= (double)pending[i] * pending[i];
+            for (var i = start + window; i < next + window; i++) energy += (double)pending[i] * pending[i];
             start = next;
         }
         return bestStart + window / 2;

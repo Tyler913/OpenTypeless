@@ -47,7 +47,7 @@ OpenTypeless ist um genau dieses Problem herum gebaut.
 | **Schnitt an Pausen** | Während du sprichst, wird das Audio in Abschnitte von 18–28 s geschnitten, jeweils im leisesten 0,4-s-Fenster. So wird kein Wort zerteilt, und keine Anfrage kommt in die Nähe des 60-s-Limits des Anbieters. |
 | **Transkription schon beim Sprechen** | Jeder Abschnitt wird im Hintergrund transkribiert, sobald er geschnitten ist. Nach einem zweiminütigen Diktat sind beim Loslassen der Taste nur noch die letzten Sekunden übrig. |
 | **Wiederholung pro Abschnitt** | Netzabbrüche, 429 und 5xx-Fehler werden mit wachsender Wartezeit wiederholt. Ungültige Schlüssel und Abrechnungsfehler schlagen sofort fehl. Ein fehlgeschlagener Abschnitt beeinflusst nie die anderen, und fehlgeschlagene Abschnitte bekommen am Ende noch eine komplette Runde. |
-| **Backup-Modell bei langsamem Start** | Hat das Bereinigungsmodell nach 0,8 s noch nicht zu antworten begonnen oder schlägt es fehl, wird zusätzlich ein Backup-Modell eines anderen Herstellers gefragt, und die erste Antwort gewinnt. Ein langsamer Anbieter kostet so weniger als eine Sekunde extra, nicht die ganze Wartezeit. |
+| **Backup-Modell bei langsamem Start** | Hat das Bereinigungsmodell nach 0,55 s noch nicht zu antworten begonnen oder schlägt es fehl, wird zusätzlich ein Backup-Modell eines anderen Herstellers gefragt, und die erste Antwort gewinnt. Ein langsamer Anbieter kostet so weniger als eine Sekunde extra, nicht die ganze Wartezeit. |
 | **Leerlauf-Timeout statt Gesamt-Timeout** | Die Bereinigung empfängt ihre Antwort gestreamt und gilt erst als hängend, wenn 25 s lang *gar keine* Daten ankommen. Lange Ausgaben werden nie abgeschnitten. |
 | **Kein Wort geht verloren** | Das Audio wird schon beim Sprechen auf die Festplatte geschrieben. Jedes Diktat landet im Verlauf; ein fehlgeschlagenes lässt sich später wiederholen, und nur seine fehlgeschlagenen Abschnitte werden neu gesendet. Schlägt die Bereinigung fehl, wird stattdessen das Rohtranskript eingefügt. |
 
@@ -248,6 +248,7 @@ Beide Apps betten die Datei beim Build ein, und ein Text ohne Übersetzung ersch
 cd macos
 swift build
 scripts/test.sh                  # Unit-Tests, einschließlich eines Mock-Servers, der Fehler in eine 130-s-Aufnahme einschleust
+scripts/perf.sh                  # Performance-Budgets in einem Release-Build (Audiopfad, Arbeit auf dem Main-Thread); die CI führt sie ebenfalls aus
 ```
 
 Nützliche Kommandozeilenmodi des gebauten Programms (aus `macos/`):
@@ -273,6 +274,7 @@ OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapsh
 cd windows
 dotnet build OpenTypeless.slnx
 scripts\test.ps1       # Unit-Tests, einschließlich eines Mock-Servers, der Fehler in eine 130-s-Aufnahme einschleust
+scripts\perf.ps1       # Performance-Budgets in einem Release-Build (Audiopfad, Arbeit auf dem UI-Thread); die CI führt sie ebenfalls aus
 ```
 
 Kommandozeilenwerkzeuge (`OpenTypeless.Cli.exe`, wird mit der App ausgeliefert und nutzt deren Einstellungen und Schlüssel):

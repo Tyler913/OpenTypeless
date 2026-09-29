@@ -47,7 +47,7 @@ OpenTypeless está construido alrededor de ese problema.
 | **Corta en las pausas** | Mientras hablas, el audio se corta en segmentos de 18–28 s en la ventana de 0,4 s más silenciosa de cada tramo, así que nunca se parten palabras y ninguna solicitud se acerca al límite de 60 s del proveedor. |
 | **Transcribe mientras hablas** | Cada segmento se transcribe en segundo plano en cuanto se corta. Tras un dictado de dos minutos, al soltar la tecla solo quedan por procesar los últimos segundos. |
 | **Reintenta por segmento** | Las caídas de red, los 429 y los errores 5xx se reintentan con espera progresiva. Las claves incorrectas y los problemas de pago fallan de inmediato. Un segmento fallido nunca afecta a los demás, y los segmentos fallidos tienen una ronda completa más al final. |
-| **Modelo de respaldo si tarda en arrancar** | Si el modelo de limpieza no ha empezado a responder en 0,8 s, o falla, se consulta también a un modelo de respaldo de otro fabricante y gana el que responda primero. Un proveedor lento cuesta menos de un segundo extra, no toda la espera. |
+| **Modelo de respaldo si tarda en arrancar** | Si el modelo de limpieza no ha empezado a responder en 0,55 s, o falla, se consulta también a un modelo de respaldo de otro fabricante y gana el que responda primero. Un proveedor lento cuesta menos de un segundo extra, no toda la espera. |
 | **Tiempo de inactividad, no tiempo total** | La limpieza recibe su respuesta en streaming y solo se considera atascada cuando no llega *ningún* dato durante 25 s, así que las salidas largas nunca se cortan. |
 | **Nunca pierde palabras** | El audio se escribe en disco mientras hablas. Cada dictado se guarda en el historial; uno fallido se puede reintentar después y solo se reenvían sus segmentos fallidos. Si la limpieza falla, se inserta la transcripción original. |
 
@@ -248,6 +248,7 @@ Ambas apps incrustan el archivo al compilar, y un texto sin traducción se muest
 cd macos
 swift build
 scripts/test.sh                  # pruebas unitarias, incluido un servidor simulado que inyecta fallos en una grabación de 130 s
+scripts/perf.sh                  # presupuestos de rendimiento en una compilación de release (ruta de audio, trabajo en el hilo principal); la CI también los ejecuta
 ```
 
 Modos de línea de comandos útiles del binario compilado (desde `macos/`):
@@ -273,6 +274,7 @@ OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapsh
 cd windows
 dotnet build OpenTypeless.slnx
 scripts\test.ps1       # pruebas unitarias, incluido un servidor simulado que inyecta fallos en una grabación de 130 s
+scripts\perf.ps1       # presupuestos de rendimiento en una compilación Release (ruta de audio, trabajo en el hilo de la interfaz); la CI también los ejecuta
 ```
 
 Herramientas de línea de comandos (`OpenTypeless.Cli.exe`, distribuida junto a la app; usa los ajustes y las claves de la app):

@@ -74,7 +74,9 @@ public class PipelineTests
         };
 
         var client = new ApiClient(ProviderEndpoint.OpenRouter("test"), MockOpenRouter.Client());
-        var pipeline = new TranscriptionPipeline(client, new TranscriptionOptions("m"), policy: new RetryPolicy(3, 0.01));
+        // Counts every sample and every request, so without trimming and speculative tails (tested on their own).
+        var pipeline = new TranscriptionPipeline(client, new TranscriptionOptions("m"), policy: new RetryPolicy(3, 0.01),
+                                                 trimSilence: false, speculate: false);
         var audio = Speech(130);
         var block = AudioFormat.SampleCount(0.1);
         for (var i = 0; i < audio.Length; i += block)
@@ -91,6 +93,22 @@ public class PipelineTests
     }
 
     [Fact]
+    public async Task ProgressCountsChunksOnceTheRecordingHasEnded()
+    {
+        MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8("""{"text":"好"}"""));
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("test"), MockOpenRouter.Client());
+        var pipeline = new TranscriptionPipeline(client, new TranscriptionOptions("m"), policy: new RetryPolicy(2, 0.01));
+        pipeline.Append(Speech(40));
+        // The tail isn't handed out yet, so the total isn't known.
+        Assert.Null(pipeline.TranscriptionProgress());
+        await pipeline.Finish();
+        var progress = pipeline.TranscriptionProgress();
+        Assert.NotNull(progress);
+        Assert.True(progress.Value.Total > 1);
+        Assert.Equal(progress.Value.Total, progress.Value.Done);
+    }
+
+    [Fact]
     public async Task PermanentFailureKeepsPartialText()
     {
         var audio = Speech(40);
@@ -102,7 +120,8 @@ public class PipelineTests
             return (500, MockOpenRouter.Utf8("""{"error":{"message":"down"}}"""));
         };
         var client = new ApiClient(ProviderEndpoint.OpenRouter("test"), MockOpenRouter.Client());
-        var pipeline = new TranscriptionPipeline(client, new TranscriptionOptions("m"), policy: new RetryPolicy(2, 0.01));
+        // Recognises the first chunk by its length, so it's sent untrimmed.
+        var pipeline = new TranscriptionPipeline(client, new TranscriptionOptions("m"), policy: new RetryPolicy(2, 0.01), trimSilence: false);
         pipeline.Append(audio);
         var failure = await Assert.ThrowsAsync<PipelineFailure>(() => pipeline.Finish());
         Assert.Equal("第一段", failure.PartialText);

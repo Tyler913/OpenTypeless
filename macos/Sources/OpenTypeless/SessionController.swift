@@ -40,6 +40,13 @@ final class SessionController: ObservableObject {
     private var handsFree = false
     private var processingTask: Task<Void, Never>?
     private var maxDurationTimer: Timer?
+    /// Keeps the connections warm while recording (see `warmConnections`).
+    private var warmTimer: Timer?
+    private let preconnector = Preconnector()
+    /// A clean-up started before the key was released, on the transcript a speculative tail gave.
+    private var speculativePolish: SpeculativePolish?
+    /// Clean-ups started ahead of time that finished but were then dropped because the speaker went on: they were billed too.
+    private var discardedPolishes: [HedgedPolishResult] = []
     private var modelInfo: [String: APIClient.ModelInfo] = [:]
     /// False when retrying from the history window: the result goes to the clipboard instead.
     private var deliverByPaste = true
@@ -178,6 +185,8 @@ final class SessionController: ObservableObject {
     // MARK: - Recording
 
     private func startRecording() {
+        // First of all, so the connections are ready by the time the first request goes out.
+        warmConnections()
         guard let sttEndpoint = settings.sttEndpoint, settings.isConfigured(settings.sttProvider) else {
             note("not started — speech-to-text provider not configured")
             hud.show(.error(L("请先在设置里配置语音转文字服务商（\(settings.sttProvider.displayName)）",
@@ -214,7 +223,16 @@ final class SessionController: ObservableObject {
             return
         }
 
-        let pipeline = makePipeline(endpoint: sttEndpoint, preset: [:])
+        let recordID = record.id
+        let pipeline = makePipeline(endpoint: sttEndpoint, preset: [:], onSpeculation: { [weak self] raw in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.record?.id == recordID else { return }
+                    self.speculationChanged(raw)
+                }
+            }
+        })
+        discardedPolishes = []
         let counter = SampleCounter()
         // A warm recorder on another input (the choice changed) is reopened on the right one.
         if recorder.isRecording, openDeviceUID != chosenDeviceUID { recorder.stop() }
@@ -272,12 +290,25 @@ final class SessionController: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in self?.finishRecording() }
         }
+        // A long dictation keeps the clean-up's connection (idle while speech-to-text works) from timing out.
+        warmTimer = Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.warmConnections() }
+        }
+    }
+
+    /// Opens the connections this dictation's requests will use (speech-to-text and clean-up, main and backup routes)
+    /// ahead of them, so the first request after the key is released doesn't wait for DNS, TCP and TLS. Each host once.
+    private func warmConnections() {
+        var endpoints: [ProviderEndpoint?] = [settings.sttEndpoint, settings.sttBackupEndpoint]
+        if settings.polishEnabled { endpoints += [settings.polishEndpoint, settings.polishBackupEndpoint] }
+        preconnector.warm(endpoints.map { $0.map { APIClient(endpoint: $0) } })
     }
 
     /// How long each speech-to-text route takes, kept while the app runs, so the backup is asked when a chunk is late.
     private var latencies: [String: TranscriptionLatency] = [:]
 
-    private func makePipeline(endpoint: ProviderEndpoint, preset: [Int: String]) -> TranscriptionPipeline {
+    private func makePipeline(endpoint: ProviderEndpoint, preset: [Int: String],
+                              onSpeculation: (@Sendable (String?) -> Void)? = nil) -> TranscriptionPipeline {
         let language = settings.sttLanguage.isEmpty ? nil : settings.sttLanguage
         let backup = settings.sttBackupEndpoint.map {
             (client: APIClient(endpoint: $0),
@@ -291,13 +322,16 @@ final class SessionController: ObservableObject {
             options: .init(model: settings.sttModel, language: language),
             preset: preset,
             backup: backup,
-            latency: latency
+            latency: latency,
+            onSpeculation: onSpeculation
         )
     }
 
     private func stopCapture() {
         maxDurationTimer?.invalidate()
         maxDurationTimer = nil
+        warmTimer?.invalidate()
+        warmTimer = nil
         // Stopping delivers what the recorder still holds, so a cold recorder stops first. After `end` nothing
         // reaches the writer; a warm recorder goes back to filling the pre-roll.
         if !settings.keepMicrophoneWarm {
@@ -332,7 +366,7 @@ final class SessionController: ObservableObject {
         history.update(record)
         self.record = record
         state = .processing
-        hud.show(.working)
+        hud.showWorking(polishes: settings.polishEnabled)
 
         processingTask = Task { [weak self] in
             await self?.process(record: record, pipeline: pipeline)
@@ -344,11 +378,28 @@ final class SessionController: ObservableObject {
     private func process(record initial: DictationRecord, pipeline: TranscriptionPipeline) async {
         var record = initial
         let started = ProcessInfo.processInfo.systemUptime
+        // Moves the bar as the speech-to-text chunks still out come back.
+        let bar = hud.model.bar
+        let watch = Task { @MainActor in
+            while !Task.isCancelled {
+                if let counts = pipeline.transcriptionProgress() {
+                    bar.reach(.transcribing(done: counts.done, total: counts.total))
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+        }
+        defer { watch.cancel() }
         do {
             let raw = try await pipeline.finish()
+            watch.cancel()
+            bar.reach(.transcribed)
             record.timing = DictationRecord.Timing(transcription: ProcessInfo.processInfo.systemUptime - started)
             let backupChunks = pipeline.backupChunkCount()
             if backupChunks > 0 { record.timing?.transcriptionBackupChunks = backupChunks }
+            if pipeline.tailWasSpeculative {
+                note(String(format: "last segment transcribed ahead of time: text %.2fs after release",
+                            ProcessInfo.processInfo.systemUptime - started))
+            }
             record.chunkTexts = pipeline.completedTranscripts()
             record.rawText = raw
             record.error = nil
@@ -359,7 +410,6 @@ final class SessionController: ObservableObject {
                 finish(showing: .error(L("没有识别到语音", "No speech detected")), hideAfter: 2)
                 return
             }
-            history.update(record)
             await polishAndDeliver(record: &record, pipeline: pipeline)
         } catch let failure as PipelineFailure {
             record.chunkTexts = pipeline.completedTranscripts()
@@ -387,16 +437,43 @@ final class SessionController: ObservableObject {
         var polished: HedgedPolishResult?
 
         if settings.polishEnabled {
+            // When the speaker paused before letting go and said nothing more, the clean-up of this very transcript
+            // started while they were still holding the key: take it over (often it's already done).
+            let polishing: Task<HedgedPolishResult, Error>
+            var ahead = 0.0
+            // One that already failed (while recording) gets a fresh attempt instead.
+            if let speculative = speculativePolish, speculative.raw == record.rawText, !speculative.outcome.failed {
+                speculativePolish = nil
+                polishing = speculative.task
+                // What it streams from now on moves this dictation's bar.
+                speculative.partials.target = onPolishPartial(expected: record.rawText)
+                ahead = ProcessInfo.processInfo.systemUptime - speculative.startedAt
+                note(String(format: "clean-up started %.2fs ago, while recording", ahead))
+            } else {
+                dropSpeculativePolish()
+                let raw = record.rawText
+                let onPartial = onPolishPartial(expected: raw)
+                polishing = Task { try await self.polish(raw, onPartial: onPartial) }
+            }
+            // Saved while the clean-up runs, so the transcript survives a crash.
+            history.update(record)
             do {
-                let outcome = try await polish(record.rawText)
+                let outcome = try await withTaskCancellationHandler {
+                    try await polishing.value
+                } onCancel: {
+                    polishing.cancel()
+                }
                 polished = outcome
                 let result = outcome.result
-                record.timing?.polishFirstToken = outcome.firstTokenSeconds
-                record.timing?.polish = outcome.totalSeconds
+                // The wait after the key was released: a clean-up started ahead of time had a head start.
+                let firstToken = max(0, outcome.firstTokenSeconds - ahead)
+                let total = max(0, outcome.totalSeconds - ahead)
+                record.timing?.polishFirstToken = firstToken
+                record.timing?.polish = total
                 record.timing?.polishModel = outcome.model
                 record.timing?.usedBackup = outcome.usedBackup
                 note(String(format: "polish: %@%@, first token %.2fs, total %.2fs", outcome.model,
-                            outcome.usedBackup ? " (backup)" : "", outcome.firstTokenSeconds, outcome.totalSeconds))
+                            outcome.usedBackup ? " (backup)" : "", firstToken, total))
                 if result.truncated {
                     notice = L("未整理，已插入原文", "Inserted without clean-up")
                     record.status = .polishFailed
@@ -418,11 +495,85 @@ final class SessionController: ObservableObject {
             record.status = .done
         }
         if record.status == .polishFailed { record.polishedText = nil }
-        account(&record, pipeline: pipeline, polished: polished)
-        history.update(record)
 
-        guard !Task.isCancelled else { return }
-        await deliver(text, notice: notice)
+        if !Task.isCancelled {
+            hud.model.bar.reach(.delivered)
+            await deliver(text, notice: notice)
+        }
+        // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
+        account(&record, pipeline: pipeline, polished: polished, discarded: discardedPolishes)
+        discardedPolishes = []
+        history.update(record)
+    }
+
+    // MARK: - Clean-up ahead of time
+
+    /// A clean-up of `raw`, started while recording.
+    private struct SpeculativePolish {
+        let raw: String
+        let startedAt: TimeInterval
+        let task: Task<HedgedPolishResult, Error>
+        let outcome: PolishOutcome
+        let partials: PartialRelay
+    }
+
+    /// Where a clean-up started ahead of time sends its partial text: nowhere until the dictation takes it over, so one
+    /// that is dropped never moves the bar.
+    private final class PartialRelay: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _target: (@Sendable (String) -> Void)?
+        var target: (@Sendable (String) -> Void)? {
+            get { lock.withLock { _target } }
+            set { lock.withLock { _target = newValue } }
+        }
+        func send(_ text: String) { target?(text) }
+    }
+
+    /// The answer of a clean-up started ahead of time, once it's in (a `Task`'s value can't be read without waiting).
+    @MainActor private final class PolishOutcome {
+        var result: HedgedPolishResult?
+        var failed = false
+    }
+
+    /// The pipeline has the whole transcript the recording would give if it ended now (the speaker paused), or no longer
+    /// has one (they went on). Starts cleaning that transcript up, so the text can be ready when the key is released.
+    private func speculationChanged(_ raw: String?) {
+        guard state == .recording, settings.polishEnabled else { return }
+        if let raw, raw == speculativePolish?.raw { return }
+        dropSpeculativePolish()
+        guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let outcome = PolishOutcome()
+        let partials = PartialRelay()
+        let task = Task { [weak self] () async throws -> HedgedPolishResult in
+            guard let self else { throw APIError.cancelled }
+            do {
+                let result = try await self.polish(raw, onPartial: { partials.send($0) })
+                outcome.result = result
+                return result
+            } catch {
+                outcome.failed = true
+                throw error
+            }
+        }
+        speculativePolish = SpeculativePolish(raw: raw, startedAt: ProcessInfo.processInfo.systemUptime, task: task,
+                                              outcome: outcome, partials: partials)
+        note("clean-up started ahead of time (speaker paused)")
+    }
+
+    private func dropSpeculativePolish() {
+        guard let speculative = speculativePolish else { return }
+        speculativePolish = nil
+        if let result = speculative.outcome.result { discardedPolishes.append(result) } else { speculative.task.cancel() }
+    }
+
+    /// Moves the bar as the clean-up streams in: its first token, then its length against the transcript's.
+    private func onPolishPartial(expected transcript: String) -> @Sendable (String) -> Void {
+        let expected = transcript.utf16.count
+        let bar = hud.model.bar
+        return { text in
+            let received = text.utf16.count
+            DispatchQueue.main.async { bar.reach(.polishing(received: received, expected: expected)) }
+        }
     }
 
     /// Pastes at the cursor unless focus is clearly not a text input. Whether the paste actually
@@ -440,7 +591,12 @@ final class SessionController: ObservableObject {
         note("deliver → \(outcome) (focus \(target)) in \(frontmostID)")
         switch outcome {
         case .pasted:
-            if let notice { finish(showing: .error(notice), hideAfter: 3) } else { finish(showing: .hidden, hideAfter: 0) }
+            if let notice {
+                finish(showing: .error(notice), hideAfter: 3)
+            } else {
+                reset()
+                hud.finishWorking()
+            }
             if settings.learnFromEdits { editWatcher.watch(inserted: text) }
         case .notPasted:
             finish(showing: .copied, hideAfter: 1.6)
@@ -452,14 +608,14 @@ final class SessionController: ObservableObject {
 
     private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
 
-    private func polish(_ raw: String) async throws -> HedgedPolishResult {
+    private func polish(_ raw: String, onPartial: (@Sendable (String) -> Void)? = nil) async throws -> HedgedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
         let primary = route(endpoint, model: settings.polishModel)
         let backup = settings.polishBackupEndpoint.map { route($0, model: settings.polishBackupModel) }
         return try await RetryPolicy(maxAttempts: 2).run { _ in
-            try await HedgedPolish.run(transcript: raw, primary: primary, backup: backup)
+            try await HedgedPolish.run(transcript: raw, primary: primary, backup: backup, onPartial: onPartial)
         }
     }
 
@@ -476,7 +632,9 @@ final class SessionController: ObservableObject {
 
     /// Prices what this run's requests used (the speech-to-text of every chunk sent, and the clean-up answer that was
     /// kept) and adds it, with the dictation's words once it's finished, to the Home page totals.
-    private func account(_ record: inout DictationRecord, pipeline: TranscriptionPipeline, polished: HedgedPolishResult?) {
+    /// `discarded`: clean-ups done ahead of time for a transcript the speaker then went on from.
+    private func account(_ record: inout DictationRecord, pipeline: TranscriptionPipeline, polished: HedgedPolishResult?,
+                         discarded: [HedgedPolishResult] = []) {
         let prices = PriceStore.shared
         let transcription = CostEstimator.transcriptions(pipeline.requestUsages(),
                                                          price: prices.price(settings.sttProvider, settings.sttModel),
@@ -488,10 +646,11 @@ final class SessionController: ObservableObject {
         let transcriptionCost = transcription.cost + backup.cost
         var unpriced = transcription.unpriced + backup.unpriced
         var cleanup = 0.0
-        if let polished, let usage = polished.result.usage {
-            if let cost = CostEstimator.chat(usage, price: prices.price(polished.provider, polished.model),
-                                             preferReported: polished.provider == .openrouter) {
-                cleanup = cost
+        for answer in discarded + [polished].compactMap({ $0 }) {
+            guard let usage = answer.result.usage else { continue }
+            if let cost = CostEstimator.chat(usage, price: prices.price(answer.provider, answer.model),
+                                             preferReported: answer.provider == .openrouter) {
+                cleanup += cost
             } else {
                 unpriced += 1
             }
@@ -519,7 +678,7 @@ final class SessionController: ObservableObject {
         history.update(record)
         self.record = record
         state = .processing
-        hud.show(.working)
+        hud.showWorking(polishes: settings.polishEnabled)
 
         let pipeline = makePipeline(endpoint: endpoint, preset: saved.chunkTexts)
         self.pipeline = pipeline
@@ -566,6 +725,7 @@ final class SessionController: ObservableObject {
     }
 
     private func reset() {
+        dropSpeculativePolish()
         state = .idle
         preRollSeconds = 0
         pipeline = nil

@@ -46,6 +46,7 @@ enum UISnapshots {
         let model = HUDModel()
         model.levels = (0..<18).map { i in Float(abs(sin(Double(i) * 0.7))) * 0.8 + 0.1 }
         model.startedAt = Date().addingTimeInterval(-83)
+        model.bar.show(0.55)
         let phases: [(String, HUDModel.Phase)] = [
             ("hud-recording", .recording),
             ("hud-working", .working),

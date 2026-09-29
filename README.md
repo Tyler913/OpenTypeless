@@ -47,7 +47,7 @@ OpenTypeless is built around that problem.
 | **Chunk at pauses** | While you talk, audio is cut into 18–28 s segments at the quietest 0.4 s window in each span, so words are never cut in half and no request comes close to the upstream 60 s limit. |
 | **Transcribe while you talk** | Each segment is transcribed in the background as soon as it is cut. After a two-minute dictation, only the last few seconds are left to process when you release the key. |
 | **Retry per segment** | Network drops, 429s and 5xx errors are retried with backoff. Bad keys and billing errors fail fast. One failed segment never affects the others, and failed segments get one more full round at the end. |
-| **Backup model for slow starts** | If the clean-up model hasn't started answering within 0.8 s, or fails, a backup model from another vendor is asked too and whichever answers first wins. A slow upstream provider costs under a second more, not the whole wait. |
+| **Backup model for slow starts** | If the clean-up model hasn't started answering within 0.55 s, or fails, a backup model from another vendor is asked too and whichever answers first wins. A slow upstream provider costs under a second more, not the whole wait. |
 | **Idle timeout, not total timeout** | The clean-up step streams its answer, and is only considered stuck when *no* data arrives for 25 s, so long outputs are never cut off. |
 | **Never lose words** | Audio is written to disk as you speak. Every dictation is kept in History; a failed one can be retried later, and only its failed segments are re-sent. If clean-up fails, the raw transcript is inserted instead. |
 
@@ -248,6 +248,7 @@ Both apps embed the file at build time, and a string with no translation shows i
 cd macos
 swift build
 scripts/test.sh                  # unit tests, including a mock server that injects failures into a 130 s recording
+scripts/perf.sh                  # performance budgets in a release build (audio path, main-thread work); CI runs them too
 ```
 
 Useful command-line modes of the built binary (from `macos/`):
@@ -273,6 +274,7 @@ OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapsh
 cd windows
 dotnet build OpenTypeless.slnx
 scripts\test.ps1       # unit tests, including a mock server that injects failures into a 130 s recording
+scripts\perf.ps1       # performance budgets in a Release build (audio path, UI-thread work); CI runs them too
 ```
 
 Command-line tools (`OpenTypeless.Cli.exe`, shipped next to the app; it uses the app's settings and keys):

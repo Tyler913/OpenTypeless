@@ -25,9 +25,12 @@ struct HistoryPage: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
+                // Filtered once per update: every row needs the selection, and searching compares every record's text.
+                let records = filtered
+                let selected = selectedID(in: records)
                 HStack(alignment: .top, spacing: 14) {
-                    list.frame(width: 260)
-                    if let record = filtered.first(where: { $0.id == selectedID }) {
+                    list(records, selected: selected).frame(width: 260)
+                    if let record = records.first(where: { $0.id == selected }) {
                         HistoryDetail(record: record, controller: controller, history: history)
                             .id(record.id)
                     } else {
@@ -89,8 +92,7 @@ struct HistoryPage: View {
         }
     }
 
-    private var selectedID: DictationRecord.ID? {
-        let records = filtered
+    private func selectedID(in records: [DictationRecord]) -> DictationRecord.ID? {
         if let selection, records.contains(where: { $0.id == selection }) { return selection }
         return records.first?.id
     }
@@ -102,11 +104,11 @@ struct HistoryPage: View {
     }
 
     /// Records grouped by the day they were made, newest day first ("Today", "Yesterday", "Fri, Sep 26").
-    private var sections: [DaySection] {
+    private static func sections(of records: [DictationRecord]) -> [DaySection] {
         let calendar = Calendar.current
         var result: [DaySection] = []
         var currentDay: Date?
-        for record in filtered {
+        for record in records {
             let day = calendar.startOfDay(for: record.date)
             if day != currentDay {
                 currentDay = day
@@ -127,9 +129,9 @@ struct HistoryPage: View {
             : day.formatted(.dateTime.year().month(.abbreviated).day().locale(locale))
     }
 
-    private var list: some View {
+    private func list(_ records: [DictationRecord], selected: DictationRecord.ID?) -> some View {
         Card {
-            let sections = self.sections
+            let sections = Self.sections(of: records)
             if sections.isEmpty {
                 Text(L("没有匹配的听写", "No matching dictations"))
                     .font(.system(size: 12))
@@ -141,7 +143,7 @@ struct HistoryPage: View {
                         ForEach(sections) { section in
                             Section {
                                 ForEach(section.records) { record in
-                                    HistoryRow(record: record, selected: record.id == selectedID) { selection = record.id }
+                                    HistoryRow(record: record, selected: record.id == selected) { selection = record.id }
                                 }
                             } header: {
                                 Text(section.title)

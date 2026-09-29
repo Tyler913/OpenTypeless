@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Numerics;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
@@ -11,6 +12,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using OpenTypeless.Native;
 using OpenTypeless.Session;
+using TypelessCore;
 using Windows.Graphics;
 using Windows.UI;
 
@@ -35,15 +37,37 @@ public sealed class HudController
         _window ??= new HudWindow(Model);
         _window.ShowHud();
 
-        if (autoHideAfter is { } seconds)
+        if (autoHideAfter is { } seconds) HideAfter(seconds);
+    }
+
+    /// <summary>Transcribing and cleaning up, with the bar starting from empty.</summary>
+    public void ShowWorking(bool polishes)
+    {
+        Model.StartProgress(polishes);
+        Show(new HudPhase.Working());
+    }
+
+    /// <summary>The text went in: the bar runs to the end, then the capsule goes.</summary>
+    public void FinishWorking()
+    {
+        if (Model.Phase is not HudPhase.Working)
         {
-            _hideTimer ??= DispatcherQueue.GetForCurrentThread().CreateTimer();
-            _hideTimer.IsRepeating = false;
-            _hideTimer.Interval = TimeSpan.FromSeconds(Math.Max(0.01, seconds));
-            _hideTimer.Tick -= OnHideTimer;
-            _hideTimer.Tick += OnHideTimer;
-            _hideTimer.Start();
+            Show(new HudPhase.Hidden());
+            return;
         }
+        Model.Progress.Reach(new ProcessingProgress.Milestone.Delivered());
+        HideAfter(0.3);
+    }
+
+    private void HideAfter(double seconds)
+    {
+        _hideTimer?.Stop();
+        _hideTimer ??= DispatcherQueue.GetForCurrentThread().CreateTimer();
+        _hideTimer.IsRepeating = false;
+        _hideTimer.Interval = TimeSpan.FromSeconds(Math.Max(0.01, seconds));
+        _hideTimer.Tick -= OnHideTimer;
+        _hideTimer.Tick += OnHideTimer;
+        _hideTimer.Start();
     }
 
     private void OnHideTimer(DispatcherQueueTimer sender, object args) => Show(new HudPhase.Hidden());
@@ -64,7 +88,14 @@ public sealed class HudWindow : Window
     private const double BottomMarginDips = 28;
 
     private readonly HudModel _model;
+    /// <summary>The processing bar behind <see cref="_root"/>, which holds the capsule's content.</summary>
+    private readonly Grid _frame = new();
     private readonly Grid _root = new() { Padding = new Thickness(16, 0, 16, 0) };
+    private readonly Border _fill;
+    private readonly ScaleTransform _fillScale = new() { ScaleX = 0 };
+    private readonly Stopwatch _frameClock = new();
+    private TimeSpan _lastFrame;
+    private bool _animating;
     private readonly LevelBars _bars;
     private readonly TextBlock _elapsed = new() { FontSize = 13, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _preview = new()
@@ -94,7 +125,16 @@ public sealed class HudWindow : Window
         // Same-width digits, like the macOS timer's monospacedDigit(): the row doesn't shift every second.
         Typography.SetNumeralAlignment(_elapsed, FontNumeralAlignment.Tabular);
         _root.VerticalAlignment = VerticalAlignment.Stretch;
-        Content = _root;
+        _fill = new Border
+        {
+            RenderTransform = _fillScale,
+            RenderTransformOrigin = new Windows.Foundation.Point(0, 0.5),
+            IsHitTestVisible = false,
+            Visibility = Visibility.Collapsed,
+        };
+        _frame.Children.Add(_fill);
+        _frame.Children.Add(_root);
+        Content = _frame;
 
         _clock = DispatcherQueue.CreateTimer();
         _clock.Interval = TimeSpan.FromSeconds(0.5);
@@ -125,6 +165,7 @@ public sealed class HudWindow : Window
     {
         _visible = false;
         _clock.Stop();
+        SetAnimating(false);
         Win32.ShowWindow(Hwnd, Win32.SW_HIDE);
     }
 
@@ -138,6 +179,9 @@ public sealed class HudWindow : Window
         }
         _root.Children.Clear();
         _clock.Stop();
+        var working = _model.Phase is HudPhase.Working;
+        _fill.Visibility = working ? Visibility.Visible : Visibility.Collapsed;
+        SetAnimating(working);
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         switch (_model.Phase)
         {
@@ -154,9 +198,8 @@ public sealed class HudWindow : Window
                 _clock.Start();
                 break;
             case HudPhase.Working:
-                row.Spacing = 9;
-                row.Children.Add(new ProgressRing { IsActive = true, Width = 16, Height = 16 });
-                row.Children.Add(Label(L("处理中", "Working")));
+                // About as wide as the recording row, so the capsule keeps its size when the key is released.
+                row.Children.Add(new Grid { Width = 128, Children = { HoppingDots() } });
                 break;
             case HudPhase.Copied:
                 row.Spacing = 8;
@@ -208,6 +251,89 @@ public sealed class HudWindow : Window
         }
     }
 
+    /// <summary>Starts or stops advancing the processing bar on every frame.</summary>
+    private void SetAnimating(bool on)
+    {
+        if (on == _animating) return;
+        _animating = on;
+        if (on)
+        {
+            // The accent colour may have changed since the last dictation.
+            var accent = Palette.Of(Tint.Accent);
+            _fill.Background = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0, 0.5),
+                EndPoint = new Windows.Foundation.Point(1, 0.5),
+                GradientStops =
+                {
+                    new GradientStop { Color = Color.FromArgb(31, accent.R, accent.G, accent.B), Offset = 0 },
+                    new GradientStop { Color = Color.FromArgb(77, accent.R, accent.G, accent.B), Offset = 1 },
+                },
+            };
+            _fillScale.ScaleX = _model.Progress.Shown;
+            _frameClock.Restart();
+            _lastFrame = TimeSpan.Zero;
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnFrame;
+        }
+        else
+        {
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnFrame;
+        }
+    }
+
+    private void OnFrame(object? sender, object args)
+    {
+        var now = _frameClock.Elapsed;
+        _fillScale.ScaleX = _model.Progress.Tick((now - _lastFrame).TotalSeconds);
+        _lastFrame = now;
+    }
+
+    /// <summary>
+    /// Three dots hopping in turn, like a voice still talking, while the text is on its way. The compositor runs the
+    /// hops, with the same rhythm as the macOS dots: each one hops for 0.36 s, 0.14 s after the one before, every 1.1 s.
+    /// </summary>
+    private static StackPanel HoppingDots()
+    {
+        var dots = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 5, Height = 18,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        };
+        for (var i = 0; i < 3; i++)
+        {
+            var dot = new Ellipse { Width = 6, Height = 6, Fill = Ui.Primary, Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center };
+            var delay = TimeSpan.FromSeconds(0.14 * i);
+            dot.Loaded += (_, _) => Hop(dot, delay);
+            dots.Children.Add(dot);
+        }
+        return dots;
+    }
+
+    private static void Hop(UIElement dot, TimeSpan delay)
+    {
+        const float period = 1.1f, top = 0.18f / period, landed = 0.36f / period;
+        ElementCompositionPreview.SetIsTranslationEnabled(dot, true);
+        var visual = ElementCompositionPreview.GetElementVisual(dot);
+        var compositor = visual.Compositor;
+        var up = compositor.CreateCubicBezierEasingFunction(new Vector2(0.33f, 0), new Vector2(0.67f, 1));
+
+        ScalarKeyFrameAnimation Cycle(float rest, float peak)
+        {
+            var animation = compositor.CreateScalarKeyFrameAnimation();
+            animation.InsertKeyFrame(0, rest);
+            animation.InsertKeyFrame(top, peak, up);
+            animation.InsertKeyFrame(landed, rest, up);
+            animation.InsertKeyFrame(1, rest);
+            animation.Duration = TimeSpan.FromSeconds(period);
+            animation.DelayTime = delay;
+            animation.IterationBehavior = AnimationIterationBehavior.Forever;
+            return animation;
+        }
+
+        visual.StartAnimation("Translation.Y", Cycle(0, -4.5f));
+        visual.StartAnimation("Opacity", Cycle(0.6f, 0.9f));
+    }
+
     private static TextBlock Label(string text) => new() { Text = text, FontSize = 13, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center };
 
     private void UpdateLevels() => _bars.SetLevels(_model.Levels, animated: true);
@@ -235,23 +361,30 @@ public sealed class HudWindow : Window
             var height = (int)Math.Round(heightDips * scale);
             _centerX = (work.Left + work.Right) / 2;
             _bottom = work.Bottom - (int)Math.Round(BottomMarginDips * scale);
-            WindowHelpers.PlaceClient(this, new RectInt32(_centerX - width / 2, _bottom - height, width, height));
+            _placed = new RectInt32(_centerX - width / 2, _bottom - height, width, height);
+            WindowHelpers.PlaceClient(this, _placed);
         }
         else
         {
             var scale = WindowHelpers.Scale(Hwnd);
             var width = (int)Math.Round(widthDips * scale);
             var height = (int)Math.Round(heightDips * scale);
-            WindowHelpers.PlaceClient(this, new RectInt32(_centerX - width / 2, _bottom - height, width, height));
+            var rect = new RectInt32(_centerX - width / 2, _bottom - height, width, height);
+            // The live preview lands here several times a second, mostly without changing the size: moving the window
+            // onto itself would still cost a round of window messages and layout.
+            if (rect.Equals(_placed)) return;
+            _placed = rect;
+            WindowHelpers.PlaceClient(this, rect);
         }
     }
 
     private int _bottom;
+    private RectInt32 _placed;
 
     private double EstimatedWidth() => _model.Phase switch
     {
         HudPhase.Recording => 160,
-        HudPhase.Working => 110,
+        HudPhase.Working => 160,
         HudPhase.Copied => 170,
         HudPhase.Learned l => Math.Min(372, 150 + l.Terms.Length * 9),
         HudPhase.Error e => Math.Min(372, 40 + e.Message.Length * 13),

@@ -1,10 +1,15 @@
+using TypelessCore;
+
 namespace OpenTypeless.Session;
 
 public abstract record HudPhase
 {
     public sealed record Hidden : HudPhase;
     public sealed record Recording : HudPhase;
-    /// <summary>Transcribing and cleaning up: one state, the user doesn't need the details.</summary>
+    /// <summary>
+    /// Transcribing and cleaning up: one state, the user doesn't need the details. Hopping dots, and a bar filling
+    /// the capsule as the answers come back (<see cref="HudModel.Progress"/>).
+    /// </summary>
     public sealed record Working : HudPhase;
     /// <summary>Nothing to paste into, so the text went to the clipboard.</summary>
     public sealed record Copied : HudPhase;
@@ -44,6 +49,12 @@ public sealed class HudModel
             PhaseChanged?.Invoke();
         }
     }
+
+    /// <summary>Where the processing bar stands; the capsule advances it on every frame while working.</summary>
+    public ProcessingProgress Progress { get; private set; } = new(polishes: true);
+
+    /// <summary>Empties the processing bar for a new dictation.</summary>
+    public void StartProgress(bool polishes) => Progress = new ProcessingProgress(polishes);
 
     public float[] Levels { get; private set; } = new float[18];
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;

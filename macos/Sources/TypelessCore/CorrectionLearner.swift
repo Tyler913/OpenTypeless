@@ -80,15 +80,27 @@ public enum CorrectionLearner {
     /// whole Chinese words when the edited text's `words` are given.
     static func changes(original: String, edited: String, words wordRanges: [Range<String.Index>] = []) -> [Correction] {
         let a = tokens(original), b = tokens(edited)
-        // Longest common subsequence over token text.
+        // Longest common subsequence over token text. The tokens both texts start and end with are left out of the
+        // table: after a small fix to a long dictation they are nearly all of it, and this runs on the main thread.
         let n = a.count, m = b.count
-        var lcs = [[Int]](repeating: [Int](repeating: 0, count: m + 1), count: n + 1)
-        if n > 0, m > 0 {
-            for i in stride(from: n - 1, through: 0, by: -1) {
-                for j in stride(from: m - 1, through: 0, by: -1) {
-                    lcs[i][j] = a[i].text == b[j].text ? lcs[i + 1][j + 1] + 1 : max(lcs[i + 1][j], lcs[i][j + 1])
-                }
+        var start = 0
+        while start < n, start < m, a[start].text == b[start].text { start += 1 }
+        var end = 0
+        while end < n - start, end < m - start, a[n - 1 - end].text == b[m - 1 - end].text { end += 1 }
+        let endA = n - end, endB = m - end
+        var lcs = [[Int]](repeating: [Int](repeating: 0, count: endB - start + 1), count: endA - start + 1)
+        for i in stride(from: endA - start - 1, through: 0, by: -1) {
+            for j in stride(from: endB - start - 1, through: 0, by: -1) {
+                lcs[i][j] = a[start + i].text == b[start + j].text ? lcs[i + 1][j + 1] + 1 : max(lcs[i + 1][j], lcs[i][j + 1])
             }
+        }
+        // Whether the walk below skips an edited token rather than an original one, as a table over every token would
+        // decide. Inside the table it is the usual comparison (the shared end adds the same to both sides); past its
+        // edge only the shared end is left, and the full table skips on the side that is less far into it.
+        func skipEdited(_ i: Int, _ j: Int) -> Bool {
+            i >= endA || j >= endB
+                ? i - endA > j - endB
+                : lcs[i - start][j + 1 - start] >= lcs[i + 1 - start][j - start]
         }
         // Hunks as token index ranges, and which original token each unchanged edited token matches.
         var hunks: [(a: Range<Int>, b: Range<Int>)] = []
@@ -103,7 +115,7 @@ public enum CorrectionLearner {
                 matchOf[j] = i
                 i += 1; j += 1
                 startA = i; startB = j
-            } else if j < m, i == n || lcs[i][j + 1] >= lcs[i + 1][j] {
+            } else if j < m, skipEdited(i, j) {
                 j += 1
             } else {
                 i += 1

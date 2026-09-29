@@ -486,17 +486,21 @@ public class BackupTranscriptionTests
     [Fact]
     public async Task SlowPrimaryIsOvertakenByTheBackup()
     {
-        MockOpenRouter.Handler = (_, body) =>
+        MockOpenRouter.Handler = (_, body) => (200, MockOpenRouter.Utf8($"{{\"text\":\"{Model(body)}\"}}"));
+        MockOpenRouter.Delay = body => Model(body) == "primary" ? 1.5 : 0;
+        try
         {
-            if (Model(body) == "primary") Thread.Sleep(1500);
-            return (200, MockOpenRouter.Utf8($"{{\"text\":\"{Model(body)}\"}}"));
-        };
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        var (text, pipeline) = await Run(new TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1));
-        Assert.Equal("backup", text);
-        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1.4));
-        Assert.Equal(1, pipeline.BackupChunkCount());
-        Assert.Empty(pipeline.Usages());
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var (text, pipeline) = await Run(new TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1));
+            Assert.Equal("backup", text);
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1.4));
+            Assert.Equal(1, pipeline.BackupChunkCount());
+            Assert.Empty(pipeline.Usages());
+        }
+        finally
+        {
+            MockOpenRouter.Delay = null;
+        }
     }
 
     [Fact]
@@ -506,17 +510,24 @@ public class BackupTranscriptionTests
         MockOpenRouter.Handler = (_, body) =>
         {
             lock (models) models.Add(Model(body));
-            if (Model(body) == "primary") Thread.Sleep(1500);
             return (200, MockOpenRouter.Utf8($"{{\"text\":\"{Model(body)}\"}}"));
         };
-        var pipeline = PipelineWithBackup(new TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1));
-        pipeline.Append(Tone(29)); // the first chunk goes out while the user is still talking
-        await Task.Delay(600);
-        lock (models) Assert.Equal(["primary"], models); // late, but nothing waits on it yet
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        await pipeline.Finish();
-        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(0.8)); // the first chunk went to the backup at once
-        Assert.Equal(2, pipeline.BackupChunkCount());
+        MockOpenRouter.Delay = body => Model(body) == "primary" ? 1.5 : 0;
+        try
+        {
+            var pipeline = PipelineWithBackup(new TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1));
+            pipeline.Append(Tone(29)); // the first chunk goes out while the user is still talking
+            await Task.Delay(600);
+            lock (models) Assert.Equal(["primary"], models); // late, but nothing waits on it yet
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            await pipeline.Finish();
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(0.8)); // the first chunk went to the backup at once
+            Assert.Equal(2, pipeline.BackupChunkCount());
+        }
+        finally
+        {
+            MockOpenRouter.Delay = null;
+        }
     }
 
     [Fact]

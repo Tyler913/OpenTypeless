@@ -27,6 +27,8 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     struct Timing: Codable, Equatable {
         /// Release → complete raw transcript (only the last chunk is usually left by then).
         var transcription: Double?
+        /// Chunks the backup speech-to-text route answered because the main one was late or failed.
+        var transcriptionBackupChunks: Int?
         var polishFirstToken: Double?
         var polish: Double?
         var polishModel: String?
@@ -36,7 +38,10 @@ struct DictationRecord: Codable, Identifiable, Equatable {
         var summary: String? {
             func secs(_ value: Double) -> String { String(format: "%.1f", value) + L(" 秒", " s") }
             var parts: [String] = []
-            if let transcription { parts.append(L("转写 ", "Transcription ") + secs(transcription)) }
+            if let transcription {
+                let backup = transcriptionBackupChunks.map { L("（备用转写 \($0) 段）", " (backup for \($0) segment\($0 == 1 ? "" : "s"))") } ?? ""
+                parts.append(L("转写 ", "Transcription ") + secs(transcription) + backup)
+            }
             if let polish {
                 var detail: [String] = []
                 if let polishFirstToken { detail.append(L("首字 ", "first token ") + secs(polishFirstToken)) }

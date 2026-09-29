@@ -685,6 +685,7 @@ struct ModelsPage: View {
     @State private var sttModels: [APIClient.ModelInfo] = []
     @State private var chatModels: [APIClient.ModelInfo] = []
     @State private var backupChatModels: [APIClient.ModelInfo] = []
+    @State private var backupSTTModels: [APIClient.ModelInfo] = []
 
     var body: some View {
         PageScaffold(page: .models) {
@@ -714,9 +715,31 @@ struct ModelsPage: View {
                     .labelsHidden()
                     .fixedSize()
                 }
+                CardDivider(inset: 50)
+                CardRow(icon: "arrow.triangle.branch", iconColor: .orange, title: L("备用语音转文字", "Backup speech-to-text"),
+                        subtitle: L("某一段比平时慢很多（按音频长度和最近的速度估算）或者失败时，同时请求备用服务商，用先返回的那个",
+                                    "If a segment takes much longer than usual (judged by its length and recent speed) or fails, the backup is asked too and the first answer wins")) {
+                    Toggle("", isOn: $settings.sttBackupEnabled).toggleStyle(.switch).labelsHidden()
+                }
+                if settings.sttBackupEnabled {
+                    CardDivider(inset: 50)
+                    CardRow(icon: "building.2", iconColor: .indigo, title: L("备用服务商", "Backup provider")) {
+                        ProviderPicker(selection: settings.sttBackupProvider, options: ProviderID.allCases.filter(\.supportsSTT),
+                                       settings: settings) { settings.selectSTTBackupProvider($0) }
+                    }
+                    CardDivider(inset: 50)
+                    CardRow(icon: "waveform", iconColor: .teal, title: L("备用模型 ID", "Backup model ID"),
+                            subtitle: L("选一个不同厂商的模型，两边不容易同时变慢", "Pick a model from another vendor so both are rarely slow at once")) {
+                        ModelField(text: $settings.sttBackupModel, models: backupSTTModels)
+                    }
+                    CardDivider(inset: 50)
+                    PriceRow(settings: settings, provider: settings.sttBackupProvider, model: settings.sttBackupModel, speech: true)
+                }
             }
             if !settings.isConfigured(settings.sttProvider) {
                 setupBanner(for: settings.sttProvider)
+            } else if settings.sttBackupEnabled, !settings.isConfigured(settings.sttBackupProvider) {
+                setupBanner(for: settings.sttBackupProvider)
             }
 
             CardSection(title: L("文字整理", "Clean-up")) {
@@ -769,6 +792,9 @@ struct ModelsPage: View {
         }
         .task(id: "\(settings.sttProvider.rawValue)|\(settings.apiKey(for: settings.sttProvider).count)") {
             sttModels = await loadModels(settings.sttProvider, speech: true)
+        }
+        .task(id: "\(settings.sttBackupProvider.rawValue)|\(settings.apiKey(for: settings.sttBackupProvider).count)|\(settings.sttBackupEnabled)") {
+            if settings.sttBackupEnabled { backupSTTModels = await loadModels(settings.sttBackupProvider, speech: true) }
         }
         .task(id: "\(settings.polishProvider.rawValue)|\(settings.apiKey(for: settings.polishProvider).count)") {
             chatModels = await loadModels(settings.polishProvider, speech: false)

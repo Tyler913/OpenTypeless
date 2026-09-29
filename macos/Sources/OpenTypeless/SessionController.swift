@@ -258,12 +258,24 @@ final class SessionController: ObservableObject {
         }
     }
 
+    /// How long each speech-to-text route takes, kept while the app runs, so the backup is asked when a chunk is late.
+    private var latencies: [String: TranscriptionLatency] = [:]
+
     private func makePipeline(endpoint: ProviderEndpoint, preset: [Int: String]) -> TranscriptionPipeline {
         let language = settings.sttLanguage.isEmpty ? nil : settings.sttLanguage
+        let backup = settings.sttBackupEndpoint.map {
+            (client: APIClient(endpoint: $0),
+             options: APIClient.TranscriptionOptions(model: settings.sttBackupModel.trimmingCharacters(in: .whitespaces), language: language))
+        }
+        let key = ModelPrice.key(settings.sttProvider, settings.sttModel)
+        let latency = latencies[key] ?? TranscriptionLatency()
+        latencies[key] = latency
         return TranscriptionPipeline(
             client: APIClient(endpoint: endpoint),
             options: .init(model: settings.sttModel, language: language),
-            preset: preset
+            preset: preset,
+            backup: backup,
+            latency: latency
         )
     }
 
@@ -316,6 +328,8 @@ final class SessionController: ObservableObject {
         do {
             let raw = try await pipeline.finish()
             record.timing = DictationRecord.Timing(transcription: ProcessInfo.processInfo.systemUptime - started)
+            let backupChunks = pipeline.backupChunkCount()
+            if backupChunks > 0 { record.timing?.transcriptionBackupChunks = backupChunks }
             record.chunkTexts = pipeline.completedTranscripts()
             record.rawText = raw
             record.error = nil
@@ -448,7 +462,12 @@ final class SessionController: ObservableObject {
         let transcription = CostEstimator.transcriptions(pipeline.requestUsages(),
                                                          price: prices.price(settings.sttProvider, settings.sttModel),
                                                          preferReported: settings.sttProvider == .openrouter)
-        var unpriced = transcription.unpriced
+        // Chunks the backup speech-to-text route answered are priced with its model.
+        let backup = CostEstimator.transcriptions(pipeline.backupRequestUsages(),
+                                                  price: prices.price(settings.sttBackupProvider, settings.sttBackupModel),
+                                                  preferReported: settings.sttBackupProvider == .openrouter)
+        let transcriptionCost = transcription.cost + backup.cost
+        var unpriced = transcription.unpriced + backup.unpriced
         var cleanup = 0.0
         if let polished, let usage = polished.result.usage {
             if let cost = CostEstimator.chat(usage, price: prices.price(polished.provider, polished.model),
@@ -458,9 +477,9 @@ final class SessionController: ObservableObject {
                 unpriced += 1
             }
         }
-        if transcription.cost + cleanup > 0 { record.cost = (record.cost ?? 0) + transcription.cost + cleanup }
-        note(String(format: "cost: transcription $%.6f, clean-up $%.6f, unpriced requests %d", transcription.cost, cleanup, unpriced))
-        UsageStore.shared.record(&record, transcriptionCost: transcription.cost, cleanupCost: cleanup, unpriced: unpriced)
+        if transcriptionCost + cleanup > 0 { record.cost = (record.cost ?? 0) + transcriptionCost + cleanup }
+        note(String(format: "cost: transcription $%.6f, clean-up $%.6f, unpriced requests %d", transcriptionCost, cleanup, unpriced))
+        UsageStore.shared.record(&record, transcriptionCost: transcriptionCost, cleanupCost: cleanup, unpriced: unpriced)
     }
 
     // MARK: - Retry / cancel

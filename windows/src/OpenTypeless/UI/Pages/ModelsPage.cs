@@ -12,7 +12,8 @@ public sealed class ModelsPage : PageBase
 {
     private static readonly HashSet<string> StructuralProperties =
         [nameof(AppSettings.SttProvider), nameof(AppSettings.PolishProvider), nameof(AppSettings.PolishEnabled),
-         nameof(AppSettings.PolishBackupEnabled), nameof(AppSettings.PolishBackupProvider), "ApiKeys", "BaseUrls"];
+         nameof(AppSettings.PolishBackupEnabled), nameof(AppSettings.PolishBackupProvider), "ApiKeys", "BaseUrls",
+         nameof(AppSettings.SttBackupEnabled), nameof(AppSettings.SttBackupProvider)];
 
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly SettingsWindow _window;
@@ -20,11 +21,13 @@ public sealed class ModelsPage : PageBase
     private readonly ModelField _sttField = new(speech: true);
     private readonly ModelField _chatField = new(speech: false);
     private readonly ModelField _backupField = new(speech: false);
-    private string? _sttKey, _chatKey, _backupKey;
-    private CardRow? _sttRow, _chatRow, _backupRow;
+    private readonly ModelField _sttBackupField = new(speech: true);
+    private string? _sttKey, _chatKey, _backupKey, _sttBackupKey;
+    private CardRow? _sttRow, _chatRow, _backupRow, _sttBackupRow;
     private readonly PriceEditor _sttPrice = new(speech: true);
     private readonly PriceEditor _chatPrice = new(speech: false);
     private readonly PriceEditor _backupPrice = new(speech: false);
+    private readonly PriceEditor _sttBackupPrice = new(speech: true);
 
     public ModelsPage(SettingsWindow window, SessionController controller) : base(SettingsPage.Models)
     {
@@ -40,6 +43,11 @@ public sealed class ModelsPage : PageBase
             _settings.PolishModel = text;
             _chatPrice.Show(_settings.PolishProvider, text);
             _controller.RefreshModelInfo();
+        };
+        _sttBackupField.TextChanged = text =>
+        {
+            _settings.SttBackupModel = text;
+            _sttBackupPrice.Show(_settings.SttBackupProvider, text);
         };
         _backupField.TextChanged = text =>
         {
@@ -66,6 +74,7 @@ public sealed class ModelsPage : PageBase
         _sttPrice.Show(_settings.SttProvider, _settings.SttModel);
         _chatPrice.Show(_settings.PolishProvider, _settings.PolishModel);
         _backupPrice.Show(_settings.PolishBackupProvider, _settings.PolishBackupModel);
+        _sttBackupPrice.Show(_settings.SttBackupProvider, _settings.SttBackupModel);
     }
 
     private static CardRow PriceRow(PriceEditor editor) =>
@@ -83,7 +92,9 @@ public sealed class ModelsPage : PageBase
         if (_sttRow != null) _sttRow.Trailing = null;
         if (_chatRow != null) _chatRow.Trailing = null;
         if (_backupRow != null) _backupRow.Trailing = null;
-        foreach (var editor in new[] { _sttPrice, _chatPrice, _backupPrice })
+        if (_sttBackupRow != null) _sttBackupRow.Trailing = null;
+        _sttBackupRow = null;
+        foreach (var editor in new[] { _sttPrice, _chatPrice, _backupPrice, _sttBackupPrice })
         {
             if (editor.Row != null) editor.Row.Trailing = null;
             editor.Row = null;
@@ -93,6 +104,7 @@ public sealed class ModelsPage : PageBase
         _sttField.Text = _settings.SttModel;
         _chatField.Text = _settings.PolishModel;
         _backupField.Text = _settings.PolishBackupModel;
+        _sttBackupField.Text = _settings.SttBackupModel;
 
         var stt = new CardSection
         {
@@ -124,8 +136,40 @@ public sealed class ModelsPage : PageBase
             Subtitle = L("固定语言可以提高准确率；中英混说请选自动", "Fixing it can help accuracy; use Auto for mixed speech"),
             Trailing = language,
         });
+        stt.Body.Add(new CardDivider());
+        var sttBackup = new ToggleSwitch { IsOn = _settings.SttBackupEnabled, OnContent = "", OffContent = "", MinWidth = 0 };
+        sttBackup.Toggled += (_, _) => _settings.SttBackupEnabled = sttBackup.IsOn;
+        stt.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Lightning, Tint = Tint.Orange, Title = L("备用语音转文字", "Backup speech-to-text"),
+            Subtitle = L("某一段比平时慢很多（按音频长度和最近的速度估算）或者失败时，同时请求备用服务商，用先返回的那个",
+                         "If a segment takes much longer than usual (judged by its length and recent speed) or fails, the backup is asked too and the first answer wins"),
+            Trailing = sttBackup,
+        });
+        if (_settings.SttBackupEnabled)
+        {
+            stt.Body.Add(new CardDivider());
+            stt.Body.Add(new CardRow
+            {
+                Glyph = Glyphs.Cloud, Tint = Tint.Indigo, Title = L("备用服务商", "Backup provider"),
+                Trailing = ProviderPicker(_settings.SttBackupProvider, ProviderIdExtensions.All.Where(p => p.SupportsStt()), _settings.SelectSttBackupProvider),
+            });
+            stt.Body.Add(new CardDivider());
+            _sttBackupRow = new CardRow
+            {
+                Glyph = Glyphs.Microphone, Tint = Tint.Teal, Title = L("备用模型 ID", "Backup model ID"),
+                Subtitle = L("选一个不同厂商的模型，两边不容易同时变慢", "Pick a model from another vendor so both are rarely slow at once"),
+                Trailing = _sttBackupField,
+            };
+            stt.Body.Add(_sttBackupRow);
+            stt.Body.Add(new CardDivider());
+            var sttBackupPriceRow = PriceRow(_sttBackupPrice);
+            _sttBackupPrice.Row = sttBackupPriceRow;
+            stt.Body.Add(sttBackupPriceRow);
+        }
         Body.Children.Add(stt);
         if (!_settings.IsConfigured(_settings.SttProvider)) Body.Children.Add(SetupBanner(_settings.SttProvider));
+        else if (_settings.SttBackupEnabled && !_settings.IsConfigured(_settings.SttBackupProvider)) Body.Children.Add(SetupBanner(_settings.SttBackupProvider));
 
         var polish = new CardSection { Title = L("文字整理", "Clean-up") };
         var enabled = new ToggleSwitch { IsOn = _settings.PolishEnabled, OnContent = "", OffContent = "", MinWidth = 0 };
@@ -255,6 +299,13 @@ public sealed class ModelsPage : PageBase
             _chatKey = chatKey;
             _chatField.SetModels([]);
             _ = Load(_settings.PolishProvider, false, chatKey, () => _chatKey, _chatField);
+        }
+        var sttBackupKey = $"{_settings.SttBackupProvider.RawValue()}|{_settings.ApiKey(_settings.SttBackupProvider).Length}|{_settings.BaseUrl(_settings.SttBackupProvider)}";
+        if (_settings.SttBackupEnabled && sttBackupKey != _sttBackupKey)
+        {
+            _sttBackupKey = sttBackupKey;
+            _sttBackupField.SetModels([]);
+            _ = Load(_settings.SttBackupProvider, true, sttBackupKey, () => _sttBackupKey, _sttBackupField);
         }
         var backupKey = $"{_settings.PolishBackupProvider.RawValue()}|{_settings.ApiKey(_settings.PolishBackupProvider).Length}|{_settings.BaseUrl(_settings.PolishBackupProvider)}";
         if (_settings.PolishBackupEnabled && backupKey != _backupKey)

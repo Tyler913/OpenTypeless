@@ -302,10 +302,19 @@ public sealed class SessionController
         _maxDurationTimer.Start();
     }
 
+    /// <summary>How long each speech-to-text route takes, kept while the app runs, so the backup is asked when a chunk is late.</summary>
+    private readonly Dictionary<string, TranscriptionLatency> _latencies = new();
+
     private TranscriptionPipeline MakePipeline(ProviderEndpoint endpoint, IReadOnlyDictionary<int, string> preset)
     {
         var language = _settings.SttLanguage.Length == 0 ? null : _settings.SttLanguage;
-        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, language), preset: preset);
+        var backup = _settings.SttBackupEndpoint is { } backupEndpoint
+            ? new TranscriptionRoute(new ApiClient(backupEndpoint), new TranscriptionOptions(_settings.SttBackupModel.Trim(), language))
+            : null;
+        var key = ModelPrice.Key(_settings.SttProvider, _settings.SttModel);
+        if (!_latencies.TryGetValue(key, out var latency)) _latencies[key] = latency = new TranscriptionLatency();
+        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, language), preset: preset,
+                                         backup: backup, latency: latency);
     }
 
     private void StopCapture()
@@ -362,6 +371,7 @@ public sealed class SessionController
         {
             var raw = await pipeline.Finish();
             record.Timing = new DictationTiming { Transcription = started.Elapsed.TotalSeconds };
+            if (pipeline.BackupChunkCount() is var backupChunks and > 0) record.Timing.TranscriptionBackupChunks = backupChunks;
             record.ChunkTexts = pipeline.CompletedTranscripts();
             record.RawText = raw;
             record.Error = null;
@@ -513,6 +523,12 @@ public sealed class SessionController
         var prices = PriceStore.Shared;
         var (transcription, unpriced) = CostEstimator.Transcriptions(
             pipeline.Usages(), prices.Price(_settings.SttProvider, _settings.SttModel), _settings.SttProvider == ProviderId.OpenRouter);
+        // Chunks the backup speech-to-text route answered are priced with its model.
+        var (backupCost, backupUnpriced) = CostEstimator.Transcriptions(
+            pipeline.BackupUsages(), prices.Price(_settings.SttBackupProvider, _settings.SttBackupModel),
+            _settings.SttBackupProvider == ProviderId.OpenRouter);
+        transcription += backupCost;
+        unpriced += backupUnpriced;
         var cleanup = 0.0;
         if (polished?.Result.Usage is { } usage)
         {

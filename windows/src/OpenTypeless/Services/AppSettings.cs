@@ -108,6 +108,25 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("polishEnabled", value);
     }
 
+    /// <summary>A second speech-to-text route, asked when the first is late for a chunk or fails (see TranscriptionPipeline).</summary>
+    public bool SttBackupEnabled
+    {
+        get => GetBool("sttBackupEnabled", false);
+        set => SetValue("sttBackupEnabled", value);
+    }
+
+    public ProviderId SttBackupProvider
+    {
+        get => ProviderIdExtensions.Parse(GetString("sttBackupProvider", "")) ?? ProviderId.OpenRouter;
+        set => SetValue("sttBackupProvider", value.RawValue());
+    }
+
+    public string SttBackupModel
+    {
+        get => GetString("sttBackupModel", ProviderId.OpenRouter.DefaultBackupSttModel());
+        set => SetValue("sttBackupModel", value);
+    }
+
     /// <summary>A second clean-up model that races the first when it is slow to start (see HedgedPolish).</summary>
     public bool PolishBackupEnabled
     {
@@ -314,6 +333,25 @@ public sealed class AppSettings : INotifyPropertyChanged
         if (id == PolishProvider) return;
         PolishProvider = id;
         PolishModel = id.DefaultChatModel();
+    }
+
+    /// <summary>The backup speech-to-text route, when switched on, configured, and actually different from the primary.</summary>
+    public ProviderEndpoint? SttBackupEndpoint
+    {
+        get
+        {
+            var model = SttBackupModel.Trim();
+            if (!SttBackupEnabled || model.Length == 0 || !SttBackupProvider.SupportsStt() || !IsConfigured(SttBackupProvider)
+                || (SttBackupProvider == SttProvider && model == SttModel.Trim())) return null;
+            return Endpoint(SttBackupProvider);
+        }
+    }
+
+    public void SelectSttBackupProvider(ProviderId id)
+    {
+        if (id == SttBackupProvider) return;
+        SttBackupProvider = id;
+        SttBackupModel = id.DefaultBackupSttModel();
     }
 
     /// <summary>The backup route, when switched on, configured, and actually different from the primary.</summary>

@@ -273,6 +273,22 @@ import Testing
     }
 }
 
+@Suite struct TranscriptionLatencyTests {
+    @Test func delayScalesWithAudioAndRecentSpeed() {
+        let latency = TranscriptionLatency()
+        #expect(abs(latency.hedgeDelay(forAudioSeconds: 20) - 16) < 1e-6) // no data yet: (0.3 × 20 + 1.5) × 2 + 1
+        latency.record(latency: 2, audioSeconds: 20)   // 0.1 s per audio second
+        latency.record(latency: 4, audioSeconds: 20)   // 0.2
+        latency.record(latency: 12, audioSeconds: 40)  // 0.3
+        #expect(latency.samples == 3)
+        #expect(abs(latency.expected(forAudioSeconds: 20) - 4) < 1e-6) // median 0.2 × 20
+        #expect(abs(latency.hedgeDelay(forAudioSeconds: 20) - 9) < 1e-6)
+        #expect(latency.hedgeDelay(forAudioSeconds: 2) == 3) // never below the minimum
+        for _ in 0..<3 { latency.record(latency: 500, audioSeconds: 1) }
+        #expect(latency.hedgeDelay(forAudioSeconds: 28) == 25) // nor above the maximum
+    }
+}
+
 @Suite struct CancelPolicyTests {
     @Test func keepsLongRecordingsForADay() {
         #expect(!CancelPolicy.keeps(recordedSeconds: 9.9))
@@ -352,6 +368,64 @@ extension PipelineTests {
         #expect(usages.count >= 3)
         #expect(usages.allSatisfy { $0.cost == 0.001 })
         #expect(abs(usages.reduce(0) { $0 + ($1.audioSeconds ?? 0) } - 65) < 0.5)
+    }
+
+    private func tone(seconds: Double) -> [Int16] {
+        (0..<AudioFormat.sampleCount(forSeconds: seconds)).map { Int16(6000 * sin(Double($0) * 0.2)) }
+    }
+
+    private func model(_ body: Data) -> String {
+        ((try? JSONSerialization.jsonObject(with: body)) as? [String: Any])?["model"] as? String ?? ""
+    }
+
+    /// Primary and backup on separate sessions, so a slow primary can't hold up the backup's request in the mock.
+    private func runWithBackup(_ latency: TranscriptionLatency) async throws -> (String, TranscriptionPipeline) {
+        let pipeline = TranscriptionPipeline(
+            client: APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session()),
+            options: .init(model: "primary"),
+            policy: RetryPolicy(maxAttempts: 1),
+            backup: (APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session()), .init(model: "backup")),
+            latency: latency)
+        pipeline.append(tone(seconds: 2))
+        return (try await pipeline.finish(), pipeline)
+    }
+
+    @Test func slowPrimaryIsOvertakenByTheBackup() async throws {
+        MockOpenRouter.handler = { [self] _, body in (200, Data(#"{"text":"\#(model(body))"}"#.utf8)) }
+        MockOpenRouter.delay = { [self] body in model(body) == "primary" ? 1.5 : 0 }
+        defer { MockOpenRouter.delay = nil }
+        let start = Date()
+        let (text, pipeline) = try await runWithBackup(TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1))
+        #expect(text == "backup")
+        #expect(Date().timeIntervalSince(start) < 1.4)
+        #expect(pipeline.backupChunkCount() == 1 && pipeline.requestUsages().isEmpty)
+    }
+
+    @Test func failingPrimaryHandsOverAtOnce() async throws {
+        MockOpenRouter.handler = { [self] _, body in
+            model(body) == "primary"
+                ? (401, Data(#"{"error":{"message":"bad key"}}"#.utf8))
+                : (200, Data(#"{"text":"backup"}"#.utf8))
+        }
+        let start = Date()
+        let (text, pipeline) = try await runWithBackup(TranscriptionLatency(minimumDelay: 20, maximumDelay: 20))
+        #expect(text == "backup")
+        #expect(Date().timeIntervalSince(start) < 5) // didn't wait for the 20 s delay
+        #expect(pipeline.backupChunkCount() == 1)
+    }
+
+    @Test func fastPrimaryNeverAsksTheBackup() async throws {
+        var models: [String] = []
+        MockOpenRouter.handler = { [self] _, body in
+            MockOpenRouter.lock.withLock { models.append(model(body)) }
+            return (200, Data(#"{"text":"primary"}"#.utf8))
+        }
+        let latency = TranscriptionLatency(minimumDelay: 5, maximumDelay: 5)
+        let (text, pipeline) = try await runWithBackup(latency)
+        #expect(text == "primary")
+        #expect(models == ["primary"])
+        #expect(latency.samples == 1)
+        #expect(pipeline.backupChunkCount() == 0)
     }
 
     @Test func connectionCheckTimesSeveralRoundTrips() async throws {

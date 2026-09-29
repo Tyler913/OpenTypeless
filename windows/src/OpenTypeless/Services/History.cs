@@ -83,6 +83,8 @@ public sealed class DictationTiming
 {
     /// <summary>Release → complete raw transcript (only the last chunk is usually left by then).</summary>
     [JsonPropertyName("transcription")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Transcription { get; set; }
+    /// <summary>Chunks the backup speech-to-text route answered because the main one was late or failed.</summary>
+    [JsonPropertyName("transcriptionBackupChunks")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? TranscriptionBackupChunks { get; set; }
     [JsonPropertyName("polishFirstToken")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? PolishFirstToken { get; set; }
     [JsonPropertyName("polish")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Polish { get; set; }
     [JsonPropertyName("polishModel")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? PolishModel { get; set; }
@@ -98,7 +100,13 @@ public sealed class DictationTiming
         {
             static string Secs(double value) => value.ToString("0.0", CultureInfo.InvariantCulture) + L(" 秒", " s");
             var parts = new List<string>();
-            if (Transcription is { } transcription) parts.Add(L("转写 ", "Transcription ") + Secs(transcription));
+            if (Transcription is { } transcription)
+            {
+                var backup = TranscriptionBackupChunks is { } n
+                    ? L($"（备用转写 {n} 段）", $" (backup for {n} segment{(n == 1 ? "" : "s")})")
+                    : "";
+                parts.Add(L("转写 ", "Transcription ") + Secs(transcription) + backup);
+            }
             if (Polish is { } polish)
             {
                 var detail = new List<string>();

@@ -51,6 +51,9 @@ public final class TranscriptionPipeline: @unchecked Sendable {
 
     private let client: APIClient
     private let options: APIClient.TranscriptionOptions
+    /// Another provider/model, asked too when the primary is late for a chunk or fails (see `transcribe`).
+    private let backup: (client: APIClient, options: APIClient.TranscriptionOptions)?
+    private let latency: TranscriptionLatency
     private let policy: RetryPolicy
     private let observer: ChunkObserver?
     private let semaphore = AsyncSemaphore(3)
@@ -64,6 +67,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     private var tasks: [Int: Task<Void, Never>] = [:]
     /// Usage of every successful request, retries of the same chunk included (each one was billed).
     private var usages: [RequestUsage] = []
+    private var backupUsages: [RequestUsage] = []
     private var finished = false
     private var cancelled = false
 
@@ -74,10 +78,14 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         chunkConfig: Chunker.Config = Chunker.Config(),
         policy: RetryPolicy = RetryPolicy(),
         preset: [Int: String] = [:],
+        backup: (client: APIClient, options: APIClient.TranscriptionOptions)? = nil,
+        latency: TranscriptionLatency = TranscriptionLatency(),
         observer: ChunkObserver? = nil
     ) {
         self.client = client
         self.options = options
+        self.backup = backup
+        self.latency = latency
         self.policy = policy
         self.observer = observer
         self.chunker = Chunker(config: chunkConfig)
@@ -136,6 +144,11 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         lock.withLock { usages }
     }
 
+    /// Usage of the requests the backup route answered (priced with the backup's model).
+    public func backupRequestUsages() -> [RequestUsage] {
+        lock.withLock { backupUsages }
+    }
+
     // MARK: - Private
 
     private var isCancelled: Bool {
@@ -185,21 +198,99 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         if Task.isCancelled { return (.failed(APIError.cancelled.localizedDescription), true) }
         observer?(chunk.index, .transcribing(attempt: 1))
         do {
-            let result = try await client.transcribeDetailedWithRetry(
-                samples: chunk.samples, options: options, policy: policy,
-                onRetry: { [observer] attempt, error in
-                    if ProcessInfo.processInfo.environment["OPENTYPELESS_DEBUG"] != nil {
-                        FileHandle.standardError.write(Data("  chunk \(chunk.index) attempt \(attempt) failed: \(error)\n".utf8))
-                    }
-                    observer?(chunk.index, .transcribing(attempt: attempt + 1))
-                }
-            )
-            if let usage = result.usage { lock.withLock { usages.append(usage) } }
+            let (result, usedBackup) = try await transcribe(chunk)
+            if let usage = result.usage {
+                lock.withLock { if usedBackup { backupUsages.append(usage) } else { usages.append(usage) } }
+            }
             return (.done(result.text), false)
         } catch {
             let apiError = APIError.from(error)
             return (.failed(apiError.localizedDescription), !apiError.isRetryable)
         }
+    }
+
+    private enum Attempt: Sendable {
+        case primary(Result<APIClient.TranscriptionResult, Error>)
+        case backup(Result<APIClient.TranscriptionResult, Error>)
+        case late
+    }
+
+    private func attempt(_ route: APIClient, _ options: APIClient.TranscriptionOptions, _ chunk: AudioChunk) async throws
+        -> APIClient.TranscriptionResult {
+        try await route.transcribeDetailedWithRetry(
+            samples: chunk.samples, options: options, policy: policy,
+            onRetry: { [observer] attempt, error in
+                if ProcessInfo.processInfo.environment["OPENTYPELESS_DEBUG"] != nil {
+                    FileHandle.standardError.write(Data("  chunk \(chunk.index) attempt \(attempt) failed: \(error)\n".utf8))
+                }
+                observer?(chunk.index, .transcribing(attempt: attempt + 1))
+            }
+        )
+    }
+
+    /// One chunk, on the primary route; with a backup route, the backup is asked too once the primary is late
+    /// (see `TranscriptionLatency`) or has failed, and whichever answers first is used; the other is cancelled.
+    private func transcribe(_ chunk: AudioChunk) async throws -> (APIClient.TranscriptionResult, usedBackup: Bool) {
+        let start = ProcessInfo.processInfo.systemUptime
+        guard let backup else {
+            let result = try await attempt(client, options, chunk)
+            latency.record(latency: ProcessInfo.processInfo.systemUptime - start, audioSeconds: chunk.duration)
+            return (result, false)
+        }
+        let delay = latency.hedgeDelay(forAudioSeconds: chunk.duration)
+        return try await withThrowingTaskGroup(of: Attempt.self) { group in
+            group.addTask {
+                do { return .primary(.success(try await self.attempt(self.client, self.options, chunk))) }
+                catch { return .primary(.failure(error)) }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                return .late
+            }
+            var backupStarted = false
+            var primaryError: Error?
+            var backupFailed = false
+            while let outcome = try await group.next() {
+                var askBackup = false
+                switch outcome {
+                case .late:
+                    askBackup = primaryError == nil
+                case let .primary(.success(result)):
+                    group.cancelAll()
+                    latency.record(latency: ProcessInfo.processInfo.systemUptime - start, audioSeconds: chunk.duration)
+                    return (result, false)
+                case let .primary(.failure(error)):
+                    if APIError.from(error) == .cancelled || backupFailed {
+                        group.cancelAll()
+                        throw error
+                    }
+                    primaryError = error
+                    askBackup = true
+                case let .backup(.success(result)):
+                    group.cancelAll()
+                    return (result, true)
+                case .backup(.failure):
+                    backupFailed = true
+                    if let primaryError {
+                        group.cancelAll()
+                        throw primaryError
+                    }
+                }
+                if askBackup, !backupStarted {
+                    backupStarted = true
+                    group.addTask {
+                        do { return .backup(.success(try await self.attempt(backup.client, backup.options, chunk))) }
+                        catch { return .backup(.failure(error)) }
+                    }
+                }
+            }
+            throw primaryError ?? APIError.cancelled
+        }
+    }
+
+    /// How many chunks the backup route transcribed.
+    public func backupChunkCount() -> Int {
+        lock.withLock { backupUsages.count }
     }
 
     private func waitForAll() async {

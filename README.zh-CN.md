@@ -65,7 +65,7 @@ OpenTypeless 就是围绕这个问题做的。
 - **你的用词、你的语言。** 改动尽量少：措辞、顺序和语气都保持原样。中英混说时，每个词都保留你说出它时的语言，日常词也一样（“shortcut”、“dark mode”），中文和英文之间加空格。
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="历史：整理后的文字在原始转写上方，并显示每个步骤的耗时">
+  <img src="docs/images/history.png" width="720" alt="历史：按天分组、可以搜索，显示整理后的文字、耗时和花费">
 </p>
 
 提示词在开发集和留出测试集上调优（见 [eval/](eval/)），其中包括真实的口述。
@@ -91,13 +91,17 @@ OpenTypeless 就是围绕这个问题做的。
 - **自动更新。** 每天检查一次 GitHub Releases，在后台下载新版本，你点 **重启更新** 时才安装，绝不会在听写中途进行。替换任何文件之前都会用 GitHub 的 SHA-256 校验下载内容。可以在 **设置 → 通用 → 更新** 里关闭或手动检查。
 - **小巧、原生。** macOS 上是约 3 MB 的 Swift/SwiftUI 应用，Windows 上是自包含的 WinUI 3 应用。没有 Electron，不需要账号，也没有自己的服务器。
 
+<p align="center">
+  <img src="docs/images/home.png" width="720" alt="主页：说了多少字、省了多少时间、说话速度、花费，以及 GitHub 风格的活跃度热力图">
+</p>
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/models.png" alt="模型：每个步骤选择服务商和模型，外加一个备用整理模型"></td>
+    <td width="50%"><img src="docs/images/models.png" alt="模型：每个步骤选择服务商和模型，显示实时价格，并可设置备用"></td>
     <td width="50%"><img src="docs/images/vocabulary.png" alt="词汇表：你的术语，包括从你的修改中学到的词"></td>
   </tr>
   <tr>
-    <td align="center">为每个步骤选择服务商和模型，外加备用整理模型</td>
+    <td align="center">为每个步骤选择服务商和模型，显示实时价格，外加备用</td>
     <td align="center">词汇表，包括从你的修改中学到的词</td>
   </tr>
 </table>

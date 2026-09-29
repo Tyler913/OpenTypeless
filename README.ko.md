@@ -65,7 +65,7 @@ OpenTypeless는 바로 이 문제를 중심으로 만들어졌습니다.
 - **여러분의 말, 여러분의 언어.** 수정은 최소한으로 하며 표현, 순서, 말투는 그대로 둡니다. 중국어와 영어를 섞어 말하면 일상 단어("shortcut", "dark mode")까지 모든 단어가 말한 언어 그대로 남고, CJK 문자와 라틴 문자 사이에는 공백이 들어갑니다.
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="기록: 원본 변환 결과 위에 다듬은 텍스트와 단계별 소요 시간">
+  <img src="docs/images/history.png" width="720" alt="기록: 날짜별로 묶이고 검색 가능하며, 다듬은 텍스트와 소요 시간, 비용 표시">
 </p>
 
 프롬프트는 개발용 세트와 홀드아웃 테스트 세트([eval/](eval/) 참고)로 조정했으며, 실제 받아쓰기도 포함되어 있습니다.
@@ -91,13 +91,17 @@ OpenTypeless는 바로 이 문제를 중심으로 만들어졌습니다.
 - **자동 업데이트.** 하루에 한 번 GitHub Releases를 확인하고, 새 버전을 백그라운드에서 다운로드한 뒤 **재시작하여 업데이트**를 클릭할 때 설치합니다. 받아쓰기 도중에는 절대 설치하지 않습니다. 파일을 교체하기 전에 다운로드를 GitHub의 SHA-256과 대조합니다. **설정 → 일반 → 업데이트**에서 끄거나 직접 확인할 수 있습니다.
 - **작고 네이티브.** macOS에서는 약 3MB의 Swift/SwiftUI 앱, Windows에서는 자체 포함형 WinUI 3 앱입니다. Electron도, 계정도, 자체 서버도 없습니다.
 
+<p align="center">
+  <img src="docs/images/home.png" width="720" alt="홈: 받아쓴 단어 수, 절약한 시간, 말하기 속도, 비용, GitHub 스타일 활동 히트맵">
+</p>
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/models.png" alt="모델: 단계별 제공업체와 모델, 그리고 백업 다듬기 모델"></td>
+    <td width="50%"><img src="docs/images/models.png" alt="모델: 단계별 제공업체와 모델, 실시간 가격, 그리고 백업"></td>
     <td width="50%"><img src="docs/images/vocabulary.png" alt="어휘: 수정에서 학습한 것을 포함한 나의 용어"></td>
   </tr>
   <tr>
-    <td align="center">단계별로 제공업체와 모델 선택, 백업 다듬기 모델까지</td>
+    <td align="center">단계별로 제공업체와 모델 선택, 실시간 가격과 백업까지</td>
     <td align="center">수정에서 학습한 단어를 포함한 어휘</td>
   </tr>
 </table>

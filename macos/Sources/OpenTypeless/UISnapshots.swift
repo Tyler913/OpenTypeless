@@ -9,6 +9,8 @@ enum UISnapshots {
     static func run(outputDirectory: String) {
         // `--demo`: pretend permissions are granted (pair with OPENTYPELESS_SUPPORT_DIR pointing at sample history).
         Permissions.assumeGranted = CommandLine.arguments.contains("--demo")
+        // `--dark`: dark appearance whatever the system uses, so README screenshots match each other.
+        if CommandLine.arguments.contains("--dark") { NSApp.appearance = NSAppearance(named: .darkAqua) }
         let dir = URL(fileURLWithPath: outputDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let controller = SessionController()
@@ -73,6 +75,8 @@ enum UISnapshots {
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
         guard let button = item.button, let buttonWindow = button.window else { return }
         popover.show(from: button)
+        // The popover takes the menu bar's appearance, not the app's.
+        if let forced = NSApp.appearance { popover.window?.appearance = forced }
         RunLoop.main.run(until: Date().addingTimeInterval(1.0))
         let icon = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
         if let window = popover.window, let screen = buttonWindow.screen {

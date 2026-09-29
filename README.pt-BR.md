@@ -65,7 +65,7 @@ A transcrição bruta é bagunçada: vícios de linguagem, recomeços, "não, es
 - **Suas palavras, seus idiomas.** As edições são mínimas: palavras, ordem e tom continuam seus. Quando você mistura chinês e inglês, cada palavra fica no idioma em que foi dita, inclusive as do dia a dia ("shortcut", "dark mode"), com espaço entre o texto CJK e o latino.
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="Histórico: o texto limpo acima da transcrição bruta, com o tempo de cada etapa">
+  <img src="docs/images/history.png" width="720" alt="Histórico: ditados agrupados por dia e pesquisáveis, com o texto limpo, os tempos e o custo">
 </p>
 
 O prompt é ajustado com conjuntos de desenvolvimento e de teste reservados (veja [eval/](eval/)), incluindo ditados reais.
@@ -91,13 +91,17 @@ O prompt é ajustado com conjuntos de desenvolvimento e de teste reservados (vej
 - **Atualiza sozinho.** Verifica o GitHub Releases uma vez por dia, baixa a nova versão em segundo plano e instala quando você clica em **Reiniciar para atualizar**, nunca no meio de um ditado. Os downloads são conferidos com o SHA-256 do GitHub antes de qualquer substituição. Desative, ou verifique manualmente, em **Configurações → Geral → Atualizações**.
 - **Pequeno e nativo.** Um app Swift/SwiftUI de ~3 MB no macOS e um app WinUI 3 independente no Windows. Sem Electron, sem conta e sem servidor próprio.
 
+<p align="center">
+  <img src="docs/images/home.png" width="720" alt="Início: palavras ditadas, tempo economizado, velocidade de fala, gastos e um mapa de atividade no estilo do GitHub">
+</p>
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/models.png" alt="Modelos: um provedor e um modelo para cada etapa, mais um modelo reserva de limpeza"></td>
+    <td width="50%"><img src="docs/images/models.png" alt="Modelos: um provedor e um modelo para cada etapa, com preços ao vivo e uma reserva"></td>
     <td width="50%"><img src="docs/images/vocabulary.png" alt="Vocabulário: seus termos, incluindo os aprendidos com suas correções"></td>
   </tr>
   <tr>
-    <td align="center">Escolha um provedor e um modelo para cada etapa, com um modelo reserva de limpeza</td>
+    <td align="center">Escolha um provedor e um modelo para cada etapa, com preços ao vivo e uma reserva</td>
     <td align="center">Vocabulário, incluindo palavras aprendidas com suas correções</td>
   </tr>
 </table>

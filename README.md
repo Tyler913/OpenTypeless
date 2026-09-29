@@ -65,7 +65,7 @@ Raw speech-to-text is messy: fillers, restarts, "no wait, I mean…", thinking o
 - **Your words, your languages.** Edits are kept to a minimum: wording, order and tone stay yours. When you mix Chinese and English, every word stays in the language you said it in, everyday words too ("shortcut", "dark mode"), with spacing between CJK and Latin text.
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="History: the cleaned-up text above the raw transcript, with timing for each step">
+  <img src="docs/images/history.png" width="720" alt="History: dictations grouped by day and searchable, with the cleaned-up text, timing and cost">
 </p>
 
 The prompt is tuned against development and held-out test sets (see [eval/](eval/)), including real dictations.
@@ -91,13 +91,17 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 - **Updates itself.** Checks GitHub Releases once a day, downloads a new version in the background and installs it when you click **Restart to update**, never in the middle of a dictation. Downloads are checked against GitHub's SHA-256 before anything is replaced. Turn it off, or check by hand, under **Settings → General → Updates**.
 - **Small and native.** A ~3 MB Swift/SwiftUI app on macOS and a self-contained WinUI 3 app on Windows. No Electron, no account and no server of its own.
 
+<p align="center">
+  <img src="docs/images/home.png" width="720" alt="Home: words dictated, time saved, speaking speed, spend and a GitHub-style activity heatmap">
+</p>
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/models.png" alt="Models: a provider and model for each step, plus a backup clean-up model"></td>
+    <td width="50%"><img src="docs/images/models.png" alt="Models: a provider and model for each step, with live prices and a backup"></td>
     <td width="50%"><img src="docs/images/vocabulary.png" alt="Vocabulary: your terms, including ones learned from your corrections"></td>
   </tr>
   <tr>
-    <td align="center">Pick a provider and model for each step, with a backup clean-up model</td>
+    <td align="center">Pick a provider and model for each step, with live prices and a backup</td>
     <td align="center">Vocabulary, including words learned from your corrections</td>
   </tr>
 </table>

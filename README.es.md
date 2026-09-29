@@ -65,7 +65,7 @@ La transcripción en bruto es desordenada: muletillas, frases que se reinician, 
 - **Tus palabras, tus idiomas.** Los cambios son mínimos: la redacción, el orden y el tono siguen siendo tuyos. Si mezclas chino e inglés, cada palabra se queda en el idioma en que la dijiste, también las cotidianas («shortcut», «dark mode»), con espacio entre el texto CJK y el latino.
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="Historial: el texto limpio sobre la transcripción original, con el tiempo de cada paso">
+  <img src="docs/images/history.png" width="720" alt="Historial: dictados agrupados por día y con búsqueda, con el texto limpio, los tiempos y el coste">
 </p>
 
 El prompt está ajustado con conjuntos de desarrollo y de prueba reservados (ver [eval/](eval/)), que incluyen dictados reales.
@@ -91,13 +91,17 @@ El prompt está ajustado con conjuntos de desarrollo y de prueba reservados (ver
 - **Se actualiza sola.** Busca en GitHub Releases una vez al día, descarga la nueva versión en segundo plano y la instala cuando pulsas **Reiniciar para actualizar**, nunca en mitad de un dictado. Las descargas se comprueban con el SHA-256 de GitHub antes de reemplazar nada. Desactívalo, o búscalas a mano, en **Ajustes → General → Actualizaciones**.
 - **Pequeña y nativa.** Una app Swift/SwiftUI de ~3 MB en macOS y una app WinUI 3 autónoma en Windows. Sin Electron, sin cuenta y sin servidor propio.
 
+<p align="center">
+  <img src="docs/images/home.png" width="720" alt="Inicio: palabras dictadas, tiempo ahorrado, velocidad al hablar, gasto y un mapa de actividad al estilo de GitHub">
+</p>
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/models.png" alt="Modelos: un proveedor y un modelo para cada paso, más un modelo de limpieza de respaldo"></td>
+    <td width="50%"><img src="docs/images/models.png" alt="Modelos: un proveedor y un modelo para cada paso, con precios en vivo y un respaldo"></td>
     <td width="50%"><img src="docs/images/vocabulary.png" alt="Vocabulario: tus términos, incluidos los aprendidos de tus correcciones"></td>
   </tr>
   <tr>
-    <td align="center">Elige un proveedor y un modelo para cada paso, con un modelo de limpieza de respaldo</td>
+    <td align="center">Elige un proveedor y un modelo para cada paso, con precios en vivo y un respaldo</td>
     <td align="center">Vocabulario, incluidas las palabras aprendidas de tus correcciones</td>
   </tr>
 </table>

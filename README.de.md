@@ -65,7 +65,7 @@ Rohe Spracherkennung ist unordentlich: Füllwörter, Neuanfänge, „nein, warte
 - **Deine Worte, deine Sprachen.** Änderungen bleiben minimal: Wortwahl, Reihenfolge und Ton bleiben deine. Wenn du Chinesisch und Englisch mischst, bleibt jedes Wort in der Sprache, in der du es gesagt hast, auch Alltagswörter („shortcut“, „dark mode“), mit Leerzeichen zwischen CJK- und lateinischem Text.
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="Verlauf: der bereinigte Text über dem Rohtranskript, mit der Dauer jedes Schritts">
+  <img src="docs/images/history.png" width="720" alt="Verlauf: Diktate nach Tagen gruppiert und durchsuchbar, mit bereinigtem Text, Zeiten und Kosten">
 </p>
 
 Der Prompt ist auf Entwicklungs- und zurückgehaltenen Testsets abgestimmt (siehe [eval/](eval/)), darunter echte Diktate.
@@ -91,13 +91,17 @@ Der Prompt ist auf Entwicklungs- und zurückgehaltenen Testsets abgestimmt (sieh
 - **Aktualisiert sich selbst.** Prüft einmal täglich GitHub Releases, lädt eine neue Version im Hintergrund und installiert sie, wenn du auf **Neu starten und aktualisieren** klickst, nie mitten in einem Diktat. Downloads werden vor jedem Austausch gegen GitHubs SHA-256 geprüft. Abschalten oder manuell prüfen kannst du unter **Einstellungen → Allgemein → Updates**.
 - **Klein und nativ.** Eine ca. 3 MB große Swift/SwiftUI-App auf macOS und eine eigenständige WinUI-3-App auf Windows. Kein Electron, kein Konto und kein eigener Server.
 
+<p align="center">
+  <img src="docs/images/home.png" width="720" alt="Startseite: diktierte Wörter, gesparte Zeit, Sprechtempo, Kosten und eine Aktivitäts-Heatmap im GitHub-Stil">
+</p>
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/models.png" alt="Modelle: ein Anbieter und ein Modell für jeden Schritt, dazu ein Backup-Bereinigungsmodell"></td>
+    <td width="50%"><img src="docs/images/models.png" alt="Modelle: ein Anbieter und ein Modell für jeden Schritt, mit Live-Preisen und einem Backup"></td>
     <td width="50%"><img src="docs/images/vocabulary.png" alt="Vokabular: deine Begriffe, auch die aus deinen Korrekturen gelernten"></td>
   </tr>
   <tr>
-    <td align="center">Anbieter und Modell für jeden Schritt, mit Backup-Bereinigungsmodell</td>
+    <td align="center">Anbieter und Modell für jeden Schritt, mit Live-Preisen und Backup</td>
     <td align="center">Vokabular, auch mit aus deinen Korrekturen gelernten Wörtern</td>
   </tr>
 </table>

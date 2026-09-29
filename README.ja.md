@@ -65,7 +65,7 @@ OpenTypeless はこの問題を中心に作られています。
 - **あなたの言葉、あなたの言語。** 編集は最小限で、言い回し、順序、口調はそのまま残ります。中国語と英語を混ぜて話した場合、日常語も含めて（「shortcut」「dark mode」）すべての単語が話したときの言語のまま残り、CJK と欧文の間にはスペースが入ります。
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="履歴：整形後のテキストが元の文字起こしの上にあり、各ステップの所要時間も表示">
+  <img src="docs/images/history.png" width="720" alt="履歴：日ごとにまとめられ検索でき、整形後のテキスト、所要時間、費用を表示">
 </p>
 
 プロンプトは開発用とホールドアウトのテストセット（[eval/](eval/) を参照）で調整されており、実際の口述も含まれています。
@@ -91,13 +91,17 @@ OpenTypeless はこの問題を中心に作られています。
 - **自動アップデート。** 1 日 1 回 GitHub Releases を確認し、新しいバージョンをバックグラウンドでダウンロードして、**再起動して更新** をクリックしたときにインストールします。音声入力の途中で行うことはありません。ファイルを置き換える前に、ダウンロードを GitHub の SHA-256 と照合します。**設定 → 一般 → アップデート** でオフにしたり、手動で確認したりできます。
 - **小さくてネイティブ。** macOS では約 3 MB の Swift/SwiftUI アプリ、Windows では自己完結型の WinUI 3 アプリ。Electron もアカウントも独自サーバーもありません。
 
+<p align="center">
+  <img src="docs/images/home.png" width="720" alt="ホーム：話した文字数、節約できた時間、話す速さ、費用、GitHub 風アクティビティヒートマップ">
+</p>
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/models.png" alt="モデル：ステップごとのプロバイダとモデル、さらに予備の整形モデル"></td>
+    <td width="50%"><img src="docs/images/models.png" alt="モデル：ステップごとのプロバイダとモデル、リアルタイムの価格、さらに予備"></td>
     <td width="50%"><img src="docs/images/vocabulary.png" alt="語彙：修正から学習したものを含むあなたの用語"></td>
   </tr>
   <tr>
-    <td align="center">ステップごとにプロバイダとモデルを選択、予備の整形モデルも</td>
+    <td align="center">ステップごとにプロバイダとモデルを選択、リアルタイムの価格と予備も</td>
     <td align="center">修正から学習した単語を含む語彙</td>
   </tr>
 </table>

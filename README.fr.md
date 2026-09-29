@@ -65,7 +65,7 @@ La transcription brute est brouillonne : tics de langage, reprises, « non atten
 - **Vos mots, vos langues.** Les modifications sont minimales : formulation, ordre et ton restent les vôtres. Quand vous mélangez chinois et anglais, chaque mot reste dans la langue où vous l’avez dit, y compris les mots courants (« shortcut », « dark mode »), avec une espace entre texte CJK et texte latin.
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="Historique : le texte nettoyé au-dessus de la transcription brute, avec la durée de chaque étape">
+  <img src="docs/images/history.png" width="720" alt="Historique : les dictées regroupées par jour et consultables par recherche, avec le texte nettoyé, les durées et le coût">
 </p>
 
 Le prompt est ajusté sur des jeux de développement et de test réservés (voir [eval/](eval/)), qui incluent de vraies dictées.
@@ -91,13 +91,17 @@ Le prompt est ajusté sur des jeux de développement et de test réservés (voir
 - **Se met à jour toute seule.** Vérifie GitHub Releases une fois par jour, télécharge la nouvelle version en arrière-plan et l’installe quand vous cliquez sur **Redémarrer pour mettre à jour**, jamais au milieu d’une dictée. Les téléchargements sont vérifiés avec le SHA-256 de GitHub avant tout remplacement. Désactivez-la, ou vérifiez manuellement, dans **Réglages → Général → Mises à jour**.
 - **Légère et native.** Une app Swift/SwiftUI d’environ 3 Mo sur macOS et une app WinUI 3 autonome sur Windows. Pas d’Electron, pas de compte et pas de serveur à elle.
 
+<p align="center">
+  <img src="docs/images/home.png" width="720" alt="Accueil : mots dictés, temps gagné, débit de parole, dépenses et une carte d’activité façon GitHub">
+</p>
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/models.png" alt="Modèles : un fournisseur et un modèle pour chaque étape, plus un modèle de nettoyage de secours"></td>
+    <td width="50%"><img src="docs/images/models.png" alt="Modèles : un fournisseur et un modèle pour chaque étape, avec les prix en direct et un secours"></td>
     <td width="50%"><img src="docs/images/vocabulary.png" alt="Vocabulaire : vos termes, y compris ceux appris de vos corrections"></td>
   </tr>
   <tr>
-    <td align="center">Un fournisseur et un modèle pour chaque étape, avec un modèle de nettoyage de secours</td>
+    <td align="center">Un fournisseur et un modèle pour chaque étape, avec les prix en direct et un secours</td>
     <td align="center">Le vocabulaire, y compris les mots appris de vos corrections</td>
   </tr>
 </table>

@@ -64,6 +64,17 @@ public class HedgedPolishTests
     }
 
     [Fact]
+    public async Task PartialTextComesOnlyFromTheStreamThatWon()
+    {
+        var server = new MockChatServer(new() { ["primary"] = new(Delay: 2, Text: "A"), ["backup"] = new(Text: "B") });
+        var partials = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var outcome = await HedgedPolish.Run("x", server.Route("primary"), server.Route("backup"), hedgeDelay: 0.2,
+                                             onPartial: partials.Enqueue);
+        Assert.Equal("B", outcome.Result.Text);
+        Assert.Equal(["B"], partials);
+    }
+
+    [Fact]
     public async Task PrimaryFailureStartsBackupWithoutWaiting()
     {
         var server = new MockChatServer(new() { ["primary"] = new(Status: 503), ["backup"] = new(Text: "B") });

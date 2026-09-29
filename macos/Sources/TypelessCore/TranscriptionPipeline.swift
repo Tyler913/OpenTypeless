@@ -69,6 +69,8 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     private var usages: [RequestUsage] = []
     private var backupUsages: [RequestUsage] = []
     private var finished = false
+    /// Every chunk has been handed out: `finish` has scheduled the tail.
+    private var flushed = false
     private var cancelled = false
 
     /// `preset` lets a retry reuse transcripts that already succeeded (keyed by chunk index).
@@ -108,6 +110,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
             return chunker.finish()
         }
         if let tail { schedule(tail) }
+        lock.withLock { flushed = true }
 
         await waitForAll()
 
@@ -137,6 +140,15 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     public func completedTranscripts() -> [Int: String] {
         lock.lock(); defer { lock.unlock() }
         return results.compactMapValues { if case let .done(text) = $0 { return text } else { return nil } }
+    }
+
+    /// How many chunks have their answer (or needed none), of how many in all; nil until `finish` has handed out
+    /// the last one, since the total isn't known before.
+    public func transcriptionProgress() -> (done: Int, total: Int)? {
+        lock.withLock { () -> (done: Int, total: Int)? in
+            guard flushed else { return nil }
+            return (results.values.filter(\.isFinished).count, results.count)
+        }
     }
 
     /// What the requests so far used, one entry per successful request.

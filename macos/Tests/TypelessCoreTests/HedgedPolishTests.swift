@@ -79,6 +79,16 @@ final class MockChatServer: URLProtocol {
         #expect(outcome.totalSeconds < 1.5)
     }
 
+    @Test func partialTextComesOnlyFromTheStreamThatWon() async throws {
+        MockChatServer.reset(["primary": .init(delay: 2, text: "A"), "backup": .init(text: "B")])
+        let partials = PartialLog()
+        let outcome = try await HedgedPolish.run(transcript: "x", primary: MockChatServer.route("primary"),
+                                                 backup: MockChatServer.route("backup"), hedgeDelay: 0.2,
+                                                 onPartial: { partials.add($0) })
+        #expect(outcome.result.text == "B")
+        #expect(partials.all == ["B"])
+    }
+
     @Test func primaryFailureStartsBackupWithoutWaiting() async throws {
         MockChatServer.reset(["primary": .init(status: 503), "backup": .init(text: "B")])
         let outcome = try await HedgedPolish.run(transcript: "x", primary: MockChatServer.route("primary"),
@@ -125,4 +135,11 @@ final class MockChatServer: URLProtocol {
         #expect(PolishMetrics.similarity("用 SwiftUI 写", "用SwiftUI写。") == 1)
         #expect(PolishMetrics.similarity("abcd", "abcf") == 0.75)
     }
+}
+
+private final class PartialLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var texts: [String] = []
+    func add(_ text: String) { lock.withLock { texts.append(text) } }
+    var all: [String] { lock.withLock { texts } }
 }

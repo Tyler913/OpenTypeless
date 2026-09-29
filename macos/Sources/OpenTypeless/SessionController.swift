@@ -332,7 +332,7 @@ final class SessionController: ObservableObject {
         history.update(record)
         self.record = record
         state = .processing
-        hud.show(.working)
+        hud.showWorking(polishes: settings.polishEnabled)
 
         processingTask = Task { [weak self] in
             await self?.process(record: record, pipeline: pipeline)
@@ -344,8 +344,21 @@ final class SessionController: ObservableObject {
     private func process(record initial: DictationRecord, pipeline: TranscriptionPipeline) async {
         var record = initial
         let started = ProcessInfo.processInfo.systemUptime
+        // Moves the bar as the speech-to-text chunks still out come back.
+        let bar = hud.model.bar
+        let watch = Task { @MainActor in
+            while !Task.isCancelled {
+                if let counts = pipeline.transcriptionProgress() {
+                    bar.reach(.transcribing(done: counts.done, total: counts.total))
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+        }
+        defer { watch.cancel() }
         do {
             let raw = try await pipeline.finish()
+            watch.cancel()
+            bar.reach(.transcribed)
             record.timing = DictationRecord.Timing(transcription: ProcessInfo.processInfo.systemUptime - started)
             let backupChunks = pipeline.backupChunkCount()
             if backupChunks > 0 { record.timing?.transcriptionBackupChunks = backupChunks }
@@ -388,7 +401,7 @@ final class SessionController: ObservableObject {
 
         if settings.polishEnabled {
             do {
-                let outcome = try await polish(record.rawText)
+                let outcome = try await polish(record.rawText, onPartial: onPolishPartial(expected: record.rawText))
                 polished = outcome
                 let result = outcome.result
                 record.timing?.polishFirstToken = outcome.firstTokenSeconds
@@ -422,7 +435,18 @@ final class SessionController: ObservableObject {
         history.update(record)
 
         guard !Task.isCancelled else { return }
+        hud.model.bar.reach(.delivered)
         await deliver(text, notice: notice)
+    }
+
+    /// Moves the bar as the clean-up streams in: its first token, then its length against the transcript's.
+    private func onPolishPartial(expected transcript: String) -> @Sendable (String) -> Void {
+        let expected = transcript.utf16.count
+        let bar = hud.model.bar
+        return { text in
+            let received = text.utf16.count
+            DispatchQueue.main.async { bar.reach(.polishing(received: received, expected: expected)) }
+        }
     }
 
     /// Pastes at the cursor unless focus is clearly not a text input. Whether the paste actually
@@ -440,7 +464,12 @@ final class SessionController: ObservableObject {
         note("deliver → \(outcome) (focus \(target)) in \(frontmostID)")
         switch outcome {
         case .pasted:
-            if let notice { finish(showing: .error(notice), hideAfter: 3) } else { finish(showing: .hidden, hideAfter: 0) }
+            if let notice {
+                finish(showing: .error(notice), hideAfter: 3)
+            } else {
+                reset()
+                hud.finishWorking()
+            }
             if settings.learnFromEdits { editWatcher.watch(inserted: text) }
         case .notPasted:
             finish(showing: .copied, hideAfter: 1.6)
@@ -452,14 +481,14 @@ final class SessionController: ObservableObject {
 
     private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
 
-    private func polish(_ raw: String) async throws -> HedgedPolishResult {
+    private func polish(_ raw: String, onPartial: (@Sendable (String) -> Void)? = nil) async throws -> HedgedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
         let primary = route(endpoint, model: settings.polishModel)
         let backup = settings.polishBackupEndpoint.map { route($0, model: settings.polishBackupModel) }
         return try await RetryPolicy(maxAttempts: 2).run { _ in
-            try await HedgedPolish.run(transcript: raw, primary: primary, backup: backup)
+            try await HedgedPolish.run(transcript: raw, primary: primary, backup: backup, onPartial: onPartial)
         }
     }
 
@@ -519,7 +548,7 @@ final class SessionController: ObservableObject {
         history.update(record)
         self.record = record
         state = .processing
-        hud.show(.working)
+        hud.showWorking(polishes: settings.polishEnabled)
 
         let pipeline = makePipeline(endpoint: endpoint, preset: saved.chunkTexts)
         self.pipeline = pipeline

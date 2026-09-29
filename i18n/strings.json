@@ -116,15 +116,6 @@
     "fr": "Hier",
     "de": "Gestern"
   },
-  "Working": {
-    "ja": "処理中",
-    "ko": "처리 중",
-    "es": "Procesando",
-    "pt": "Processando",
-    "ru": "Обработка",
-    "fr": "Traitement",
-    "de": "Verarbeitung"
-  },
   "Copied to clipboard": {
     "ja": "クリップボードにコピーしました",
     "ko": "클립보드에 복사됨",

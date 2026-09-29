@@ -47,11 +47,11 @@ final class LivePreview: @unchecked Sendable {
     func append(_ samples: [Int16]) {
         guard !samples.isEmpty else { return }
         let state = lock.withLock { () -> (AVAudioConverter, AVAudioFormat, AsyncStream<AnalyzerInput>.Continuation)? in
-            guard let converter, let analyzerFormat, let continuation else { return nil }
-            return (converter, analyzerFormat, continuation)
+            guard let c = self.converter, let f = self.analyzerFormat, let k = self.continuation else { return nil }
+            return (c, f, k)
         }
         guard let state else { return }
-        let (converter, format, continuation) = state
+        let (audioConverter, format, stream) = state
         guard let input = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: AVAudioFrameCount(samples.count)),
               let channel = input.int16ChannelData else { return }
         samples.withUnsafeBufferPointer { channel[0].update(from: $0.baseAddress!, count: samples.count) }
@@ -60,7 +60,7 @@ final class LivePreview: @unchecked Sendable {
         guard let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return }
         var consumed = false
         var error: NSError?
-        converter.convert(to: output, error: &error) { _, status in
+        audioConverter.convert(to: output, error: &error) { _, status in
             if consumed {
                 status.pointee = .noDataNow
                 return nil
@@ -70,7 +70,7 @@ final class LivePreview: @unchecked Sendable {
             return input
         }
         guard error == nil, output.frameLength > 0 else { return }
-        continuation.yield(AnalyzerInput(buffer: output))
+        stream.yield(AnalyzerInput(buffer: output))
     }
 
     private func run(language: String) async {

@@ -126,6 +126,12 @@ struct GeneralPage: View {
                     Toggle("", isOn: $settings.playSounds).toggleStyle(.switch).labelsHidden()
                 }
                 CardDivider(inset: 50)
+                CardRow(icon: "text.bubble.fill", iconColor: .teal, title: L("实时预览（测试版）", "Live preview (beta)"),
+                        subtitle: L("说话时在录音条上方显示识别到的文字，由这台 Mac 本地识别。只是预览：插入的文字仍然来自语音转文字服务商。第一次使用会下载对应语言的语音模型。",
+                                    "Shows what you're saying above the capsule as you talk, recognised on this Mac. Only a preview: the inserted text still comes from your speech-to-text provider. The first time, macOS downloads a speech model for your language.")) {
+                    Toggle("", isOn: $settings.livePreview).toggleStyle(.switch).labelsHidden()
+                }
+                CardDivider(inset: 50)
                 CardRow(icon: "timer", iconColor: .orange, title: L("单次最长录音", "Maximum recording"),
                         subtitle: L("到时间会自动结束并处理", "Stops and processes automatically at the limit")) {
                     Stepper(L("\(settings.maxRecordingMinutes) 分钟", "\(settings.maxRecordingMinutes) min"),

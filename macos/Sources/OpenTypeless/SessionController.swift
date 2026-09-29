@@ -29,6 +29,8 @@ final class SessionController: ObservableObject {
     private var openDeviceUID: String?
     /// Audio from before the key was pressed at the start of this dictation (only with a warm microphone).
     private var preRollSeconds: Double = 0
+    /// On-device recognition shown above the capsule while recording, when Live preview is on.
+    private var preview: LivePreview?
 
     private var pipeline: TranscriptionPipeline?
     private var writer: WAVFileWriter?
@@ -216,11 +218,23 @@ final class SessionController: ObservableObject {
         let counter = SampleCounter()
         // A warm recorder on another input (the choice changed) is reopened on the right one.
         if recorder.isRecording, openDeviceUID != chosenDeviceUID { recorder.stop() }
+        var livePreview: LivePreview?
+        if settings.livePreview {
+            let hudModel = hud.model
+            livePreview = LivePreview { text in
+                let line = LivePreviewText.tail(text)
+                DispatchQueue.main.async { hudModel.preview = line }
+            }
+            livePreview?.start(language: settings.sttLanguage)
+        }
+        preview = livePreview
+        hud.model.preview = ""
         // Starts with the pre-roll when the microphone was already running.
-        let preRoll = sink.begin { samples in
+        let preRoll = sink.begin { [livePreview] samples in
             writer.append(samples)
             pipeline.append(samples)
             counter.add(samples.count)
+            livePreview?.append(samples)
         }
         preRollSeconds = AudioFormat.seconds(forSampleCount: preRoll)
         if !recorder.isRecording {
@@ -230,6 +244,8 @@ final class SessionController: ObservableObject {
                 openDeviceUID = chosenDeviceUID
             } catch {
                 sink.end()
+                preview?.stop()
+                preview = nil
                 writer.close()
                 history.delete(record)
                 hud.show(.error(L("无法开始录音：", "Can't start recording: ") + error.localizedDescription), autoHideAfter: 4)
@@ -289,6 +305,9 @@ final class SessionController: ObservableObject {
             openDeviceUID = nil
         }
         sink.end()
+        preview?.stop()
+        preview = nil
+        hud.model.preview = ""
         writer?.close()
         writer = nil
     }

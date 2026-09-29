@@ -50,6 +50,8 @@ public sealed class SessionController
     private string? _openDeviceId;
     /// <summary>Audio from before the key was pressed at the start of this dictation (only with a warm microphone).</summary>
     private double _preRollSeconds;
+    /// <summary>Windows' own recognition shown above the capsule while recording, when Live preview is on.</summary>
+    private LivePreview? _preview;
     private readonly DispatcherQueue _dispatcher = DispatcherQueue.GetForCurrentThread();
 
     private TranscriptionPipeline? _pipeline;
@@ -255,6 +257,17 @@ public sealed class SessionController
         var counter = new SampleCounter();
         // A warm recorder on another input (the choice changed) is reopened on the right one.
         if (_recorder.IsRecording && _openDeviceId != ChosenDeviceId) _recorder.Stop();
+        Hud.Model.Preview = "";
+        if (_settings.LivePreview)
+        {
+            var hudModel = Hud.Model;
+            _preview = new LivePreview(text =>
+            {
+                var line = LivePreviewText.Tail(text);
+                _dispatcher.TryEnqueue(() => { if (_preview != null) hudModel.Preview = line; });
+            });
+            _preview.Start(_settings.SttLanguage);
+        }
         // Starts with the pre-roll when the microphone was already running.
         var preRoll = _sink.Begin(samples =>
         {
@@ -275,6 +288,8 @@ public sealed class SessionController
         catch (Exception error)
         {
             _sink.End();
+            _preview?.Stop();
+            _preview = null;
             writer.Close();
             _history.Delete(record);
             Hud.Show(new HudPhase.Error(L("无法开始录音：", "Can't start recording: ") + error.Message), 4);
@@ -329,6 +344,9 @@ public sealed class SessionController
             _openDeviceId = null;
         }
         _sink.End();
+        _preview?.Stop();
+        _preview = null;
+        Hud.Model.Preview = "";
         _writer?.Close();
         _writer = null;
     }

@@ -63,6 +63,8 @@ cat > "$STAGED/Contents/Info.plist" <<PLIST
     <key>NSHighResolutionCapable</key><true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>OpenTypeless records your voice to turn it into text.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>With Live preview on, OpenTypeless shows what you say as you talk, recognised on this Mac.</string>
 </dict>
 </plist>
 PLIST

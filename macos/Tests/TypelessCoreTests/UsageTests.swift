@@ -289,6 +289,16 @@ import Testing
     }
 }
 
+@Suite struct LivePreviewTextTests {
+    @Test func keepsTheEndOnOneLine() {
+        #expect(LivePreviewText.tail("hello\nthere") == "hello there")
+        #expect(LivePreviewText.tail("the quick brown fox jumps over the lazy dog", limit: 26) == "…jumps over the lazy dog")
+        let chinese = String(repeating: "我们今天讨论一下", count: 10)
+        #expect(LivePreviewText.tail(chinese) == "…" + String(chinese.suffix(60)))
+        #expect(LivePreviewText.tail("👍👍👍👍", limit: 2) == "…👍👍") // emoji stay whole
+    }
+}
+
 @Suite struct CancelPolicyTests {
     @Test func keepsLongRecordingsForADay() {
         #expect(!CancelPolicy.keeps(recordedSeconds: 9.9))

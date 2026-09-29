@@ -18,6 +18,20 @@ public sealed class HudModel
 {
     public event Action? PhaseChanged;
     public event Action? LevelsChanged;
+    public event Action? PreviewChanged;
+
+    private string _preview = "";
+    /// <summary>Live preview of what's being said (empty when it's off or hasn't heard anything yet).</summary>
+    public string Preview
+    {
+        get => _preview;
+        set
+        {
+            if (_preview == value) return;
+            _preview = value;
+            PreviewChanged?.Invoke();
+        }
+    }
 
     private HudPhase _phase = new HudPhase.Hidden();
     public HudPhase Phase

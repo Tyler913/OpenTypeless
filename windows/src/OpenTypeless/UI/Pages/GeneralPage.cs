@@ -155,6 +155,14 @@ public sealed class GeneralPage : PageBase
             Trailing = Toggle(_settings.PlaySounds, on => _settings.PlaySounds = on),
         });
         dictation.Body.Add(new CardDivider());
+        dictation.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Message, Tint = Tint.Teal, Title = L("实时预览（测试版）", "Live preview (beta)"),
+            Subtitle = L("说话时在录音条上方显示识别到的文字，由 Windows 语音识别提供（需要安装对应语言的语音包，并在「隐私和安全性 → 语音」里打开在线语音识别；它使用默认麦克风）。只是预览：插入的文字仍然来自语音转文字服务商。",
+                         "Shows what you're saying above the capsule as you talk, recognised by Windows speech recognition (needs the language's speech pack, and online speech recognition on under Privacy & security → Speech; it listens to the default microphone). Only a preview: the inserted text still comes from your speech-to-text provider."),
+            Trailing = Toggle(_settings.LivePreview, on => _settings.LivePreview = on),
+        });
+        dictation.Body.Add(new CardDivider());
         var minutes = new NumberBox
         {
             Minimum = 1, Maximum = 60, SmallChange = 1, LargeChange = 5,

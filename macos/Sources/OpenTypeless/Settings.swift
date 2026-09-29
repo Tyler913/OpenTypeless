@@ -39,6 +39,8 @@ final class AppSettings: ObservableObject {
     @AppStorage("microphone") var microphoneUID: String = ""
     /// Keep the microphone running between dictations, so recording starts at once with the moment before the key.
     @AppStorage("keepMicrophoneWarm") var keepMicrophoneWarm: Bool = false
+    /// Show what's being said above the capsule while recording, recognised on this Mac (see LivePreview).
+    @AppStorage("livePreview") var livePreview: Bool = false
     /// Open the Home page when the app starts at login (a manual launch always shows it).
     @AppStorage("showHomeAtLogin") var showHomeAtLogin: Bool = false
     /// The typing speed "time saved" on the Home page is measured against.

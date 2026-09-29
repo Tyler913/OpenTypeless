@@ -521,3 +521,16 @@ public class BackupTranscriptionTests
         Assert.Equal(0, pipeline.BackupChunkCount());
     }
 }
+
+public class LivePreviewTextTests
+{
+    [Fact]
+    public void KeepsTheEndOnOneLine()
+    {
+        Assert.Equal("hello there", LivePreviewText.Tail("hello\nthere"));
+        Assert.Equal("…jumps over the lazy dog", LivePreviewText.Tail("the quick brown fox jumps over the lazy dog", limit: 26));
+        var chinese = string.Concat(Enumerable.Repeat("我们今天讨论一下", 10));
+        Assert.Equal("…" + chinese[^60..], LivePreviewText.Tail(chinese));
+        Assert.Equal("…👍👍", LivePreviewText.Tail("👍👍👍👍", limit: 2)); // emoji stay whole
+    }
+}

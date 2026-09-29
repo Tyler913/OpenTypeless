@@ -210,6 +210,13 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("keepMicrophoneWarm", value);
     }
 
+    /// <summary>Show what's being said above the capsule while recording, recognised by Windows (see LivePreview).</summary>
+    public bool LivePreview
+    {
+        get => GetBool("livePreview", false);
+        set => SetValue("livePreview", value);
+    }
+
     /// <summary>Open the Home page when the app starts at sign-in (a manual launch always shows it).</summary>
     public bool ShowHomeAtLogin
     {

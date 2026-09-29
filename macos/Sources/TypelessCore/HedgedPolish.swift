@@ -38,12 +38,14 @@ public enum HedgedPolish {
         transcript: String,
         primary: PolishRoute,
         backup: PolishRoute?,
-        hedgeDelay: Double = defaultHedgeDelay
+        hedgeDelay: Double = defaultHedgeDelay,
+        onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> HedgedPolishResult {
         let routes = [primary] + (backup.map { [$0] } ?? [])
         let start = ProcessInfo.processInfo.systemUptime
         let (events, continuation) = AsyncStream<Event>.makeStream()
         let firstToken = FirstTokenLatch()
+        let leader = Leader()
         var tasks: [Int: Task<Void, Never>] = [:]
 
         func launch(_ index: Int) {
@@ -53,8 +55,10 @@ public enum HedgedPolish {
                 do {
                     let result = try await route.client.polish(
                         transcript: transcript, options: route.options,
-                        onPartial: { _ in
+                        onPartial: { text in
                             if firstToken.mark(index) { continuation.yield(.firstToken(index)) }
+                            // Only the stream that answered first is passed on.
+                            if leader.claim(index) { onPartial?(text) }
                         })
                     continuation.yield(.finished(index, .success(result)))
                 } catch {
@@ -115,6 +119,19 @@ public enum HedgedPolish {
         case hedgeTimer
         case firstToken(Int)
         case finished(Int, Result<APIClient.PolishResult, Error>)
+    }
+}
+
+/// The route that streamed first.
+private final class Leader: @unchecked Sendable {
+    private let lock = NSLock()
+    private var index: Int?
+
+    func claim(_ candidate: Int) -> Bool {
+        lock.withLock { () -> Bool in
+            if index == nil { index = candidate }
+            return index == candidate
+        }
     }
 }
 

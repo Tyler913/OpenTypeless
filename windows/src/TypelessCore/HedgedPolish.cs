@@ -35,12 +35,15 @@ public static class HedgedPolish
     public const double DefaultHedgeDelay = 0.55;
 
     public static async Task<HedgedPolishResult> Run(string transcript, PolishRoute primary, PolishRoute? backup,
-                                                     double hedgeDelay = DefaultHedgeDelay, CancellationToken cancellationToken = default)
+                                                     double hedgeDelay = DefaultHedgeDelay, CancellationToken cancellationToken = default,
+                                                     Action<string>? onPartial = null)
     {
         PolishRoute[] routes = backup is null ? [primary] : [primary, backup];
         var clock = Stopwatch.StartNew();
         var events = Channel.CreateUnbounded<Event>();
         var firstToken = new int[routes.Length];
+        // The route that streamed first, plus one (0 until one has).
+        var leader = 0;
         var cancels = new CancellationTokenSource?[routes.Length];
         using var scope = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var timer = CancellationTokenSource.CreateLinkedTokenSource(scope.Token);
@@ -55,9 +58,12 @@ public static class HedgedPolish
             {
                 try
                 {
-                    var result = await route.Client.Polish(transcript, route.Options, onPartial: _ =>
+                    var result = await route.Client.Polish(transcript, route.Options, onPartial: text =>
                     {
                         if (Interlocked.Exchange(ref firstToken[index], 1) == 0) events.Writer.TryWrite(new Event.FirstToken(index));
+                        // Only the stream that answered first is passed on.
+                        Interlocked.CompareExchange(ref leader, index + 1, 0);
+                        if (Volatile.Read(ref leader) == index + 1) onPartial?.Invoke(text);
                     }, cancellationToken: cancel.Token).ConfigureAwait(false);
                     events.Writer.TryWrite(new Event.Finished(index, result, null));
                 }

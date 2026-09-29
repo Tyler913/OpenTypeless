@@ -7,7 +7,8 @@ final class HUDModel: ObservableObject {
     enum Phase: Equatable {
         case hidden
         case recording
-        /// Transcribing and cleaning up — one state, the user doesn't need the details.
+        /// Transcribing and cleaning up — one state, the user doesn't need the details: hopping dots, and a bar
+        /// filling the capsule as the answers come back (`bar`).
         case working
         /// Nothing to paste into, so the text went to the clipboard.
         case copied
@@ -21,6 +22,7 @@ final class HUDModel: ObservableObject {
     @Published var startedAt = Date()
     /// Live preview of what's being said (empty when it's off or hasn't heard anything yet).
     @Published var preview = ""
+    let bar = ProcessingBar()
 
     func push(level: Float) {
         // Perceptual scaling so normal speech fills the bars.
@@ -31,6 +33,49 @@ final class HUDModel: ObservableObject {
 
     func resetLevels() {
         levels = Array(repeating: 0, count: levels.count)
+    }
+}
+
+/// The bar that fills the capsule while a dictation is transcribed and cleaned up (see `ProcessingProgress`). Its own
+/// object, so its updates on every frame redraw only the bar.
+@MainActor
+final class ProcessingBar: ObservableObject {
+    @Published private(set) var shown: Double = 0
+    private var progress = ProcessingProgress(polishes: true)
+    private var timer: Timer?
+    private var lastTick: TimeInterval = 0
+
+    /// Empties the bar and starts animating it.
+    func start(polishes: Bool) {
+        progress = ProcessingProgress(polishes: polishes)
+        shown = 0
+        lastTick = ProcessInfo.processInfo.systemUptime
+        guard timer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tick() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    func reach(_ milestone: ProcessingProgress.Milestone) {
+        progress.reach(milestone)
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    /// Sets the bar directly, for the UI snapshots.
+    func show(_ value: Double) {
+        shown = value
+    }
+
+    private func tick() {
+        let now = ProcessInfo.processInfo.systemUptime
+        shown = progress.tick(now - lastTick)
+        lastTick = now
     }
 }
 
@@ -46,6 +91,7 @@ final class HUDController {
 
     func show(_ phase: HUDModel.Phase, autoHideAfter: Double? = nil) {
         hideWork?.cancel()
+        if phase != .working { model.bar.stop() }
         withAnimation(.spring(duration: 0.32, bounce: 0.18)) { model.phase = phase }
         if phase == .hidden {
             panel?.orderOut(nil)
@@ -61,6 +107,19 @@ final class HUDController {
             hideWork = work
             DispatchQueue.main.asyncAfter(deadline: .now() + autoHideAfter, execute: work)
         }
+    }
+
+    /// Transcribing and cleaning up, with the bar starting from empty.
+    func showWorking(polishes: Bool) {
+        model.bar.start(polishes: polishes)
+        show(.working)
+    }
+
+    /// The text went in: the bar runs to the end, then the capsule goes.
+    func finishWorking() {
+        guard model.phase == .working else { return show(.hidden) }
+        model.bar.reach(.delivered)
+        show(.working, autoHideAfter: 0.3)
     }
 
     private func makePanel() -> NSPanel {
@@ -113,6 +172,9 @@ struct HUDView: View {
                     .font(.system(size: 13, weight: .medium))
                     .padding(.horizontal, 14)
                     .frame(height: 36)
+                    .background {
+                        if model.phase == .working { ProgressFill(bar: model.bar).transition(.opacity) }
+                    }
                     .glassEffect(.regular, in: .capsule)
                     .glassEffectID("hud", in: glass)
             }
@@ -137,10 +199,8 @@ struct HUDView: View {
                 }
             }
         case .working:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text(L("处理中", "Working"))
-            }
+            // About as wide as the recording row, so the capsule keeps its size when the key is released.
+            HoppingDots().frame(width: 132)
         case .copied:
             HStack(spacing: 7) {
                 Image(systemName: "doc.on.clipboard").foregroundStyle(.secondary)
@@ -164,6 +224,53 @@ struct HUDView: View {
     private func elapsed(_ now: Date) -> String {
         let seconds = max(0, Int(now.timeIntervalSince(model.startedAt)))
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+/// Three dots hopping in turn, like a voice still talking, while the text is on its way.
+struct HoppingDots: View {
+    /// One hop of each dot, one after another, then a short rest.
+    private static let period = 1.1
+    private static let hop = 0.36
+    private static let stagger = 0.14
+    private static let height: CGFloat = 4.5
+
+    var body: some View {
+        TimelineView(.animation) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { index in
+                    let lift = Self.lift(time - Double(index) * Self.stagger)
+                    Circle()
+                        .fill(.primary.opacity(0.6 + 0.3 * lift))
+                        .frame(width: 6, height: 6)
+                        .offset(y: -Self.height * CGFloat(lift))
+                }
+            }
+            .frame(height: 18)
+        }
+    }
+
+    /// 0 at rest, 1 at the top of a hop.
+    private static func lift(_ time: Double) -> Double {
+        let phase = time.truncatingRemainder(dividingBy: period)
+        let t = (phase < 0 ? phase + period : phase) / hop
+        return t < 1 ? sin(t * .pi) : 0
+    }
+}
+
+/// The processing bar: a soft wash of the accent colour filling the capsule from the left.
+struct ProgressFill: View {
+    @ObservedObject var bar: ProcessingBar
+
+    var body: some View {
+        GeometryReader { proxy in
+            LinearGradient(colors: [Color.accentColor.opacity(0.12), Color.accentColor.opacity(0.3)],
+                           startPoint: .leading, endPoint: .trailing)
+                .frame(width: proxy.size.width * bar.shown)
+        }
+        .clipShape(.capsule)
+        .allowsHitTesting(false)
     }
 }
 

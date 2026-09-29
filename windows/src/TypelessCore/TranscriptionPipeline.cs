@@ -68,6 +68,8 @@ public sealed class TranscriptionPipeline
     private readonly List<RequestUsage> _usages = new();
     private readonly List<RequestUsage> _backupUsages = new();
     private bool _finished;
+    /// <summary>Every chunk has been handed out: <see cref="Finish"/> has scheduled the tail.</summary>
+    private bool _flushed;
     private bool _cancelled;
     /// <summary>Completed by <see cref="Finish"/>: the recording has ended, so every chunk still out is holding up the text.</summary>
     private readonly TaskCompletionSource _recordingEnded = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -179,6 +181,7 @@ public sealed class TranscriptionPipeline
         _recordingEnded.TrySetResult();
         if (adopted != null) _observer?.Invoke(tail!.Index, new ChunkState.Queued());
         else if (tail != null) Schedule(tail);
+        lock (_lock) _flushed = true;
 
         await WaitForAll().ConfigureAwait(false);
 
@@ -207,6 +210,19 @@ public sealed class TranscriptionPipeline
         lock (_lock)
         {
             return _results.Where(r => r.Value is ChunkState.Done).ToDictionary(r => r.Key, r => ((ChunkState.Done)r.Value).Text);
+        }
+    }
+
+    /// <summary>
+    /// How many chunks have their answer (or needed none), of how many in all; null until <see cref="Finish"/> has
+    /// handed out the last one, since the total isn't known before.
+    /// </summary>
+    public (int Done, int Total)? TranscriptionProgress()
+    {
+        lock (_lock)
+        {
+            if (!_flushed) return null;
+            return (_results.Values.Count(r => r.IsFinished), _results.Count);
         }
     }
 

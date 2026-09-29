@@ -93,6 +93,22 @@ public class PipelineTests
     }
 
     [Fact]
+    public async Task ProgressCountsChunksOnceTheRecordingHasEnded()
+    {
+        MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8("""{"text":"好"}"""));
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("test"), MockOpenRouter.Client());
+        var pipeline = new TranscriptionPipeline(client, new TranscriptionOptions("m"), policy: new RetryPolicy(2, 0.01));
+        pipeline.Append(Speech(40));
+        // The tail isn't handed out yet, so the total isn't known.
+        Assert.Null(pipeline.TranscriptionProgress());
+        await pipeline.Finish();
+        var progress = pipeline.TranscriptionProgress();
+        Assert.NotNull(progress);
+        Assert.True(progress.Value.Total > 1);
+        Assert.Equal(progress.Value.Total, progress.Value.Done);
+    }
+
+    [Fact]
     public async Task PermanentFailureKeepsPartialText()
     {
         var audio = Speech(40);

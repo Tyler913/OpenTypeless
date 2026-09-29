@@ -412,7 +412,7 @@ public sealed class SessionController
         _history.Update(record);
         _record = record;
         State = SessionState.Processing;
-        Hud.Show(new HudPhase.Working());
+        Hud.ShowWorking(_settings.PolishEnabled);
 
         var processing = new CancellationTokenSource();
         _processing = processing;
@@ -424,9 +424,15 @@ public sealed class SessionController
     private async Task Process(DictationRecord record, TranscriptionPipeline pipeline, CancellationToken token)
     {
         var started = Stopwatch.StartNew();
+        // Moves the bar as the speech-to-text chunks still out come back.
+        var progress = Hud.Model.Progress;
+        var watch = new CancellationTokenSource();
+        _ = WatchTranscription();
         try
         {
             var raw = await pipeline.Finish();
+            watch.Cancel();
+            progress.Reach(new ProcessingProgress.Milestone.Transcribed());
             record.Timing = new DictationTiming { Transcription = started.Elapsed.TotalSeconds };
             if (pipeline.BackupChunkCount() is var backupChunks and > 0) record.Timing.TranscriptionBackupChunks = backupChunks;
             if (pipeline.TailWasSpeculative) Note($"last segment transcribed ahead of time: text {started.Elapsed.TotalSeconds:0.00}s after release");
@@ -464,6 +470,19 @@ public sealed class SessionController
             LastError = error.Message;
             Finish(new HudPhase.Error(error.Message), 5);
         }
+        finally
+        {
+            watch.Cancel();
+        }
+
+        async Task WatchTranscription()
+        {
+            while (!watch.IsCancellationRequested)
+            {
+                if (pipeline.TranscriptionProgress() is { } counts) progress.Reach(new ProcessingProgress.Milestone.Transcribing(counts.Done, counts.Total));
+                try { await Task.Delay(50, watch.Token); } catch (OperationCanceledException) { return; }
+            }
+        }
     }
 
     private async Task PolishAndDeliver(DictationRecord record, TranscriptionPipeline pipeline, CancellationToken token)
@@ -485,6 +504,8 @@ public sealed class SessionController
             {
                 _speculativePolish = null;
                 polishing = speculative.Task;
+                // What it streams from now on moves this dictation's bar.
+                speculative.Partials.Target = OnPolishPartial(record.RawText);
                 ahead = speculative.Started.Elapsed.TotalSeconds;
                 adopted = token.Register(speculative.Cancel.Cancel);
                 Note($"clean-up started {ahead:0.00}s ago, while recording");
@@ -492,7 +513,7 @@ public sealed class SessionController
             else
             {
                 DropSpeculativePolish();
-                polishing = Polish(record.RawText, token);
+                polishing = Polish(record.RawText, OnPolishPartial(record.RawText), token);
             }
             // Saved while the clean-up runs, so the transcript survives a crash.
             _history.Update(record);
@@ -542,7 +563,11 @@ public sealed class SessionController
         }
         if (record.Status == DictationStatus.PolishFailed) record.PolishedText = null;
 
-        if (!token.IsCancellationRequested) await Deliver(text, notice);
+        if (!token.IsCancellationRequested)
+        {
+            Hud.Model.Progress.Reach(new ProcessingProgress.Milestone.Delivered());
+            await Deliver(text, notice);
+        }
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
         Account(record, pipeline, polished, _discardedPolishes.ToList());
         _discardedPolishes.Clear();
@@ -552,7 +577,18 @@ public sealed class SessionController
     // MARK: - Clean-up ahead of time
 
     /// <summary>A clean-up of <c>Raw</c>, started while recording.</summary>
-    private sealed record SpeculativePolish(string Raw, Stopwatch Started, Task<HedgedPolishResult> Task, CancellationTokenSource Cancel);
+    private sealed record SpeculativePolish(string Raw, Stopwatch Started, Task<HedgedPolishResult> Task, CancellationTokenSource Cancel,
+                                            PartialRelay Partials);
+
+    /// <summary>
+    /// Where a clean-up started ahead of time sends its partial text: nowhere until the dictation takes it over, so one
+    /// that is dropped never moves the bar.
+    /// </summary>
+    private sealed class PartialRelay
+    {
+        public volatile Action<string>? Target;
+        public void Send(string text) => Target?.Invoke(text);
+    }
 
     /// <summary>
     /// The pipeline has the whole transcript the recording would give if it ended now (the speaker paused), or no longer
@@ -565,10 +601,11 @@ public sealed class SessionController
         DropSpeculativePolish();
         if (raw is null || raw.Trim().Length == 0) return;
         var cancel = new CancellationTokenSource();
-        var task = Polish(raw, cancel.Token);
+        var partials = new PartialRelay();
+        var task = Polish(raw, partials.Send, cancel.Token);
         // A dropped clean-up's failure (usually its cancellation) is expected; observe it so it isn't reported.
         _ = task.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-        _speculativePolish = new SpeculativePolish(raw, Stopwatch.StartNew(), task, cancel);
+        _speculativePolish = new SpeculativePolish(raw, Stopwatch.StartNew(), task, cancel, partials);
         Note("clean-up started ahead of time (speaker paused)");
     }
 
@@ -578,6 +615,17 @@ public sealed class SessionController
         _speculativePolish = null;
         if (speculative.Task.IsCompletedSuccessfully) _discardedPolishes.Add(speculative.Task.Result);
         else speculative.Cancel.Cancel();
+    }
+
+    /// <summary>Moves the bar as the clean-up streams in: its first token, then its length against the transcript's.</summary>
+    private Action<string> OnPolishPartial(string transcript)
+    {
+        var progress = Hud.Model.Progress;
+        return text =>
+        {
+            var received = text.Length;
+            _dispatcher.TryEnqueue(() => progress.Reach(new ProcessingProgress.Milestone.Polishing(received, transcript.Length)));
+        };
     }
 
     /// <summary>
@@ -600,7 +648,15 @@ public sealed class SessionController
         switch (outcome)
         {
             case TextInserter.Outcome.Pasted:
-                Finish(notice is { } message ? new HudPhase.Error(message) : new HudPhase.Hidden(), notice != null ? 3 : 0);
+                if (notice is { } message)
+                {
+                    Finish(new HudPhase.Error(message), 3);
+                }
+                else
+                {
+                    Reset();
+                    Hud.FinishWorking();
+                }
                 if (_settings.LearnFromEdits) _editWatcher.Watch(text);
                 break;
             default:
@@ -609,7 +665,7 @@ public sealed class SessionController
         }
     }
 
-    private async Task<HedgedPolishResult> Polish(string raw, CancellationToken token)
+    private async Task<HedgedPolishResult> Polish(string raw, Action<string>? onPartial, CancellationToken token)
     {
         if (_settings.PolishEndpoint is not { } endpoint || !_settings.IsConfigured(_settings.PolishProvider))
         {
@@ -617,7 +673,7 @@ public sealed class SessionController
         }
         var primary = Route(endpoint, _settings.PolishModel);
         var backup = _settings.PolishBackupEndpoint is { } backupEndpoint ? Route(backupEndpoint, _settings.PolishBackupModel) : null;
-        return await new RetryPolicy(MaxAttempts: 2).Run((_, ct) => HedgedPolish.Run(raw, primary, backup, cancellationToken: ct),
+        return await new RetryPolicy(MaxAttempts: 2).Run((_, ct) => HedgedPolish.Run(raw, primary, backup, cancellationToken: ct, onPartial: onPartial),
                                                          cancellationToken: token);
     }
 
@@ -686,7 +742,7 @@ public sealed class SessionController
         _history.Update(record);
         _record = record;
         State = SessionState.Processing;
-        Hud.Show(new HudPhase.Working());
+        Hud.ShowWorking(_settings.PolishEnabled);
 
         var pipeline = MakePipeline(endpoint, saved.ChunkTexts);
         _pipeline = pipeline;

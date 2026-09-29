@@ -366,7 +366,7 @@ final class SessionController: ObservableObject {
         history.update(record)
         self.record = record
         state = .processing
-        hud.show(.working)
+        hud.showWorking(polishes: settings.polishEnabled)
 
         processingTask = Task { [weak self] in
             await self?.process(record: record, pipeline: pipeline)
@@ -378,8 +378,21 @@ final class SessionController: ObservableObject {
     private func process(record initial: DictationRecord, pipeline: TranscriptionPipeline) async {
         var record = initial
         let started = ProcessInfo.processInfo.systemUptime
+        // Moves the bar as the speech-to-text chunks still out come back.
+        let bar = hud.model.bar
+        let watch = Task { @MainActor in
+            while !Task.isCancelled {
+                if let counts = pipeline.transcriptionProgress() {
+                    bar.reach(.transcribing(done: counts.done, total: counts.total))
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+        }
+        defer { watch.cancel() }
         do {
             let raw = try await pipeline.finish()
+            watch.cancel()
+            bar.reach(.transcribed)
             record.timing = DictationRecord.Timing(transcription: ProcessInfo.processInfo.systemUptime - started)
             let backupChunks = pipeline.backupChunkCount()
             if backupChunks > 0 { record.timing?.transcriptionBackupChunks = backupChunks }
@@ -432,12 +445,15 @@ final class SessionController: ObservableObject {
             if let speculative = speculativePolish, speculative.raw == record.rawText, !speculative.outcome.failed {
                 speculativePolish = nil
                 polishing = speculative.task
+                // What it streams from now on moves this dictation's bar.
+                speculative.partials.target = onPolishPartial(expected: record.rawText)
                 ahead = ProcessInfo.processInfo.systemUptime - speculative.startedAt
                 note(String(format: "clean-up started %.2fs ago, while recording", ahead))
             } else {
                 dropSpeculativePolish()
                 let raw = record.rawText
-                polishing = Task { try await self.polish(raw) }
+                let onPartial = onPolishPartial(expected: raw)
+                polishing = Task { try await self.polish(raw, onPartial: onPartial) }
             }
             // Saved while the clean-up runs, so the transcript survives a crash.
             history.update(record)
@@ -480,7 +496,10 @@ final class SessionController: ObservableObject {
         }
         if record.status == .polishFailed { record.polishedText = nil }
 
-        if !Task.isCancelled { await deliver(text, notice: notice) }
+        if !Task.isCancelled {
+            hud.model.bar.reach(.delivered)
+            await deliver(text, notice: notice)
+        }
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
         account(&record, pipeline: pipeline, polished: polished, discarded: discardedPolishes)
         discardedPolishes = []
@@ -495,6 +514,19 @@ final class SessionController: ObservableObject {
         let startedAt: TimeInterval
         let task: Task<HedgedPolishResult, Error>
         let outcome: PolishOutcome
+        let partials: PartialRelay
+    }
+
+    /// Where a clean-up started ahead of time sends its partial text: nowhere until the dictation takes it over, so one
+    /// that is dropped never moves the bar.
+    private final class PartialRelay: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _target: (@Sendable (String) -> Void)?
+        var target: (@Sendable (String) -> Void)? {
+            get { lock.withLock { _target } }
+            set { lock.withLock { _target = newValue } }
+        }
+        func send(_ text: String) { target?(text) }
     }
 
     /// The answer of a clean-up started ahead of time, once it's in (a `Task`'s value can't be read without waiting).
@@ -511,10 +543,11 @@ final class SessionController: ObservableObject {
         dropSpeculativePolish()
         guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let outcome = PolishOutcome()
+        let partials = PartialRelay()
         let task = Task { [weak self] () async throws -> HedgedPolishResult in
             guard let self else { throw APIError.cancelled }
             do {
-                let result = try await self.polish(raw)
+                let result = try await self.polish(raw, onPartial: { partials.send($0) })
                 outcome.result = result
                 return result
             } catch {
@@ -523,7 +556,7 @@ final class SessionController: ObservableObject {
             }
         }
         speculativePolish = SpeculativePolish(raw: raw, startedAt: ProcessInfo.processInfo.systemUptime, task: task,
-                                              outcome: outcome)
+                                              outcome: outcome, partials: partials)
         note("clean-up started ahead of time (speaker paused)")
     }
 
@@ -531,6 +564,16 @@ final class SessionController: ObservableObject {
         guard let speculative = speculativePolish else { return }
         speculativePolish = nil
         if let result = speculative.outcome.result { discardedPolishes.append(result) } else { speculative.task.cancel() }
+    }
+
+    /// Moves the bar as the clean-up streams in: its first token, then its length against the transcript's.
+    private func onPolishPartial(expected transcript: String) -> @Sendable (String) -> Void {
+        let expected = transcript.utf16.count
+        let bar = hud.model.bar
+        return { text in
+            let received = text.utf16.count
+            DispatchQueue.main.async { bar.reach(.polishing(received: received, expected: expected)) }
+        }
     }
 
     /// Pastes at the cursor unless focus is clearly not a text input. Whether the paste actually
@@ -548,7 +591,12 @@ final class SessionController: ObservableObject {
         note("deliver → \(outcome) (focus \(target)) in \(frontmostID)")
         switch outcome {
         case .pasted:
-            if let notice { finish(showing: .error(notice), hideAfter: 3) } else { finish(showing: .hidden, hideAfter: 0) }
+            if let notice {
+                finish(showing: .error(notice), hideAfter: 3)
+            } else {
+                reset()
+                hud.finishWorking()
+            }
             if settings.learnFromEdits { editWatcher.watch(inserted: text) }
         case .notPasted:
             finish(showing: .copied, hideAfter: 1.6)
@@ -560,14 +608,14 @@ final class SessionController: ObservableObject {
 
     private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
 
-    private func polish(_ raw: String) async throws -> HedgedPolishResult {
+    private func polish(_ raw: String, onPartial: (@Sendable (String) -> Void)? = nil) async throws -> HedgedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
         let primary = route(endpoint, model: settings.polishModel)
         let backup = settings.polishBackupEndpoint.map { route($0, model: settings.polishBackupModel) }
         return try await RetryPolicy(maxAttempts: 2).run { _ in
-            try await HedgedPolish.run(transcript: raw, primary: primary, backup: backup)
+            try await HedgedPolish.run(transcript: raw, primary: primary, backup: backup, onPartial: onPartial)
         }
     }
 
@@ -630,7 +678,7 @@ final class SessionController: ObservableObject {
         history.update(record)
         self.record = record
         state = .processing
-        hud.show(.working)
+        hud.showWorking(polishes: settings.polishEnabled)
 
         let pipeline = makePipeline(endpoint: endpoint, preset: saved.chunkTexts)
         self.pipeline = pipeline

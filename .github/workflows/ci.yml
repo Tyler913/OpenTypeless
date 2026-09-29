@@ -1,9 +1,14 @@
 # Runs on every push to main and every pull request into it, but only builds the app whose folder changed:
 #
 #   macos/**     macOS build: tests, then the app zip
-#   windows/**   Windows build: tests, then the x64 and ARM64 zips
-#   testdata/**  both: the test cases both apps' test suites read, so they count and price the same way
+#   windows/**   Windows build: tests, then the x64 and ARM64 zips, plus the pipeline tests on Linux (below)
+#   testdata/**  both: the test cases both apps' test suites read, so they count and price the same way, and trim
+#                silence and notice pauses the same way (the speculative tail depends on it)
 #   i18n/**      both: the translations both apps embed
+#
+# The pipeline (chunking, speculative tails, silence trimming, connection warm-up, hedged clean-up) is pure .NET in
+# windows/src/TypelessCore, so its test suite also runs on Linux: it reports in about a minute, long before the
+# Windows build, and a third OS keeps the timing-based tests honest about scheduling.
 #
 # Every run also checks i18n/strings.json against the L(…) strings in both apps (python3 i18n/check.py).
 # Changes to shared files only (docs/, eval/, README*.md) build nothing. A change to a workflow file builds
@@ -69,6 +74,21 @@ jobs:
     if: needs.changes.outputs.windows == 'true'
     uses: ./.github/workflows/windows.yml
 
+  pipeline:
+    name: Pipeline tests (Linux)
+    needs: changes
+    if: needs.changes.outputs.windows == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: TypelessCore tests
+        run: dotnet test windows/tests/TypelessCore.Tests --nologo --logger "console;verbosity=normal"
+
   translations:
     name: Translations
     runs-on: ubuntu-latest
@@ -79,11 +99,11 @@ jobs:
 
   passed:
     name: CI passed
-    needs: [changes, translations, macos, windows]
+    needs: [changes, translations, pipeline, macos, windows]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check that every build that ran succeeded
         run: |
-          echo "Translations: ${{ needs.translations.result }}, macOS: ${{ needs.macos.result }}, Windows: ${{ needs.windows.result }}"
+          echo "Translations: ${{ needs.translations.result }}, pipeline: ${{ needs.pipeline.result }}, macOS: ${{ needs.macos.result }}, Windows: ${{ needs.windows.result }}"
           [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "false" ]]

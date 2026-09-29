@@ -4,6 +4,16 @@ public sealed record AudioChunk(int Index, int StartSample, short[] Samples)
 {
     public double Duration => AudioFormat.Seconds(Samples.Length);
     public double StartTime => AudioFormat.Seconds(StartSample);
+
+    /// <summary>
+    /// This chunk without the silence before and after the speech (see <see cref="VoiceActivity.SpeechBounds"/>): less to
+    /// upload and transcribe, and nothing for the model to hallucinate on. Itself when there is nothing to trim.
+    /// </summary>
+    public AudioChunk Trimmed()
+    {
+        var (start, end) = VoiceActivity.SpeechBounds(Samples);
+        return start == 0 && end == Samples.Length ? this : this with { StartSample = StartSample + start, Samples = Samples[start..end] };
+    }
 }
 
 /// <summary>
@@ -43,6 +53,12 @@ public sealed class Chunker
 
     /// <summary>Flushes whatever audio is left as the final chunk (null when nothing is left).</summary>
     public AudioChunk? Finish() => _pending.Count == 0 ? null : Emit(_pending.Count);
+
+    /// <summary>The chunk <see cref="Finish"/> would flush now, left in place (null when nothing is pending).</summary>
+    public AudioChunk? Peek() => _pending.Count == 0 ? null : new AudioChunk(_nextIndex, _pendingStart, _pending.ToArray());
+
+    /// <summary>Where the audio not yet cut into a chunk starts, in samples from the start of the recording.</summary>
+    public int PendingStart => _pendingStart;
 
     private AudioChunk Emit(int cut)
     {

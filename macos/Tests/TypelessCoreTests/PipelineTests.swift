@@ -77,10 +77,13 @@ final class MockOpenRouter: URLProtocol {
         }
 
         let client = APIClient(endpoint: .openRouter(apiKey: "test"), session: MockOpenRouter.session())
+        // Counts every sample and every request, so without trimming and speculative tails (tested on their own).
         let pipeline = TranscriptionPipeline(
             client: client,
             options: .init(model: "m"),
-            policy: RetryPolicy(maxAttempts: 3, baseDelay: 0.01)
+            policy: RetryPolicy(maxAttempts: 3, baseDelay: 0.01),
+            trimSilence: false,
+            speculate: false
         )
         let audio = speech(seconds: 130)
         let block = AudioFormat.sampleCount(forSeconds: 0.1)
@@ -110,8 +113,9 @@ final class MockOpenRouter: URLProtocol {
             return (500, Data(#"{"error":{"message":"down"}}"#.utf8))
         }
         let client = APIClient(endpoint: .openRouter(apiKey: "test"), session: MockOpenRouter.session())
+        // Recognises the first chunk by its length, so it's sent untrimmed.
         let pipeline = TranscriptionPipeline(client: client, options: .init(model: "m"),
-                                             policy: RetryPolicy(maxAttempts: 2, baseDelay: 0.01))
+                                             policy: RetryPolicy(maxAttempts: 2, baseDelay: 0.01), trimSilence: false)
         pipeline.append(audio)
         do {
             _ = try await pipeline.finish()

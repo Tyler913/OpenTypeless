@@ -20,23 +20,25 @@ From reading several open-source voice-typing apps and the provider documentatio
 ## Pipeline
 
 ```
+key down ─► warm the provider connections
 mic ─► AVAudioEngine ─► 16 kHz mono PCM ─┬─► WAV file on disk (written continuously)
-                                         └─► Chunker
+                                         └─► Chunker + pause tracker
                                                │ every 18–28 s: cut at the quietest 0.4 s window
+                                               │ at every pause: transcribe the pending audio ahead of time
                                                ▼
-                                         STT queue (≤3 concurrent, per-chunk retries)
-                                               │
-release key ─► flush last chunk ─► join in order ─► clean-up LLM (streaming) ─► paste / clipboard
-                                                          │ on failure
-                                                          └─► insert raw transcript
+                                         STT queue (≤3 concurrent, per-chunk retries, silence trimmed)
+                                               │ speculative tail done ─► start the clean-up ahead of time
+release key ─► last chunk (often already transcribed) ─► join in order ─► clean-up LLM (streaming) ─► paste / clipboard
+                                                                                │ on failure            │
+                                                                                └─► insert raw transcript └─► then save costs and History
 ```
 
 ### Chunker (`TypelessCore/Chunker.swift`)
 Once pending audio reaches 28 s, it slides a 0.4 s window over the 18–28 s span and cuts at the centre of the lowest-energy window. There are no thresholds to tune, since the quietest spot always wins. On real speech, cut points land 22–70 dB below speech level.
 
 ### Transcription (`TypelessCore/TranscriptionPipeline.swift`)
-- Chunks are transcribed as soon as they're cut, so after release only the tail remains.
-- Silent chunks are skipped (STT models hallucinate "Thanks for watching!" on silence).
+- Chunks are transcribed as soon as they're cut, so after release only the tail remains (and often not even that: see [Latency after release](#latency-after-release)).
+- Silent chunks are skipped (STT models hallucinate "Thanks for watching!" on silence). Every chunk is sent without the silence before and after its speech, keeping 0.3 s on each side (`VoiceActivity.speechBounds`).
 - Per-attempt timeout: `clamp(2 × chunk length + 15 s, 30…90 s)`.
 - Retryable: network errors, timeouts, 408/409/425/429/5xx. Permanent: 400/401/402/403, missing keys.
 - After the first pass, chunks that failed with a *transient* error get one more full round.
@@ -45,12 +47,20 @@ Once pending audio reaches 28 s, it slides a 0.4 s window over the 18–28 s spa
 ### Clean-up (`TypelessCore/PolishClient.swift`, `HedgedPolish.swift`, `Prompts.swift`)
 - Streaming chat completion with an **idle** timeout (25 s without data) plus a 240 s runaway guard.
 - On OpenRouter: reasoning is disabled or set to its minimum based on `/models` metadata, and providers are sorted by latency, with those under 50 tokens/s at the median moved to the back.
-- **Hedged requests.** An optional backup model (by default a fast model from another vendor) starts when the main model has produced no token after a fixed 0.8 s, or fails before that. Whichever streams its first token first is kept and the other request is cancelled, so a slow upstream costs about 0.8 s plus the backup's own first-token time instead of the whole wait, and the extra spend is limited to that slow tail. The delay is a constant rather than learned at runtime because flash-class first-token latency is stable (see [eval/README.md](../eval/README.md)).
+- **Hedged requests.** An optional backup model (by default a fast model from another vendor) starts when the main model has produced no token after a fixed 0.55 s, or fails before that. Whichever streams its first token first is kept and the other request is cancelled, so a slow upstream costs about 0.55 s plus the backup's own first-token time instead of the whole wait, and the extra spend is limited to that slow tail. The delay is a constant rather than learned at runtime because flash-class first-token latency is stable: gemini-3.1-flash-lite's first token comes at 0.41 s at the median and 0.49 s at p90, so one still missing at 0.55 s is in the slow tail (see [eval/README.md](../eval/README.md)).
 - Each dictation records where the wait went (transcription tail, clean-up first token and total, which model answered) in `session.json`, shown in History.
 - If a server rejects an optional parameter (e.g. `temperature` on reasoning models), the request is retried with the bare minimum.
 - Safety nets: echoed wrappers are stripped, and an output far longer than the input (the model *answered* the prompt instead of rewriting it) falls back to the raw transcript.
 - The prompt asks for **minimal edits**: only self-corrections, speech noise, recognition errors, punctuation and explicit enumerations are touched; wording, order, tone, pronouns and every word's language are kept. Mixed Chinese/English is preserved word by word (an earlier, more ambitious prompt translated about a third of the English words in real mixed dictations). A one-line reminder after the transcript restates the two rules models drift from most.
 - The prompt uses few-shot examples, which proved far more effective than extra rules. It is tuned with `--eval-polish` against a development set, a held-out set and real dictations.
+
+### Latency after release (`TypelessCore/VoiceActivity.swift`, `Preconnector.swift`, `TranscriptionPipeline.swift`, `OpenTypeless/SessionController.swift`)
+What the speaker waits for is the time from letting go of the key to the text at the cursor. Most dictations are shorter than one chunk, so without the steps below the whole recording would only be sent at release.
+- **Warm connections.** When the key goes down, a HEAD request (no key) goes to each distinct host the dictation will use: speech-to-text and clean-up, main and backup routes. Any answer leaves a warm connection in the shared session / `HttpClient` pool, so the first real request doesn't pay for DNS, TCP and TLS. Repeated every 25 s while recording, so the clean-up's connection, idle while speech-to-text works, doesn't time out; a host is warmed at most once every 20 s.
+- **Speech and pauses** (`VoiceActivity`, `PauseTracker`). 30 ms frames; a frame is speech above twice the level of the quietest tenth of the frames, clamped to 0.004–0.008 RMS (about −48 to −42 dBFS). The floor is the level silent chunks are skipped under; the ceiling keeps a softly spoken word from being taken for a pause, while a noisy room still has pauses. `testdata/voice-activity-cases.json` holds cases both test suites read.
+- **Speculative tail.** People stop talking a moment before they let go of the key. Once the speaker has been quiet for 0.3 s after speaking, the audio not yet cut into a chunk is sent for transcription. If they speak again, that request is cancelled (or its answer dropped) and the next pause starts another; if they let go without saying anything more (only silence since, the unfinished last frame included), its answer is the last chunk's, and the text is there as soon as that request is. Chunk boundaries don't change, so neither does the transcript. A chunk cut while it is out cancels it too. Answered requests count toward the cost, dropped ones included.
+- **Clean-up ahead of time.** When a speculative tail and every chunk before it are transcribed, the pipeline passes the whole transcript to the app, which starts the (hedged) clean-up on it. At release, if the final transcript is that exact text, the running or finished clean-up is used; otherwise it's cancelled. History's clean-up times count from the release. A clean-up that finished and was then dropped because the speaker went on was billed and is counted.
+- **Bookkeeping after the paste.** Costs, the usage ledger and History (with its retention pass) are written after the text is inserted; the transcript is saved while the clean-up runs.
 
 ### Delivery (`OpenTypeless/FocusProbe.swift`, `TextInserter.swift`)
 The Accessibility API is asked what has focus:

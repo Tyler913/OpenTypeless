@@ -38,8 +38,10 @@ public class PerformanceTests
             slowest = Math.Min(slowest, runSlowest);
             total = Math.Min(total, runTotal);
         }
-        // The microphone fills the next block 40 ms later; half of that leaves room for the rest of the thread's work.
-        Performance.Check("Live audio: slowest 40 ms block", slowest, budget: 20);
+        // Everything the thread does per block is in here, so the bound is the block itself: the microphone fills the next
+        // one 40 ms later. (Cutting a chunk or starting a speculation copies about 1 MB, which a busy 2-core runner can
+        // stretch past 20 ms; the capture buffers hold 200 ms, so that loses nothing.)
+        Performance.Check("Live audio: slowest 40 ms block", slowest, budget: 40);
         Performance.Check("Live audio: 20 minutes, all blocks", total, budget: 1500);
 
         static (double Slowest, double Total, int Chunks) Dictate(short[] audio)

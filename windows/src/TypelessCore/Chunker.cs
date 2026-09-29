@@ -73,7 +73,9 @@ public sealed class Chunker
 
     private AudioChunk Emit(int cut)
     {
-        var chunk = new AudioChunk(_nextIndex, _pendingStart, _pending.GetRange(_emitted, cut).ToArray());
+        // Copied straight from the list's storage: GetRange would copy it once more, and a chunk is ~1 MB allocated on the
+        // audio thread.
+        var chunk = new AudioChunk(_nextIndex, _pendingStart, CollectionsMarshal.AsSpan(_pending).Slice(_emitted, cut).ToArray());
         _emitted += cut;
         _pendingStart += cut;
         _nextIndex += 1;

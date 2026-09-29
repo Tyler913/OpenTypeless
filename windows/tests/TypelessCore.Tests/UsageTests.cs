@@ -436,21 +436,24 @@ public class AudioSinkTests
 public class TranscriptionLatencyTests
 {
     [Fact]
-    public void DelayScalesWithAudioAndRecentSpeed()
+    public void DelayFollowsTheFittedLineAndTheRouteSpeed()
     {
         var latency = new TranscriptionLatency();
-        Assert.Equal(16, latency.HedgeDelay(20), 6); // no data yet: (0.3 × 20 + 1.5) × 2 + 1
-        latency.Record(2, 20);   // 0.1 s per audio second
-        latency.Record(4, 20);   // 0.2
-        latency.Record(12, 40);  // 0.3
+        // No data yet: 0.39 s + 0.02 s per audio second, plus the 0.2 s margin.
+        Assert.Equal(0.63, latency.HedgeDelay(2), 6);
+        Assert.Equal(1.15, latency.HedgeDelay(28), 6);
+        latency.Record(1.59, 10); // 1 s above the line
+        latency.Record(1.79, 20); // 1 s above
+        latency.Record(30, 5);    // an outlier, which the median ignores
         Assert.Equal(3, latency.Samples);
-        Assert.Equal(4, latency.Expected(20), 6); // median 0.2 × 20
-        Assert.Equal(9, latency.HedgeDelay(20), 6);
-        Assert.Equal(3, latency.HedgeDelay(2), 6); // never below the minimum
-        latency.Record(500, 1);
-        latency.Record(500, 1);
-        latency.Record(500, 1);
-        Assert.Equal(25, latency.HedgeDelay(28), 6); // nor above the maximum
+        Assert.Equal(1, latency.Shift, 6);
+        Assert.Equal(1.79, latency.Expected(20), 6);
+        Assert.Equal(1.99, latency.HedgeDelay(20), 6);
+        for (var i = 0; i < 3; i++) latency.Record(500, 1);
+        Assert.Equal(25, latency.HedgeDelay(28), 6); // never above the maximum
+        var fast = new TranscriptionLatency();
+        for (var i = 0; i < 3; i++) fast.Record(0, 28);
+        Assert.Equal(0.5, fast.HedgeDelay(1), 6); // nor below the minimum
     }
 }
 
@@ -466,11 +469,16 @@ public class BackupTranscriptionTests
 
     private static string Model(byte[] body) => (string)JsonNode.Parse(body)!["model"]!;
 
-    private static async Task<(string Text, TranscriptionPipeline Pipeline)> Run(TranscriptionLatency latency)
+    private static TranscriptionPipeline PipelineWithBackup(TranscriptionLatency latency)
     {
         var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
-        var pipeline = new TranscriptionPipeline(client, new TranscriptionOptions("primary"), policy: new RetryPolicy(MaxAttempts: 1),
-                                                 backup: new TranscriptionRoute(client, new TranscriptionOptions("backup")), latency: latency);
+        return new TranscriptionPipeline(client, new TranscriptionOptions("primary"), policy: new RetryPolicy(MaxAttempts: 1),
+                                         backup: new TranscriptionRoute(client, new TranscriptionOptions("backup")), latency: latency);
+    }
+
+    private static async Task<(string Text, TranscriptionPipeline Pipeline)> Run(TranscriptionLatency latency)
+    {
+        var pipeline = PipelineWithBackup(latency);
         pipeline.Append(Tone(2));
         return (await pipeline.Finish(), pipeline);
     }
@@ -478,17 +486,48 @@ public class BackupTranscriptionTests
     [Fact]
     public async Task SlowPrimaryIsOvertakenByTheBackup()
     {
+        MockOpenRouter.Handler = (_, body) => (200, MockOpenRouter.Utf8($"{{\"text\":\"{Model(body)}\"}}"));
+        MockOpenRouter.Delay = body => Model(body) == "primary" ? 1.5 : 0;
+        try
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var (text, pipeline) = await Run(new TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1));
+            Assert.Equal("backup", text);
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1.4));
+            Assert.Equal(1, pipeline.BackupChunkCount());
+            Assert.Empty(pipeline.Usages());
+        }
+        finally
+        {
+            MockOpenRouter.Delay = null;
+        }
+    }
+
+    [Fact]
+    public async Task ChunkSentWhileTalkingIsOnlyHedgedOnceTheRecordingEnds()
+    {
+        var models = new List<string>();
         MockOpenRouter.Handler = (_, body) =>
         {
-            if (Model(body) == "primary") Thread.Sleep(1500);
+            lock (models) models.Add(Model(body));
             return (200, MockOpenRouter.Utf8($"{{\"text\":\"{Model(body)}\"}}"));
         };
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        var (text, pipeline) = await Run(new TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1));
-        Assert.Equal("backup", text);
-        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1.4));
-        Assert.Equal(1, pipeline.BackupChunkCount());
-        Assert.Empty(pipeline.Usages());
+        MockOpenRouter.Delay = body => Model(body) == "primary" ? 1.5 : 0;
+        try
+        {
+            var pipeline = PipelineWithBackup(new TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1));
+            pipeline.Append(Tone(29)); // the first chunk goes out while the user is still talking
+            await Task.Delay(600);
+            lock (models) Assert.Equal(["primary"], models); // late, but nothing waits on it yet
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            await pipeline.Finish();
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(0.8)); // the first chunk went to the backup at once
+            Assert.Equal(2, pipeline.BackupChunkCount());
+        }
+        finally
+        {
+            MockOpenRouter.Delay = null;
+        }
     }
 
     [Fact]

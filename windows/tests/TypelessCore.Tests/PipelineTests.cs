@@ -11,12 +11,16 @@ namespace TypelessCore.Tests;
 public sealed class MockOpenRouter : HttpMessageHandler
 {
     public static Func<HttpRequestMessage, byte[], (int Status, byte[] Body)>? Handler;
+    /// <summary>Seconds to hold a response back, without blocking a thread, so other requests aren't held up.</summary>
+    public static Func<byte[], double>? Delay;
     public static readonly object Lock = new();
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var body = request.Content == null ? [] : await request.Content.ReadAsByteArrayAsync(cancellationToken);
         var (status, data) = Handler!(request, body);
+        var wait = Delay?.Invoke(body) ?? 0;
+        if (wait > 0) await Task.Delay(TimeSpan.FromSeconds(wait), cancellationToken);
         return new HttpResponseMessage((HttpStatusCode)status) { Content = new ByteArrayContent(data), RequestMessage = request };
     }
 

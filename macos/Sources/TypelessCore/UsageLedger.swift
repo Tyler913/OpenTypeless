@@ -119,7 +119,15 @@ public struct CalendarDay: Hashable, Comparable, Sendable, CustomStringConvertib
     }
 
     /// "2026-09-28"
-    public var key: String { String(format: "%04d-%02d-%02d", year, month, day) }
+    public var key: String {
+        // By hand rather than String(format:), which was most of a Home page redraw: it looks up hundreds of days.
+        guard year >= 0, month >= 0, day >= 0 else { return String(format: "%04d-%02d-%02d", year, month, day) }
+        func padded(_ value: Int, _ width: Int) -> String {
+            let digits = String(value)
+            return digits.count < width ? String(repeating: "0", count: width - digits.count) + digits : digits
+        }
+        return padded(year, 4) + "-" + padded(month, 2) + "-" + padded(day, 2)
+    }
 
     public init?(key: String) {
         let parts = key.split(separator: "-").compactMap { Int($0) }

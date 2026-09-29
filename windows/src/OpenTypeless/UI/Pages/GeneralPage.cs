@@ -74,6 +74,14 @@ public sealed class GeneralPage : PageBase
             Trailing = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { _meter, _testButton } },
         };
         _microphone.Body.Add(_testRow);
+        _microphone.Body.Add(new CardDivider());
+        _microphone.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Lightning, Tint = Tint.Orange, Title = L("预热麦克风", "Keep microphone ready"),
+            Subtitle = L("按下快捷键立刻开始录音，并带上按键前的一小段，第一个字不会被吞掉（蓝牙耳机尤其明显）。麦克风会一直开着，蓝牙耳机会切到通话模式，音乐音质会下降。",
+                         "Recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped (noticeable with Bluetooth headsets). The microphone stays on, and Bluetooth headphones switch to call mode, which lowers music quality."),
+            Trailing = Toggle(_settings.KeepMicrophoneWarm, on => _settings.KeepMicrophoneWarm = on),
+        });
         _tester.Changed += RefreshTester;
         Body.Children.Add(_microphone);
         RefreshMicrophones();

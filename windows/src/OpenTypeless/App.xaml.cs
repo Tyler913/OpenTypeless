@@ -20,6 +20,7 @@ public partial class App : Application
     private TrayIcon _tray = null!;
     private PopoverWindow _popover = null!;
     private SettingsWindow? _settingsWindow;
+    private DispatcherQueue? _dispatcher;
 
     public App()
     {
@@ -62,6 +63,7 @@ public partial class App : Application
         };
         _controller.OpenSettingsRequested += page => ShowSettings(SettingsPageInfo.Parse(page));
         var dispatcher = DispatcherQueue.GetForCurrentThread();
+        _dispatcher = dispatcher;
         // Launching the app again (Start menu, Explorer) shows Home, like reopening it on macOS.
         Program.ActivationRequested += () => dispatcher.TryEnqueue(() => ShowSettings(SettingsPage.Home));
 
@@ -69,6 +71,7 @@ public partial class App : Application
         LaunchAtLogin.RefreshPathIfRegistered();
         LaunchAtLogin.EnableByDefaultOnce(_settings);
         _ = UsageStore.Shared; // counts the dictations History already has, the first time
+        _controller.UpdateWarmMicrophone();
         PriceStore.Shared.RefreshIfStale();
         Updater.Shared.CanInstallNow = () => _controller.State == SessionController.SessionState.Idle;
         Updater.Shared.Quit = Quit;
@@ -84,6 +87,10 @@ public partial class App : Application
 
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(AppSettings.KeepMicrophoneWarm) or nameof(AppSettings.MicrophoneId))
+        {
+            _dispatcher?.TryEnqueue(_controller.UpdateWarmMicrophone);
+        }
         if (e.PropertyName == nameof(AppSettings.Hotkey))
         {
             var hotkey = _settings.Hotkey;

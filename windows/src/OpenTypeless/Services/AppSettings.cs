@@ -184,6 +184,13 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("microphone", value);
     }
 
+    /// <summary>Keep the microphone running between dictations, so recording starts at once with the moment before the key.</summary>
+    public bool KeepMicrophoneWarm
+    {
+        get => GetBool("keepMicrophoneWarm", false);
+        set => SetValue("keepMicrophoneWarm", value);
+    }
+
     /// <summary>Open the Home page when the app starts at sign-in (a manual launch always shows it).</summary>
     public bool ShowHomeAtLogin
     {

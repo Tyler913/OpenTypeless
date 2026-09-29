@@ -399,3 +399,36 @@ public class ConnectionCheckTests
         Assert.Equal("ok · 183 ms", new ConnectionCheck("ok", 182.6).Summary);
     }
 }
+
+public class AudioSinkTests
+{
+    [Fact]
+    public void HandsOverThePreRollFirstAndKeepsOrder()
+    {
+        var sink = new AudioSink(preRollSeconds: 0.01); // 160 samples
+        for (short i = 0; i < 5; i++) sink.Deliver(Enumerable.Repeat(i, 100).ToArray());
+        Assert.False(sink.IsRecording);
+        var received = new List<short>();
+        Assert.Equal(160, sink.Begin(samples => received.AddRange(samples)));
+        sink.Deliver([9, 9]);
+        Assert.True(sink.IsRecording);
+        // The last 160 samples before the start (60 × 3, 100 × 4), then what came after.
+        Assert.Equal(Enumerable.Repeat((short)3, 60).Concat(Enumerable.Repeat((short)4, 100)).Concat(new short[] { 9, 9 }), received);
+
+        sink.End();
+        sink.Deliver([7]);
+        Assert.Equal(162, received.Count); // nothing after the end
+        var next = new List<short>();
+        Assert.Equal(1, sink.Begin(samples => next.AddRange(samples)));
+        Assert.Equal(new short[] { 7 }, next);
+    }
+
+    [Fact]
+    public void StartsEmptyWithoutAWarmMicrophone()
+    {
+        var sink = new AudioSink();
+        var calls = 0;
+        Assert.Equal(0, sink.Begin(_ => calls++));
+        Assert.Equal(0, calls);
+    }
+}

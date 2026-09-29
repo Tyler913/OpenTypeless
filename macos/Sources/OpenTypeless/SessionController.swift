@@ -23,6 +23,12 @@ final class SessionController: ObservableObject {
     private let settings = AppSettings.shared
     private let history = HistoryStore.shared
     private let recorder = AudioRecorder()
+    /// Receives every microphone sample; hands them to the running dictation, or keeps a pre-roll in between.
+    private let sink = AudioSink()
+    /// The input the running recorder was opened on (it may keep running between dictations when warm).
+    private var openDeviceUID: String?
+    /// Audio from before the key was pressed at the start of this dictation (only with a warm microphone).
+    private var preRollSeconds: Double = 0
 
     private var pipeline: TranscriptionPipeline?
     private var writer: WAVFileWriter?
@@ -52,6 +58,36 @@ final class SessionController: ObservableObject {
             Task { @MainActor in
                 self?.abort(message: L("录音中断：", "Recording interrupted: ") + error.localizedDescription)
             }
+        }
+        // Set once: while the microphone is kept warm the recorder runs between dictations too.
+        recorder.onSamples = { [sink] samples in sink.deliver(samples) }
+        recorder.onLevel = { [sink, hudModel = hud.model] level in
+            guard sink.isRecording else { return }
+            DispatchQueue.main.async { hudModel.push(level: level) }
+        }
+    }
+
+    private var chosenDeviceUID: String? { settings.microphoneUID.isEmpty ? nil : settings.microphoneUID }
+
+    /// With "Keep microphone ready" on, keeps the recorder running between dictations (on the chosen input), so a
+    /// dictation starts at once and includes the moment before the key; otherwise lets it stop. Called at launch,
+    /// when settings change and after each dictation.
+    func updateWarmMicrophone() {
+        guard state == .idle else { return }
+        if settings.keepMicrophoneWarm, Permissions.microphoneGranted {
+            if recorder.isRecording, openDeviceUID == chosenDeviceUID { return }
+            recorder.stop()
+            recorder.deviceUID = chosenDeviceUID
+            do {
+                try recorder.start()
+                openDeviceUID = chosenDeviceUID
+                note("microphone kept warm")
+            } catch {
+                note("couldn't keep the microphone warm: \(error.localizedDescription)")
+            }
+        } else if recorder.isRecording {
+            recorder.stop()
+            openDeviceUID = nil
         }
     }
 
@@ -98,7 +134,7 @@ final class SessionController: ObservableObject {
 
     func escapePressed() {
         guard state != .idle else { return }
-        if state == .recording, CancelPolicy.keeps(recordedSeconds: counter.seconds) {
+        if state == .recording, CancelPolicy.keeps(recordedSeconds: counter.seconds - preRollSeconds) {
             keepCancelledRecording()
         } else {
             cancel(silently: false)
@@ -178,24 +214,27 @@ final class SessionController: ObservableObject {
 
         let pipeline = makePipeline(endpoint: sttEndpoint, preset: [:])
         let counter = SampleCounter()
-        let hudModel = hud.model
-        recorder.onSamples = { samples in
+        // A warm recorder on another input (the choice changed) is reopened on the right one.
+        if recorder.isRecording, openDeviceUID != chosenDeviceUID { recorder.stop() }
+        // Starts with the pre-roll when the microphone was already running.
+        let preRoll = sink.begin { samples in
             writer.append(samples)
             pipeline.append(samples)
             counter.add(samples.count)
         }
-        recorder.onLevel = { level in
-            DispatchQueue.main.async { hudModel.push(level: level) }
-        }
-
-        recorder.deviceUID = settings.microphoneUID.isEmpty ? nil : settings.microphoneUID
-        do {
-            try recorder.start()
-        } catch {
-            writer.close()
-            history.delete(record)
-            hud.show(.error(L("无法开始录音：", "Can't start recording: ") + error.localizedDescription), autoHideAfter: 4)
-            return
+        preRollSeconds = AudioFormat.seconds(forSampleCount: preRoll)
+        if !recorder.isRecording {
+            recorder.deviceUID = chosenDeviceUID
+            do {
+                try recorder.start()
+                openDeviceUID = chosenDeviceUID
+            } catch {
+                sink.end()
+                writer.close()
+                history.delete(record)
+                hud.show(.error(L("无法开始录音：", "Can't start recording: ") + error.localizedDescription), autoHideAfter: 4)
+                return
+            }
         }
 
         self.record = record
@@ -231,9 +270,13 @@ final class SessionController: ObservableObject {
     private func stopCapture() {
         maxDurationTimer?.invalidate()
         maxDurationTimer = nil
-        recorder.stop()
-        recorder.onSamples = nil
-        recorder.onLevel = nil
+        // Stopping delivers what the recorder still holds, so a cold recorder stops first. After `end` nothing
+        // reaches the writer; a warm recorder goes back to filling the pre-roll.
+        if !settings.keepMicrophoneWarm {
+            recorder.stop()
+            openDeviceUID = nil
+        }
+        sink.end()
         writer?.close()
         writer = nil
     }
@@ -244,7 +287,7 @@ final class SessionController: ObservableObject {
         playSound("Pop")
 
         record.duration = counter.seconds
-        if record.duration < 0.4 {
+        if record.duration - preRollSeconds < 0.4 {
             note(String(format: "discarded — only %.2fs of audio", record.duration))
             // Accidental tap.
             pipeline.cancel()
@@ -486,6 +529,7 @@ final class SessionController: ObservableObject {
 
     private func reset() {
         state = .idle
+        preRollSeconds = 0
         pipeline = nil
         record = nil
         pressedAt = nil

@@ -240,6 +240,39 @@ import Testing
     }
 }
 
+@Suite struct AudioSinkTests {
+    /// Collects what the sink hands on (called under the sink's lock, so no extra locking needed here).
+    final class Collector: @unchecked Sendable {
+        var samples: [Int16] = []
+    }
+
+    @Test func handsOverThePreRollFirstAndKeepsOrder() {
+        let sink = AudioSink(preRollSeconds: 0.01) // 160 samples
+        for i in 0..<5 { sink.deliver([Int16](repeating: Int16(i), count: 100)) }
+        #expect(!sink.isRecording)
+        let received = Collector()
+        #expect(sink.begin { received.samples += $0 } == 160)
+        sink.deliver([9, 9])
+        #expect(sink.isRecording)
+        // The last 160 samples before the start (60 × 3, 100 × 4), then what came after.
+        #expect(received.samples == [Int16](repeating: 3, count: 60) + [Int16](repeating: 4, count: 100) + [9, 9])
+
+        sink.end()
+        sink.deliver([7])
+        #expect(received.samples.count == 162) // nothing after the end
+        let next = Collector()
+        #expect(sink.begin { next.samples += $0 } == 1)
+        #expect(next.samples == [7])
+    }
+
+    @Test func startsEmptyWithoutAWarmMicrophone() {
+        let sink = AudioSink()
+        let received = Collector()
+        #expect(sink.begin { received.samples += $0 } == 0)
+        #expect(received.samples.isEmpty)
+    }
+}
+
 @Suite struct CancelPolicyTests {
     @Test func keepsLongRecordingsForADay() {
         #expect(!CancelPolicy.keeps(recordedSeconds: 9.9))

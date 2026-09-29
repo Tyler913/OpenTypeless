@@ -64,6 +64,12 @@ struct GeneralPage: View {
                         .controlSize(.small)
                     }
                 }
+                CardDivider(inset: 50)
+                CardRow(icon: "bolt.fill", iconColor: .yellow, title: L("预热麦克风", "Keep microphone ready"),
+                        subtitle: L("按下快捷键立刻开始录音，并带上按键前的一小段，第一个字不会被吞掉（AirPods 这类耳机尤其明显）。麦克风会一直开着，蓝牙耳机会切到通话模式，音乐音质会下降。",
+                                    "Recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped (noticeable with AirPods). The microphone stays on, and Bluetooth headphones switch to call mode, which lowers music quality.")) {
+                    Toggle("", isOn: $settings.keepMicrophoneWarm).toggleStyle(.switch).labelsHidden()
+                }
             }
             .onChange(of: settings.microphoneUID) {
                 if tester.isRunning { tester.start(deviceUID: selectedMicrophoneUID) }

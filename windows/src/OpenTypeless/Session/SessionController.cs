@@ -44,6 +44,12 @@ public sealed class SessionController
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly HistoryStore _history = HistoryStore.Shared;
     private readonly AudioRecorder _recorder = new();
+    /// <summary>Receives every microphone sample; hands them to the running dictation, or keeps a pre-roll in between.</summary>
+    private readonly AudioSink _sink = new();
+    /// <summary>The input the running recorder was opened on (it may keep running between dictations when warm).</summary>
+    private string? _openDeviceId;
+    /// <summary>Audio from before the key was pressed at the start of this dictation (only with a warm microphone).</summary>
+    private double _preRollSeconds;
     private readonly DispatcherQueue _dispatcher = DispatcherQueue.GetForCurrentThread();
 
     private TranscriptionPipeline? _pipeline;
@@ -75,6 +81,46 @@ public sealed class SessionController
         };
         _recorder.OnFailure = error => _dispatcher.TryEnqueue(() =>
             Abort(L("录音中断：", "Recording interrupted: ") + error.Message));
+        // Set once: while the microphone is kept warm the recorder runs between dictations too.
+        _recorder.OnSamples = _sink.Deliver;
+        var hudModel = Hud.Model;
+        _recorder.OnLevel = level =>
+        {
+            if (_sink.IsRecording) _dispatcher.TryEnqueue(() => hudModel.Push(level));
+        };
+    }
+
+    private string? ChosenDeviceId => _settings.MicrophoneId.Length == 0 ? null : _settings.MicrophoneId;
+
+    /// <summary>
+    /// With "Keep microphone ready" on, keeps the recorder running between dictations (on the chosen input), so a
+    /// dictation starts at once and includes the moment before the key; otherwise lets it stop. Called at launch,
+    /// when settings change and after each dictation.
+    /// </summary>
+    public void UpdateWarmMicrophone()
+    {
+        if (State != SessionState.Idle) return;
+        if (_settings.KeepMicrophoneWarm && Permissions.MicrophoneGranted)
+        {
+            if (_recorder.IsRecording && _openDeviceId == ChosenDeviceId) return;
+            _recorder.Stop();
+            _recorder.DeviceId = ChosenDeviceId;
+            try
+            {
+                _recorder.Start();
+                _openDeviceId = ChosenDeviceId;
+                Note("microphone kept warm");
+            }
+            catch (Exception error)
+            {
+                Note("couldn't keep the microphone warm: " + error.Message);
+            }
+        }
+        else if (_recorder.IsRecording)
+        {
+            _recorder.Stop();
+            _openDeviceId = null;
+        }
     }
 
     // MARK: - Hotkey events
@@ -123,7 +169,7 @@ public sealed class SessionController
     public void EscapePressed()
     {
         if (State == SessionState.Idle) return;
-        if (State == SessionState.Recording && CancelPolicy.Keeps(_counter.Seconds)) KeepCancelledRecording();
+        if (State == SessionState.Recording && CancelPolicy.Keeps(_counter.Seconds - _preRollSeconds)) KeepCancelledRecording();
         else Cancel(silently: false);
     }
 
@@ -207,22 +253,28 @@ public sealed class SessionController
 
         var pipeline = MakePipeline(sttEndpoint, new Dictionary<int, string>());
         var counter = new SampleCounter();
-        var hudModel = Hud.Model;
-        _recorder.OnSamples = samples =>
+        // A warm recorder on another input (the choice changed) is reopened on the right one.
+        if (_recorder.IsRecording && _openDeviceId != ChosenDeviceId) _recorder.Stop();
+        // Starts with the pre-roll when the microphone was already running.
+        var preRoll = _sink.Begin(samples =>
         {
             writer.Append(samples);
             pipeline.Append(samples);
             counter.Add(samples.Length);
-        };
-        _recorder.OnLevel = level => _dispatcher.TryEnqueue(() => hudModel.Push(level));
-
-        _recorder.DeviceId = _settings.MicrophoneId.Length == 0 ? null : _settings.MicrophoneId;
+        });
+        _preRollSeconds = AudioFormat.Seconds(preRoll);
         try
         {
-            _recorder.Start();
+            if (!_recorder.IsRecording)
+            {
+                _recorder.DeviceId = ChosenDeviceId;
+                _recorder.Start();
+                _openDeviceId = ChosenDeviceId;
+            }
         }
         catch (Exception error)
         {
+            _sink.End();
             writer.Close();
             _history.Delete(record);
             Hud.Show(new HudPhase.Error(L("无法开始录音：", "Can't start recording: ") + error.Message), 4);
@@ -260,9 +312,14 @@ public sealed class SessionController
     {
         _maxDurationTimer?.Stop();
         _maxDurationTimer = null;
-        _recorder.Stop();
-        _recorder.OnSamples = null;
-        _recorder.OnLevel = null;
+        // Stopping delivers what the recorder still holds, so a cold recorder stops first. After End nothing reaches
+        // the writer; a warm recorder goes back to filling the pre-roll.
+        if (!_settings.KeepMicrophoneWarm)
+        {
+            _recorder.Stop();
+            _openDeviceId = null;
+        }
+        _sink.End();
         _writer?.Close();
         _writer = null;
     }
@@ -274,7 +331,7 @@ public sealed class SessionController
         PlaySound(Sounds.Kind.Stop);
 
         record.Duration = _counter.Seconds;
-        if (record.Duration < 0.4)
+        if (record.Duration - _preRollSeconds < 0.4)
         {
             Note($"discarded — only {record.Duration:0.00}s of audio");
             // Accidental tap.
@@ -555,6 +612,7 @@ public sealed class SessionController
     private void Reset()
     {
         State = SessionState.Idle;
+        _preRollSeconds = 0;
         _pipeline = null;
         _record = null;
         _pressedAt = null;

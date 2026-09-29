@@ -22,7 +22,7 @@ cd "$(dirname "$0")/.."
 
 APP_NAME="OpenTypeless"
 BUNDLE_ID="local.opentypeless.app"
-VERSION="1.1.0"
+VERSION="1.2.0"
 IDENTITY_NAME="OpenTypeless Dev"
 INSTALLED="/Applications/$APP_NAME.app"
 STAGING_DIR=".build/app-staging"

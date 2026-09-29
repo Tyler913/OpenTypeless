@@ -224,3 +224,30 @@ extension Date {
         return formatted(.dateTime.month(.defaultDigits).day()) + " " + time
     }
 }
+
+/// A horizontal input level bar (green → red) with a peak marker.
+struct LevelMeter: View {
+    let level: Float
+    let peak: Float
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.08))
+                Capsule()
+                    .fill(LinearGradient(colors: [.green, .green, .yellow, .orange, .red], startPoint: .leading, endPoint: .trailing))
+                    .mask(alignment: .leading) {
+                        Rectangle().frame(width: width * CGFloat(min(1, max(0, level))))
+                    }
+                Capsule()
+                    .fill(Color.primary.opacity(0.55))
+                    .frame(width: 2)
+                    .offset(x: max(0, width * CGFloat(min(1, peak)) - 2))
+                    .opacity(peak > 0.02 ? 1 : 0)
+            }
+        }
+        .frame(height: 8)
+        .animation(.linear(duration: 0.08), value: level)
+    }
+}

@@ -3,8 +3,15 @@ using TypelessCore;
 
 namespace OpenTypeless.Audio;
 
+/// <summary>An audio input, remembered by its endpoint ID.</summary>
+/// <param name="IsVirtual">A software device (a root-enumerated driver such as a virtual cable), not a real mic.</param>
+public sealed record MicrophoneInfo(string Id, string Name, bool IsVirtual)
+{
+    public string Label => IsVirtual ? Name + L("（虚拟）", " (virtual)") : Name;
+}
+
 /// <summary>
-/// Captures the default microphone and delivers 16 kHz mono Int16 samples, using WASAPI shared mode with the
+/// Captures the chosen microphone (or the default one) and delivers 16 kHz mono Int16 samples, using WASAPI shared mode with the
 /// system resampler (<c>AUTOCONVERTPCM</c>) so no conversion code runs in the app.
 ///
 /// Capture runs on its own thread. If the default input changes mid-recording (a headset connects) or the device
@@ -21,6 +28,9 @@ public sealed class AudioRecorder
     public Action<Exception>? OnFailure;
 
     public bool IsRecording { get; private set; }
+
+    /// <summary>The input to use, by endpoint ID; null (or a device that isn't active) means the default input.</summary>
+    public string? DeviceId { get; set; }
 
     private Thread? _thread;
     private volatile bool _stopRequested;
@@ -92,7 +102,7 @@ public sealed class AudioRecorder
                 Stream? stream;
                 try
                 {
-                    stream = Stream.Open(enumerator, _wake!);
+                    stream = Stream.Open(enumerator, _wake!, DeviceId);
                 }
                 catch (Exception error)
                 {
@@ -187,6 +197,7 @@ public sealed class AudioRecorder
         private const uint AUDCLNT_BUFFERFLAGS_SILENT = 0x2;
         private const int E_NOTFOUND = unchecked((int)0x80070490);
         private const int E_ACCESSDENIED = unchecked((int)0x80070005);
+        private const int DEVICE_STATE_ACTIVE = 1;
 
         private static readonly Guid IID_IAudioClient = new("1CB9AD4C-DBFA-4c32-B178-C2F568A703B2");
         private static readonly Guid IID_IAudioCaptureClient = new("C8ADBD64-E71E-48a0-A4DE-185C395CD317");
@@ -202,11 +213,22 @@ public sealed class AudioRecorder
             _capture = capture;
         }
 
-        public static Stream Open(IMMDeviceEnumerator enumerator, AutoResetEvent wake)
+        public static Stream Open(IMMDeviceEnumerator enumerator, AutoResetEvent wake, string? deviceId)
         {
-            var hr = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole, out var device);
-            if (hr == E_NOTFOUND || device == null) throw new RecorderException(L("没有可用的麦克风", "No microphone available"));
-            Check(hr);
+            IMMDevice? device = null;
+            int hr;
+            if (deviceId != null && enumerator.GetDevice(deviceId, out var chosen) >= 0)
+            {
+                // The chosen device, while it's plugged in and enabled; otherwise the default input.
+                if (chosen.GetState(out var state) >= 0 && state == DEVICE_STATE_ACTIVE) device = chosen;
+                else Marshal.ReleaseComObject(chosen);
+            }
+            if (device == null)
+            {
+                hr = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole, out device);
+                if (hr == E_NOTFOUND || device == null) throw new RecorderException(L("没有可用的麦克风", "No microphone available"));
+                Check(hr);
+            }
             var iid = IID_IAudioClient;
             hr = device.Activate(ref iid, CLSCTX_ALL, 0, out var clientObject);
             if (hr == E_ACCESSDENIED) throw Denied();
@@ -276,16 +298,134 @@ public sealed class AudioRecorder
     {
         public void OnDefaultDeviceChanged(int flow, int role, string? defaultDeviceId)
         {
-            if (flow != 1 /* eCapture */ || role != 0 /* eConsole */ || !owner.IsRecording) return;
+            // Only matters when following the default input; a chosen device stays chosen.
+            if (flow != 1 /* eCapture */ || role != 0 /* eConsole */ || owner.DeviceId != null) return;
+            Reopen();
+        }
+
+        /// <summary>The chosen device came back (reopen on it) or went away (reopen on the default).</summary>
+        public void OnDeviceStateChanged(string deviceId, int newState)
+        {
+            if (owner.DeviceId != null && string.Equals(deviceId, owner.DeviceId, StringComparison.OrdinalIgnoreCase)) Reopen();
+        }
+
+        private void Reopen()
+        {
+            if (!owner.IsRecording) return;
             owner._reopenRequested = true;
             try { owner._wake?.Set(); } catch (ObjectDisposedException) { }
         }
 
-        public void OnDeviceStateChanged(string deviceId, int newState) { }
         public void OnDeviceAdded(string deviceId) { }
         public void OnDeviceRemoved(string deviceId) { }
         public void OnPropertyValueChanged(string deviceId, PropertyKey key) { }
     }
+
+    // MARK: Devices
+
+    private static readonly PropertyKey FriendlyNameKey = new() { FormatId = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), PropertyId = 14 };
+    private static readonly PropertyKey EnumeratorNameKey = new() { FormatId = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), PropertyId = 24 };
+
+    /// <summary>Every active input, in the order Windows lists them.</summary>
+    public static List<MicrophoneInfo> Microphones()
+    {
+        var result = new List<MicrophoneInfo>();
+        IMMDeviceEnumerator? enumerator = null;
+        IMMDeviceCollection? collection = null;
+        try
+        {
+            enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
+            if (enumerator.EnumAudioEndpoints(1 /* eCapture */, 1 /* DEVICE_STATE_ACTIVE */, out collection) < 0 || collection == null) return result;
+            collection.GetCount(out var count);
+            for (uint i = 0; i < count; i++)
+            {
+                if (collection.Item(i, out var device) < 0 || device == null) continue;
+                try
+                {
+                    if (Describe(device) is { } info) result.Add(info);
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(device);
+                }
+            }
+        }
+        catch (COMException) { }
+        finally
+        {
+            if (collection != null) Marshal.ReleaseComObject(collection);
+            if (enumerator != null) Marshal.ReleaseComObject(enumerator);
+        }
+        return result;
+    }
+
+    /// <summary>The current default input.</summary>
+    public static MicrophoneInfo? DefaultMicrophone()
+    {
+        IMMDeviceEnumerator? enumerator = null;
+        try
+        {
+            enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
+            if (enumerator.GetDefaultAudioEndpoint(1 /* eCapture */, 0 /* eConsole */, out var device) < 0 || device == null) return null;
+            try
+            {
+                return Describe(device);
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(device);
+            }
+        }
+        catch (COMException)
+        {
+            return null;
+        }
+        finally
+        {
+            if (enumerator != null) Marshal.ReleaseComObject(enumerator);
+        }
+    }
+
+    private static MicrophoneInfo? Describe(IMMDevice device)
+    {
+        if (device.GetId(out var id) < 0 || device.OpenPropertyStore(0 /* STGM_READ */, out var store) < 0 || store == null) return null;
+        try
+        {
+            var name = ReadString(store, FriendlyNameKey) ?? id;
+            var enumeratorName = ReadString(store, EnumeratorNameKey) ?? "";
+            return new MicrophoneInfo(id, name, string.Equals(enumeratorName, "ROOT", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(store);
+        }
+    }
+
+    private static string? ReadString(IPropertyStore store, PropertyKey key)
+    {
+        var k = key;
+        if (store.GetValue(ref k, out var value) < 0) return null;
+        try
+        {
+            return value.vt == 31 /* VT_LPWSTR */ && value.data != 0 ? Marshal.PtrToStringUni(value.data) : null;
+        }
+        finally
+        {
+            PropVariantClear(ref value);
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PropVariant
+    {
+        public ushort vt;
+        public ushort reserved1, reserved2, reserved3;
+        public nint data;
+        public nint data2;
+    }
+
+    [DllImport("ole32.dll")]
+    private static extern int PropVariantClear(ref PropVariant value);
 
     // MARK: COM declarations
 
@@ -314,7 +454,7 @@ public sealed class AudioRecorder
     [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IMMDeviceEnumerator
     {
-        [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out nint devices);
+        [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IMMDeviceCollection? devices);
         [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice? endpoint);
         [PreserveSig] int GetDevice([MarshalAs(UnmanagedType.LPWStr)] string id, out IMMDevice device);
         [PreserveSig] int RegisterEndpointNotificationCallback(IMMNotificationClient client);
@@ -325,9 +465,26 @@ public sealed class AudioRecorder
     private interface IMMDevice
     {
         [PreserveSig] int Activate(ref Guid iid, int clsCtx, nint activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object instance);
-        [PreserveSig] int OpenPropertyStore(int access, out nint properties);
+        [PreserveSig] int OpenPropertyStore(int access, out IPropertyStore? properties);
         [PreserveSig] int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
         [PreserveSig] int GetState(out int state);
+    }
+
+    [ComImport, Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IMMDeviceCollection
+    {
+        [PreserveSig] int GetCount(out uint count);
+        [PreserveSig] int Item(uint index, out IMMDevice? device);
+    }
+
+    [ComImport, Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPropertyStore
+    {
+        [PreserveSig] int GetCount(out uint count);
+        [PreserveSig] int GetAt(uint index, out PropertyKey key);
+        [PreserveSig] int GetValue(ref PropertyKey key, out PropVariant value);
+        [PreserveSig] int SetValue(ref PropertyKey key, ref PropVariant value);
+        [PreserveSig] int Commit();
     }
 
     [ComImport, Guid("1CB9AD4C-DBFA-4c32-B178-C2F568A703B2"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

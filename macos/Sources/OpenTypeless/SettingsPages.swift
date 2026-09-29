@@ -12,6 +12,9 @@ struct GeneralPage: View {
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var launchNeedsApproval = LaunchAtLogin.needsApproval
     @State private var launchError: String?
+    @State private var microphones: [Microphone] = Microphones.all()
+    @State private var defaultMicrophone: Microphone? = Microphones.defaultInput
+    @StateObject private var tester = MicrophoneTester()
     private let timer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -32,6 +35,38 @@ struct GeneralPage: View {
                         Permissions.openAccessibilitySettings()
                     }
                 }
+            }
+
+            CardSection(title: L("麦克风", "Microphone"), footer: microphoneFooter) {
+                CardRow(icon: "mic.circle.fill", iconColor: .orange, title: L("输入设备", "Input device"),
+                        subtitle: L("有的电脑默认用的是虚拟麦克风，可以在这里选真正的麦克风",
+                                    "Some Macs default to a virtual device; pick your real microphone here")) {
+                    Picker("", selection: $settings.microphoneUID) {
+                        Text(L("跟随系统", "System default") + (defaultMicrophone.map { L("（\($0.name)）", " (\($0.name))") } ?? "")).tag("")
+                        ForEach(microphones) { Text($0.label).tag($0.uid) }
+                        if !settings.microphoneUID.isEmpty, !microphones.contains(where: { $0.uid == settings.microphoneUID }) {
+                            Text(L("未连接的设备", "Disconnected device")).tag(settings.microphoneUID)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 240)
+                }
+                CardDivider(inset: 50)
+                CardRow(icon: "waveform", iconColor: .pink, title: L("测试麦克风", "Test microphone"),
+                        subtitle: tester.isRunning
+                            ? L("说几句话，音量条应该随你的声音起伏", "Say something: the bar should rise and fall with your voice")
+                            : L("检查选中的设备能不能听到你", "Check that the chosen device can hear you")) {
+                    HStack(spacing: 10) {
+                        LevelMeter(level: tester.level, peak: tester.peak).frame(width: 130)
+                        Button(tester.isRunning ? L("停止", "Stop") : L("测试", "Test")) {
+                            if tester.isRunning { tester.stop() } else { tester.start(deviceUID: selectedMicrophoneUID) }
+                        }
+                        .controlSize(.small)
+                    }
+                }
+            }
+            .onChange(of: settings.microphoneUID) {
+                if tester.isRunning { tester.start(deviceUID: selectedMicrophoneUID) }
             }
 
             CardSection(title: L("外观", "Appearance")) {
@@ -108,7 +143,30 @@ struct GeneralPage: View {
             micGranted = Permissions.microphoneGranted
             axGranted = Permissions.accessibilityGranted
             refreshLaunchState()
+            let connected = Microphones.all()
+            if connected != microphones { microphones = connected }
+            let systemDefault = Microphones.defaultInput
+            if systemDefault != defaultMicrophone { defaultMicrophone = systemDefault }
         }
+        .onDisappear { tester.stop() }
+    }
+
+    private var selectedMicrophoneUID: String? { settings.microphoneUID.isEmpty ? nil : settings.microphoneUID }
+
+    private var microphoneFooter: String? {
+        if let error = tester.error { return error }
+        guard !settings.microphoneUID.isEmpty else {
+            return defaultMicrophone?.isVirtual == true
+                ? L("系统默认的输入是虚拟设备，如果听写没有声音，请在上面选择真正的麦克风。",
+                    "The system default input is a virtual device. If dictations come out empty, pick your real microphone above.")
+                : nil
+        }
+        guard let chosen = microphones.first(where: { $0.uid == settings.microphoneUID }) else {
+            return L("选中的麦克风没有连接，暂时使用系统默认输入。", "The chosen microphone isn't connected, so the system default is used until it's back.")
+        }
+        return chosen.isVirtual
+            ? L("这是虚拟设备，如果听写没有声音，请换成真正的麦克风。", "This is a virtual device. If dictations come out empty, pick a real microphone.")
+            : nil
     }
 
     private var launchFooter: String? {

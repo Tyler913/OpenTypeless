@@ -216,6 +216,7 @@ public sealed class SessionController
         };
         _recorder.OnLevel = level => _dispatcher.TryEnqueue(() => hudModel.Push(level));
 
+        _recorder.DeviceId = _settings.MicrophoneId.Length == 0 ? null : _settings.MicrophoneId;
         try
         {
             _recorder.Start();

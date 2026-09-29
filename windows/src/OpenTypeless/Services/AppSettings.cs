@@ -177,6 +177,13 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("learnFromEdits", value);
     }
 
+    /// <summary>The microphone to record from, by endpoint ID; "" follows the default input.</summary>
+    public string MicrophoneId
+    {
+        get => GetString("microphone", "");
+        set => SetValue("microphone", value);
+    }
+
     /// <summary>Open the Home page when the app starts at sign-in (a manual launch always shows it).</summary>
     public bool ShowHomeAtLogin
     {

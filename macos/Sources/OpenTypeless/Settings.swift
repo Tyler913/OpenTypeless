@@ -31,6 +31,8 @@ final class AppSettings: ObservableObject {
     @AppStorage("historyRetention") var historyRetention: HistoryRetention = .month
     /// Look for a new release once a day and download it in the background (see Updater).
     @AppStorage("autoCheckUpdates") var autoCheckUpdates: Bool = true
+    /// The microphone to record from, by CoreAudio UID; "" follows the system default input.
+    @AppStorage("microphone") var microphoneUID: String = ""
     /// Open the Home page when the app starts at login (a manual launch always shows it).
     @AppStorage("showHomeAtLogin") var showHomeAtLogin: Bool = false
     /// The typing speed "time saved" on the Home page is measured against.

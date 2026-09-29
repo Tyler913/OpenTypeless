@@ -499,3 +499,53 @@ public static class Formatting
         return value.ToString(value < 10 ? "0.#" : "0", System.Globalization.CultureInfo.InvariantCulture) + " " + units[unit];
     }
 }
+
+/// <summary>A horizontal input level bar (green → red) with a peak marker.</summary>
+public sealed class LevelMeter : UserControl
+{
+    private const double BarHeight = 8;
+    private readonly Border _track = new() { Height = BarHeight, CornerRadius = new CornerRadius(BarHeight / 2) };
+    private readonly Border _fill = new() { Height = BarHeight, CornerRadius = new CornerRadius(BarHeight / 2), HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly Border _peak = new() { Width = 2, Height = BarHeight, CornerRadius = new CornerRadius(1), HorizontalAlignment = HorizontalAlignment.Left };
+    private float _level, _peakLevel;
+
+    public LevelMeter()
+    {
+        _track.Background = Palette.Brush(Tint.Gray, 0.2);
+        _peak.Background = Ui.Secondary;
+        Content = new Grid { VerticalAlignment = VerticalAlignment.Center, Children = { _track, _fill, _peak } };
+        SizeChanged += (_, _) => Update();
+    }
+
+    public void Set(float level, float peak)
+    {
+        _level = Math.Clamp(level, 0, 1);
+        _peakLevel = Math.Clamp(peak, 0, 1);
+        Update();
+    }
+
+    private void Update()
+    {
+        var width = ActualWidth > 0 ? ActualWidth : Width;
+        if (double.IsNaN(width) || width <= 0) return;
+        // Colours are laid out over the whole track, so a low level stays green and only a loud one reaches red.
+        _fill.Background = new LinearGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            StartPoint = new Windows.Foundation.Point(0, 0),
+            EndPoint = new Windows.Foundation.Point(width, 0),
+            GradientStops =
+            {
+                new GradientStop { Color = Palette.Of(Tint.Green), Offset = 0 },
+                new GradientStop { Color = Palette.Of(Tint.Green), Offset = 0.45 },
+                new GradientStop { Color = Color.FromArgb(255, 255, 204, 0), Offset = 0.65 },
+                new GradientStop { Color = Palette.Of(Tint.Orange), Offset = 0.82 },
+                new GradientStop { Color = Palette.Of(Tint.Red), Offset = 1 },
+            },
+        };
+        _fill.Width = width * _level;
+        _fill.Visibility = _level > 0.005 ? Visibility.Visible : Visibility.Collapsed;
+        _peak.Margin = new Thickness(Math.Max(0, width * _peakLevel - 2), 0, 0, 0);
+        _peak.Visibility = _peakLevel > 0.02 ? Visibility.Visible : Visibility.Collapsed;
+    }
+}

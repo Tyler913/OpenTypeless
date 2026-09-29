@@ -1,7 +1,8 @@
+import AudioToolbox
 import AVFoundation
 import TypelessCore
 
-/// Captures the default microphone and delivers 16 kHz mono Int16 samples.
+/// Captures the chosen microphone (or the system default) and delivers 16 kHz mono Int16 samples.
 ///
 /// A fresh AVAudioEngine is built per recording, and the engine is rebuilt in place if the audio
 /// route changes mid-recording (e.g. AirPods connect), so a long dictation keeps going.
@@ -12,6 +13,8 @@ final class AudioRecorder {
     var onLevel: ((Float) -> Void)?
     /// Called on the main thread when capture fails irrecoverably.
     var onFailure: ((Error) -> Void)?
+    /// The input to use, by UID; nil (or a device that isn't connected) means the system default.
+    var deviceUID: String?
 
     private var engine: AVAudioEngine?
     private var converter: AVAudioConverter?
@@ -51,6 +54,11 @@ final class AudioRecorder {
     private func startEngine() throws {
         let engine = AVAudioEngine()
         let input = engine.inputNode
+        if let deviceUID, var deviceID = Microphones.deviceID(uid: deviceUID), let unit = input.audioUnit {
+            // Point the engine's input unit at the chosen device before reading its format.
+            AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                                 &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size))
+        }
         let inputFormat = input.outputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else { throw RecorderError.noInput }
         guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {

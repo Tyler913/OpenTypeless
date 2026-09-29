@@ -188,6 +188,7 @@ final class SessionController: ObservableObject {
             DispatchQueue.main.async { hudModel.push(level: level) }
         }
 
+        recorder.deviceUID = settings.microphoneUID.isEmpty ? nil : settings.microphoneUID
         do {
             try recorder.start()
         } catch {

@@ -31,7 +31,7 @@ public sealed class LivePreview
     {
         try
         {
-            var recognizer = Tag(language) is { } tag && IsInstalled(tag) ? new SpeechRecognizer(new Language(tag)) : new SpeechRecognizer();
+            var recognizer = Tag(language) is { } tag ? new SpeechRecognizer(new Language(tag)) : new SpeechRecognizer();
             recognizer.Constraints.Add(new SpeechRecognitionTopicConstraint(SpeechRecognitionScenario.Dictation, "dictation"));
             var compiled = await recognizer.CompileConstraintsAsync();
             if (compiled.Status != SpeechRecognitionResultStatus.Success || _stopped)
@@ -73,15 +73,18 @@ public sealed class LivePreview
         recognizer.Dispose();
     }
 
-    private static string? Tag(string language) => language switch
+    /// <summary>The installed recognizer language for an ISO code: the usual region when present ("zh" → zh-CN), otherwise
+    /// any installed variant ("pt" → pt-PT).</summary>
+    private static string? Tag(string language)
     {
-        "zh" => "zh-CN",
-        "en" => "en-US",
-        "ja" => "ja-JP",
-        "ko" => "ko-KR",
-        _ => null,
-    };
-
-    private static bool IsInstalled(string tag) =>
-        SpeechRecognizer.SupportedTopicLanguages.Any(l => string.Equals(l.LanguageTag, tag, StringComparison.OrdinalIgnoreCase));
+        if (language.Length == 0) return null;
+        var installed = SpeechRecognizer.SupportedTopicLanguages.Select(l => l.LanguageTag).ToList();
+        var usual = language switch
+        {
+            "zh" => "zh-CN", "en" => "en-US", "ja" => "ja-JP", "ko" => "ko-KR", "es" => "es-ES",
+            "pt" => "pt-BR", "fr" => "fr-FR", "de" => "de-DE", "ru" => "ru-RU", _ => null,
+        };
+        return installed.FirstOrDefault(tag => string.Equals(tag, usual, StringComparison.OrdinalIgnoreCase))
+            ?? installed.FirstOrDefault(tag => tag.StartsWith(language + "-", StringComparison.OrdinalIgnoreCase));
+    }
 }

@@ -1,0 +1,2927 @@
+{
+  "Settings…": {
+    "ja": "設定…",
+    "ko": "설정…",
+    "es": "Ajustes…",
+    "pt": "Configurações…",
+    "ru": "Настройки…",
+    "fr": "Réglages…",
+    "de": "Einstellungen…"
+  },
+  "Close Window": {
+    "ja": "ウインドウを閉じる",
+    "ko": "창 닫기",
+    "es": "Cerrar ventana",
+    "pt": "Fechar janela",
+    "ru": "Закрыть окно",
+    "fr": "Fermer la fenêtre",
+    "de": "Fenster schließen"
+  },
+  "Quit OpenTypeless": {
+    "ja": "OpenTypeless を終了",
+    "ko": "OpenTypeless 종료",
+    "es": "Salir de OpenTypeless",
+    "pt": "Sair do OpenTypeless",
+    "ru": "Завершить OpenTypeless",
+    "fr": "Quitter OpenTypeless",
+    "de": "OpenTypeless beenden"
+  },
+  "Edit": {
+    "ja": "編集",
+    "ko": "편집",
+    "es": "Edición",
+    "pt": "Editar",
+    "ru": "Правка",
+    "fr": "Édition",
+    "de": "Bearbeiten"
+  },
+  "Undo": {
+    "ja": "取り消す",
+    "ko": "실행 취소",
+    "es": "Deshacer",
+    "pt": "Desfazer",
+    "ru": "Отменить",
+    "fr": "Annuler",
+    "de": "Widerrufen"
+  },
+  "Redo": {
+    "ja": "やり直す",
+    "ko": "실행 복귀",
+    "es": "Rehacer",
+    "pt": "Refazer",
+    "ru": "Повторить",
+    "fr": "Rétablir",
+    "de": "Wiederholen"
+  },
+  "Cut": {
+    "ja": "カット",
+    "ko": "오려두기",
+    "es": "Cortar",
+    "pt": "Recortar",
+    "ru": "Вырезать",
+    "fr": "Couper",
+    "de": "Ausschneiden"
+  },
+  "Copy": {
+    "ja": "コピー",
+    "ko": "복사하기",
+    "es": "Copiar",
+    "pt": "Copiar",
+    "ru": "Копировать",
+    "fr": "Copier",
+    "de": "Kopieren"
+  },
+  "Paste": {
+    "ja": "ペースト",
+    "ko": "붙여넣기",
+    "es": "Pegar",
+    "pt": "Colar",
+    "ru": "Вставить",
+    "fr": "Coller",
+    "de": "Einsetzen"
+  },
+  "Select All": {
+    "ja": "すべてを選択",
+    "ko": "전체 선택",
+    "es": "Seleccionar todo",
+    "pt": "Selecionar tudo",
+    "ru": "Выбрать все",
+    "fr": "Tout sélectionner",
+    "de": "Alles auswählen"
+  },
+  "No microphone available": {
+    "ja": "使用できるマイクがありません",
+    "ko": "사용 가능한 마이크가 없습니다",
+    "es": "No hay ningún micrófono disponible",
+    "pt": "Nenhum microfone disponível",
+    "ru": "Нет доступного микрофона",
+    "fr": "Aucun micro disponible",
+    "de": "Kein Mikrofon verfügbar"
+  },
+  "Couldn't create the audio converter": {
+    "ja": "オーディオコンバータを作成できませんでした",
+    "ko": "오디오 변환기를 만들 수 없습니다",
+    "es": "No se pudo crear el conversor de audio",
+    "pt": "Não foi possível criar o conversor de áudio",
+    "ru": "Не удалось создать аудиоконвертер",
+    "fr": "Impossible de créer le convertisseur audio",
+    "de": "Audiokonverter konnte nicht erstellt werden"
+  },
+  "Yesterday": {
+    "ja": "昨日",
+    "ko": "어제",
+    "es": "Ayer",
+    "pt": "Ontem",
+    "ru": "Вчера",
+    "fr": "Hier",
+    "de": "Gestern"
+  },
+  "Working": {
+    "ja": "処理中",
+    "ko": "처리 중",
+    "es": "Procesando",
+    "pt": "Processando",
+    "ru": "Обработка",
+    "fr": "Traitement",
+    "de": "Verarbeitung"
+  },
+  "Copied to clipboard": {
+    "ja": "クリップボードにコピーしました",
+    "ko": "클립보드에 복사됨",
+    "es": "Copiado al portapapeles",
+    "pt": "Copiado para a área de transferência",
+    "ru": "Скопировано в буфер обмена",
+    "fr": "Copié dans le presse-papiers",
+    "de": "In die Zwischenablage kopiert"
+  },
+  "Added to vocabulary: ": {
+    "ja": "語彙に追加：",
+    "ko": "어휘에 추가됨: ",
+    "es": "Añadido al vocabulario: ",
+    "pt": "Adicionado ao vocabulário: ",
+    "ru": "Добавлено в словарь: ",
+    "fr": "Ajouté au vocabulaire : ",
+    "de": "Zum Vokabular hinzugefügt: "
+  },
+  " s": {
+    "ja": " 秒",
+    "ko": "초",
+    "es": " s",
+    "pt": " s",
+    "ru": " с",
+    "fr": " s",
+    "de": " s"
+  },
+  "Transcription ": {
+    "ja": "文字起こし ",
+    "ko": "변환 ",
+    "es": "Transcripción ",
+    "pt": "Transcrição ",
+    "ru": "Распознавание ",
+    "fr": "Transcription ",
+    "de": "Transkription "
+  },
+  "first token ": {
+    "ja": "最初のトークン ",
+    "ko": "첫 토큰 ",
+    "es": "primer token ",
+    "pt": "primeiro token ",
+    "ru": "первый токен ",
+    "fr": "premier jeton ",
+    "de": "erstes Token "
+  },
+  "backup ": {
+    "ja": "予備 ",
+    "ko": "백업 ",
+    "es": "respaldo ",
+    "pt": "reserva ",
+    "ru": "резерв ",
+    "fr": "secours ",
+    "de": "Backup "
+  },
+  "Clean-up ": {
+    "ja": "整形 ",
+    "ko": "다듬기 ",
+    "es": "Limpieza ",
+    "pt": "Limpeza ",
+    "ru": "Очистка ",
+    "fr": "Nettoyage ",
+    "de": "Bereinigung "
+  },
+  " (": {
+    "ja": "（",
+    "ko": " (",
+    "es": " (",
+    "pt": " (",
+    "ru": " (",
+    "fr": " (",
+    "de": " ("
+  },
+  ", ": {
+    "ja": "、",
+    "ko": ", ",
+    "es": ", ",
+    "pt": ", ",
+    "ru": ", ",
+    "fr": ", ",
+    "de": ", "
+  },
+  ")": {
+    "ja": "）",
+    "ko": ")",
+    "es": ")",
+    "pt": ")",
+    "ru": ")",
+    "fr": ")",
+    "de": ")"
+  },
+  "Don't keep recordings": {
+    "ja": "録音を保存しない",
+    "ko": "녹음 저장 안 함",
+    "es": "No guardar grabaciones",
+    "pt": "Não guardar gravações",
+    "ru": "Не хранить записи",
+    "fr": "Ne pas conserver les enregistrements",
+    "de": "Aufnahmen nicht behalten"
+  },
+  "1 day": {
+    "ja": "1日間",
+    "ko": "1일",
+    "es": "1 día",
+    "pt": "1 dia",
+    "ru": "1 день",
+    "fr": "1 jour",
+    "de": "1 Tag"
+  },
+  "7 days": {
+    "ja": "7日間",
+    "ko": "7일",
+    "es": "7 días",
+    "pt": "7 dias",
+    "ru": "7 дней",
+    "fr": "7 jours",
+    "de": "7 Tage"
+  },
+  "1 month": {
+    "ja": "1か月",
+    "ko": "1개월",
+    "es": "1 mes",
+    "pt": "1 mês",
+    "ru": "1 месяц",
+    "fr": "1 mois",
+    "de": "1 Monat"
+  },
+  "1 year": {
+    "ja": "1年",
+    "ko": "1년",
+    "es": "1 año",
+    "pt": "1 ano",
+    "ru": "1 год",
+    "fr": "1 an",
+    "de": "1 Jahr"
+  },
+  "Forever": {
+    "ja": "無期限",
+    "ko": "영구 보관",
+    "es": "Para siempre",
+    "pt": "Para sempre",
+    "ru": "Всегда",
+    "fr": "Pour toujours",
+    "de": "Für immer"
+  },
+  "Interrupted last time (audio saved — you can retry)": {
+    "ja": "前回は中断されました（音声は保存済み。再試行できます）",
+    "ko": "지난번에 중단됨 (오디오 저장됨 — 다시 시도 가능)",
+    "es": "Se interrumpió la última vez (audio guardado; puedes reintentarlo)",
+    "pt": "Interrompido da última vez (áudio salvo — você pode tentar de novo)",
+    "ru": "В прошлый раз прервано (аудио сохранено, можно повторить)",
+    "fr": "Interrompu la dernière fois (audio conservé, vous pouvez réessayer)",
+    "de": "Letztes Mal unterbrochen (Audio gespeichert – du kannst es erneut versuchen)"
+  },
+  "Hold {0} and talk. Your stats will show up here.": {
+    "ja": "{0} を押したまま話すと、ここに統計が表示されます。",
+    "ko": "{0} 키를 누른 채 말하면 여기에 통계가 표시됩니다.",
+    "es": "Mantén {0} y habla. Tus estadísticas aparecerán aquí.",
+    "pt": "Segure {0} e fale. Suas estatísticas aparecerão aqui.",
+    "ru": "Удерживайте {0} и говорите — здесь появится статистика.",
+    "fr": "Maintenez {0} et parlez. Vos statistiques apparaîtront ici.",
+    "de": "Halte {0} gedrückt und sprich. Deine Statistik erscheint dann hier."
+  },
+  "Words dictated": {
+    "ja": "音声入力した文字数",
+    "ko": "받아쓴 단어",
+    "es": "Palabras dictadas",
+    "pt": "Palavras ditadas",
+    "ru": "Надиктовано слов",
+    "fr": "Mots dictés",
+    "de": "Diktierte Wörter"
+  },
+  "Today {0} · This month {1}": {
+    "ja": "今日 {0} · 今月 {1}",
+    "ko": "오늘 {0} · 이번 달 {1}",
+    "es": "Hoy {0} · Este mes {1}",
+    "pt": "Hoje {0} · Este mês {1}",
+    "ru": "Сегодня {0} · В этом месяце {1}",
+    "fr": "Aujourd’hui {0} · Ce mois-ci {1}",
+    "de": "Heute {0} · Diesen Monat {1}"
+  },
+  "Time saved": {
+    "ja": "節約できた時間",
+    "ko": "절약한 시간",
+    "es": "Tiempo ahorrado",
+    "pt": "Tempo economizado",
+    "ru": "Сэкономлено времени",
+    "fr": "Temps gagné",
+    "de": "Gesparte Zeit"
+  },
+  "Compared with typing at {0} wpm": {
+    "ja": "毎分 {0} 字のタイピングと比べて",
+    "ko": "분당 {0}단어 타이핑과 비교",
+    "es": "Frente a teclear a {0} ppm",
+    "pt": "Comparado a digitar a {0} ppm",
+    "ru": "По сравнению с набором {0} сл/мин",
+    "fr": "Par rapport à une frappe à {0} mots/min",
+    "de": "Verglichen mit Tippen mit {0} Wörtern/Min."
+  },
+  "Speaking speed": {
+    "ja": "話す速さ",
+    "ko": "말하기 속도",
+    "es": "Velocidad al hablar",
+    "pt": "Velocidade de fala",
+    "ru": "Скорость речи",
+    "fr": "Débit de parole",
+    "de": "Sprechtempo"
+  },
+  "{0} wpm": {
+    "ja": "{0} 字/分",
+    "ko": "{0}단어/분",
+    "es": "{0} ppm",
+    "pt": "{0} ppm",
+    "ru": "{0} сл/мин",
+    "fr": "{0} mots/min",
+    "de": "{0} Wörter/Min."
+  },
+  "{0}× your typing speed": {
+    "ja": "タイピングの {0} 倍",
+    "ko": "타이핑의 {0}배",
+    "es": "{0}× tu velocidad al teclear",
+    "pt": "{0}× sua velocidade de digitação",
+    "ru": "{0}× скорости набора",
+    "fr": "{0}× votre vitesse de frappe",
+    "de": "{0}× so schnell wie Tippen"
+  },
+  "Dictate a little to see it": {
+    "ja": "少し話すと表示されます",
+    "ko": "조금 말하면 표시됩니다",
+    "es": "Dicta un poco para verla",
+    "pt": "Dite um pouco para ver",
+    "ru": "Надиктуйте немного, чтобы увидеть",
+    "fr": "Dictez un peu pour la voir",
+    "de": "Diktiere etwas, um sie zu sehen"
+  },
+  "Dictations": {
+    "ja": "音声入力の回数",
+    "ko": "받아쓰기 횟수",
+    "es": "Dictados",
+    "pt": "Ditados",
+    "ru": "Диктовки",
+    "fr": "Dictées",
+    "de": "Diktate"
+  },
+  "{0}-day streak · Longest {1} days": {
+    "ja": "{0} 日連続 · 最長 {1} 日",
+    "ko": "{0}일 연속 · 최장 {1}일",
+    "es": "Racha de {0} días · Máxima {1} días",
+    "pt": "Sequência de {0} dias · Maior {1} dias",
+    "ru": "Серия: {0} дн. · Рекорд: {1} дн.",
+    "fr": "{0} jours d’affilée · Record {1} jours",
+    "de": "{0} Tage in Folge · Rekord {1} Tage"
+  },
+  "Longest streak {0} days": {
+    "ja": "最長 {0} 日連続",
+    "ko": "최장 {0}일 연속",
+    "es": "Racha máxima: {0} días",
+    "pt": "Maior sequência: {0} dias",
+    "ru": "Рекордная серия: {0} дн.",
+    "fr": "Record : {0} jours d’affilée",
+    "de": "Längste Serie: {0} Tage"
+  },
+  "Saying these {0} words took {1}; typing them at {2} wpm would take {3}. Change the typing speed under General.": {
+    "ja": "この {0} 字を話すのにかかったのは {1}。毎分 {2} 字でタイピングすると {3} かかります。タイピング速度は「一般」で変更できます。",
+    "ko": "이 {0}단어를 말하는 데 걸린 시간은 {1}, 분당 {2}단어로 타이핑하면 {3}입니다. 타이핑 속도는 ‘일반’에서 바꿀 수 있습니다.",
+    "es": "Decir estas {0} palabras llevó {1}; teclearlas a {2} ppm llevaría {3}. Cambia la velocidad de escritura en General.",
+    "pt": "Falar estas {0} palavras levou {1}; digitá-las a {2} ppm levaria {3}. Altere a velocidade de digitação em Geral.",
+    "ru": "Произнести эти слова ({0}) заняло {1}; набор со скоростью {2} сл/мин занял бы {3}. Скорость набора меняется в разделе «Общие».",
+    "fr": "Dire ces {0} mots a pris {1} ; les taper à {2} mots/min prendrait {3}. Modifiez la vitesse de frappe dans Général.",
+    "de": "Diese {0} Wörter zu sprechen dauerte {1}; sie mit {2} Wörtern/Min. zu tippen, würde {3} dauern. Die Tippgeschwindigkeit lässt sich unter „Allgemein“ ändern."
+  },
+  "Spend": {
+    "ja": "費用",
+    "ko": "비용",
+    "es": "Gasto",
+    "pt": "Gastos",
+    "ru": "Расходы",
+    "fr": "Dépenses",
+    "de": "Kosten"
+  },
+  "Today": {
+    "ja": "今日",
+    "ko": "오늘",
+    "es": "Hoy",
+    "pt": "Hoje",
+    "ru": "Сегодня",
+    "fr": "Aujourd’hui",
+    "de": "Heute"
+  },
+  "This month": {
+    "ja": "今月",
+    "ko": "이번 달",
+    "es": "Este mes",
+    "pt": "Este mês",
+    "ru": "В этом месяце",
+    "fr": "Ce mois-ci",
+    "de": "Diesen Monat"
+  },
+  "All time": {
+    "ja": "累計",
+    "ko": "전체",
+    "es": "Total",
+    "pt": "Total",
+    "ru": "За всё время",
+    "fr": "Total",
+    "de": "Insgesamt"
+  },
+  "{0} requests used a model with no price, so they aren't in the spend.": {
+    "ja": "価格が未設定のモデルを使ったリクエストが {0} 件あり、費用に含まれていません。",
+    "ko": "가격이 없는 모델을 사용한 요청 {0}건은 비용에 포함되지 않았습니다.",
+    "es": "{0} solicitudes usaron un modelo sin precio, así que no cuentan en el gasto.",
+    "pt": "{0} solicitações usaram um modelo sem preço e não entram nos gastos.",
+    "ru": "Запросов к моделям без цены: {0}. Они не учтены в расходах.",
+    "fr": "{0} requêtes ont utilisé un modèle sans prix et ne sont pas comptées dans les dépenses.",
+    "de": "{0} Anfragen nutzten ein Modell ohne Preis und sind nicht in den Kosten enthalten."
+  },
+  "Set prices": {
+    "ja": "価格を設定",
+    "ko": "가격 설정",
+    "es": "Fijar precios",
+    "pt": "Definir preços",
+    "ru": "Указать цены",
+    "fr": "Définir les prix",
+    "de": "Preise festlegen"
+  },
+  "Activity": {
+    "ja": "アクティビティ",
+    "ko": "활동",
+    "es": "Actividad",
+    "pt": "Atividade",
+    "ru": "Активность",
+    "fr": "Activité",
+    "de": "Aktivität"
+  },
+  "not downloaded yet": {
+    "ja": "未取得",
+    "ko": "아직 다운로드하지 않음",
+    "es": "aún sin descargar",
+    "pt": "ainda não baixada",
+    "ru": "ещё не загружен",
+    "fr": "pas encore téléchargée",
+    "de": "noch nicht geladen"
+  },
+  "OpenRouter requests count what OpenRouter billed for them (price list updated {0}). Other providers use the prices you set under Models.": {
+    "ja": "OpenRouter のリクエストは実際の請求額で計算します（価格表の更新：{0}）。その他のプロバイダは「モデル」で設定した価格で計算します。",
+    "ko": "OpenRouter 요청은 실제 청구된 금액으로 계산합니다(가격표 업데이트: {0}). 다른 제공업체는 ‘모델’에서 설정한 가격을 사용합니다.",
+    "es": "Las solicitudes a OpenRouter cuentan lo que OpenRouter cobró (lista de precios actualizada: {0}). Otros proveedores usan los precios que fijes en Modelos.",
+    "pt": "As solicitações ao OpenRouter contam o que o OpenRouter cobrou (tabela de preços atualizada: {0}). Outros provedores usam os preços definidos em Modelos.",
+    "ru": "Запросы к OpenRouter учитываются по фактическому списанию (прайс-лист обновлён: {0}). Для других провайдеров используются цены из раздела «Модели».",
+    "fr": "Les requêtes OpenRouter comptent ce qu’OpenRouter a facturé (grille tarifaire mise à jour : {0}). Les autres fournisseurs utilisent les prix définis dans Modèles.",
+    "de": "OpenRouter-Anfragen zählen, was OpenRouter berechnet hat (Preisliste aktualisiert: {0}). Andere Anbieter nutzen die Preise, die du unter „Modelle“ festlegst."
+  },
+  "Less": {
+    "ja": "少",
+    "ko": "적음",
+    "es": "Menos",
+    "pt": "Menos",
+    "ru": "Меньше",
+    "fr": "Moins",
+    "de": "Weniger"
+  },
+  "More": {
+    "ja": "多",
+    "ko": "많음",
+    "es": "Más",
+    "pt": "Mais",
+    "ru": "Больше",
+    "fr": "Plus",
+    "de": "Mehr"
+  },
+  "{0}: no dictation": {
+    "ja": "{0}：音声入力なし",
+    "ko": "{0}: 받아쓰기 없음",
+    "es": "{0}: sin dictado",
+    "pt": "{0}: sem ditado",
+    "ru": "{0}: без диктовок",
+    "fr": "{0} : aucune dictée",
+    "de": "{0}: kein Diktat"
+  },
+  "Left ": {
+    "ja": "左",
+    "ko": "왼쪽 ",
+    "es": "Izq. ",
+    "pt": "Esq. ",
+    "ru": "Левый ",
+    "fr": "Gauche ",
+    "de": "Links "
+  },
+  "Right ": {
+    "ja": "右",
+    "ko": "오른쪽 ",
+    "es": "Der. ",
+    "pt": "Dir. ",
+    "ru": "Правый ",
+    "fr": "Droite ",
+    "de": "Rechts "
+  },
+  "Ready": {
+    "ja": "準備完了",
+    "ko": "준비됨",
+    "es": "Listo",
+    "pt": "Pronto",
+    "ru": "Готово",
+    "fr": "Prêt",
+    "de": "Bereit"
+  },
+  "Recording": {
+    "ja": "録音中",
+    "ko": "녹음 중",
+    "es": "Grabando",
+    "pt": "Gravando",
+    "ru": "Запись",
+    "fr": "Enregistrement",
+    "de": "Aufnahme"
+  },
+  "Processing": {
+    "ja": "処理中",
+    "ko": "처리 중",
+    "es": "Procesando",
+    "pt": "Processando",
+    "ru": "Обработка",
+    "fr": "Traitement",
+    "de": "Verarbeitung"
+  },
+  "Hold": {
+    "ja": "押したまま",
+    "ko": "누른 채로",
+    "es": "Mantén",
+    "pt": "Segure",
+    "ru": "Удерживайте",
+    "fr": "Maintenez",
+    "de": "Halte"
+  },
+  "and speak": {
+    "ja": "で話す",
+    "ko": "말하기",
+    "es": "y habla",
+    "pt": "e fale",
+    "ru": "и говорите",
+    "fr": "et parlez",
+    "de": "und sprich"
+  },
+  "Tap once for hands-free · Esc to cancel": {
+    "ja": "1回タップでハンズフリー · Esc でキャンセル",
+    "ko": "한 번 탭하면 핸즈프리 · Esc로 취소",
+    "es": "Toca una vez para manos libres · Esc para cancelar",
+    "pt": "Toque uma vez para mãos livres · Esc cancela",
+    "ru": "Одно нажатие — режим без рук · Esc — отмена",
+    "fr": "Appuyez une fois pour les mains libres · Échap pour annuler",
+    "de": "Einmal tippen für freihändig · Esc bricht ab"
+  },
+  "Fix": {
+    "ja": "設定する",
+    "ko": "설정",
+    "es": "Configurar",
+    "pt": "Configurar",
+    "ru": "Настроить",
+    "fr": "Configurer",
+    "de": "Einrichten"
+  },
+  "Last dictation failed ({0} recording saved)": {
+    "ja": "前回の音声入力に失敗しました（{0} の録音を保存済み）",
+    "ko": "지난 받아쓰기 실패 ({0} 녹음 저장됨)",
+    "es": "Falló el último dictado (grabación de {0} guardada)",
+    "pt": "O último ditado falhou (gravação de {0} salva)",
+    "ru": "Последняя диктовка не удалась (запись {0} сохранена)",
+    "fr": "La dernière dictée a échoué (enregistrement de {0} conservé)",
+    "de": "Letztes Diktat fehlgeschlagen ({0} Aufnahme gespeichert)"
+  },
+  "Retry": {
+    "ja": "再試行",
+    "ko": "다시 시도",
+    "es": "Reintentar",
+    "pt": "Tentar de novo",
+    "ru": "Повторить",
+    "fr": "Réessayer",
+    "de": "Wiederholen"
+  },
+  "Updates to {0} after this dictation": {
+    "ja": "この音声入力の後に {0} へ更新します",
+    "ko": "이번 받아쓰기 후 {0}(으)로 업데이트",
+    "es": "Se actualizará a {0} tras este dictado",
+    "pt": "Atualiza para {0} após este ditado",
+    "ru": "Обновление до {0} после этой диктовки",
+    "fr": "Mise à jour vers {0} après cette dictée",
+    "de": "Update auf {0} nach diesem Diktat"
+  },
+  "Version {0} is ready": {
+    "ja": "バージョン {0} の準備ができました",
+    "ko": "버전 {0} 준비됨",
+    "es": "La versión {0} está lista",
+    "pt": "A versão {0} está pronta",
+    "ru": "Версия {0} готова",
+    "fr": "La version {0} est prête",
+    "de": "Version {0} ist bereit"
+  },
+  "Restart to update": {
+    "ja": "再起動して更新",
+    "ko": "재시작하여 업데이트",
+    "es": "Reiniciar para actualizar",
+    "pt": "Reiniciar para atualizar",
+    "ru": "Перезапустить и обновить",
+    "fr": "Redémarrer pour mettre à jour",
+    "de": "Neu starten und aktualisieren"
+  },
+  "Version {0} is available": {
+    "ja": "バージョン {0} が利用可能です",
+    "ko": "버전 {0} 사용 가능",
+    "es": "La versión {0} está disponible",
+    "pt": "A versão {0} está disponível",
+    "ru": "Доступна версия {0}",
+    "fr": "La version {0} est disponible",
+    "de": "Version {0} ist verfügbar"
+  },
+  "Download": {
+    "ja": "ダウンロード",
+    "ko": "다운로드",
+    "es": "Descargar",
+    "pt": "Baixar",
+    "ru": "Скачать",
+    "fr": "Télécharger",
+    "de": "Laden"
+  },
+  "Recent": {
+    "ja": "最近",
+    "ko": "최근",
+    "es": "Recientes",
+    "pt": "Recentes",
+    "ru": "Недавние",
+    "fr": "Récents",
+    "de": "Zuletzt"
+  },
+  "Click to copy": {
+    "ja": "クリックしてコピー",
+    "ko": "클릭하여 복사",
+    "es": "Haz clic para copiar",
+    "pt": "Clique para copiar",
+    "ru": "Нажмите, чтобы скопировать",
+    "fr": "Cliquez pour copier",
+    "de": "Zum Kopieren klicken"
+  },
+  "Nothing yet — hold the shortcut and try it": {
+    "ja": "まだ履歴がありません。ショートカットを押したまま話してみましょう",
+    "ko": "아직 기록이 없습니다 — 단축키를 누른 채 말해 보세요",
+    "es": "Nada todavía: mantén el atajo y pruébalo",
+    "pt": "Nada ainda — segure o atalho e experimente",
+    "ru": "Пока пусто — удерживайте сочетание клавиш и попробуйте",
+    "fr": "Rien pour l’instant — maintenez le raccourci pour essayer",
+    "de": "Noch nichts – halte das Tastenkürzel gedrückt und probier es aus"
+  },
+  "Settings": {
+    "ja": "設定",
+    "ko": "설정",
+    "es": "Ajustes",
+    "pt": "Configurações",
+    "ru": "Настройки",
+    "fr": "Réglages",
+    "de": "Einstellungen"
+  },
+  "History": {
+    "ja": "履歴",
+    "ko": "기록",
+    "es": "Historial",
+    "pt": "Histórico",
+    "ru": "История",
+    "fr": "Historique",
+    "de": "Verlauf"
+  },
+  "No API key for {0}": {
+    "ja": "{0} の API キーが未設定です",
+    "ko": "{0} API 키 없음",
+    "es": "No hay clave de API para {0}",
+    "pt": "Sem chave de API para {0}",
+    "ru": "Нет API-ключа для {0}",
+    "fr": "Aucune clé API pour {0}",
+    "de": "Kein API-Schlüssel für {0}"
+  },
+  "Accessibility permission needed": {
+    "ja": "アクセシビリティの許可が必要です",
+    "ko": "손쉬운 사용 권한 필요",
+    "es": "Se necesita permiso de accesibilidad",
+    "pt": "Permissão de acessibilidade necessária",
+    "ru": "Нужно разрешение «Универсальный доступ»",
+    "fr": "Autorisation d’accessibilité requise",
+    "de": "Bedienungshilfen-Berechtigung erforderlich"
+  },
+  "Microphone permission needed": {
+    "ja": "マイクの許可が必要です",
+    "ko": "마이크 권한 필요",
+    "es": "Se necesita permiso del micrófono",
+    "pt": "Permissão do microfone necessária",
+    "ru": "Нужен доступ к микрофону",
+    "fr": "Autorisation du micro requise",
+    "de": "Mikrofonberechtigung erforderlich"
+  },
+  "Recording interrupted: ": {
+    "ja": "録音が中断されました：",
+    "ko": "녹음 중단됨: ",
+    "es": "Grabación interrumpida: ",
+    "pt": "Gravação interrompida: ",
+    "ru": "Запись прервана: ",
+    "fr": "Enregistrement interrompu : ",
+    "de": "Aufnahme unterbrochen: "
+  },
+  "Set up the speech-to-text provider ({0}) in Settings first": {
+    "ja": "先に設定で文字起こしのプロバイダ（{0}）を設定してください",
+    "ko": "먼저 설정에서 음성 인식 제공업체({0})를 설정하세요",
+    "es": "Configura primero el proveedor de voz a texto ({0}) en Ajustes",
+    "pt": "Configure primeiro o provedor de voz para texto ({0}) nas Configurações",
+    "ru": "Сначала настройте провайдера распознавания речи ({0}) в настройках",
+    "fr": "Configurez d’abord le fournisseur de transcription ({0}) dans les Réglages",
+    "de": "Richte zuerst den Spracherkennungs-Anbieter ({0}) in den Einstellungen ein"
+  },
+  "Microphone access needed: System Settings → Privacy & Security → Microphone": {
+    "ja": "マイクへのアクセスが必要です：システム設定 → プライバシーとセキュリティ → マイク",
+    "ko": "마이크 접근 권한 필요: 시스템 설정 → 개인정보 보호 및 보안 → 마이크",
+    "es": "Se necesita acceso al micrófono: Ajustes del Sistema → Privacidad y seguridad → Micrófono",
+    "pt": "Acesso ao microfone necessário: Ajustes do Sistema → Privacidade e Segurança → Microfone",
+    "ru": "Нужен доступ к микрофону: Системные настройки → Конфиденциальность и безопасность → Микрофон",
+    "fr": "Accès au micro requis : Réglages Système → Confidentialité et sécurité → Micro",
+    "de": "Mikrofonzugriff erforderlich: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon"
+  },
+  "Can't create the recording file: ": {
+    "ja": "録音ファイルを作成できません：",
+    "ko": "녹음 파일을 만들 수 없습니다: ",
+    "es": "No se puede crear el archivo de grabación: ",
+    "pt": "Não foi possível criar o arquivo de gravação: ",
+    "ru": "Не удаётся создать файл записи: ",
+    "fr": "Impossible de créer le fichier d’enregistrement : ",
+    "de": "Aufnahmedatei kann nicht erstellt werden: "
+  },
+  "Can't start recording: ": {
+    "ja": "録音を開始できません：",
+    "ko": "녹음을 시작할 수 없습니다: ",
+    "es": "No se puede empezar a grabar: ",
+    "pt": "Não foi possível iniciar a gravação: ",
+    "ru": "Не удаётся начать запись: ",
+    "fr": "Impossible de démarrer l’enregistrement : ",
+    "de": "Aufnahme kann nicht gestartet werden: "
+  },
+  "No speech detected": {
+    "ja": "音声が検出されませんでした",
+    "ko": "음성이 감지되지 않음",
+    "es": "No se detectó voz",
+    "pt": "Nenhuma fala detectada",
+    "ru": "Речь не обнаружена",
+    "fr": "Aucune parole détectée",
+    "de": "Keine Sprache erkannt"
+  },
+  "Failed — retry from the menu bar": {
+    "ja": "失敗しました。メニューバーから再試行できます",
+    "ko": "실패 — 메뉴 막대에서 다시 시도하세요",
+    "es": "Falló: reinténtalo desde la barra de menús",
+    "pt": "Falhou — tente de novo pela barra de menus",
+    "ru": "Ошибка — повторите из строки меню",
+    "fr": "Échec — réessayez depuis la barre des menus",
+    "de": "Fehlgeschlagen – über die Menüleiste erneut versuchen"
+  },
+  "Inserted without clean-up": {
+    "ja": "整形せずに挿入しました",
+    "ko": "다듬기 없이 삽입됨",
+    "es": "Insertado sin limpieza",
+    "pt": "Inserido sem limpeza",
+    "ru": "Вставлено без очистки",
+    "fr": "Inséré sans nettoyage",
+    "de": "Ohne Bereinigung eingefügt"
+  },
+  "Clean-up failed — inserted raw text": {
+    "ja": "整形に失敗したため、元のテキストを挿入しました",
+    "ko": "다듬기 실패 — 원본 텍스트를 삽입함",
+    "es": "Falló la limpieza: se insertó el texto sin procesar",
+    "pt": "A limpeza falhou — texto bruto inserido",
+    "ru": "Очистка не удалась — вставлен исходный текст",
+    "fr": "Échec du nettoyage — texte brut inséré",
+    "de": "Bereinigung fehlgeschlagen – Rohtext eingefügt"
+  },
+  "No Accessibility permission — text copied to the clipboard": {
+    "ja": "アクセシビリティの許可がないため、テキストをクリップボードにコピーしました",
+    "ko": "손쉬운 사용 권한이 없어 텍스트를 클립보드에 복사함",
+    "es": "Sin permiso de accesibilidad: texto copiado al portapapeles",
+    "pt": "Sem permissão de acessibilidade — texto copiado para a área de transferência",
+    "ru": "Нет разрешения «Универсальный доступ» — текст скопирован в буфер обмена",
+    "fr": "Pas d’autorisation d’accessibilité — texte copié dans le presse-papiers",
+    "de": "Keine Bedienungshilfen-Berechtigung – Text in die Zwischenablage kopiert"
+  },
+  "The recording for this entry is gone": {
+    "ja": "この項目の録音が見つかりません",
+    "ko": "이 항목의 녹음 파일이 없습니다",
+    "es": "La grabación de esta entrada ya no existe",
+    "pt": "A gravação deste item não existe mais",
+    "ru": "Запись для этого элемента не найдена",
+    "fr": "L’enregistrement de cette entrée a disparu",
+    "de": "Die Aufnahme zu diesem Eintrag fehlt"
+  },
+  "Cancelled": {
+    "ja": "キャンセルしました",
+    "ko": "취소됨",
+    "es": "Cancelado",
+    "pt": "Cancelado",
+    "ru": "Отменено",
+    "fr": "Annulé",
+    "de": "Abgebrochen"
+  },
+  "Permissions": {
+    "ja": "権限",
+    "ko": "권한",
+    "es": "Permisos",
+    "pt": "Permissões",
+    "ru": "Разрешения",
+    "fr": "Autorisations",
+    "de": "Berechtigungen"
+  },
+  "Microphone": {
+    "ja": "マイク",
+    "ko": "마이크",
+    "es": "Micrófono",
+    "pt": "Microfone",
+    "ru": "Микрофон",
+    "fr": "Micro",
+    "de": "Mikrofon"
+  },
+  "To record your voice": {
+    "ja": "音声を録音するため",
+    "ko": "음성을 녹음하는 데 사용",
+    "es": "Para grabar tu voz",
+    "pt": "Para gravar sua voz",
+    "ru": "Для записи голоса",
+    "fr": "Pour enregistrer votre voix",
+    "de": "Um deine Stimme aufzunehmen"
+  },
+  "Accessibility": {
+    "ja": "アクセシビリティ",
+    "ko": "손쉬운 사용",
+    "es": "Accesibilidad",
+    "pt": "Acessibilidade",
+    "ru": "Универсальный доступ",
+    "fr": "Accessibilité",
+    "de": "Bedienungshilfen"
+  },
+  "To listen for the shortcut and paste text at the cursor": {
+    "ja": "ショートカットを検知し、カーソル位置にテキストをペーストするため",
+    "ko": "단축키를 감지하고 커서 위치에 텍스트를 붙여넣는 데 사용",
+    "es": "Para detectar el atajo y pegar texto en el cursor",
+    "pt": "Para detectar o atalho e colar texto no cursor",
+    "ru": "Чтобы отслеживать сочетание клавиш и вставлять текст у курсора",
+    "fr": "Pour détecter le raccourci et coller le texte au curseur",
+    "de": "Um das Tastenkürzel zu erkennen und Text am Cursor einzufügen"
+  },
+  "Appearance": {
+    "ja": "外観",
+    "ko": "모양",
+    "es": "Apariencia",
+    "pt": "Aparência",
+    "ru": "Оформление",
+    "fr": "Apparence",
+    "de": "Darstellung"
+  },
+  "Language": {
+    "ja": "言語",
+    "ko": "언어",
+    "es": "Idioma",
+    "pt": "Idioma",
+    "ru": "Язык",
+    "fr": "Langue",
+    "de": "Sprache"
+  },
+  "System": {
+    "ja": "システムに従う",
+    "ko": "시스템 설정 따름",
+    "es": "Sistema",
+    "pt": "Sistema",
+    "ru": "Как в системе",
+    "fr": "Système",
+    "de": "System"
+  },
+  "Startup": {
+    "ja": "起動",
+    "ko": "시동",
+    "es": "Arranque",
+    "pt": "Inicialização",
+    "ru": "Запуск",
+    "fr": "Démarrage",
+    "de": "Start"
+  },
+  "Open at login": {
+    "ja": "ログイン時に開く",
+    "ko": "로그인 시 열기",
+    "es": "Abrir al iniciar sesión",
+    "pt": "Abrir ao iniciar sessão",
+    "ru": "Открывать при входе",
+    "fr": "Ouvrir à la connexion",
+    "de": "Bei der Anmeldung öffnen"
+  },
+  "Waits in the menu bar after you log in": {
+    "ja": "ログイン後、メニューバーで待機します",
+    "ko": "로그인 후 메뉴 막대에서 대기합니다",
+    "es": "Espera en la barra de menús al iniciar sesión",
+    "pt": "Fica na barra de menus após o login",
+    "ru": "После входа ожидает в строке меню",
+    "fr": "Attend dans la barre des menus après la connexion",
+    "de": "Wartet nach der Anmeldung in der Menüleiste"
+  },
+  "Show Home when opened at login": {
+    "ja": "ログイン時の起動でもホームを表示",
+    "ko": "로그인 시 열릴 때 홈 표시",
+    "es": "Mostrar Inicio al abrirse al iniciar sesión",
+    "pt": "Mostrar o Início ao abrir no login",
+    "ru": "Показывать «Главную» при запуске при входе",
+    "fr": "Afficher l’accueil à l’ouverture à la connexion",
+    "de": "Startseite bei der Anmeldung anzeigen"
+  },
+  "Off: it waits in the menu bar after you log in. Opening the app yourself always shows Home": {
+    "ja": "オフの場合はログイン後メニューバーで待機します。自分でアプリを開くと常にホームが表示されます",
+    "ko": "끄면 로그인 후 메뉴 막대에서 대기합니다. 직접 앱을 열면 항상 홈이 표시됩니다",
+    "es": "Desactivado: espera en la barra de menús al iniciar sesión. Si abres la app tú mismo, siempre muestra Inicio",
+    "pt": "Desligado: fica na barra de menus após o login. Abrir o app manualmente sempre mostra o Início",
+    "ru": "Если выключено, после входа приложение ждёт в строке меню. При ручном запуске всегда открывается «Главная»",
+    "fr": "Désactivé : l’app attend dans la barre des menus après la connexion. L’ouvrir vous-même affiche toujours l’accueil",
+    "de": "Aus: Nach der Anmeldung wartet die App in der Menüleiste. Wenn du sie selbst öffnest, erscheint immer die Startseite"
+  },
+  "Dictation": {
+    "ja": "音声入力",
+    "ko": "받아쓰기",
+    "es": "Dictado",
+    "pt": "Ditado",
+    "ru": "Диктовка",
+    "fr": "Dictée",
+    "de": "Diktat"
+  },
+  "Restore clipboard": {
+    "ja": "クリップボードを復元",
+    "ko": "클립보드 복원",
+    "es": "Restaurar portapapeles",
+    "pt": "Restaurar área de transferência",
+    "ru": "Восстанавливать буфер обмена",
+    "fr": "Restaurer le presse-papiers",
+    "de": "Zwischenablage wiederherstellen"
+  },
+  "Put your previous clipboard back after inserting": {
+    "ja": "挿入後に元のクリップボードの内容に戻します",
+    "ko": "삽입 후 이전 클립보드 내용을 되돌립니다",
+    "es": "Recupera el contenido anterior del portapapeles tras insertar",
+    "pt": "Devolve o conteúdo anterior da área de transferência após inserir",
+    "ru": "Возвращать прежнее содержимое буфера после вставки",
+    "fr": "Remet le contenu précédent du presse-papiers après l’insertion",
+    "de": "Stellt nach dem Einfügen den vorherigen Inhalt der Zwischenablage wieder her"
+  },
+  "Sounds": {
+    "ja": "サウンド",
+    "ko": "사운드",
+    "es": "Sonidos",
+    "pt": "Sons",
+    "ru": "Звуки",
+    "fr": "Sons",
+    "de": "Töne"
+  },
+  "Soft chime when recording starts and stops": {
+    "ja": "録音の開始時と終了時に小さな音を鳴らします",
+    "ko": "녹음 시작과 종료 시 부드러운 알림음",
+    "es": "Un tono suave al empezar y terminar de grabar",
+    "pt": "Um toque suave ao iniciar e parar a gravação",
+    "ru": "Тихий сигнал в начале и в конце записи",
+    "fr": "Un léger carillon au début et à la fin de l’enregistrement",
+    "de": "Leiser Ton bei Start und Ende der Aufnahme"
+  },
+  "Maximum recording": {
+    "ja": "最大録音時間",
+    "ko": "최대 녹음 시간",
+    "es": "Grabación máxima",
+    "pt": "Gravação máxima",
+    "ru": "Максимальная запись",
+    "fr": "Enregistrement maximal",
+    "de": "Maximale Aufnahmedauer"
+  },
+  "Stops and processes automatically at the limit": {
+    "ja": "上限に達すると自動で終了して処理します",
+    "ko": "한도에 도달하면 자동으로 멈추고 처리합니다",
+    "es": "Al llegar al límite se detiene y procesa automáticamente",
+    "pt": "Para e processa automaticamente no limite",
+    "ru": "При достижении лимита запись останавливается и обрабатывается",
+    "fr": "S’arrête et traite automatiquement à la limite",
+    "de": "Stoppt am Limit und verarbeitet automatisch"
+  },
+  "{0} min": {
+    "ja": "{0} 分",
+    "ko": "{0}분",
+    "es": "{0} min",
+    "pt": "{0} min",
+    "ru": "{0} мин",
+    "fr": "{0} min",
+    "de": "{0} Min."
+  },
+  "Home stats": {
+    "ja": "ホームの統計",
+    "ko": "홈 통계",
+    "es": "Estadísticas de Inicio",
+    "pt": "Estatísticas do Início",
+    "ru": "Статистика на главной",
+    "fr": "Statistiques de l’accueil",
+    "de": "Statistik auf der Startseite"
+  },
+  "“Time saved” is how long typing the same words at this speed would take, minus the time you spent talking.": {
+    "ja": "「節約できた時間」は、同じ文字数をこの速さでタイピングした場合の時間から、実際に話した時間を引いたものです。",
+    "ko": "‘절약한 시간’은 같은 단어를 이 속도로 타이핑할 때 걸리는 시간에서 실제로 말한 시간을 뺀 값입니다.",
+    "es": "El «tiempo ahorrado» es lo que tardarías en teclear las mismas palabras a esta velocidad, menos el tiempo que pasaste hablando.",
+    "pt": "O “tempo economizado” é quanto levaria para digitar as mesmas palavras nessa velocidade, menos o tempo que você passou falando.",
+    "ru": "«Сэкономленное время» — сколько занял бы набор тех же слов с этой скоростью минус время, которое вы говорили.",
+    "fr": "Le « temps gagné » est le temps qu’il faudrait pour taper les mêmes mots à cette vitesse, moins le temps passé à parler.",
+    "de": "„Gesparte Zeit“ ist, wie lange das Tippen derselben Wörter bei diesem Tempo dauern würde, abzüglich der Zeit, die du gesprochen hast."
+  },
+  "Your typing speed": {
+    "ja": "あなたのタイピング速度",
+    "ko": "내 타이핑 속도",
+    "es": "Tu velocidad de escritura",
+    "pt": "Sua velocidade de digitação",
+    "ru": "Ваша скорость набора",
+    "fr": "Votre vitesse de frappe",
+    "de": "Deine Tippgeschwindigkeit"
+  },
+  "Used to work out the time saved (100 wpm by default)": {
+    "ja": "節約できた時間の計算に使います（デフォルトは毎分 100 字）",
+    "ko": "절약한 시간을 계산하는 데 사용합니다(기본값 분당 100단어)",
+    "es": "Se usa para calcular el tiempo ahorrado (100 ppm por defecto)",
+    "pt": "Usada para calcular o tempo economizado (100 ppm por padrão)",
+    "ru": "Используется для расчёта сэкономленного времени (по умолчанию 100 сл/мин)",
+    "fr": "Sert à calculer le temps gagné (100 mots/min par défaut)",
+    "de": "Dient zur Berechnung der gesparten Zeit (standardmäßig 100 Wörter/Min.)"
+  },
+  "Couldn't change it: ": {
+    "ja": "変更できませんでした：",
+    "ko": "변경할 수 없습니다: ",
+    "es": "No se pudo cambiar: ",
+    "pt": "Não foi possível alterar: ",
+    "ru": "Не удалось изменить: ",
+    "fr": "Impossible de modifier : ",
+    "de": "Konnte nicht geändert werden: "
+  },
+  "Allow OpenTypeless in System Settings → General → Login Items.": {
+    "ja": "システム設定 → 一般 → ログイン項目 で OpenTypeless を許可してください。",
+    "ko": "시스템 설정 → 일반 → 로그인 항목에서 OpenTypeless를 허용하세요.",
+    "es": "Permite OpenTypeless en Ajustes del Sistema → General → Ítems de inicio de sesión.",
+    "pt": "Permita o OpenTypeless em Ajustes do Sistema → Geral → Itens de Início.",
+    "ru": "Разрешите OpenTypeless в разделе «Системные настройки → Основные → Объекты входа».",
+    "fr": "Autorisez OpenTypeless dans Réglages Système → Général → Ouverture.",
+    "de": "Erlaube OpenTypeless unter Systemeinstellungen → Allgemein → Anmeldeobjekte."
+  },
+  "Updates": {
+    "ja": "アップデート",
+    "ko": "업데이트",
+    "es": "Actualizaciones",
+    "pt": "Atualizações",
+    "ru": "Обновления",
+    "fr": "Mises à jour",
+    "de": "Updates"
+  },
+  "What’s new in {0}": {
+    "ja": "{0} の新機能",
+    "ko": "{0}의 새로운 기능",
+    "es": "Novedades de {0}",
+    "pt": "Novidades da {0}",
+    "ru": "Что нового в {0}",
+    "fr": "Nouveautés de la {0}",
+    "de": "Neu in {0}"
+  },
+  "Skip this version": {
+    "ja": "このバージョンをスキップ",
+    "ko": "이 버전 건너뛰기",
+    "es": "Omitir esta versión",
+    "pt": "Pular esta versão",
+    "ru": "Пропустить эту версию",
+    "fr": "Ignorer cette version",
+    "de": "Diese Version überspringen"
+  },
+  "Release notes": {
+    "ja": "リリースノート",
+    "ko": "릴리스 노트",
+    "es": "Notas de la versión",
+    "pt": "Notas da versão",
+    "ru": "Примечания к выпуску",
+    "fr": "Notes de version",
+    "de": "Versionshinweise"
+  },
+  "Check automatically": {
+    "ja": "自動で確認",
+    "ko": "자동으로 확인",
+    "es": "Buscar automáticamente",
+    "pt": "Verificar automaticamente",
+    "ru": "Проверять автоматически",
+    "fr": "Vérifier automatiquement",
+    "de": "Automatisch suchen"
+  },
+  "Once a day. Downloads in the background; installs when you choose": {
+    "ja": "1日1回。バックグラウンドでダウンロードし、インストールのタイミングは自分で選べます",
+    "ko": "하루에 한 번. 백그라운드에서 다운로드하고, 설치 시점은 직접 선택합니다",
+    "es": "Una vez al día. Descarga en segundo plano; se instala cuando tú decidas",
+    "pt": "Uma vez por dia. Baixa em segundo plano; instala quando você escolher",
+    "ru": "Раз в день. Загрузка в фоне, установка — когда вы решите",
+    "fr": "Une fois par jour. Téléchargement en arrière-plan ; installation quand vous le décidez",
+    "de": "Einmal täglich. Lädt im Hintergrund; installiert, wann du willst"
+  },
+  "Development builds don’t check for updates": {
+    "ja": "開発版はアップデートを確認しません",
+    "ko": "개발 빌드는 업데이트를 확인하지 않습니다",
+    "es": "Las compilaciones de desarrollo no buscan actualizaciones",
+    "pt": "Versões de desenvolvimento não verificam atualizações",
+    "ru": "Сборки для разработки не проверяют обновления",
+    "fr": "Les versions de développement ne recherchent pas de mises à jour",
+    "de": "Entwicklungsversionen suchen nicht nach Updates"
+  },
+  "Last checked ": {
+    "ja": "最終確認：",
+    "ko": "마지막 확인: ",
+    "es": "Última comprobación: ",
+    "pt": "Última verificação: ",
+    "ru": "Последняя проверка: ",
+    "fr": "Dernière vérification : ",
+    "de": "Zuletzt geprüft: "
+  },
+  "Not checked yet": {
+    "ja": "まだ確認していません",
+    "ko": "아직 확인하지 않음",
+    "es": "Aún no se ha comprobado",
+    "pt": "Ainda não verificado",
+    "ru": "Ещё не проверялось",
+    "fr": "Pas encore vérifié",
+    "de": "Noch nicht geprüft"
+  },
+  "Checking…": {
+    "ja": "確認中…",
+    "ko": "확인 중…",
+    "es": "Comprobando…",
+    "pt": "Verificando…",
+    "ru": "Проверка…",
+    "fr": "Vérification…",
+    "de": "Suche …"
+  },
+  "You’re up to date": {
+    "ja": "最新の状態です",
+    "ko": "최신 버전입니다",
+    "es": "Estás al día",
+    "pt": "Você está atualizado",
+    "ru": "У вас последняя версия",
+    "fr": "Vous êtes à jour",
+    "de": "Du bist auf dem neuesten Stand"
+  },
+  "Downloading {0}… {1}%": {
+    "ja": "{0} をダウンロード中… {1}%",
+    "ko": "{0} 다운로드 중… {1}%",
+    "es": "Descargando {0}… {1} %",
+    "pt": "Baixando {0}… {1}%",
+    "ru": "Загрузка {0}… {1}%",
+    "fr": "Téléchargement de {0}… {1} %",
+    "de": "{0} wird geladen … {1} %"
+  },
+  "Restarts to update when this dictation finishes": {
+    "ja": "この音声入力が終わると再起動して更新します",
+    "ko": "이번 받아쓰기가 끝나면 재시작하여 업데이트합니다",
+    "es": "Se reiniciará para actualizar al terminar este dictado",
+    "pt": "Reinicia para atualizar quando este ditado terminar",
+    "ru": "Перезапустится для обновления после этой диктовки",
+    "fr": "Redémarre pour la mise à jour à la fin de cette dictée",
+    "de": "Startet nach diesem Diktat neu, um zu aktualisieren"
+  },
+  "{0} is downloaded. Restart to finish updating": {
+    "ja": "{0} をダウンロードしました。再起動すると更新が完了します",
+    "ko": "{0} 다운로드 완료. 재시작하면 업데이트가 끝납니다",
+    "es": "{0} está descargada. Reinicia para terminar de actualizar",
+    "pt": "A {0} foi baixada. Reinicie para concluir a atualização",
+    "ru": "{0} загружена. Перезапустите, чтобы завершить обновление",
+    "fr": "La {0} est téléchargée. Redémarrez pour terminer la mise à jour",
+    "de": "{0} ist geladen. Neu starten, um das Update abzuschließen"
+  },
+  "Restarting…": {
+    "ja": "再起動中…",
+    "ko": "재시작 중…",
+    "es": "Reiniciando…",
+    "pt": "Reiniciando…",
+    "ru": "Перезапуск…",
+    "fr": "Redémarrage…",
+    "de": "Neustart …"
+  },
+  "Download…": {
+    "ja": "ダウンロード…",
+    "ko": "다운로드…",
+    "es": "Descargar…",
+    "pt": "Baixar…",
+    "ru": "Скачать…",
+    "fr": "Télécharger…",
+    "de": "Laden …"
+  },
+  "Check now": {
+    "ja": "今すぐ確認",
+    "ko": "지금 확인",
+    "es": "Buscar ahora",
+    "pt": "Verificar agora",
+    "ru": "Проверить сейчас",
+    "fr": "Vérifier maintenant",
+    "de": "Jetzt prüfen"
+  },
+  "Granted": {
+    "ja": "許可済み",
+    "ko": "허용됨",
+    "es": "Concedido",
+    "pt": "Concedido",
+    "ru": "Разрешено",
+    "fr": "Accordé",
+    "de": "Erteilt"
+  },
+  "Grant…": {
+    "ja": "許可…",
+    "ko": "허용…",
+    "es": "Conceder…",
+    "pt": "Conceder…",
+    "ru": "Разрешить…",
+    "fr": "Autoriser…",
+    "de": "Erteilen …"
+  },
+  "A plain key would break normal typing — combine it with ⌃ ⌥ ⇧ ⌘, or press a single modifier / F1–F20.": {
+    "ja": "単独の文字キーは通常の入力を妨げます。⌃ ⌥ ⇧ ⌘ と組み合わせるか、修飾キー1つ / F1–F20 を押してください。",
+    "ko": "일반 키만 쓰면 평소 타이핑에 방해가 됩니다. ⌃ ⌥ ⇧ ⌘와 조합하거나 보조 키 하나 / F1–F20을 누르세요.",
+    "es": "Una tecla normal interferiría al escribir: combínala con ⌃ ⌥ ⇧ ⌘, o pulsa un solo modificador / F1–F20.",
+    "pt": "Uma tecla comum atrapalharia a digitação — combine com ⌃ ⌥ ⇧ ⌘ ou pressione um único modificador / F1–F20.",
+    "ru": "Обычная клавиша помешает набору — сочетайте её с ⌃ ⌥ ⇧ ⌘ или нажмите одну клавишу-модификатор / F1–F20.",
+    "fr": "Une touche simple gênerait la saisie — combinez-la avec ⌃ ⌥ ⇧ ⌘, ou appuyez sur un seul modificateur / F1–F20.",
+    "de": "Eine normale Taste würde das Tippen stören – kombiniere sie mit ⌃ ⌥ ⇧ ⌘ oder drücke eine einzelne Sondertaste / F1–F20."
+  },
+  "Press the new shortcut…": {
+    "ja": "新しいショートカットを押してください…",
+    "ko": "새 단축키를 누르세요…",
+    "es": "Pulsa el nuevo atajo…",
+    "pt": "Pressione o novo atalho…",
+    "ru": "Нажмите новое сочетание…",
+    "fr": "Appuyez sur le nouveau raccourci…",
+    "de": "Neues Tastenkürzel drücken …"
+  },
+  "Current shortcut": {
+    "ja": "現在のショートカット",
+    "ko": "현재 단축키",
+    "es": "Atajo actual",
+    "pt": "Atalho atual",
+    "ru": "Текущее сочетание",
+    "fr": "Raccourci actuel",
+    "de": "Aktuelles Tastenkürzel"
+  },
+  "Cancel": {
+    "ja": "キャンセル",
+    "ko": "취소",
+    "es": "Cancelar",
+    "pt": "Cancelar",
+    "ru": "Отмена",
+    "fr": "Annuler",
+    "de": "Abbrechen"
+  },
+  "Record shortcut": {
+    "ja": "ショートカットを記録",
+    "ko": "단축키 기록",
+    "es": "Grabar atajo",
+    "pt": "Gravar atalho",
+    "ru": "Записать сочетание",
+    "fr": "Enregistrer un raccourci",
+    "de": "Tastenkürzel aufnehmen"
+  },
+  "A single modifier (Fn, right ⌘…) or a combination (⌥ Space, F5…)": {
+    "ja": "修飾キー1つ（Fn、右 ⌘ など）または組み合わせ（⌥ Space、F5 など）",
+    "ko": "보조 키 하나(Fn, 오른쪽 ⌘ 등) 또는 조합(⌥ Space, F5 등)",
+    "es": "Un solo modificador (Fn, ⌘ derecha…) o una combinación (⌥ Espacio, F5…)",
+    "pt": "Um único modificador (Fn, ⌘ direito…) ou uma combinação (⌥ Espaço, F5…)",
+    "ru": "Одна клавиша-модификатор (Fn, правая ⌘…) или сочетание (⌥ Пробел, F5…)",
+    "fr": "Un seul modificateur (Fn, ⌘ droite…) ou une combinaison (⌥ Espace, F5…)",
+    "de": "Eine einzelne Sondertaste (Fn, rechte ⌘ …) oder eine Kombination (⌥ Leertaste, F5 …)"
+  },
+  "Presets": {
+    "ja": "プリセット",
+    "ko": "프리셋",
+    "es": "Predefinidos",
+    "pt": "Predefinições",
+    "ru": "Готовые варианты",
+    "fr": "Préréglages",
+    "de": "Vorlagen"
+  },
+  "How it works": {
+    "ja": "使い方",
+    "ko": "사용 방법",
+    "es": "Cómo funciona",
+    "pt": "Como funciona",
+    "ru": "Как это работает",
+    "fr": "Fonctionnement",
+    "de": "So funktioniert’s"
+  },
+  "Hold to talk": {
+    "ja": "押したまま話す",
+    "ko": "누른 채 말하기",
+    "es": "Mantén para hablar",
+    "pt": "Segure para falar",
+    "ru": "Удерживайте и говорите",
+    "fr": "Maintenir pour parler",
+    "de": "Halten zum Sprechen"
+  },
+  "Hold the shortcut while you speak; release to clean up and insert": {
+    "ja": "話している間ショートカットを押し続け、離すと整形して挿入します",
+    "ko": "말하는 동안 단축키를 누르고 있다가 떼면 다듬어서 삽입합니다",
+    "es": "Mantén el atajo mientras hablas; suéltalo para limpiar e insertar",
+    "pt": "Segure o atalho enquanto fala; solte para limpar e inserir",
+    "ru": "Удерживайте сочетание, пока говорите; отпустите — текст будет очищен и вставлен",
+    "fr": "Maintenez le raccourci pendant que vous parlez ; relâchez pour nettoyer et insérer",
+    "de": "Halte das Tastenkürzel beim Sprechen; beim Loslassen wird bereinigt und eingefügt"
+  },
+  "Tap once: hands-free": {
+    "ja": "1回タップ：ハンズフリー",
+    "ko": "한 번 탭: 핸즈프리",
+    "es": "Un toque: manos libres",
+    "pt": "Um toque: mãos livres",
+    "ru": "Одно нажатие: без рук",
+    "fr": "Un appui : mains libres",
+    "de": "Einmal tippen: freihändig"
+  },
+  "For long dictation — press again when done": {
+    "ja": "長い音声入力向け。終わったらもう一度押します",
+    "ko": "긴 받아쓰기용 — 끝나면 다시 누르세요",
+    "es": "Para dictados largos: vuelve a pulsar al terminar",
+    "pt": "Para ditados longos — pressione de novo ao terminar",
+    "ru": "Для длинной диктовки — нажмите ещё раз, когда закончите",
+    "fr": "Pour les longues dictées — appuyez à nouveau pour terminer",
+    "de": "Für lange Diktate – zum Beenden erneut drücken"
+  },
+  "Esc to cancel": {
+    "ja": "Esc でキャンセル",
+    "ko": "Esc로 취소",
+    "es": "Esc para cancelar",
+    "pt": "Esc para cancelar",
+    "ru": "Esc — отмена",
+    "fr": "Échap pour annuler",
+    "de": "Esc bricht ab"
+  },
+  "Cancel any time while recording or processing": {
+    "ja": "録音中や処理中はいつでもキャンセルできます",
+    "ko": "녹음 또는 처리 중 언제든지 취소",
+    "es": "Cancela en cualquier momento mientras se graba o procesa",
+    "pt": "Cancele a qualquer momento durante a gravação ou o processamento",
+    "ru": "Отмена в любой момент записи или обработки",
+    "fr": "Annulez à tout moment pendant l’enregistrement ou le traitement",
+    "de": "Jederzeit während Aufnahme oder Verarbeitung abbrechen"
+  },
+  "Set System Settings → Keyboard → “Press 🌐 key to” → “Do Nothing”, so tapping Fn doesn’t open the emoji picker.": {
+    "ja": "「システム設定 → キーボード → 🌐キーを押して」を「何もしない」に設定すると、Fn をタップしても絵文字ピッカーが開きません。",
+    "ko": "‘시스템 설정 → 키보드 → 🌐 키를 눌러 다음 수행’을 ‘동작 안 함’으로 설정하면 Fn을 탭해도 이모티콘 선택기가 열리지 않습니다.",
+    "es": "Ajusta Ajustes del Sistema → Teclado → “Pulsar la tecla 🌐 para” → “No hacer nada”, para que tocar Fn no abra el selector de emojis.",
+    "pt": "Defina Ajustes do Sistema → Teclado → “Pressionar a tecla 🌐 para” → “Não Fazer Nada”, para que tocar em Fn não abra o seletor de emojis.",
+    "ru": "Установите «Системные настройки → Клавиатура → Нажатие клавиши 🌐» → «Ничего не делать», чтобы нажатие Fn не открывало панель эмодзи.",
+    "fr": "Réglez Réglages Système → Clavier → « Appuyer sur la touche 🌐 pour » → « Ne rien faire », pour que Fn n’ouvre pas le sélecteur d’emoji.",
+    "de": "Stelle Systemeinstellungen → Tastatur → „🌐-Taste drücken für“ → „Keine Aktion“ ein, damit Fn nicht die Emoji-Auswahl öffnet."
+  },
+  "Keyboard Settings": {
+    "ja": "キーボード設定",
+    "ko": "키보드 설정",
+    "es": "Ajustes de teclado",
+    "pt": "Ajustes de Teclado",
+    "ru": "Настройки клавиатуры",
+    "fr": "Réglages du clavier",
+    "de": "Tastatureinstellungen"
+  },
+  "This combination overrides the same shortcut in every app.": {
+    "ja": "この組み合わせは、すべてのアプリで同じショートカットより優先されます。",
+    "ko": "이 조합은 모든 앱에서 같은 단축키보다 우선합니다.",
+    "es": "Esta combinación anula el mismo atajo en todas las apps.",
+    "pt": "Esta combinação substitui o mesmo atalho em todos os apps.",
+    "ru": "Это сочетание перекрывает такое же сочетание во всех приложениях.",
+    "fr": "Cette combinaison remplace le même raccourci dans toutes les apps.",
+    "de": "Diese Kombination überschreibt dasselbe Kürzel in allen Apps."
+  },
+  "Default": {
+    "ja": "デフォルト",
+    "ko": "기본값",
+    "es": "Predeterminado",
+    "pt": "Padrão",
+    "ru": "По умолчанию",
+    "fr": "Par défaut",
+    "de": "Standard"
+  },
+  "Speech-to-text · Clean-up": {
+    "ja": "文字起こし · 整形",
+    "ko": "음성 인식 · 다듬기",
+    "es": "Voz a texto · Limpieza",
+    "pt": "Voz para texto · Limpeza",
+    "ru": "Распознавание · Очистка",
+    "fr": "Transcription · Nettoyage",
+    "de": "Spracherkennung · Bereinigung"
+  },
+  "Clean-up": {
+    "ja": "整形",
+    "ko": "다듬기",
+    "es": "Limpieza",
+    "pt": "Limpeza",
+    "ru": "Очистка",
+    "fr": "Nettoyage",
+    "de": "Bereinigung"
+  },
+  "Not set": {
+    "ja": "未設定",
+    "ko": "설정 안 됨",
+    "es": "Sin configurar",
+    "pt": "Não configurado",
+    "ru": "Не задано",
+    "fr": "Non défini",
+    "de": "Nicht festgelegt"
+  },
+  "Reset": {
+    "ja": "リセット",
+    "ko": "재설정",
+    "es": "Restablecer",
+    "pt": "Redefinir",
+    "ru": "Сбросить",
+    "fr": "Réinitialiser",
+    "de": "Zurücksetzen"
+  },
+  "Get an API key": {
+    "ja": "API キーを取得",
+    "ko": "API 키 받기",
+    "es": "Obtener clave de API",
+    "pt": "Obter chave de API",
+    "ru": "Получить API-ключ",
+    "fr": "Obtenir une clé API",
+    "de": "API-Schlüssel holen"
+  },
+  "Any OpenAI-compatible server: /audio/transcriptions and /chat/completions": {
+    "ja": "OpenAI 互換の任意のサーバー：/audio/transcriptions と /chat/completions",
+    "ko": "OpenAI 호환 서버: /audio/transcriptions 및 /chat/completions",
+    "es": "Cualquier servidor compatible con OpenAI: /audio/transcriptions y /chat/completions",
+    "pt": "Qualquer servidor compatível com a OpenAI: /audio/transcriptions e /chat/completions",
+    "ru": "Любой OpenAI-совместимый сервер: /audio/transcriptions и /chat/completions",
+    "fr": "Tout serveur compatible OpenAI : /audio/transcriptions et /chat/completions",
+    "de": "Jeder OpenAI-kompatible Server: /audio/transcriptions und /chat/completions"
+  },
+  "Testing…": {
+    "ja": "テスト中…",
+    "ko": "테스트 중…",
+    "es": "Probando…",
+    "pt": "Testando…",
+    "ru": "Проверка…",
+    "fr": "Test…",
+    "de": "Teste …"
+  },
+  "Test": {
+    "ja": "接続テスト",
+    "ko": "연결 테스트",
+    "es": "Probar",
+    "pt": "Testar",
+    "ru": "Проверить",
+    "fr": "Tester",
+    "de": "Testen"
+  },
+  "Speech-to-text": {
+    "ja": "文字起こし",
+    "ko": "음성 인식",
+    "es": "Voz a texto",
+    "pt": "Voz para texto",
+    "ru": "Распознавание речи",
+    "fr": "Transcription",
+    "de": "Spracherkennung"
+  },
+  "Speech to text": {
+    "ja": "文字起こし",
+    "ko": "음성 인식",
+    "es": "Voz a texto",
+    "pt": "Voz para texto",
+    "ru": "Распознавание речи",
+    "fr": "Transcription",
+    "de": "Spracherkennung"
+  },
+  "Long recordings are split at pauses into ≤28 s segments that are transcribed while you talk, each retried on failure.": {
+    "ja": "長い録音は間のところで 28 秒以下に分割され、話している間に文字起こしされます。失敗した部分は個別に再試行されます。",
+    "ko": "긴 녹음은 쉬는 지점에서 28초 이하 구간으로 나뉘어 말하는 동안 변환되며, 실패한 구간은 다시 시도합니다.",
+    "es": "Las grabaciones largas se dividen en las pausas en segmentos de ≤28 s que se transcriben mientras hablas; cada uno se reintenta si falla.",
+    "pt": "Gravações longas são divididas nas pausas em trechos de ≤28 s, transcritos enquanto você fala; cada um é repetido se falhar.",
+    "ru": "Длинные записи делятся по паузам на фрагменты ≤28 с, которые распознаются, пока вы говорите; при ошибке каждый повторяется.",
+    "fr": "Les longs enregistrements sont découpés aux pauses en segments de ≤28 s, transcrits pendant que vous parlez et relancés en cas d’échec.",
+    "de": "Lange Aufnahmen werden an Pausen in Abschnitte von ≤28 s geteilt, die schon beim Sprechen transkribiert und bei Fehlern wiederholt werden."
+  },
+  "Provider": {
+    "ja": "プロバイダ",
+    "ko": "제공업체",
+    "es": "Proveedor",
+    "pt": "Provedor",
+    "ru": "Провайдер",
+    "fr": "Fournisseur",
+    "de": "Anbieter"
+  },
+  "Model": {
+    "ja": "モデル",
+    "ko": "모델",
+    "es": "Modelo",
+    "pt": "Modelo",
+    "ru": "Модель",
+    "fr": "Modèle",
+    "de": "Modell"
+  },
+  "Spoken language": {
+    "ja": "話す言語",
+    "ko": "말하는 언어",
+    "es": "Idioma hablado",
+    "pt": "Idioma falado",
+    "ru": "Язык речи",
+    "fr": "Langue parlée",
+    "de": "Gesprochene Sprache"
+  },
+  "Fixing it can help accuracy; use Auto for mixed speech": {
+    "ja": "固定すると精度が上がることがあります。複数の言語を混ぜて話す場合は自動検出を選んでください",
+    "ko": "고정하면 정확도가 높아질 수 있습니다. 여러 언어를 섞어 말하면 자동 감지를 선택하세요",
+    "es": "Fijarlo puede mejorar la precisión; usa Detección automática si mezclas idiomas",
+    "pt": "Fixar pode melhorar a precisão; use Detecção automática se misturar idiomas",
+    "ru": "Фиксированный язык повышает точность; для смешанной речи выберите «Автоопределение»",
+    "fr": "La fixer peut améliorer la précision ; choisissez Détection auto si vous mélangez les langues",
+    "de": "Eine feste Sprache kann genauer sein; bei gemischter Sprache „Automatisch erkennen“ wählen"
+  },
+  "Auto-detect": {
+    "ja": "自動検出",
+    "ko": "자동 감지",
+    "es": "Detección automática",
+    "pt": "Detecção automática",
+    "ru": "Автоопределение",
+    "fr": "Détection auto",
+    "de": "Automatisch erkennen"
+  },
+  "Clean up with AI": {
+    "ja": "AI で整形",
+    "ko": "AI로 다듬기",
+    "es": "Limpiar con IA",
+    "pt": "Limpar com IA",
+    "ru": "Очистка с помощью ИИ",
+    "fr": "Nettoyer avec l’IA",
+    "de": "Mit KI bereinigen"
+  },
+  "Removes fillers and false starts, adds paragraphs and lists": {
+    "ja": "言いよどみや言い直しを取り除き、段落やリストに整えます",
+    "ko": "군더더기 말과 말 고침을 없애고 문단과 목록으로 정리합니다",
+    "es": "Quita muletillas y arranques en falso, añade párrafos y listas",
+    "pt": "Remove vícios de linguagem e falsos começos, adiciona parágrafos e listas",
+    "ru": "Убирает слова-паразиты и оговорки, разбивает на абзацы и списки",
+    "fr": "Supprime les tics de langage et les faux départs, ajoute paragraphes et listes",
+    "de": "Entfernt Füllwörter und Versprecher, fügt Absätze und Listen ein"
+  },
+  "Reasoning is turned off or minimised for speed": {
+    "ja": "速度を優先し、推論はオフまたは最小になります",
+    "ko": "속도를 위해 추론은 끄거나 최소로 설정됩니다",
+    "es": "El razonamiento se desactiva o se minimiza para ganar velocidad",
+    "pt": "O raciocínio é desligado ou minimizado para ganhar velocidade",
+    "ru": "Рассуждения отключаются или сводятся к минимуму ради скорости",
+    "fr": "Le raisonnement est désactivé ou réduit au minimum pour la vitesse",
+    "de": "Reasoning wird für mehr Tempo abgeschaltet oder minimiert"
+  },
+  "Backup model": {
+    "ja": "予備モデル",
+    "ko": "백업 모델",
+    "es": "Modelo de respaldo",
+    "pt": "Modelo reserva",
+    "ru": "Резервная модель",
+    "fr": "Modèle de secours",
+    "de": "Backup-Modell"
+  },
+  "If the main model hasn't started answering within {0}, or fails, the backup is asked too and the first to answer wins": {
+    "ja": "メインのモデルが {0} 以内に応答を始めないか失敗した場合、予備モデルにも同時に依頼し、先に応答した方を使います",
+    "ko": "기본 모델이 {0} 안에 응답을 시작하지 않거나 실패하면 백업 모델에도 요청하고, 먼저 응답한 쪽을 사용합니다",
+    "es": "Si el modelo principal no empieza a responder en {0}, o falla, también se consulta al de respaldo y gana el primero en responder",
+    "pt": "Se o modelo principal não começar a responder em {0}, ou falhar, o reserva também é consultado e vence o primeiro a responder",
+    "ru": "Если основная модель не начала отвечать за {0} или выдала ошибку, запрос уходит и резервной — используется тот ответ, что пришёл первым",
+    "fr": "Si le modèle principal n’a pas commencé à répondre en {0}, ou échoue, le modèle de secours est aussi sollicité et le premier à répondre l’emporte",
+    "de": "Wenn das Hauptmodell nicht innerhalb von {0} zu antworten beginnt oder fehlschlägt, wird auch das Backup gefragt – die erste Antwort gewinnt"
+  },
+  "Backup provider": {
+    "ja": "予備のプロバイダ",
+    "ko": "백업 제공업체",
+    "es": "Proveedor de respaldo",
+    "pt": "Provedor reserva",
+    "ru": "Резервный провайдер",
+    "fr": "Fournisseur de secours",
+    "de": "Backup-Anbieter"
+  },
+  "Backup model ID": {
+    "ja": "予備モデル ID",
+    "ko": "백업 모델 ID",
+    "es": "ID del modelo de respaldo",
+    "pt": "ID do modelo reserva",
+    "ru": "ID резервной модели",
+    "fr": "ID du modèle de secours",
+    "de": "Backup-Modell-ID"
+  },
+  "Pick a fast model from another vendor so both are rarely slow at once": {
+    "ja": "別のベンダーの高速なモデルを選ぶと、両方が同時に遅くなることはほとんどありません",
+    "ko": "다른 회사의 빠른 모델을 고르면 둘 다 동시에 느려지는 일이 드뭅니다",
+    "es": "Elige un modelo rápido de otro fabricante para que rara vez vayan lentos los dos a la vez",
+    "pt": "Escolha um modelo rápido de outro fornecedor para que raramente ambos fiquem lentos ao mesmo tempo",
+    "ru": "Выберите быструю модель другого разработчика, чтобы обе редко тормозили одновременно",
+    "fr": "Choisissez un modèle rapide d’un autre éditeur pour qu’ils soient rarement lents en même temps",
+    "de": "Wähle ein schnelles Modell eines anderen Herstellers, damit selten beide gleichzeitig langsam sind"
+  },
+  "{0} has no API key yet": {
+    "ja": "{0} の API キーがまだ設定されていません",
+    "ko": "{0}에 아직 API 키가 없습니다",
+    "es": "{0} aún no tiene clave de API",
+    "pt": "{0} ainda não tem chave de API",
+    "ru": "У {0} ещё нет API-ключа",
+    "fr": "{0} n’a pas encore de clé API",
+    "de": "{0} hat noch keinen API-Schlüssel"
+  },
+  "Add key": {
+    "ja": "キーを追加",
+    "ko": "키 추가",
+    "es": "Añadir clave",
+    "pt": "Adicionar chave",
+    "ru": "Добавить ключ",
+    "fr": "Ajouter une clé",
+    "de": "Schlüssel hinzufügen"
+  },
+  " (not set)": {
+    "ja": "（未設定）",
+    "ko": " (설정 안 됨)",
+    "es": " (sin configurar)",
+    "pt": " (não configurado)",
+    "ru": " (не задан)",
+    "fr": " (non défini)",
+    "de": " (nicht festgelegt)"
+  },
+  "Price": {
+    "ja": "価格",
+    "ko": "가격",
+    "es": "Precio",
+    "pt": "Preço",
+    "ru": "Цена",
+    "fr": "Prix",
+    "de": "Preis"
+  },
+  "$/min": {
+    "ja": "ドル/分",
+    "ko": "달러/분",
+    "es": "$/min",
+    "pt": "US$/min",
+    "ru": "$/мин",
+    "fr": "$/min",
+    "de": "$/Min."
+  },
+  "In": {
+    "ja": "入力",
+    "ko": "입력",
+    "es": "Entrada",
+    "pt": "Entrada",
+    "ru": "Вход",
+    "fr": "Entrée",
+    "de": "Eingabe"
+  },
+  "Out": {
+    "ja": "出力",
+    "ko": "출력",
+    "es": "Salida",
+    "pt": "Saída",
+    "ru": "Выход",
+    "fr": "Sortie",
+    "de": "Ausgabe"
+  },
+  "Per minute of audio, in USD. Leave empty to leave it out of the spend.": {
+    "ja": "音声1分あたりの料金（米ドル）。空欄にすると費用に含めません。",
+    "ko": "오디오 1분당 가격(USD). 비워 두면 비용에 포함하지 않습니다.",
+    "es": "Por minuto de audio, en USD. Déjalo vacío para no contarlo en el gasto.",
+    "pt": "Por minuto de áudio, em USD. Deixe vazio para não contar nos gastos.",
+    "ru": "За минуту аудио, в долларах США. Оставьте пустым, чтобы не учитывать в расходах.",
+    "fr": "Par minute d’audio, en USD. Laissez vide pour l’exclure des dépenses.",
+    "de": "Pro Minute Audio, in USD. Leer lassen, um es nicht in die Kosten einzurechnen."
+  },
+  "USD per million tokens (estimated from the text when the server doesn't say). Leave empty to leave it out of the spend.": {
+    "ja": "100万トークンあたりの米ドル（サーバーが使用量を返さない場合はテキストから推定）。空欄にすると費用に含めません。",
+    "ko": "100만 토큰당 USD(서버가 사용량을 알려 주지 않으면 텍스트로 추정). 비워 두면 비용에 포함하지 않습니다.",
+    "es": "USD por millón de tokens (estimado a partir del texto si el servidor no lo indica). Déjalo vacío para no contarlo en el gasto.",
+    "pt": "USD por milhão de tokens (estimado a partir do texto quando o servidor não informa). Deixe vazio para não contar nos gastos.",
+    "ru": "Долларов США за миллион токенов (оценивается по тексту, если сервер не сообщает). Оставьте пустым, чтобы не учитывать в расходах.",
+    "fr": "USD par million de jetons (estimé à partir du texte si le serveur ne l’indique pas). Laissez vide pour l’exclure des dépenses.",
+    "de": "USD pro Million Tokens (aus dem Text geschätzt, wenn der Server nichts meldet). Leer lassen, um es nicht in die Kosten einzurechnen."
+  },
+  "Getting the latest prices from OpenRouter…": {
+    "ja": "OpenRouter から最新の価格を取得中…",
+    "ko": "OpenRouter에서 최신 가격을 가져오는 중…",
+    "es": "Obteniendo los precios más recientes de OpenRouter…",
+    "pt": "Obtendo os preços mais recentes do OpenRouter…",
+    "ru": "Получение актуальных цен OpenRouter…",
+    "fr": "Récupération des derniers prix d’OpenRouter…",
+    "de": "Aktuelle Preise von OpenRouter werden geladen …"
+  },
+  "Live from OpenRouter, updated {0}. Each request counts what OpenRouter billed.": {
+    "ja": "OpenRouter のリアルタイム価格（{0} 更新）。各リクエストは実際の請求額で計算します。",
+    "ko": "OpenRouter 실시간 가격, {0} 업데이트. 각 요청은 실제 청구 금액으로 계산합니다.",
+    "es": "En vivo desde OpenRouter, actualizado: {0}. Cada solicitud cuenta lo que OpenRouter cobró.",
+    "pt": "Ao vivo do OpenRouter, atualizado: {0}. Cada solicitação conta o que o OpenRouter cobrou.",
+    "ru": "Актуальные цены OpenRouter, обновлено: {0}. Каждый запрос учитывается по фактическому списанию.",
+    "fr": "En direct d’OpenRouter, mis à jour : {0}. Chaque requête compte ce qu’OpenRouter a facturé.",
+    "de": "Live von OpenRouter, aktualisiert: {0}. Jede Anfrage zählt, was OpenRouter berechnet hat."
+  },
+  "As billed": {
+    "ja": "請求額どおり",
+    "ko": "청구 금액 기준",
+    "es": "Según lo cobrado",
+    "pt": "Conforme cobrado",
+    "ru": "По факту списания",
+    "fr": "Selon facturation",
+    "de": "Wie abgerechnet"
+  },
+  "Not listed on OpenRouter": {
+    "ja": "OpenRouter に掲載されていません",
+    "ko": "OpenRouter에 없는 모델",
+    "es": "No aparece en OpenRouter",
+    "pt": "Não listado no OpenRouter",
+    "ru": "Нет в списке OpenRouter",
+    "fr": "Absent d’OpenRouter",
+    "de": "Nicht bei OpenRouter gelistet"
+  },
+  "In {0} · Out {1} / 1M tokens": {
+    "ja": "入力 {0} · 出力 {1} / 100万トークン",
+    "ko": "입력 {0} · 출력 {1} / 100만 토큰",
+    "es": "Entrada {0} · Salida {1} / 1 M tokens",
+    "pt": "Entrada {0} · Saída {1} / 1 mi tokens",
+    "ru": "Вход {0} · Выход {1} / 1 млн токенов",
+    "fr": "Entrée {0} · Sortie {1} / 1 M jetons",
+    "de": "Eingabe {0} · Ausgabe {1} / 1 Mio. Tokens"
+  },
+  "Model ID": {
+    "ja": "モデル ID",
+    "ko": "모델 ID",
+    "es": "ID del modelo",
+    "pt": "ID do modelo",
+    "ru": "ID модели",
+    "fr": "ID du modèle",
+    "de": "Modell-ID"
+  },
+  "Add an API key to browse models": {
+    "ja": "API キーを追加するとモデルを参照できます",
+    "ko": "API 키를 추가하면 모델을 둘러볼 수 있습니다",
+    "es": "Añade una clave de API para explorar modelos",
+    "pt": "Adicione uma chave de API para ver os modelos",
+    "ru": "Добавьте API-ключ, чтобы просматривать модели",
+    "fr": "Ajoutez une clé API pour parcourir les modèles",
+    "de": "Füge einen API-Schlüssel hinzu, um Modelle zu durchsuchen"
+  },
+  "Browse models": {
+    "ja": "モデルを参照",
+    "ko": "모델 둘러보기",
+    "es": "Explorar modelos",
+    "pt": "Ver modelos",
+    "ru": "Обзор моделей",
+    "fr": "Parcourir les modèles",
+    "de": "Modelle durchsuchen"
+  },
+  "Vocabulary": {
+    "ja": "語彙",
+    "ko": "어휘",
+    "es": "Vocabulario",
+    "pt": "Vocabulário",
+    "ru": "Словарь",
+    "fr": "Vocabulaire",
+    "de": "Vokabular"
+  },
+  "Comma- or line-separated. Clean-up uses these spellings to fix recognition errors — names, products, projects.": {
+    "ja": "カンマまたは改行で区切ります。整形時にこの表記で認識ミスを修正します（人名、製品名、プロジェクト名など）。",
+    "ko": "쉼표나 줄바꿈으로 구분합니다. 다듬기 단계에서 이 표기로 인식 오류를 고칩니다 — 이름, 제품, 프로젝트 등.",
+    "es": "Separados por comas o líneas. La limpieza usa estas grafías para corregir errores de reconocimiento: nombres, productos, proyectos.",
+    "pt": "Separados por vírgula ou linha. A limpeza usa essas grafias para corrigir erros de reconhecimento — nomes, produtos, projetos.",
+    "ru": "Через запятую или с новой строки. Очистка использует это написание, чтобы исправлять ошибки распознавания — имена, продукты, проекты.",
+    "fr": "Séparés par des virgules ou des retours à la ligne. Le nettoyage utilise ces graphies pour corriger les erreurs de reconnaissance — noms, produits, projets.",
+    "de": "Durch Kommas oder Zeilenumbrüche getrennt. Die Bereinigung korrigiert mit diesen Schreibweisen Erkennungsfehler – Namen, Produkte, Projekte."
+  },
+  "Learning": {
+    "ja": "学習",
+    "ko": "학습",
+    "es": "Aprendizaje",
+    "pt": "Aprendizado",
+    "ru": "Обучение",
+    "fr": "Apprentissage",
+    "de": "Lernen"
+  },
+  "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. The field is read on this Mac only.": {
+    "ja": "ペースト後に誤認識された単語を修正すると（例：TypeList → Typeless）、入力欄を離れるか送信した時点で語彙に追加されます。学習するのは発音が似ている修正だけで、書き換えや数字の変更、普通の単語の置き換えは学習しません。入力欄の内容はこの Mac 上でのみ読み取ります。",
+    "ko": "붙여넣은 뒤 잘못 인식된 단어를 고치면(예: TypeList → Typeless) 입력란을 벗어나거나 전송할 때 어휘에 추가됩니다. 발음이 비슷한 수정만 학습하며, 고쳐 쓰기나 숫자 변경, 일반 단어 교체는 학습하지 않습니다. 입력란 내용은 이 Mac에서만 읽습니다.",
+    "es": "Si corriges una palabra mal reconocida después de pegar (por ejemplo, TypeList → Typeless), se añade al vocabulario cuando sales del campo o envías. Solo se aprenden correcciones de sonido parecido, nunca reescrituras, números cambiados ni sustituciones de palabras corrientes. El campo solo se lee en este Mac.",
+    "pt": "Se você corrigir uma palavra mal reconhecida depois de colar (por exemplo, TypeList → Typeless), ela é adicionada ao vocabulário quando você sai do campo ou envia. Só são aprendidas correções de som parecido, nunca reescritas, números alterados ou trocas de palavras comuns. O campo é lido apenas neste Mac.",
+    "ru": "Если после вставки вы исправите неверно распознанное слово (например, TypeList → Typeless), оно попадёт в словарь, когда вы покинете поле или отправите текст. Запоминаются только исправления похожих по звучанию слов — не переформулировки, не изменённые числа и не замены обычных слов. Поле читается только на этом Mac.",
+    "fr": "Si vous corrigez un mot mal reconnu après le collage (par exemple TypeList → Typeless), il est ajouté au vocabulaire quand vous quittez le champ ou envoyez. Seules les corrections de sonorité proche sont apprises, jamais les reformulations, les nombres modifiés ou les remplacements de mots courants. Le champ n’est lu que sur ce Mac.",
+    "de": "Wenn du nach dem Einfügen ein falsch erkanntes Wort korrigierst (etwa TypeList → Typeless), wird es beim Verlassen des Felds oder beim Senden ins Vokabular übernommen. Gelernt werden nur ähnlich klingende Korrekturen, nie Umformulierungen, geänderte Zahlen oder normale Wortwechsel. Das Feld wird nur auf diesem Mac gelesen."
+  },
+  "Learn from my corrections": {
+    "ja": "自分の修正から学習",
+    "ko": "내 수정 내용에서 학습",
+    "es": "Aprender de mis correcciones",
+    "pt": "Aprender com minhas correções",
+    "ru": "Учиться на моих исправлениях",
+    "fr": "Apprendre de mes corrections",
+    "de": "Aus meinen Korrekturen lernen"
+  },
+  "Clean-up preferences (optional)": {
+    "ja": "整形の好み（任意）",
+    "ko": "다듬기 선호 설정(선택)",
+    "es": "Preferencias de limpieza (opcional)",
+    "pt": "Preferências de limpeza (opcional)",
+    "ru": "Предпочтения очистки (необязательно)",
+    "fr": "Préférences de nettoyage (facultatif)",
+    "de": "Vorlieben für die Bereinigung (optional)"
+  },
+  "e.g. “Never use bullet lists”, “Keep my casual tone”, “Keep technical terms lowercase”.": {
+    "ja": "例：「箇条書きは使わない」「くだけた口調を残す」「専門用語は小文字のまま」。",
+    "ko": "예: “글머리 기호 목록 쓰지 않기”, “편한 말투 유지”, “기술 용어는 소문자로”.",
+    "es": "p. ej., «Nunca uses listas con viñetas», «Mantén mi tono informal», «Deja los términos técnicos en minúsculas».",
+    "pt": "ex.: “Nunca use listas com marcadores”, “Mantenha meu tom informal”, “Deixe termos técnicos em minúsculas”.",
+    "ru": "Например: «Никогда не используй маркированные списки», «Сохраняй мой разговорный тон», «Пиши технические термины строчными».",
+    "fr": "p. ex. « Jamais de listes à puces », « Garde mon ton décontracté », « Termes techniques en minuscules ».",
+    "de": "z. B. „Keine Aufzählungen verwenden“, „Meinen lockeren Ton beibehalten“, „Fachbegriffe kleinschreiben“."
+  },
+  "heard as ": {
+    "ja": "聞き取り：",
+    "ko": "인식: ",
+    "es": "se oyó como ",
+    "pt": "ouvido como ",
+    "ru": "распознано как ",
+    "fr": "entendu comme ",
+    "de": "gehört als "
+  },
+  "Remove from the vocabulary and never learn it again": {
+    "ja": "語彙から削除し、今後は学習しない",
+    "ko": "어휘에서 삭제하고 다시 학습하지 않기",
+    "es": "Quitar del vocabulario y no volver a aprenderlo",
+    "pt": "Remover do vocabulário e nunca mais aprender",
+    "ru": "Удалить из словаря и больше не запоминать",
+    "fr": "Retirer du vocabulaire et ne plus jamais l’apprendre",
+    "de": "Aus dem Vokabular entfernen und nie wieder lernen"
+  },
+  "Keep recordings": {
+    "ja": "録音の保存期間",
+    "ko": "녹음 보관 기간",
+    "es": "Conservar grabaciones",
+    "pt": "Manter gravações",
+    "ru": "Хранить записи",
+    "fr": "Conserver les enregistrements",
+    "de": "Aufnahmen behalten"
+  },
+  "No dictations yet": {
+    "ja": "まだ音声入力の履歴がありません",
+    "ko": "아직 받아쓰기 기록이 없습니다",
+    "es": "Aún no hay dictados",
+    "pt": "Nenhum ditado ainda",
+    "ru": "Диктовок пока нет",
+    "fr": "Aucune dictée pour l’instant",
+    "de": "Noch keine Diktate"
+  },
+  "Raw transcript": {
+    "ja": "元の文字起こし",
+    "ko": "원본 변환 결과",
+    "es": "Transcripción original",
+    "pt": "Transcrição bruta",
+    "ru": "Исходная расшифровка",
+    "fr": "Transcription brute",
+    "de": "Rohtranskript"
+  },
+  "Re-transcribe": {
+    "ja": "もう一度文字起こし",
+    "ko": "다시 변환",
+    "es": "Volver a transcribir",
+    "pt": "Transcrever de novo",
+    "ru": "Распознать заново",
+    "fr": "Retranscrire",
+    "de": "Neu transkribieren"
+  },
+  "Copies the result to the clipboard": {
+    "ja": "結果をクリップボードにコピーします",
+    "ko": "결과를 클립보드에 복사합니다",
+    "es": "Copia el resultado al portapapeles",
+    "pt": "Copia o resultado para a área de transferência",
+    "ru": "Копирует результат в буфер обмена",
+    "fr": "Copie le résultat dans le presse-papiers",
+    "de": "Kopiert das Ergebnis in die Zwischenablage"
+  },
+  "Show recording in Finder": {
+    "ja": "Finder で録音を表示",
+    "ko": "Finder에서 녹음 보기",
+    "es": "Mostrar grabación en el Finder",
+    "pt": "Mostrar gravação no Finder",
+    "ru": "Показать запись в Finder",
+    "fr": "Afficher l’enregistrement dans le Finder",
+    "de": "Aufnahme im Finder zeigen"
+  },
+  "Delete": {
+    "ja": "削除",
+    "ko": "삭제",
+    "es": "Eliminar",
+    "pt": "Excluir",
+    "ru": "Удалить",
+    "fr": "Supprimer",
+    "de": "Löschen"
+  },
+  "Done": {
+    "ja": "完了",
+    "ko": "완료",
+    "es": "Listo",
+    "pt": "Concluído",
+    "ru": "Готово",
+    "fr": "Terminé",
+    "de": "Fertig"
+  },
+  "Not cleaned up": {
+    "ja": "未整形",
+    "ko": "다듬지 않음",
+    "es": "Sin limpiar",
+    "pt": "Não limpo",
+    "ru": "Без очистки",
+    "fr": "Non nettoyé",
+    "de": "Nicht bereinigt"
+  },
+  "Failed": {
+    "ja": "失敗",
+    "ko": "실패",
+    "es": "Falló",
+    "pt": "Falhou",
+    "ru": "Ошибка",
+    "fr": "Échec",
+    "de": "Fehlgeschlagen"
+  },
+  "In progress": {
+    "ja": "処理中",
+    "ko": "진행 중",
+    "es": "En curso",
+    "pt": "Em andamento",
+    "ru": "Выполняется",
+    "fr": "En cours",
+    "de": "Läuft"
+  },
+  "Home": {
+    "ja": "ホーム",
+    "ko": "홈",
+    "es": "Inicio",
+    "pt": "Início",
+    "ru": "Главная",
+    "fr": "Accueil",
+    "de": "Startseite"
+  },
+  "General": {
+    "ja": "一般",
+    "ko": "일반",
+    "es": "General",
+    "pt": "Geral",
+    "ru": "Общие",
+    "fr": "Général",
+    "de": "Allgemein"
+  },
+  "Shortcut": {
+    "ja": "ショートカット",
+    "ko": "단축키",
+    "es": "Atajo",
+    "pt": "Atalho",
+    "ru": "Сочетание клавиш",
+    "fr": "Raccourci",
+    "de": "Tastenkürzel"
+  },
+  "Providers": {
+    "ja": "プロバイダ",
+    "ko": "제공업체",
+    "es": "Proveedores",
+    "pt": "Provedores",
+    "ru": "Провайдеры",
+    "fr": "Fournisseurs",
+    "de": "Anbieter"
+  },
+  "Models": {
+    "ja": "モデル",
+    "ko": "모델",
+    "es": "Modelos",
+    "pt": "Modelos",
+    "ru": "Модели",
+    "fr": "Modèles",
+    "de": "Modelle"
+  },
+  "Vocabulary & Style": {
+    "ja": "語彙とスタイル",
+    "ko": "어휘 및 스타일",
+    "es": "Vocabulario y estilo",
+    "pt": "Vocabulário e estilo",
+    "ru": "Словарь и стиль",
+    "fr": "Vocabulaire et style",
+    "de": "Vokabular & Stil"
+  },
+  "What you've dictated, the time it saved and what it cost": {
+    "ja": "音声入力した量、節約できた時間、かかった費用",
+    "ko": "받아쓴 양, 절약한 시간, 든 비용",
+    "es": "Lo que has dictado, el tiempo ahorrado y lo que ha costado",
+    "pt": "O que você ditou, o tempo economizado e quanto custou",
+    "ru": "Сколько вы надиктовали, сколько времени сэкономили и сколько это стоило",
+    "fr": "Ce que vous avez dicté, le temps gagné et ce que ça a coûté",
+    "de": "Was du diktiert hast, wie viel Zeit es gespart und was es gekostet hat"
+  },
+  "Language, startup and system permissions": {
+    "ja": "言語、起動、システムの権限",
+    "ko": "언어, 시동 및 시스템 권한",
+    "es": "Idioma, arranque y permisos del sistema",
+    "pt": "Idioma, inicialização e permissões do sistema",
+    "ru": "Язык, запуск и системные разрешения",
+    "fr": "Langue, démarrage et autorisations système",
+    "de": "Sprache, Start und Systemberechtigungen"
+  },
+  "Choose the key that starts dictation": {
+    "ja": "音声入力を開始するキーを選択",
+    "ko": "받아쓰기를 시작할 키 선택",
+    "es": "Elige la tecla que inicia el dictado",
+    "pt": "Escolha a tecla que inicia o ditado",
+    "ru": "Выберите клавишу для начала диктовки",
+    "fr": "Choisissez la touche qui lance la dictée",
+    "de": "Wähle die Taste, die das Diktat startet"
+  },
+  "Add API keys. Speech-to-text and clean-up can use different providers.": {
+    "ja": "API キーを追加します。文字起こしと整形には別々のプロバイダを使えます。",
+    "ko": "API 키를 추가하세요. 음성 인식과 다듬기에 서로 다른 제공업체를 쓸 수 있습니다.",
+    "es": "Añade claves de API. Voz a texto y limpieza pueden usar proveedores distintos.",
+    "pt": "Adicione chaves de API. Voz para texto e limpeza podem usar provedores diferentes.",
+    "ru": "Добавьте API-ключи. Для распознавания и очистки можно использовать разных провайдеров.",
+    "fr": "Ajoutez des clés API. La transcription et le nettoyage peuvent utiliser des fournisseurs différents.",
+    "de": "API-Schlüssel hinzufügen. Spracherkennung und Bereinigung können verschiedene Anbieter nutzen."
+  },
+  "Pick a model for each step": {
+    "ja": "各ステップのモデルを選択",
+    "ko": "단계별 모델 선택",
+    "es": "Elige un modelo para cada paso",
+    "pt": "Escolha um modelo para cada etapa",
+    "ru": "Выберите модель для каждого шага",
+    "fr": "Choisissez un modèle pour chaque étape",
+    "de": "Wähle ein Modell für jeden Schritt"
+  },
+  "Teach the clean-up your terms and preferences": {
+    "ja": "整形に用語や好みを教えます",
+    "ko": "다듬기에 용어와 선호를 알려 주세요",
+    "es": "Enseña a la limpieza tus términos y preferencias",
+    "pt": "Ensine à limpeza seus termos e preferências",
+    "ru": "Научите очистку вашим терминам и предпочтениям",
+    "fr": "Apprenez au nettoyage vos termes et préférences",
+    "de": "Bring der Bereinigung deine Begriffe und Vorlieben bei"
+  },
+  "Every dictation is saved; failed ones can be retried": {
+    "ja": "すべての音声入力が保存され、失敗したものは再試行できます",
+    "ko": "모든 받아쓰기가 저장되며 실패한 것은 다시 시도할 수 있습니다",
+    "es": "Cada dictado se guarda; los fallidos se pueden reintentar",
+    "pt": "Todo ditado é salvo; os que falharem podem ser repetidos",
+    "ru": "Каждая диктовка сохраняется; неудачные можно повторить",
+    "fr": "Chaque dictée est enregistrée ; celles qui échouent peuvent être relancées",
+    "de": "Jedes Diktat wird gespeichert; fehlgeschlagene lassen sich wiederholen"
+  },
+  "Setup needed": {
+    "ja": "設定が必要です",
+    "ko": "설정 필요",
+    "es": "Falta configurar",
+    "pt": "Configuração necessária",
+    "ru": "Требуется настройка",
+    "fr": "Configuration requise",
+    "de": "Einrichtung nötig"
+  },
+  "development build": {
+    "ja": "開発版",
+    "ko": "개발 빌드",
+    "es": "compilación de desarrollo",
+    "pt": "versão de desenvolvimento",
+    "ru": "сборка для разработки",
+    "fr": "version de développement",
+    "de": "Entwicklungsversion"
+  },
+  "Couldn't install {0}; still on {1}": {
+    "ja": "{0} をインストールできませんでした。{1} を引き続き使用します",
+    "ko": "{0} 설치 실패, {1} 계속 사용 중",
+    "es": "No se pudo instalar {0}; sigues en {1}",
+    "pt": "Não foi possível instalar a {0}; continua na {1}",
+    "ru": "Не удалось установить {0}; остаётся {1}",
+    "fr": "Impossible d’installer la {0} ; la {1} reste en place",
+    "de": "{0} konnte nicht installiert werden; weiterhin {1}"
+  },
+  "Development builds don't update themselves": {
+    "ja": "開発版は自動更新されません",
+    "ko": "개발 빌드는 자동으로 업데이트되지 않습니다",
+    "es": "Las compilaciones de desarrollo no se actualizan solas",
+    "pt": "Versões de desenvolvimento não se atualizam sozinhas",
+    "ru": "Сборки для разработки не обновляются сами",
+    "fr": "Les versions de développement ne se mettent pas à jour seules",
+    "de": "Entwicklungsversionen aktualisieren sich nicht selbst"
+  },
+  "GitHub published no checksum for this download": {
+    "ja": "GitHub はこのダウンロードのチェックサムを公開していません",
+    "ko": "GitHub에 이 다운로드의 체크섬이 없습니다",
+    "es": "GitHub no publicó ninguna suma de verificación para esta descarga",
+    "pt": "O GitHub não publicou checksum para este download",
+    "ru": "GitHub не опубликовал контрольную сумму для этой загрузки",
+    "fr": "GitHub n’a publié aucune somme de contrôle pour ce téléchargement",
+    "de": "GitHub hat für diesen Download keine Prüfsumme veröffentlicht"
+  },
+  "macOS is running OpenTypeless from a temporary location; move it to Applications first": {
+    "ja": "macOS が OpenTypeless を一時的な場所から実行しています。先に「アプリケーション」フォルダへ移動してください",
+    "ko": "macOS가 임시 위치에서 OpenTypeless를 실행 중입니다. 먼저 응용 프로그램 폴더로 옮기세요",
+    "es": "macOS está ejecutando OpenTypeless desde una ubicación temporal; muévelo primero a Aplicaciones",
+    "pt": "O macOS está executando o OpenTypeless de um local temporário; mova-o primeiro para Aplicativos",
+    "ru": "macOS запускает OpenTypeless из временного расположения; сначала переместите его в «Программы»",
+    "fr": "macOS exécute OpenTypeless depuis un emplacement temporaire ; déplacez-le d’abord dans Applications",
+    "de": "macOS führt OpenTypeless von einem temporären Ort aus; verschiebe es zuerst in „Programme“"
+  },
+  "No permission to replace OpenTypeless in {0}": {
+    "ja": "{0} 内の OpenTypeless を置き換える権限がありません",
+    "ko": "{0}에 있는 OpenTypeless를 교체할 권한이 없습니다",
+    "es": "Sin permiso para reemplazar OpenTypeless en {0}",
+    "pt": "Sem permissão para substituir o OpenTypeless em {0}",
+    "ru": "Нет прав на замену OpenTypeless в {0}",
+    "fr": "Pas l’autorisation de remplacer OpenTypeless dans {0}",
+    "de": "Keine Berechtigung, OpenTypeless in {0} zu ersetzen"
+  },
+  "the download doesn't match its published checksum": {
+    "ja": "ダウンロードしたファイルが公開されたチェックサムと一致しません",
+    "ko": "다운로드한 파일이 게시된 체크섬과 일치하지 않습니다",
+    "es": "la descarga no coincide con su suma de verificación publicada",
+    "pt": "o download não corresponde ao checksum publicado",
+    "ru": "загрузка не совпадает с опубликованной контрольной суммой",
+    "fr": "le téléchargement ne correspond pas à sa somme de contrôle publiée",
+    "de": "der Download passt nicht zur veröffentlichten Prüfsumme"
+  },
+  "Couldn't start the install: ": {
+    "ja": "インストールを開始できませんでした：",
+    "ko": "설치를 시작할 수 없습니다: ",
+    "es": "No se pudo iniciar la instalación: ",
+    "pt": "Não foi possível iniciar a instalação: ",
+    "ru": "Не удалось начать установку: ",
+    "fr": "Impossible de lancer l’installation : ",
+    "de": "Installation konnte nicht gestartet werden: "
+  },
+  "the downloaded app is invalid: ": {
+    "ja": "ダウンロードしたアプリが無効です：",
+    "ko": "다운로드한 앱이 올바르지 않습니다: ",
+    "es": "la app descargada no es válida: ",
+    "pt": "o app baixado é inválido: ",
+    "ru": "загруженное приложение недействительно: ",
+    "fr": "l’app téléchargée n’est pas valide : ",
+    "de": "die geladene App ist ungültig: "
+  },
+  "it is signed with a different certificate than this copy": {
+    "ja": "このコピーとは異なる証明書で署名されています",
+    "ko": "현재 사본과 다른 인증서로 서명되었습니다",
+    "es": "está firmada con un certificado distinto al de esta copia",
+    "pt": "está assinado com um certificado diferente desta cópia",
+    "ru": "оно подписано другим сертификатом, чем эта копия",
+    "fr": "elle est signée avec un autre certificat que cette copie",
+    "de": "sie ist mit einem anderen Zertifikat signiert als diese Kopie"
+  },
+  "Key is valid": {
+    "ja": "キーは有効です",
+    "ko": "키가 유효합니다",
+    "es": "La clave es válida",
+    "pt": "A chave é válida",
+    "ru": "Ключ действителен",
+    "fr": "La clé est valide",
+    "de": "Schlüssel ist gültig"
+  },
+  "Connected — {0} models available": {
+    "ja": "接続しました — {0} 個のモデルが利用可能",
+    "ko": "연결됨 — 모델 {0}개 사용 가능",
+    "es": "Conectado: {0} modelos disponibles",
+    "pt": "Conectado — {0} modelos disponíveis",
+    "ru": "Подключено — доступно моделей: {0}",
+    "fr": "Connecté — {0} modèles disponibles",
+    "de": "Verbunden – {0} Modelle verfügbar"
+  },
+  "the model returned nothing": {
+    "ja": "モデルが何も返しませんでした",
+    "ko": "모델이 아무것도 반환하지 않았습니다",
+    "es": "el modelo no devolvió nada",
+    "pt": "o modelo não retornou nada",
+    "ru": "модель ничего не вернула",
+    "fr": "le modèle n’a rien renvoyé",
+    "de": "das Modell hat nichts zurückgegeben"
+  },
+  "SiliconFlow": {
+    "ja": "SiliconFlow",
+    "ko": "SiliconFlow",
+    "es": "SiliconFlow",
+    "pt": "SiliconFlow",
+    "ru": "SiliconFlow",
+    "fr": "SiliconFlow",
+    "de": "SiliconFlow"
+  },
+  "Custom (OpenAI-compatible)": {
+    "ja": "カスタム（OpenAI 互換）",
+    "ko": "사용자 지정(OpenAI 호환)",
+    "es": "Personalizado (compatible con OpenAI)",
+    "pt": "Personalizado (compatível com OpenAI)",
+    "ru": "Свой (совместимый с OpenAI)",
+    "fr": "Personnalisé (compatible OpenAI)",
+    "de": "Benutzerdefiniert (OpenAI-kompatibel)"
+  },
+  "optional": {
+    "ja": "任意",
+    "ko": "선택 사항",
+    "es": "opcional",
+    "pt": "opcional",
+    "ru": "необязательно",
+    "fr": "facultatif",
+    "de": "optional"
+  },
+  "No API key set for {0}": {
+    "ja": "{0} の API キーが設定されていません",
+    "ko": "{0}의 API 키가 설정되지 않았습니다",
+    "es": "No hay clave de API configurada para {0}",
+    "pt": "Nenhuma chave de API definida para {0}",
+    "ru": "Для {0} не задан API-ключ",
+    "fr": "Aucune clé API définie pour {0}",
+    "de": "Kein API-Schlüssel für {0} festgelegt"
+  },
+  "Invalid API key (401): ": {
+    "ja": "API キーが無効です (401)：",
+    "ko": "잘못된 API 키 (401): ",
+    "es": "Clave de API no válida (401): ",
+    "pt": "Chave de API inválida (401): ",
+    "ru": "Неверный API-ключ (401): ",
+    "fr": "Clé API non valide (401) : ",
+    "de": "Ungültiger API-Schlüssel (401): "
+  },
+  "Out of credits (402): ": {
+    "ja": "クレジット不足 (402)：",
+    "ko": "크레딧 부족 (402): ",
+    "es": "Sin crédito (402): ",
+    "pt": "Sem créditos (402): ",
+    "ru": "Недостаточно средств (402): ",
+    "fr": "Crédit épuisé (402) : ",
+    "de": "Kein Guthaben (402): "
+  },
+  "Rate limited (429): ": {
+    "ja": "リクエスト過多 (429)：",
+    "ko": "요청 한도 초과 (429): ",
+    "es": "Límite de solicitudes (429): ",
+    "pt": "Limite de solicitações (429): ",
+    "ru": "Слишком много запросов (429): ",
+    "fr": "Limite de requêtes (429) : ",
+    "de": "Ratenlimit erreicht (429): "
+  },
+  "Network error: ": {
+    "ja": "ネットワークエラー：",
+    "ko": "네트워크 오류: ",
+    "es": "Error de red: ",
+    "pt": "Erro de rede: ",
+    "ru": "Ошибка сети: ",
+    "fr": "Erreur réseau : ",
+    "de": "Netzwerkfehler: "
+  },
+  "Timed out after {0}s": {
+    "ja": "{0} 秒でタイムアウトしました",
+    "ko": "{0}초 후 시간 초과",
+    "es": "Tiempo agotado tras {0} s",
+    "pt": "Tempo esgotado após {0} s",
+    "ru": "Тайм-аут через {0} с",
+    "fr": "Délai dépassé après {0} s",
+    "de": "Zeitüberschreitung nach {0} s"
+  },
+  "Unexpected response: ": {
+    "ja": "予期しない応答：",
+    "ko": "예상치 못한 응답: ",
+    "es": "Respuesta inesperada: ",
+    "pt": "Resposta inesperada: ",
+    "ru": "Неожиданный ответ: ",
+    "fr": "Réponse inattendue : ",
+    "de": "Unerwartete Antwort: "
+  },
+  "connection timed out": {
+    "ja": "接続がタイムアウトしました",
+    "ko": "연결 시간 초과",
+    "es": "se agotó el tiempo de conexión",
+    "pt": "a conexão expirou",
+    "ru": "истекло время ожидания подключения",
+    "fr": "délai de connexion dépassé",
+    "de": "Zeitüberschreitung der Verbindung"
+  },
+  "{0} segment(s) failed: {1}": {
+    "ja": "{0} 個のセグメントが失敗しました：{1}",
+    "ko": "{0}개 구간 실패: {1}",
+    "es": "{0} segmento(s) fallaron: {1}",
+    "pt": "{0} trecho(s) falharam: {1}",
+    "ru": "Ошибка во фрагментах ({0}): {1}",
+    "fr": "{0} segment(s) en échec : {1}",
+    "de": "{0} Abschnitt(e) fehlgeschlagen: {1}"
+  },
+  "GitHub rate limit reached, try again later": {
+    "ja": "GitHub のリクエスト上限に達しました。しばらくしてから再試行してください",
+    "ko": "GitHub 요청 한도에 도달했습니다. 나중에 다시 시도하세요",
+    "es": "Se alcanzó el límite de GitHub; inténtalo más tarde",
+    "pt": "Limite do GitHub atingido; tente mais tarde",
+    "ru": "Достигнут лимит запросов GitHub, попробуйте позже",
+    "fr": "Limite GitHub atteinte, réessayez plus tard",
+    "de": "GitHub-Limit erreicht, später erneut versuchen"
+  },
+  "{0} s": {
+    "ja": "{0} 秒",
+    "ko": "{0}초",
+    "es": "{0} s",
+    "pt": "{0} s",
+    "ru": "{0} с",
+    "fr": "{0} s",
+    "de": "{0} s"
+  },
+  "{0} h": {
+    "ja": "{0} 時間",
+    "ko": "{0}시간",
+    "es": "{0} h",
+    "pt": "{0} h",
+    "ru": "{0} ч",
+    "fr": "{0} h",
+    "de": "{0} Std."
+  },
+  "{0} h {1} min": {
+    "ja": "{0} 時間 {1} 分",
+    "ko": "{0}시간 {1}분",
+    "es": "{0} h {1} min",
+    "pt": "{0} h {1} min",
+    "ru": "{0} ч {1} мин",
+    "fr": "{0} h {1} min",
+    "de": "{0} Std. {1} Min."
+  },
+  "Failed — retry from the tray menu": {
+    "ja": "失敗しました。トレイメニューから再試行できます",
+    "ko": "실패 — 트레이 메뉴에서 다시 시도하세요",
+    "es": "Falló: reinténtalo desde el menú de la bandeja",
+    "pt": "Falhou — tente de novo pelo menu da bandeja",
+    "ru": "Ошибка — повторите из меню в трее",
+    "fr": "Échec — réessayez depuis le menu de la zone de notification",
+    "de": "Fehlgeschlagen – über das Menü im Infobereich erneut versuchen"
+  },
+  "Keyboard & paste": {
+    "ja": "キーボードとペースト",
+    "ko": "키보드 및 붙여넣기",
+    "es": "Teclado y pegado",
+    "pt": "Teclado e colagem",
+    "ru": "Клавиатура и вставка",
+    "fr": "Clavier et collage",
+    "de": "Tastatur & Einfügen"
+  },
+  "To listen for the shortcut and paste text at the cursor. Windows needs no extra permission, but can’t paste into apps running as administrator (the text goes to the clipboard instead).": {
+    "ja": "ショートカットを検知し、カーソル位置にテキストをペーストするため。Windows では追加の許可は不要ですが、管理者として実行中のアプリにはペーストできません（その場合はクリップボードにコピーされます）。",
+    "ko": "단축키를 감지하고 커서 위치에 텍스트를 붙여넣는 데 사용합니다. Windows에서는 추가 권한이 필요 없지만, 관리자 권한으로 실행 중인 앱에는 붙여넣을 수 없습니다(이 경우 클립보드로 복사됩니다).",
+    "es": "Para detectar el atajo y pegar texto en el cursor. Windows no necesita permisos extra, pero no puede pegar en apps que se ejecutan como administrador (en ese caso el texto va al portapapeles).",
+    "pt": "Para detectar o atalho e colar texto no cursor. O Windows não precisa de permissão extra, mas não consegue colar em apps executados como administrador (nesse caso o texto vai para a área de transferência).",
+    "ru": "Чтобы отслеживать сочетание клавиш и вставлять текст у курсора. Windows не требует дополнительных разрешений, но не позволяет вставлять в приложения, запущенные от имени администратора (тогда текст попадает в буфер обмена).",
+    "fr": "Pour détecter le raccourci et coller le texte au curseur. Windows ne demande aucune autorisation, mais ne permet pas de coller dans les apps exécutées en administrateur (le texte va alors dans le presse-papiers).",
+    "de": "Um das Tastenkürzel zu erkennen und Text am Cursor einzufügen. Windows braucht keine zusätzliche Berechtigung, kann aber nicht in Apps einfügen, die als Administrator laufen (der Text landet dann in der Zwischenablage)."
+  },
+  "Not required": {
+    "ja": "不要",
+    "ko": "필요 없음",
+    "es": "No necesario",
+    "pt": "Não necessário",
+    "ru": "Не требуется",
+    "fr": "Non requis",
+    "de": "Nicht nötig"
+  },
+  "Waits in the notification area after you sign in": {
+    "ja": "サインイン後、通知領域で待機します",
+    "ko": "로그인 후 알림 영역에서 대기합니다",
+    "es": "Espera en el área de notificación al iniciar sesión",
+    "pt": "Fica na área de notificação após entrar",
+    "ru": "После входа ожидает в области уведомлений",
+    "fr": "Attend dans la zone de notification après la connexion",
+    "de": "Wartet nach der Anmeldung im Infobereich"
+  },
+  "Off: it waits quietly after you sign in. Opening the app yourself always shows Home": {
+    "ja": "オフの場合はサインイン後バックグラウンドで待機します。自分でアプリを開くと常にホームが表示されます",
+    "ko": "끄면 로그인 후 조용히 대기합니다. 직접 앱을 열면 항상 홈이 표시됩니다",
+    "es": "Desactivado: espera en silencio al iniciar sesión. Si abres la app tú mismo, siempre muestra Inicio",
+    "pt": "Desligado: fica em segundo plano após entrar. Abrir o app manualmente sempre mostra o Início",
+    "ru": "Если выключено, после входа приложение тихо ждёт в фоне. При ручном запуске всегда открывается «Главная»",
+    "fr": "Désactivé : l’app attend discrètement après la connexion. L’ouvrir vous-même affiche toujours l’accueil",
+    "de": "Aus: Nach der Anmeldung wartet die App im Hintergrund. Wenn du sie selbst öffnest, erscheint immer die Startseite"
+  },
+  "min": {
+    "ja": "分",
+    "ko": "분",
+    "es": "min",
+    "pt": "min",
+    "ru": "мин",
+    "fr": "min",
+    "de": "Min."
+  },
+  "wpm": {
+    "ja": "字/分",
+    "ko": "단어/분",
+    "es": "ppm",
+    "pt": "ppm",
+    "ru": "сл/мин",
+    "fr": "mots/min",
+    "de": "Wörter/Min."
+  },
+  "Enable OpenTypeless in Task Manager → Startup apps.": {
+    "ja": "タスク マネージャー → スタートアップ アプリ で OpenTypeless を有効にしてください。",
+    "ko": "작업 관리자 → 시작 앱에서 OpenTypeless를 사용하도록 설정하세요.",
+    "es": "Activa OpenTypeless en Administrador de tareas → Aplicaciones de arranque.",
+    "pt": "Habilite o OpenTypeless em Gerenciador de Tarefas → Aplicativos de inicialização.",
+    "ru": "Включите OpenTypeless в «Диспетчер задач → Автозагрузка приложений».",
+    "fr": "Activez OpenTypeless dans Gestionnaire des tâches → Applications de démarrage.",
+    "de": "Aktiviere OpenTypeless im Task-Manager → Autostart-Apps."
+  },
+  "Show recording in File Explorer": {
+    "ja": "エクスプローラーで録音を表示",
+    "ko": "파일 탐색기에서 녹음 보기",
+    "es": "Mostrar grabación en el Explorador de archivos",
+    "pt": "Mostrar gravação no Explorador de Arquivos",
+    "ru": "Показать запись в проводнике",
+    "fr": "Afficher l’enregistrement dans l’Explorateur de fichiers",
+    "de": "Aufnahme im Explorer anzeigen"
+  },
+  "A single modifier (Right Ctrl, Right Alt…) or a combination (Alt + Space, F5…)": {
+    "ja": "修飾キー1つ（右 Ctrl、右 Alt など）または組み合わせ（Alt + Space、F5 など）",
+    "ko": "보조 키 하나(오른쪽 Ctrl, 오른쪽 Alt 등) 또는 조합(Alt + Space, F5 등)",
+    "es": "Un solo modificador (Ctrl derecha, Alt derecha…) o una combinación (Alt + Espacio, F5…)",
+    "pt": "Um único modificador (Ctrl direito, Alt direito…) ou uma combinação (Alt + Espaço, F5…)",
+    "ru": "Одна клавиша-модификатор (правый Ctrl, правый Alt…) или сочетание (Alt + Пробел, F5…)",
+    "fr": "Un seul modificateur (Ctrl droite, Alt droite…) ou une combinaison (Alt + Espace, F5…)",
+    "de": "Eine einzelne Sondertaste (rechte Ctrl, rechte Alt …) oder eine Kombination (Alt + Leertaste, F5 …)"
+  },
+  "On keyboard layouts such as German or French, Right Alt is AltGr and types characters like @ and €. If you use it for typing, pick another shortcut.": {
+    "ja": "ドイツ語やフランス語などのキーボード配列では、右 Alt は AltGr として @ や € などの入力に使われます。入力に使う場合は別のショートカットを選んでください。",
+    "ko": "독일어나 프랑스어 같은 키보드 배열에서는 오른쪽 Alt가 AltGr로 @, € 같은 문자를 입력합니다. 입력에 사용한다면 다른 단축키를 고르세요.",
+    "es": "En distribuciones de teclado como la alemana, la francesa o la española, Alt derecha es AltGr y escribe caracteres como @ y €. Si la usas para escribir, elige otro atajo.",
+    "pt": "Em layouts de teclado como o alemão, o francês ou o ABNT2, o Alt direito é o AltGr e digita caracteres como @ e €. Se você o usa para digitar, escolha outro atalho.",
+    "ru": "В раскладках вроде немецкой или французской правый Alt — это AltGr, он вводит символы вроде @ и €. Если вы им пользуетесь, выберите другое сочетание.",
+    "fr": "Sur les dispositions de clavier comme l’allemand ou le français, Alt droite est AltGr et sert à taper @ ou €. Si vous l’utilisez pour la saisie, choisissez un autre raccourci.",
+    "de": "Bei Tastaturlayouts wie Deutsch oder Französisch ist die rechte Alt-Taste AltGr und tippt Zeichen wie @ und €. Wenn du sie zum Schreiben nutzt, wähle ein anderes Kürzel."
+  },
+  "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. The field is read on this PC only.": {
+    "ja": "ペースト後に誤認識された単語を修正すると（例：TypeList → Typeless）、入力欄を離れるか送信した時点で語彙に追加されます。学習するのは発音が似ている修正だけで、書き換えや数字の変更、普通の単語の置き換えは学習しません。入力欄の内容はこの PC 上でのみ読み取ります。",
+    "ko": "붙여넣은 뒤 잘못 인식된 단어를 고치면(예: TypeList → Typeless) 입력란을 벗어나거나 전송할 때 어휘에 추가됩니다. 발음이 비슷한 수정만 학습하며, 고쳐 쓰기나 숫자 변경, 일반 단어 교체는 학습하지 않습니다. 입력란 내용은 이 PC에서만 읽습니다.",
+    "es": "Si corriges una palabra mal reconocida después de pegar (por ejemplo, TypeList → Typeless), se añade al vocabulario cuando sales del campo o envías. Solo se aprenden correcciones de sonido parecido, nunca reescrituras, números cambiados ni sustituciones de palabras corrientes. El campo solo se lee en este PC.",
+    "pt": "Se você corrigir uma palavra mal reconhecida depois de colar (por exemplo, TypeList → Typeless), ela é adicionada ao vocabulário quando você sai do campo ou envia. Só são aprendidas correções de som parecido, nunca reescritas, números alterados ou trocas de palavras comuns. O campo é lido apenas neste PC.",
+    "ru": "Если после вставки вы исправите неверно распознанное слово (например, TypeList → Typeless), оно попадёт в словарь, когда вы покинете поле или отправите текст. Запоминаются только исправления похожих по звучанию слов — не переформулировки, не изменённые числа и не замены обычных слов. Поле читается только на этом ПК.",
+    "fr": "Si vous corrigez un mot mal reconnu après le collage (par exemple TypeList → Typeless), il est ajouté au vocabulaire quand vous quittez le champ ou envoyez. Seules les corrections de sonorité proche sont apprises, jamais les reformulations, les nombres modifiés ou les remplacements de mots courants. Le champ n’est lu que sur ce PC.",
+    "de": "Wenn du nach dem Einfügen ein falsch erkanntes Wort korrigierst (etwa TypeList → Typeless), wird es beim Verlassen des Felds oder beim Senden ins Vokabular übernommen. Gelernt werden nur ähnlich klingende Korrekturen, nie Umformulierungen, geänderte Zahlen oder normale Wortwechsel. Das Feld wird nur auf diesem PC gelesen."
+  },
+  "A plain key would break normal typing — combine it with Ctrl / Alt / Shift / Win, or press a single modifier / F1–F24.": {
+    "ja": "単独の文字キーは通常の入力を妨げます。Ctrl / Alt / Shift / Win と組み合わせるか、修飾キー1つ / F1–F24 を押してください。",
+    "ko": "일반 키만 쓰면 평소 타이핑에 방해가 됩니다. Ctrl / Alt / Shift / Win과 조합하거나 보조 키 하나 / F1–F24를 누르세요.",
+    "es": "Una tecla normal interferiría al escribir: combínala con Ctrl / Alt / Shift / Win, o pulsa un solo modificador / F1–F24.",
+    "pt": "Uma tecla comum atrapalharia a digitação — combine com Ctrl / Alt / Shift / Win ou pressione um único modificador / F1–F24.",
+    "ru": "Обычная клавиша помешает набору — сочетайте её с Ctrl / Alt / Shift / Win или нажмите одну клавишу-модификатор / F1–F24.",
+    "fr": "Une touche simple gênerait la saisie — combinez-la avec Ctrl / Alt / Shift / Win, ou appuyez sur un seul modificateur / F1–F24.",
+    "de": "Eine normale Taste würde das Tippen stören – kombiniere sie mit Ctrl / Alt / Shift / Win oder drücke eine einzelne Sondertaste / F1–F24."
+  },
+  "Timed out opening the microphone": {
+    "ja": "マイクを開く際にタイムアウトしました",
+    "ko": "마이크를 여는 중 시간 초과",
+    "es": "Se agotó el tiempo al abrir el micrófono",
+    "pt": "Tempo esgotado ao abrir o microfone",
+    "ru": "Истекло время открытия микрофона",
+    "fr": "Délai dépassé à l’ouverture du micro",
+    "de": "Zeitüberschreitung beim Öffnen des Mikrofons"
+  },
+  "No microphone access: Settings → Privacy & security → Microphone": {
+    "ja": "マイクへのアクセスがありません：設定 → プライバシーとセキュリティ → マイク",
+    "ko": "마이크 접근 권한 없음: 설정 → 개인 정보 및 보안 → 마이크",
+    "es": "Sin acceso al micrófono: Configuración → Privacidad y seguridad → Micrófono",
+    "pt": "Sem acesso ao microfone: Configurações → Privacidade e segurança → Microfone",
+    "ru": "Нет доступа к микрофону: Параметры → Конфиденциальность и защита → Микрофон",
+    "fr": "Pas d’accès au micro : Paramètres → Confidentialité et sécurité → Microphone",
+    "de": "Kein Mikrofonzugriff: Einstellungen → Datenschutz und Sicherheit → Mikrofon"
+  },
+  "Can't open the startup registry key": {
+    "ja": "スタートアップのレジストリキーを開けません",
+    "ko": "시작 레지스트리 키를 열 수 없습니다",
+    "es": "No se puede abrir la clave de registro de inicio",
+    "pt": "Não foi possível abrir a chave de registro de inicialização",
+    "ru": "Не удаётся открыть раздел реестра автозагрузки",
+    "fr": "Impossible d’ouvrir la clé de registre de démarrage",
+    "de": "Autostart-Registrierungsschlüssel kann nicht geöffnet werden"
+  },
+  "Can't find where OpenTypeless is installed": {
+    "ja": "OpenTypeless のインストール先が見つかりません",
+    "ko": "OpenTypeless 설치 위치를 찾을 수 없습니다",
+    "es": "No se encuentra dónde está instalado OpenTypeless",
+    "pt": "Não foi possível encontrar onde o OpenTypeless está instalado",
+    "ru": "Не удаётся найти, где установлен OpenTypeless",
+    "fr": "Impossible de trouver où OpenTypeless est installé",
+    "de": "Installationsort von OpenTypeless nicht gefunden"
+  },
+  "OpenTypeless is installed in its own data folder ({0}); move it elsewhere, such as %LOCALAPPDATA%\\Programs": {
+    "ja": "OpenTypeless が自身のデータフォルダ（{0}）にインストールされています。%LOCALAPPDATA%\\Programs など別の場所に移動してください",
+    "ko": "OpenTypeless가 자체 데이터 폴더({0})에 설치되어 있습니다. %LOCALAPPDATA%\\Programs 같은 다른 위치로 옮기세요",
+    "es": "OpenTypeless está instalado en su propia carpeta de datos ({0}); muévelo a otro sitio, como %LOCALAPPDATA%\\Programs",
+    "pt": "O OpenTypeless está instalado na própria pasta de dados ({0}); mova-o para outro lugar, como %LOCALAPPDATA%\\Programs",
+    "ru": "OpenTypeless установлен в собственную папку данных ({0}); переместите его в другое место, например в %LOCALAPPDATA%\\Programs",
+    "fr": "OpenTypeless est installé dans son propre dossier de données ({0}) ; déplacez-le ailleurs, par exemple dans %LOCALAPPDATA%\\Programs",
+    "de": "OpenTypeless ist in seinem eigenen Datenordner installiert ({0}); verschiebe es woandershin, etwa nach %LOCALAPPDATA%\\Programs"
+  },
+  "the download has no OpenTypeless.exe": {
+    "ja": "ダウンロードに OpenTypeless.exe が含まれていません",
+    "ko": "다운로드에 OpenTypeless.exe가 없습니다",
+    "es": "la descarga no contiene OpenTypeless.exe",
+    "pt": "o download não contém o OpenTypeless.exe",
+    "ru": "в загрузке нет OpenTypeless.exe",
+    "fr": "le téléchargement ne contient pas OpenTypeless.exe",
+    "de": "der Download enthält keine OpenTypeless.exe"
+  },
+  "the download is version {0}, not {1}": {
+    "ja": "ダウンロードしたのはバージョン {0} で、{1} ではありません",
+    "ko": "다운로드한 버전이 {1}이 아니라 {0}입니다",
+    "es": "la descarga es la versión {0}, no la {1}",
+    "pt": "o download é a versão {0}, não a {1}",
+    "ru": "загружена версия {0}, а не {1}",
+    "fr": "le téléchargement est la version {0}, pas la {1}",
+    "de": "der Download ist Version {0}, nicht {1}"
+  },
+  "Microphone access needed: Settings → Privacy & security → Microphone": {
+    "ja": "マイクへのアクセスが必要です：設定 → プライバシーとセキュリティ → マイク",
+    "ko": "마이크 접근 권한 필요: 설정 → 개인 정보 및 보안 → 마이크",
+    "es": "Se necesita acceso al micrófono: Configuración → Privacidad y seguridad → Micrófono",
+    "pt": "Acesso ao microfone necessário: Configurações → Privacidade e segurança → Microfone",
+    "ru": "Нужен доступ к микрофону: Параметры → Конфиденциальность и защита → Микрофон",
+    "fr": "Accès au micro requis : Paramètres → Confidentialité et sécurité → Microphone",
+    "de": "Mikrofonzugriff erforderlich: Einstellungen → Datenschutz und Sicherheit → Mikrofon"
+  },
+  "Search dictations": {
+    "ja": "聞き取りを検索",
+    "ko": "받아쓰기 검색",
+    "es": "Buscar dictados",
+    "pt": "Buscar ditados",
+    "ru": "Поиск по диктовкам",
+    "fr": "Rechercher des dictées",
+    "de": "Diktate durchsuchen"
+  },
+  "Hold {0} and talk. Every dictation is kept here.": {
+    "ja": "{0} を押しながら話してください。聞き取りはすべてここに保存されます。",
+    "ko": "{0} 키를 누른 채 말하세요. 모든 받아쓰기가 여기에 저장됩니다.",
+    "es": "Mantén {0} y habla. Todos los dictados se guardan aquí.",
+    "pt": "Segure {0} e fale. Todos os ditados ficam guardados aqui.",
+    "ru": "Удерживайте {0} и говорите. Все диктовки сохраняются здесь.",
+    "fr": "Maintenez {0} et parlez. Chaque dictée est conservée ici.",
+    "de": "Halte {0} gedrückt und sprich. Jedes Diktat wird hier gespeichert."
+  },
+  "Space used by recordings and transcripts. Recordings take about 1.9 MB per minute; failed dictations keep theirs so you can retry.": {
+    "ja": "録音と文字起こしが使っている容量です。録音は 1 分あたり約 1.9 MB。失敗した聞き取りの録音は再試行できるよう保持されます。",
+    "ko": "녹음과 전사본이 차지하는 공간입니다. 녹음은 1분에 약 1.9MB이며, 실패한 받아쓰기의 녹음은 다시 시도할 수 있도록 보관됩니다.",
+    "es": "Espacio que ocupan las grabaciones y transcripciones. Las grabaciones ocupan unos 1,9 MB por minuto; los dictados fallidos conservan la suya para poder reintentarlos.",
+    "pt": "Espaço usado por gravações e transcrições. As gravações ocupam cerca de 1,9 MB por minuto; ditados que falharam mantêm a sua para você tentar de novo.",
+    "ru": "Место, занятое записями и расшифровками. Запись занимает около 1,9 МБ в минуту; у неудачных диктовок запись сохраняется, чтобы можно было повторить.",
+    "fr": "Espace occupé par les enregistrements et les transcriptions. Un enregistrement prend environ 1,9 Mo par minute ; les dictées en échec gardent le leur pour pouvoir réessayer.",
+    "de": "Speicher für Aufnahmen und Transkripte. Aufnahmen belegen etwa 1,9 MB pro Minute; fehlgeschlagene Diktate behalten ihre, damit du es erneut versuchen kannst."
+  },
+  "No matching dictations": {
+    "ja": "一致する聞き取りはありません",
+    "ko": "일치하는 받아쓰기가 없습니다",
+    "es": "No hay dictados que coincidan",
+    "pt": "Nenhum ditado encontrado",
+    "ru": "Нет подходящих диктовок",
+    "fr": "Aucune dictée correspondante",
+    "de": "Keine passenden Diktate"
+  },
+  "Recording…": {
+    "ja": "録音中…",
+    "ko": "녹음 중…",
+    "es": "Grabando…",
+    "pt": "Gravando…",
+    "ru": "Запись…",
+    "fr": "Enregistrement…",
+    "de": "Aufnahme…"
+  },
+  "Processing…": {
+    "ja": "処理中…",
+    "ko": "처리 중…",
+    "es": "Procesando…",
+    "pt": "Processando…",
+    "ru": "Обработка…",
+    "fr": "Traitement…",
+    "de": "Wird verarbeitet…"
+  },
+  "(no text)": {
+    "ja": "（テキストなし）",
+    "ko": "(텍스트 없음)",
+    "es": "(sin texto)",
+    "pt": "(sem texto)",
+    "ru": "(нет текста)",
+    "fr": "(aucun texte)",
+    "de": "(kein Text)"
+  },
+  "Cancelled, so nothing was inserted. It's kept until {0} to copy or re-transcribe.": {
+    "ja": "キャンセルしたため挿入されていません。{0} まで保持されるので、コピーや再文字起こしができます。",
+    "ko": "취소되어 입력되지 않았습니다. {0}까지 보관되며 그동안 복사하거나 다시 전사할 수 있습니다.",
+    "es": "Cancelado, así que no se insertó nada. Se conserva hasta {0} para copiarlo o volver a transcribirlo.",
+    "pt": "Cancelado, então nada foi inserido. Fica guardado até {0} para copiar ou transcrever de novo.",
+    "ru": "Отменено, поэтому ничего не вставлено. Хранится до {0}: можно скопировать или расшифровать заново.",
+    "fr": "Annulé, donc rien n'a été inséré. Conservé jusqu'au {0} pour le copier ou le retranscrire.",
+    "de": "Abgebrochen, daher wurde nichts eingefügt. Bleibt bis {0} erhalten, zum Kopieren oder erneuten Transkribieren."
+  },
+  "Copied": {
+    "ja": "コピーしました",
+    "ko": "복사됨",
+    "es": "Copiado",
+    "pt": "Copiado",
+    "ru": "Скопировано",
+    "fr": "Copié",
+    "de": "Kopiert"
+  },
+  "{0} words": {
+    "ja": "{0} 語",
+    "ko": "{0}단어",
+    "es": "{0} palabras",
+    "pt": "{0} palavras",
+    "ru": "Слов: {0}",
+    "fr": "{0} mots",
+    "de": "{0} Wörter"
+  },
+  "Speech {0} · Clean-up {1}": {
+    "ja": "音声 {0} · 整形 {1}",
+    "ko": "음성 {0} · 정리 {1}",
+    "es": "Voz {0} · Limpieza {1}",
+    "pt": "Fala {0} · Limpeza {1}",
+    "ru": "Речь {0} · Обработка {1}",
+    "fr": "Voix {0} · Nettoyage {1}",
+    "de": "Sprache {0} · Bereinigung {1}"
+  },
+  "{0}: 1 dictation · {1} words": {
+    "ja": "{0}：聞き取り 1 回 · {1} 語",
+    "ko": "{0}: 받아쓰기 1회 · {1}단어",
+    "es": "{0}: 1 dictado · {1} palabras",
+    "pt": "{0}: 1 ditado · {1} palavras",
+    "ru": "{0}: 1 диктовка · слов: {1}",
+    "fr": "{0} : 1 dictée · {1} mots",
+    "de": "{0}: 1 Diktat · {1} Wörter"
+  },
+  "{0}: {1} dictations · {2} words": {
+    "ja": "{0}：聞き取り {1} 回 · {2} 語",
+    "ko": "{0}: 받아쓰기 {1}회 · {2}단어",
+    "es": "{0}: {1} dictados · {2} palabras",
+    "pt": "{0}: {1} ditados · {2} palavras",
+    "ru": "{0}: диктовок: {1} · слов: {2}",
+    "fr": "{0} : {1} dictées · {2} mots",
+    "de": "{0}: {1} Diktate · {2} Wörter"
+  },
+  " (virtual)": {
+    "ja": "（仮想）",
+    "ko": " (가상)",
+    "es": " (virtual)",
+    "pt": " (virtual)",
+    "ru": " (виртуальное)",
+    "fr": " (virtuel)",
+    "de": " (virtuell)"
+  },
+  "Cancelled — kept in History for 24 hours": {
+    "ja": "キャンセル済み — 履歴に 24 時間保持されます",
+    "ko": "취소됨 — 기록에 24시간 보관됩니다",
+    "es": "Cancelado: se guarda en el historial 24 horas",
+    "pt": "Cancelado — fica no histórico por 24 horas",
+    "ru": "Отменено — хранится в истории 24 часа",
+    "fr": "Annulé — conservé 24 heures dans l'historique",
+    "de": "Abgebrochen – 24 Stunden im Verlauf gespeichert"
+  },
+  "Input device": {
+    "ja": "入力デバイス",
+    "ko": "입력 장치",
+    "es": "Dispositivo de entrada",
+    "pt": "Dispositivo de entrada",
+    "ru": "Устройство ввода",
+    "fr": "Périphérique d'entrée",
+    "de": "Eingabegerät"
+  },
+  "Some Macs default to a virtual device; pick your real microphone here": {
+    "ja": "仮想デバイスが既定になっている Mac もあります。ここで実際のマイクを選んでください",
+    "ko": "일부 Mac은 가상 장치가 기본값입니다. 여기서 실제 마이크를 선택하세요",
+    "es": "Algunos Mac usan por defecto un dispositivo virtual; elige aquí tu micrófono real",
+    "pt": "Alguns Macs usam um dispositivo virtual por padrão; escolha aqui seu microfone real",
+    "ru": "На некоторых Mac по умолчанию выбрано виртуальное устройство — выберите здесь настоящий микрофон",
+    "fr": "Certains Mac utilisent par défaut un périphérique virtuel ; choisissez ici votre vrai micro",
+    "de": "Manche Macs verwenden standardmäßig ein virtuelles Gerät – wähle hier dein echtes Mikrofon"
+  },
+  "Some PCs default to a virtual device; pick your real microphone here": {
+    "ja": "仮想デバイスが既定になっている PC もあります。ここで実際のマイクを選んでください",
+    "ko": "일부 PC는 가상 장치가 기본값입니다. 여기서 실제 마이크를 선택하세요",
+    "es": "Algunos PC usan por defecto un dispositivo virtual; elige aquí tu micrófono real",
+    "pt": "Alguns PCs usam um dispositivo virtual por padrão; escolha aqui seu microfone real",
+    "ru": "На некоторых ПК по умолчанию выбрано виртуальное устройство — выберите здесь настоящий микрофон",
+    "fr": "Certains PC utilisent par défaut un périphérique virtuel ; choisissez ici votre vrai micro",
+    "de": "Manche PCs verwenden standardmäßig ein virtuelles Gerät – wähle hier dein echtes Mikrofon"
+  },
+  "System default": {
+    "ja": "システムの既定",
+    "ko": "시스템 기본값",
+    "es": "Predeterminado del sistema",
+    "pt": "Padrão do sistema",
+    "ru": "Системное по умолчанию",
+    "fr": "Par défaut du système",
+    "de": "Systemstandard"
+  },
+  " ({0})": {
+    "ja": "（{0}）",
+    "ko": " ({0})",
+    "es": " ({0})",
+    "pt": " ({0})",
+    "ru": " ({0})",
+    "fr": " ({0})",
+    "de": " ({0})"
+  },
+  "Disconnected device": {
+    "ja": "未接続のデバイス",
+    "ko": "연결되지 않은 장치",
+    "es": "Dispositivo desconectado",
+    "pt": "Dispositivo desconectado",
+    "ru": "Отключённое устройство",
+    "fr": "Périphérique déconnecté",
+    "de": "Getrenntes Gerät"
+  },
+  "Test microphone": {
+    "ja": "マイクをテスト",
+    "ko": "마이크 테스트",
+    "es": "Probar micrófono",
+    "pt": "Testar microfone",
+    "ru": "Проверить микрофон",
+    "fr": "Tester le micro",
+    "de": "Mikrofon testen"
+  },
+  "Say something: the bar should rise and fall with your voice": {
+    "ja": "何か話してください。声に合わせてバーが上下するはずです",
+    "ko": "말해 보세요. 목소리에 따라 막대가 오르내려야 합니다",
+    "es": "Di algo: la barra debería subir y bajar con tu voz",
+    "pt": "Diga algo: a barra deve subir e descer com a sua voz",
+    "ru": "Скажите что-нибудь: полоска должна двигаться в такт голосу",
+    "fr": "Dites quelque chose : la barre doit monter et descendre avec votre voix",
+    "de": "Sag etwas: Der Balken sollte mit deiner Stimme steigen und fallen"
+  },
+  "Check that the chosen device can hear you": {
+    "ja": "選んだデバイスに声が届いているか確認します",
+    "ko": "선택한 장치가 목소리를 듣는지 확인합니다",
+    "es": "Comprueba que el dispositivo elegido te oye",
+    "pt": "Verifique se o dispositivo escolhido ouve você",
+    "ru": "Проверьте, слышит ли вас выбранное устройство",
+    "fr": "Vérifiez que le périphérique choisi vous entend",
+    "de": "Prüfe, ob das gewählte Gerät dich hört"
+  },
+  "Stop": {
+    "ja": "停止",
+    "ko": "중지",
+    "es": "Detener",
+    "pt": "Parar",
+    "ru": "Остановить",
+    "fr": "Arrêter",
+    "de": "Stoppen"
+  },
+  "Keep microphone ready": {
+    "ja": "マイクを待機させる",
+    "ko": "마이크 대기 유지",
+    "es": "Mantener el micrófono listo",
+    "pt": "Manter o microfone pronto",
+    "ru": "Держать микрофон наготове",
+    "fr": "Garder le micro prêt",
+    "de": "Mikrofon bereithalten"
+  },
+  "Recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped (noticeable with AirPods). The microphone stays on, and Bluetooth headphones switch to call mode, which lowers music quality.": {
+    "ja": "キーを押した瞬間に録音が始まり、押す直前の音も含まれるので、最初の言葉が切れません（AirPods で特に効果的）。マイクはオンのままになり、Bluetooth ヘッドホンは通話モードに切り替わるため音楽の音質が下がります。",
+    "ko": "키를 누르는 즉시 녹음이 시작되고 누르기 직전의 소리도 포함되어 첫 단어가 잘리지 않습니다(AirPods에서 특히 효과적). 마이크가 계속 켜져 있고 블루투스 헤드폰은 통화 모드로 전환되어 음악 음질이 낮아집니다.",
+    "es": "La grabación empieza en cuanto pulsas la tecla e incluye el instante anterior, así que la primera palabra no se corta (se nota con AirPods). El micrófono queda encendido y los auriculares Bluetooth pasan al modo llamada, lo que empeora la calidad de la música.",
+    "pt": "A gravação começa no instante em que você pressiona a tecla e inclui o momento anterior, então a primeira palavra não é cortada (perceptível com AirPods). O microfone fica ligado e fones Bluetooth passam para o modo de chamada, o que reduz a qualidade da música.",
+    "ru": "Запись начинается в момент нажатия клавиши и включает мгновение до него, поэтому первое слово не обрезается (заметно с AirPods). Микрофон остаётся включённым, а Bluetooth-наушники переходят в режим звонка, из-за чего падает качество музыки.",
+    "fr": "L'enregistrement démarre dès que vous appuyez sur la touche et inclut l'instant qui précède, pour que le premier mot ne soit pas coupé (sensible avec les AirPods). Le micro reste allumé et les écouteurs Bluetooth passent en mode appel, ce qui dégrade la qualité de la musique.",
+    "de": "Die Aufnahme beginnt, sobald du die Taste drückst, und enthält den Moment davor, damit das erste Wort nicht abgeschnitten wird (merklich bei AirPods). Das Mikrofon bleibt an, und Bluetooth-Kopfhörer wechseln in den Anrufmodus, was die Musikqualität senkt."
+  },
+  "Recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped (noticeable with Bluetooth headsets). The microphone stays on, and Bluetooth headphones switch to call mode, which lowers music quality.": {
+    "ja": "キーを押した瞬間に録音が始まり、押す直前の音も含まれるので、最初の言葉が切れません（Bluetooth ヘッドセットで特に効果的）。マイクはオンのままになり、Bluetooth ヘッドホンは通話モードに切り替わるため音楽の音質が下がります。",
+    "ko": "키를 누르는 즉시 녹음이 시작되고 누르기 직전의 소리도 포함되어 첫 단어가 잘리지 않습니다(블루투스 헤드셋에서 특히 효과적). 마이크가 계속 켜져 있고 블루투스 헤드폰은 통화 모드로 전환되어 음악 음질이 낮아집니다.",
+    "es": "La grabación empieza en cuanto pulsas la tecla e incluye el instante anterior, así que la primera palabra no se corta (se nota con auriculares Bluetooth). El micrófono queda encendido y los auriculares Bluetooth pasan al modo llamada, lo que empeora la calidad de la música.",
+    "pt": "A gravação começa no instante em que você pressiona a tecla e inclui o momento anterior, então a primeira palavra não é cortada (perceptível com headsets Bluetooth). O microfone fica ligado e fones Bluetooth passam para o modo de chamada, o que reduz a qualidade da música.",
+    "ru": "Запись начинается в момент нажатия клавиши и включает мгновение до него, поэтому первое слово не обрезается (заметно с Bluetooth-гарнитурами). Микрофон остаётся включённым, а Bluetooth-наушники переходят в режим звонка, из-за чего падает качество музыки.",
+    "fr": "L'enregistrement démarre dès que vous appuyez sur la touche et inclut l'instant qui précède, pour que le premier mot ne soit pas coupé (sensible avec les casques Bluetooth). Le micro reste allumé et les écouteurs Bluetooth passent en mode appel, ce qui dégrade la qualité de la musique.",
+    "de": "Die Aufnahme beginnt, sobald du die Taste drückst, und enthält den Moment davor, damit das erste Wort nicht abgeschnitten wird (merklich bei Bluetooth-Headsets). Das Mikrofon bleibt an, und Bluetooth-Kopfhörer wechseln in den Anrufmodus, was die Musikqualität senkt."
+  },
+  "Live preview (beta)": {
+    "ja": "ライブプレビュー（ベータ）",
+    "ko": "실시간 미리보기(베타)",
+    "es": "Vista previa en directo (beta)",
+    "pt": "Prévia ao vivo (beta)",
+    "ru": "Предпросмотр в реальном времени (бета)",
+    "fr": "Aperçu en direct (bêta)",
+    "de": "Live-Vorschau (Beta)"
+  },
+  "Shows what you're saying above the capsule as you talk, recognised on this Mac. Only a preview: the inserted text still comes from your speech-to-text provider. The first time, macOS downloads a speech model for your language.": {
+    "ja": "話している内容をカプセルの上に表示します。認識はこの Mac 上で行われます。あくまでプレビューで、挿入されるテキストは引き続き音声認識プロバイダから届きます。初回は macOS がその言語の音声モデルをダウンロードします。",
+    "ko": "말하는 동안 캡슐 위에 인식된 내용을 보여 줍니다. 인식은 이 Mac에서 이루어집니다. 미리보기일 뿐이며 입력되는 텍스트는 여전히 음성 인식 제공업체에서 옵니다. 처음 사용할 때 macOS가 해당 언어의 음성 모델을 다운로드합니다.",
+    "es": "Muestra lo que dices encima de la cápsula mientras hablas, reconocido en este Mac. Es solo una vista previa: el texto insertado sigue viniendo de tu proveedor de voz a texto. La primera vez, macOS descarga un modelo de voz para tu idioma.",
+    "pt": "Mostra o que você está dizendo acima da cápsula enquanto fala, reconhecido neste Mac. É só uma prévia: o texto inserido continua vindo do seu provedor de fala para texto. Na primeira vez, o macOS baixa um modelo de fala para o seu idioma.",
+    "ru": "Показывает над капсулой то, что вы говорите, по мере речи; распознавание идёт на этом Mac. Это только предпросмотр: вставляемый текст по-прежнему приходит от вашего сервиса распознавания речи. В первый раз macOS загрузит речевую модель для вашего языка.",
+    "fr": "Affiche ce que vous dites au-dessus de la capsule pendant que vous parlez, reconnu sur ce Mac. Ce n'est qu'un aperçu : le texte inséré vient toujours de votre fournisseur de transcription. La première fois, macOS télécharge un modèle vocal pour votre langue.",
+    "de": "Zeigt beim Sprechen über der Kapsel, was du sagst, erkannt auf diesem Mac. Nur eine Vorschau: Der eingefügte Text kommt weiterhin von deinem Spracherkennungsanbieter. Beim ersten Mal lädt macOS ein Sprachmodell für deine Sprache."
+  },
+  "Shows what you're saying above the capsule as you talk, recognised by Windows speech recognition. It needs the language's speech pack and online speech recognition on under Privacy & security → Speech (your voice is then sent to Microsoft to recognise), and listens to the default microphone. Only a preview: the inserted text still comes from your speech-to-text provider.": {
+    "ja": "話している内容をカプセルの上に表示します。認識には Windows の音声認識を使います。その言語の音声パックと、［プライバシーとセキュリティ］→［音声認識］のオンライン音声認識が必要です（音声は認識のため Microsoft に送信されます）。既定のマイクを使用します。あくまでプレビューで、挿入されるテキストは引き続き音声認識プロバイダから届きます。",
+    "ko": "말하는 동안 캡슐 위에 인식된 내용을 보여 줍니다. Windows 음성 인식을 사용하며, 해당 언어의 음성 팩과 [개인 정보 및 보안] → [음성]의 온라인 음성 인식이 필요합니다(음성이 인식을 위해 Microsoft로 전송됩니다). 기본 마이크를 사용합니다. 미리보기일 뿐이며 입력되는 텍스트는 여전히 음성 인식 제공업체에서 옵니다.",
+    "es": "Muestra lo que dices encima de la cápsula mientras hablas, reconocido por el reconocimiento de voz de Windows. Necesita el paquete de voz del idioma y el reconocimiento de voz en línea activado en Privacidad y seguridad → Voz (tu voz se envía entonces a Microsoft para reconocerla), y usa el micrófono predeterminado. Es solo una vista previa: el texto insertado sigue viniendo de tu proveedor de voz a texto.",
+    "pt": "Mostra o que você está dizendo acima da cápsula enquanto fala, reconhecido pelo reconhecimento de fala do Windows. Requer o pacote de fala do idioma e o reconhecimento de fala online ativado em Privacidade e segurança → Fala (sua voz é então enviada à Microsoft para reconhecimento), e usa o microfone padrão. É só uma prévia: o texto inserido continua vindo do seu provedor de fala para texto.",
+    "ru": "Показывает над капсулой то, что вы говорите, по мере речи с помощью распознавания речи Windows. Нужны языковой речевой пакет и включённое онлайн-распознавание речи в разделе «Конфиденциальность и защита» → «Голосовые функции» (тогда голос отправляется в Microsoft для распознавания); используется микрофон по умолчанию. Это только предпросмотр: вставляемый текст по-прежнему приходит от вашего сервиса распознавания речи.",
+    "fr": "Affiche ce que vous dites au-dessus de la capsule pendant que vous parlez, grâce à la reconnaissance vocale de Windows. Il faut le module vocal de la langue et la reconnaissance vocale en ligne activée dans Confidentialité et sécurité → Voix (votre voix est alors envoyée à Microsoft pour être reconnue) ; le micro par défaut est utilisé. Ce n'est qu'un aperçu : le texte inséré vient toujours de votre fournisseur de transcription.",
+    "de": "Zeigt beim Sprechen über der Kapsel, was du sagst, erkannt von der Windows-Spracherkennung. Benötigt das Sprachpaket der Sprache und die Online-Spracherkennung unter Datenschutz und Sicherheit → Spracherkennung (deine Stimme wird dann zur Erkennung an Microsoft gesendet) und nutzt das Standardmikrofon. Nur eine Vorschau: Der eingefügte Text kommt weiterhin von deinem Spracherkennungsanbieter."
+  },
+  "The system default input is a virtual device. If dictations come out empty, pick your real microphone above.": {
+    "ja": "システムの既定の入力は仮想デバイスです。聞き取りが空になる場合は、上で実際のマイクを選んでください。",
+    "ko": "시스템 기본 입력이 가상 장치입니다. 받아쓰기가 비어 있다면 위에서 실제 마이크를 선택하세요.",
+    "es": "La entrada predeterminada del sistema es un dispositivo virtual. Si los dictados salen vacíos, elige arriba tu micrófono real.",
+    "pt": "A entrada padrão do sistema é um dispositivo virtual. Se os ditados saírem vazios, escolha acima seu microfone real.",
+    "ru": "Системный вход по умолчанию — виртуальное устройство. Если диктовки получаются пустыми, выберите выше настоящий микрофон.",
+    "fr": "L'entrée par défaut du système est un périphérique virtuel. Si les dictées sont vides, choisissez votre vrai micro ci-dessus.",
+    "de": "Der Standardeingang des Systems ist ein virtuelles Gerät. Wenn Diktate leer bleiben, wähle oben dein echtes Mikrofon."
+  },
+  "The default input is a virtual device. If dictations come out empty, pick your real microphone above.": {
+    "ja": "既定の入力は仮想デバイスです。聞き取りが空になる場合は、上で実際のマイクを選んでください。",
+    "ko": "기본 입력이 가상 장치입니다. 받아쓰기가 비어 있다면 위에서 실제 마이크를 선택하세요.",
+    "es": "La entrada predeterminada es un dispositivo virtual. Si los dictados salen vacíos, elige arriba tu micrófono real.",
+    "pt": "A entrada padrão é um dispositivo virtual. Se os ditados saírem vazios, escolha acima seu microfone real.",
+    "ru": "Вход по умолчанию — виртуальное устройство. Если диктовки получаются пустыми, выберите выше настоящий микрофон.",
+    "fr": "L'entrée par défaut est un périphérique virtuel. Si les dictées sont vides, choisissez votre vrai micro ci-dessus.",
+    "de": "Der Standardeingang ist ein virtuelles Gerät. Wenn Diktate leer bleiben, wähle oben dein echtes Mikrofon."
+  },
+  "The chosen microphone isn't connected, so the system default is used until it's back.": {
+    "ja": "選んだマイクが接続されていないため、再接続されるまでシステムの既定を使います。",
+    "ko": "선택한 마이크가 연결되어 있지 않아 다시 연결될 때까지 시스템 기본값을 사용합니다.",
+    "es": "El micrófono elegido no está conectado, así que se usa el predeterminado del sistema hasta que vuelva.",
+    "pt": "O microfone escolhido não está conectado, então o padrão do sistema é usado até ele voltar.",
+    "ru": "Выбранный микрофон не подключён, поэтому до его возвращения используется системный по умолчанию.",
+    "fr": "Le micro choisi n'est pas connecté : celui par défaut du système est utilisé jusqu'à son retour.",
+    "de": "Das gewählte Mikrofon ist nicht verbunden, daher wird bis zu seiner Rückkehr der Systemstandard verwendet."
+  },
+  "The chosen microphone isn't connected, so the default input is used until it's back.": {
+    "ja": "選んだマイクが接続されていないため、再接続されるまで既定の入力を使います。",
+    "ko": "선택한 마이크가 연결되어 있지 않아 다시 연결될 때까지 기본 입력을 사용합니다.",
+    "es": "El micrófono elegido no está conectado, así que se usa la entrada predeterminada hasta que vuelva.",
+    "pt": "O microfone escolhido não está conectado, então a entrada padrão é usada até ele voltar.",
+    "ru": "Выбранный микрофон не подключён, поэтому до его возвращения используется вход по умолчанию.",
+    "fr": "Le micro choisi n'est pas connecté : l'entrée par défaut est utilisée jusqu'à son retour.",
+    "de": "Das gewählte Mikrofon ist nicht verbunden, daher wird bis zu seiner Rückkehr der Standardeingang verwendet."
+  },
+  "This is a virtual device. If dictations come out empty, pick a real microphone.": {
+    "ja": "これは仮想デバイスです。聞き取りが空になる場合は、実際のマイクを選んでください。",
+    "ko": "가상 장치입니다. 받아쓰기가 비어 있다면 실제 마이크를 선택하세요.",
+    "es": "Es un dispositivo virtual. Si los dictados salen vacíos, elige un micrófono real.",
+    "pt": "Este é um dispositivo virtual. Se os ditados saírem vazios, escolha um microfone real.",
+    "ru": "Это виртуальное устройство. Если диктовки получаются пустыми, выберите настоящий микрофон.",
+    "fr": "C'est un périphérique virtuel. Si les dictées sont vides, choisissez un vrai micro.",
+    "de": "Das ist ein virtuelles Gerät. Wenn Diktate leer bleiben, wähle ein echtes Mikrofon."
+  },
+  "Checks the API key and times three round trips (median)": {
+    "ja": "API キーを確認し、3 回の往復時間を測定します（中央値）",
+    "ko": "API 키를 확인하고 세 번의 왕복 시간을 측정합니다(중앙값)",
+    "es": "Comprueba la clave de API y mide tres viajes de ida y vuelta (mediana)",
+    "pt": "Verifica a chave de API e mede três viagens de ida e volta (mediana)",
+    "ru": "Проверяет ключ API и измеряет три запроса туда и обратно (медиана)",
+    "fr": "Vérifie la clé d'API et mesure trois allers-retours (médiane)",
+    "de": "Prüft den API-Schlüssel und misst drei Round-Trips (Median)"
+  },
+  "Backup speech-to-text": {
+    "ja": "予備の音声認識",
+    "ko": "백업 음성 인식",
+    "es": "Voz a texto de respaldo",
+    "pt": "Fala para texto de reserva",
+    "ru": "Резервное распознавание речи",
+    "fr": "Transcription de secours",
+    "de": "Ersatz-Spracherkennung"
+  },
+  "If a segment takes much longer than usual (judged by its length and recent speed) or fails, the backup is asked too and the first answer wins": {
+    "ja": "区間の処理がいつもよりかなり遅い（長さと最近の速度から判断）か失敗した場合、予備にも依頼し、先に返ってきた結果を使います",
+    "ko": "구간 처리가 평소보다 훨씬 오래 걸리거나(길이와 최근 속도로 판단) 실패하면 백업에도 요청하고 먼저 돌아온 결과를 사용합니다",
+    "es": "Si un fragmento tarda mucho más de lo habitual (según su duración y la velocidad reciente) o falla, también se pide al de respaldo y gana la primera respuesta",
+    "pt": "Se um trecho demorar muito mais que o normal (pela duração e velocidade recente) ou falhar, o de reserva também é chamado e vale a primeira resposta",
+    "ru": "Если фрагмент обрабатывается намного дольше обычного (с учётом его длины и недавней скорости) или завершается ошибкой, запрос отправляется и резервному сервису, и используется первый ответ",
+    "fr": "Si un segment prend bien plus de temps que d'habitude (selon sa durée et la vitesse récente) ou échoue, le secours est aussi sollicité et la première réponse l'emporte",
+    "de": "Dauert ein Abschnitt deutlich länger als üblich (gemessen an Länge und jüngster Geschwindigkeit) oder schlägt fehl, wird auch der Ersatz gefragt, und die erste Antwort gewinnt"
+  },
+  "Pick a model from another vendor so both are rarely slow at once": {
+    "ja": "両方が同時に遅くなりにくいよう、別の提供元のモデルを選んでください",
+    "ko": "둘이 동시에 느려지는 일이 드물도록 다른 업체의 모델을 선택하세요",
+    "es": "Elige un modelo de otro proveedor para que rara vez vayan lentos a la vez",
+    "pt": "Escolha um modelo de outro fornecedor para que raramente fiquem lentos ao mesmo tempo",
+    "ru": "Выберите модель другого поставщика, чтобы оба редко тормозили одновременно",
+    "fr": "Choisissez un modèle d'un autre fournisseur pour qu'ils soient rarement lents en même temps",
+    "de": "Wähle ein Modell eines anderen Anbieters, damit selten beide gleichzeitig langsam sind"
+  },
+  " (backup for 1 segment)": {
+    "ja": "（1 区間は予備で文字起こし）",
+    "ko": " (1개 구간 백업)",
+    "es": " (respaldo en 1 fragmento)",
+    "pt": " (reserva em 1 trecho)",
+    "ru": " (резерв для 1 фрагмента)",
+    "fr": " (secours pour 1 segment)",
+    "de": " (Ersatz für 1 Abschnitt)"
+  },
+  " (backup for {0} segments)": {
+    "ja": "（{0} 区間は予備で文字起こし）",
+    "ko": " ({0}개 구간 백업)",
+    "es": " (respaldo en {0} fragmentos)",
+    "pt": " (reserva em {0} trechos)",
+    "ru": " (резерв для фрагментов: {0})",
+    "fr": " (secours pour {0} segments)",
+    "de": " (Ersatz für {0} Abschnitte)"
+  },
+  "{0}, {1}": {
+    "ja": "{1}（{0}）",
+    "ko": "{1} ({0})",
+    "es": "{0}, {1}",
+    "pt": "{0}, {1}",
+    "ru": "{0}, {1}",
+    "fr": "{0} {1}",
+    "de": "{0}, {1}"
+  }
+}

@@ -39,7 +39,7 @@ struct DictationRecord: Codable, Identifiable, Equatable {
             func secs(_ value: Double) -> String { String(format: "%.1f", value) + L(" 秒", " s") }
             var parts: [String] = []
             if let transcription {
-                let backup = transcriptionBackupChunks.map { L("（备用转写 \($0) 段）", " (backup for \($0) segment\($0 == 1 ? "" : "s"))") } ?? ""
+                let backup = transcriptionBackupChunks.map { $0 == 1 ? L("（备用转写 1 段）", " (backup for 1 segment)") : L("（备用转写 \($0) 段）", " (backup for \($0) segments)") } ?? ""
                 parts.append(L("转写 ", "Transcription ") + secs(transcription) + backup)
             }
             if let polish {

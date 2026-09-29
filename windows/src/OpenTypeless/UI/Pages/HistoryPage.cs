@@ -128,11 +128,11 @@ public sealed class HistoryPage : PageBase
         var today = DateTime.Today;
         if (day == today) return L("今天", "Today");
         if (day == today.AddDays(-1)) return L("昨天", "Yesterday");
-        var weekday = L("周" + "日一二三四五六"[(int)day.DayOfWeek], CultureInfo.InvariantCulture.DateTimeFormat.AbbreviatedDayNames[(int)day.DayOfWeek]);
-        var month = CultureInfo.InvariantCulture.DateTimeFormat.AbbreviatedMonthNames[day.Month - 1];
-        return day.Year == today.Year
-            ? L($"{day.Month}月{day.Day}日 {weekday}", $"{weekday}, {month} {day.Day}")
-            : L($"{day.Year}年{day.Month}月{day.Day}日", $"{month} {day.Day}, {day.Year}");
+        var dates = Localization.Resolved.Culture().DateTimeFormat;
+        if (day.Year != today.Year) return day.ToString(dates.ShortDatePattern, dates);
+        var weekday = dates.AbbreviatedDayNames[(int)day.DayOfWeek];
+        var monthDay = day.ToString(dates.MonthDayPattern.Replace("MMMM", "MMM"), dates);
+        return L($"{monthDay} {weekday}", $"{weekday}, {monthDay}");
     }
 
     private void Render()

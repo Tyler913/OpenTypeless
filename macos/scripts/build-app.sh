@@ -57,7 +57,7 @@ cat > "$STAGED/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key><string>$(date +%Y%m%d%H%M)</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
-    <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>
+    <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string><string>ja</string><string>ko</string><string>es</string><string>pt-BR</string><string>fr</string><string>de</string><string>ru</string></array>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>

@@ -79,8 +79,9 @@ struct GeneralPage: View {
                 CardRow(icon: "globe", iconColor: .teal, title: L("界面语言", "Language")) {
                     Picker("", selection: $settings.appLanguage) {
                         Text(L("跟随系统", "System")).tag(AppLanguage.system)
-                        Text("简体中文").tag(AppLanguage.zh)
-                        Text("English").tag(AppLanguage.en)
+                        ForEach(AppLanguage.supported) { language in
+                            Text(language.nativeName).tag(language)
+                        }
                     }
                     .labelsHidden()
                     .fixedSize()
@@ -713,10 +714,9 @@ struct ModelsPage: View {
                         subtitle: L("固定语言可以提高准确率；中英混说请选自动", "Fixing it can help accuracy; use Auto for mixed speech")) {
                     Picker("", selection: $settings.sttLanguage) {
                         Text(L("自动检测", "Auto-detect")).tag("")
-                        Text("中文").tag("zh")
-                        Text("English").tag("en")
-                        Text("日本語").tag("ja")
-                        Text("한국어").tag("ko")
+                        ForEach(AppLanguage.supported) { language in
+                            Text(language == .zh ? "中文" : language.nativeName).tag(language.rawValue)
+                        }
                     }
                     .labelsHidden()
                     .fixedSize()

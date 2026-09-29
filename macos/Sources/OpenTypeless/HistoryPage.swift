@@ -121,9 +121,10 @@ struct HistoryPage: View {
         if calendar.isDateInToday(day) { return L("今天", "Today") }
         if calendar.isDateInYesterday(day) { return L("昨天", "Yesterday") }
         let sameYear = calendar.isDate(day, equalTo: Date(), toGranularity: .year)
+        let locale = AppLanguage.resolved.locale
         return sameYear
-            ? day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
-            : day.formatted(.dateTime.year().month(.abbreviated).day())
+            ? day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().locale(locale))
+            : day.formatted(.dateTime.year().month(.abbreviated).day().locale(locale))
     }
 
     private var list: some View {

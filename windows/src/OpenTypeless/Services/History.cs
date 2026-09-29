@@ -103,7 +103,7 @@ public sealed class DictationTiming
             if (Transcription is { } transcription)
             {
                 var backup = TranscriptionBackupChunks is { } n
-                    ? L($"（备用转写 {n} 段）", $" (backup for {n} segment{(n == 1 ? "" : "s")})")
+                    ? n == 1 ? L("（备用转写 1 段）", " (backup for 1 segment)") : L($"（备用转写 {n} 段）", $" (backup for {n} segments)")
                     : "";
                 parts.Add(L("转写 ", "Transcription ") + Secs(transcription) + backup);
             }

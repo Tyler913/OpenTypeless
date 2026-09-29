@@ -30,7 +30,7 @@ failure handling. Only the system-integration layer and the look differ.
 | `CorrectionLearner.swift` | `CorrectionLearner.cs`, `Transliteration.cs` | Same diff (LCS over Latin words / CJK characters) and the same filters. Foundation's `.toLatin` transform becomes ICU's `Any-Latin; Latin-ASCII` called from the OS's own ICU (`icu.dll`, Windows 10 1903+), so 逻辑 / 罗技 compare as the same pinyin. Chinese numerals count as digits, like Swift's `Character.isNumber`. |
 | `TranscriptionPipeline.swift` | `TranscriptionPipeline.cs` | Transcribe while talking, ≤ 3 concurrent, skip silent / < 0.3 s chunks, preset transcripts for retries, one extra round for transient failures, `PipelineFailure` with partial text. |
 | `PolishEvaluation.swift` | `PolishEvaluation.cs` | Evaluation-only accounting, durable budget ledger with an exclusive lock file, first-token time, `--provider-routing`, `PolishMetrics` (English kept, similarity). |
-| `Localization.swift` | `Localization.cs` | Inline `L("中文", "English")`, `system / zh / en`, switchable at runtime. |
+| `Localization.swift` | `Localization.cs` | Inline `L("中文", "English")`; other languages looked up in the shared `i18n/strings.json` (Swift: `ExpressibleByStringInterpolation`, C#: an interpolated string handler, both turning the English text into a `{0}` template). `system / zh / en / ja / ko / es / pt / fr / de / ru`, switchable at runtime. |
 | `Usage.swift` | `Usage.cs` | `RequestUsage` from STT / SSE `usage`, token estimate, `ModelPrice`, `CostEstimator` (reported cost vs. price), OpenRouter `PriceCatalog`, `UsageFormat`. |
 | `UsageLedger.swift` | `UsageLedger.cs` | `WordCount`, per-day `usage.json`, totals, time saved, streaks, heatmap quartiles. `CalendarDay` on macOS is `DateOnly` on Windows. Both suites run `testdata/usage-cases.json`. |
 | `CancelPolicy.swift` | `CancelPolicy.cs` | Esc keeps recordings of 10 s or more, as `cancelled`, for 24 hours. |
@@ -106,15 +106,15 @@ These follow from how Windows works rather than from missing features:
   recording a new shortcut on the Shortcut page.
 - `OpenTypeless.Cli`: chunk analysis on an 86 s speech file (4 chunks, every cut at a true pause), the full pipeline
   with injected 503s, 44.1 kHz stereo input through the Media Foundation transcoder, and an evaluation dry run.
-- UI: every page in both languages, the tray panel and each HUD state via `--snapshot-ui`, and live on-screen captures.
+- UI: every page in Chinese and English (or one language with `--lang`), the tray panel and each HUD state via `--snapshot-ui`, and live on-screen captures.
 
 ## UI parity checklist
 
 - **Popover**: header (tile, name, status pill), hero ("Hold [keys] and speak", tip), setup warnings with Fix, last failed dictation with Retry, 5 recent items (click to copy, check mark), footer (Settings, History, Quit).
-- **General**: permissions, language (System / 简体中文 / English), open at login (+ error / approval footer), restore clipboard, sounds, maximum recording (1–60 min).
+- **General**: permissions, language (System or one of the nine UI languages), open at login (+ error / approval footer), restore clipboard, sounds, maximum recording (1–60 min).
 - **Shortcut**: current keys (large key caps), record / cancel, presets, how it works, warnings.
 - **Providers**: six expandable cards: usage tags, configured pill, API key (password box + Paste), Base URL (+ Reset), get-a-key link, Test connection.
 - **Models**: STT provider / model (free text + browse, grouped by vendor when > 40) / spoken language; clean-up toggle / provider / model; backup model toggle / provider / model; missing-key banners.
 - **Vocabulary & Style**: vocabulary editor, "Learn from my corrections" with the learned terms (heard as…, date, remove = never learn again), preferences editor.
 - **History**: recording retention picker with the space used; list + detail (status, error, timing, cleaned + raw text, Copy, Re-transcribe, Show in Explorer, Delete).
-- Bilingual UI switching instantly, Esc cancel, max-duration auto stop, < 0.4 s accidental tap discarded, "No speech detected", truncation / answer detection fallbacks.
+- UI language switching instantly, Esc cancel, max-duration auto stop, < 0.4 s accidental tap discarded, "No speech detected", truncation / answer detection fallbacks.

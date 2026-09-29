@@ -319,10 +319,12 @@ internal sealed class ActivityHeatmap : UserControl
 
     private static string Tooltip(HeatmapCell cell)
     {
-        var date = L($"{cell.Date.Month}月{cell.Date.Day}日", $"{MonthName(cell.Date.Month)} {cell.Date.Day}");
+        var date = DateLabel(cell.Date);
         if (cell.Dictations == 0) return L($"{date}：没有听写", $"{date}: no dictation");
-        return L($"{date}：{cell.Dictations} 次听写 · {UsageFormat.Count(cell.Words)} 字",
-                 $"{date}: {cell.Dictations} {(cell.Dictations == 1 ? "dictation" : "dictations")} · {UsageFormat.Count(cell.Words)} words");
+        var words = UsageFormat.Count(cell.Words);
+        return cell.Dictations == 1
+            ? L($"{date}：1 次听写 · {words} 字", $"{date}: 1 dictation · {words} words")
+            : L($"{date}：{cell.Dictations} 次听写 · {words} 字", $"{date}: {cell.Dictations} dictations · {words} words");
     }
 
     /// <summary>Empty days in neutral grey, busier days in deeper shades of the accent colour.</summary>
@@ -335,9 +337,12 @@ internal sealed class ActivityHeatmap : UserControl
         _ => Palette.Brush(Tint.Accent),
     };
 
-    private static string MonthName(int month) =>
-        L($"{month}月", CultureInfo.InvariantCulture.DateTimeFormat.AbbreviatedMonthNames[month - 1]);
+    // Labels in the UI language: "Sep" / "9月", "Mon" / "周一", "Sep 28" / "9月28日".
+    private static DateTimeFormatInfo Dates => Localization.Resolved.Culture().DateTimeFormat;
 
-    private static string WeekdayName(int weekday) =>
-        L("周" + "日一二三四五六"[weekday], CultureInfo.InvariantCulture.DateTimeFormat.AbbreviatedDayNames[weekday]);
+    private static string MonthName(int month) => Dates.AbbreviatedMonthNames[month - 1];
+
+    private static string WeekdayName(int weekday) => Dates.AbbreviatedDayNames[weekday];
+
+    private static string DateLabel(DateOnly day) => day.ToString(Dates.MonthDayPattern.Replace("MMMM", "MMM"), Dates);
 }

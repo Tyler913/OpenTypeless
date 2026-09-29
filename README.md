@@ -69,14 +69,18 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 ## Features
 
 - **Global hotkey.** Hold **Fn** (macOS) or **Right Ctrl** (Windows) by default, or record any single modifier (right ⌘, right ⌥, Right Alt, …) or a combination (⌥ Space, Alt + Space, F5, …).
-- **Push-to-talk or hands-free.** Hold to talk; tap once to keep recording hands-free and tap again to finish. **Esc** cancels.
+- **Push-to-talk or hands-free.** Hold to talk; tap once to keep recording hands-free and tap again to finish. **Esc** cancels. After 10 seconds of talking, a cancelled dictation isn't lost: it's transcribed (not inserted) and kept in History for 24 hours.
+- **Choose your microphone** under **Settings → General**, with a live level meter to check it hears you. Virtual devices (meeting and streaming apps) are marked, and a disconnected choice falls back to the system default.
+- **Keep microphone ready** (optional): recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped. The mic stays on, and Bluetooth headphones switch to call mode.
+- **Live preview (beta)**: see the words above the recording capsule as you speak, recognised on the device (macOS SpeechAnalyzer; Windows speech recognition). The inserted text still comes from your provider.
 - **Pastes where your cursor is.** In a text field the text is pasted and your clipboard restored; with no text field focused it goes to the clipboard. Browsers and Electron apps are handled too, and terminals on Windows.
-- **Bring your own provider.** OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek, or any OpenAI-compatible endpoint. Speech-to-text, clean-up and the backup clean-up model can each use a different provider.
+- **Bring your own provider.** OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek, or any OpenAI-compatible endpoint. Speech-to-text, clean-up and the backup clean-up model can each use a different provider. **Test** checks a key and shows the provider's round-trip latency (median of three).
+- **Backup speech-to-text** (optional): when a segment takes much longer than that route usually needs for its length, or fails, a second provider is asked too and the first answer wins.
 - **Custom vocabulary and style preferences** for names, products and jargon.
 - **Learns from your fixes.** Correct a misrecognised word after it's pasted (TypeList → Typeless) and it's added to your vocabulary automatically, along with how it was misheard. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps, and a word you remove is never learned again.
 - **Home page** with what voice typing has done for you: words dictated, time saved against typing (100 wpm by default, adjustable), your speaking speed, what it cost today, this month and in total, and a GitHub-style activity heatmap with streaks. It opens when you launch the app yourself; at login it stays out of the way unless you turn on **Show Home when opened at login**.
 - **Know what you spend.** OpenRouter requests count exactly what OpenRouter billed for them, and its live price list is shown next to each model. For any other provider or a custom endpoint, enter the model's price under **Models** (per million tokens, or per minute of audio for speech-to-text).
-- **History** of every dictation with raw and cleaned text, timing, copy and re-transcribe. Choose how long recordings are kept: not at all, a day, a week, a month, a year, or forever.
+- **History** of every dictation, grouped by day and searchable, with raw and cleaned text, timing, cost, copy and re-transcribe. Choose how long recordings are kept: not at all, a day, a week, a month, a year, or forever.
 - **Bilingual UI** (English / 简体中文), following the system language or chosen manually.
 - **Native design.** Liquid Glass on macOS 26+ with a menu-bar panel; Mica and Acrylic on Windows 11 with a tray panel. Both show a small recording capsule while you talk.
 - **Launch at login.**
@@ -192,7 +196,7 @@ Reasoning is automatically turned off or set to its minimum for the clean-up mod
 
 ## Privacy
 
-- Audio and text are only sent to the providers you configure.
+- Audio and text are only sent to the providers you configure. With **Live preview** on, macOS recognises speech on the Mac; Windows uses its own speech recognition, which sends your voice to Microsoft when online speech recognition is on (the setting says so).
 - API keys are stored in the macOS Keychain, or in Windows Credential Manager (one entry, `OpenTypeless/credentials`).
 - Usage totals for the Home page (words, speaking time and cost per day, no text) are kept in `usage.json` in the same folder as the settings and history. The OpenRouter price list is downloaded from its public model list (no key, nothing about you) a few times a day.
 - History (audio + transcripts) lives in `~/Library/Application Support/OpenTypeless/Sessions/` on macOS and `%LOCALAPPDATA%\OpenTypeless\` on Windows. Recordings are kept for a month by default (History page: not at all, a day, a week, a month, a year, or forever); after that the text stays among the newest 200 entries. Failed dictations keep their audio so they can be retried.

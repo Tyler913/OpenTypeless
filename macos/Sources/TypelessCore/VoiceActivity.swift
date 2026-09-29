@@ -23,8 +23,29 @@ public enum VoiceActivity {
     /// The level above which a frame is speech, given the levels of the frames around it.
     public static func threshold(_ levels: [Float]) -> Float {
         guard !levels.isEmpty else { return minimumThreshold }
-        let sorted = levels.sorted()
-        return min(max(2 * sorted[sorted.count / 10], minimumThreshold), maximumThreshold)
+        var copy = levels
+        return min(max(2 * nthSmallest(&copy, copy.count / 10), minimumThreshold), maximumThreshold)
+    }
+
+    /// The value sorting would put at `k`, found by selection instead (reorders `values`): the pause tracker asks for
+    /// the threshold on every 40 ms block of the audio thread, and sorting every level was most of that thread's time.
+    private static func nthSmallest(_ values: inout [Float], _ k: Int) -> Float {
+        var lo = 0, hi = values.count - 1
+        while lo < hi {
+            let pivot = values[(lo + hi) / 2]
+            var i = lo, j = hi
+            while i <= j {
+                while values[i] < pivot { i += 1 }
+                while values[j] > pivot { j -= 1 }
+                if i <= j {
+                    values.swapAt(i, j)
+                    i += 1
+                    j -= 1
+                }
+            }
+            if k <= j { hi = j } else if k >= i { lo = i } else { return values[k] }
+        }
+        return values[k]
     }
 
     /// Where the speech in `samples` starts and ends, widened by `padding` seconds on each side: all of it when no

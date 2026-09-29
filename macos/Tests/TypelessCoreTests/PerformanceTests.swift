@@ -9,17 +9,22 @@ import Testing
 /// does too, and puts the results on the run's summary page). The inputs are sized so that work growing faster than
 /// the input takes seconds instead of milliseconds, and budgets leave a wide margin for slow, shared CI machines.
 /// The Windows suite (windows/tests/TypelessCore.Tests/PerformanceTests.cs) checks the same cases with the same numbers.
+/// Speech-to-text is answered by `MockOpenRouter`, which the pipeline tests also set: run this suite on its own
+/// (`scripts/perf.sh` filters for it).
 @Suite(.enabled(if: Performance.isEnabled), .serialized)
 struct PerformanceTests {
     /// The audio thread's work for each 40 ms block of a 20-minute dictation: hand the samples on through the sink,
-    /// append them to the WAV file and the chunker, and measure the level for the capsule.
-    @Test func liveAudioKeepsUpWithTheMicrophone() throws {
+    /// append them to the WAV file and the transcription pipeline, and measure the level for the capsule. The pipeline
+    /// cuts chunks, follows the pauses and, since the audio pauses every 2 s, transcribes the tail ahead of time about
+    /// 600 times, all answered at once by the mock server while the blocks keep coming.
+    @Test func liveAudioKeepsUpWithTheMicrophone() async throws {
         let audio = Performance.speech(minutes: 20)
+        MockOpenRouter.handler = { _, _ in (200, Data(#"{"text":"ok"}"#.utf8)) }
         // Twice, keeping the better result: a block that is slow by nature is slow both times, while a hiccup of a
         // shared CI machine rarely hits twice.
         var slowest = Double.infinity, total = Double.infinity
         for _ in 0..<2 {
-            let run = try dictate(audio)
+            let run = try await dictate(audio)
             XCTAssertTrue(run.chunks >= 40)
             slowest = min(slowest, run.slowest)
             total = min(total, run.total)
@@ -28,17 +33,17 @@ struct PerformanceTests {
         Performance.check("Live audio: slowest 40 ms block", slowest, budget: 20)
         Performance.check("Live audio: 20 minutes, all blocks", total, budget: 1500)
 
-        func dictate(_ audio: [Int16]) throws -> (slowest: Double, total: Double, chunks: Int) {
+        func dictate(_ audio: [Int16]) async throws -> (slowest: Double, total: Double, chunks: Int) {
             let block = AudioFormat.sampleCount(forSeconds: 0.04)
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".wav")
             defer { try? FileManager.default.removeItem(at: url) }
             let writer = try WAVFileWriter(url: url)
-            let chunker = Chunker()
-            var chunks = 0
+            let pipeline = TranscriptionPipeline(client: APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session()),
+                                                 options: .init(model: "m"))
             let sink = AudioSink()
             sink.begin { samples in
                 writer.append(samples)
-                chunks += chunker.append(samples).count
+                pipeline.append(samples)
             }
             var slowest = 0.0
             let total = Performance.time {
@@ -54,7 +59,8 @@ struct PerformanceTests {
             }
             sink.end()
             writer.close()
-            return (slowest, total, chunks)
+            _ = try await pipeline.finish()
+            return (slowest, total, pipeline.completedTranscripts().count)
         }
     }
 

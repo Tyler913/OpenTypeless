@@ -33,8 +33,38 @@ public static class VoiceActivity
     public static float Threshold(IReadOnlyList<float> levels)
     {
         if (levels.Count == 0) return MinimumThreshold;
-        var sorted = levels.Order().ToArray();
-        return Math.Clamp(2 * sorted[sorted.Length / 10], MinimumThreshold, MaximumThreshold);
+        var copy = levels.ToArray();
+        return Math.Clamp(2 * NthSmallest(copy, copy.Length / 10), MinimumThreshold, MaximumThreshold);
+    }
+
+    /// <summary>
+    /// The value sorting would put at <paramref name="k"/>, found by selection instead (reorders <paramref name="values"/>):
+    /// the pause tracker asks for the threshold on every 40 ms block of the capture thread, and sorting every level was
+    /// most of that thread's time.
+    /// </summary>
+    private static float NthSmallest(float[] values, int k)
+    {
+        int lo = 0, hi = values.Length - 1;
+        while (lo < hi)
+        {
+            var pivot = values[(lo + hi) >>> 1];
+            int i = lo, j = hi;
+            while (i <= j)
+            {
+                while (values[i] < pivot) i++;
+                while (values[j] > pivot) j--;
+                if (i <= j)
+                {
+                    (values[i], values[j]) = (values[j], values[i]);
+                    i++;
+                    j--;
+                }
+            }
+            if (k <= j) hi = j;
+            else if (k >= i) lo = i;
+            else return values[k];
+        }
+        return values[k];
     }
 
     /// <summary>

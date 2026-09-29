@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json.Nodes;
 
 namespace TypelessCore.Tests;
 
@@ -11,17 +12,22 @@ namespace TypelessCore.Tests;
 /// (CI does too, and puts the results on the run's summary page). The inputs are sized so that work growing faster than
 /// the input takes seconds instead of milliseconds, and budgets leave a wide margin for slow, shared CI machines.
 /// The macOS suite (macos/Tests/TypelessCoreTests/PerformanceTests.swift) checks the same cases with the same numbers.
+/// Answers speech-to-text through <see cref="MockOpenRouter"/>, so it shares the pipeline tests' serialized collection.
 /// </summary>
+[Collection("MockServer")]
 public class PerformanceTests
 {
     /// <summary>
     /// The capture thread's work for each 40 ms block of a 20-minute dictation: hand the samples on through the sink,
-    /// append them to the WAV file and the chunker, and measure the level for the capsule.
+    /// append them to the WAV file and the transcription pipeline, and measure the level for the capsule. The pipeline
+    /// cuts chunks, follows the pauses and, since the audio pauses every 2 s, transcribes the tail ahead of time about
+    /// 600 times, all answered at once by the mock server while the blocks keep coming.
     /// </summary>
     [PerformanceFact]
     public void LiveAudioKeepsUpWithTheMicrophone()
     {
         var audio = Performance.Speech(minutes: 20);
+        MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8(new JsonObject { ["text"] = "ok" }.ToJsonString()));
         // Twice, keeping the better result: a block that is slow by nature is slow both times, while a hiccup of a
         // shared CI machine rarely hits twice.
         double slowest = double.MaxValue, total = double.MaxValue;
@@ -43,13 +49,13 @@ public class PerformanceTests
             try
             {
                 var writer = new WavFileWriter(path);
-                var chunker = new Chunker();
-                var chunks = 0;
+                var pipeline = new TranscriptionPipeline(new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client()),
+                                                         new TranscriptionOptions("m"));
                 var sink = new AudioSink();
                 sink.Begin(samples =>
                 {
                     writer.Append(samples);
-                    chunks += chunker.Append(samples).Count;
+                    pipeline.Append(samples);
                 });
                 var slowest = 0.0;
                 Performance.CollectGarbage();
@@ -67,7 +73,8 @@ public class PerformanceTests
                 });
                 sink.End();
                 writer.Close();
-                return (slowest, total, chunks);
+                pipeline.Finish().GetAwaiter().GetResult();
+                return (slowest, total, pipeline.CompletedTranscripts().Count);
             }
             finally
             {

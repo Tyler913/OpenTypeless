@@ -153,6 +153,58 @@ public class CorrectionLearnerTests
         Assert.Equal([new Correction("逻辑", "罗技")], Learn("我用的是逻辑鼠标", "我用的是罗技鼠标"));
     }
 
+    /// <summary>Stands in for the system's word segmenter: known words whole, anything else a character at a time.</summary>
+    private static IReadOnlyList<(int Start, int End)> Words(string text)
+    {
+        string[] known = ["罗技", "鼠标", "一个", "这个", "模型", "叫做", "打开", "文档", "高兴", "项目", "前端", "打算"];
+        var words = new List<(int, int)>();
+        for (var i = 0; i < text.Length;)
+        {
+            var word = known.FirstOrDefault(k => string.CompareOrdinal(text, i, k, 0, k.Length) == 0);
+            var length = word?.Length ?? 1;
+            if (!char.IsWhiteSpace(text[i])) words.Add((i, i + length));
+            i += length;
+        }
+        return words;
+    }
+
+    private static List<Correction> LearnWords(string original, string edited) =>
+        CorrectionLearner.Corrections(original, edited, word => Common.Contains(word.ToLowerInvariant()), Words);
+
+    [Fact]
+    public void OneWrongCharacterLearnsTheWholeWord()
+    {
+        if (!Transliteration.IsAvailable) return;
+        Assert.Equal([new Correction("罗级", "罗技")], LearnWords("我买了一个罗级鼠标", "我买了一个罗技鼠标"));
+        // Names the segmenter doesn't know come out as single characters (千|问); the neighbours are taken in.
+        Assert.Equal([new Correction("千文", "千问")], LearnWords("这个模型叫做千文", "这个模型叫做千问"));
+        Assert.Equal([new Correction("非书", "飞书")], LearnWords("打开非书文档", "打开飞书文档"));
+        // A particle fixed is grammar, not a word.
+        Assert.Empty(LearnWords("他高兴的跑了", "他高兴地跑了"));
+        // Without a segmenter, one character stays too little to learn.
+        Assert.Empty(Learn("我买了一个罗级鼠标", "我买了一个罗技鼠标"));
+    }
+
+    [Fact]
+    public void LearnsEnglishThatSoundsAlike()
+    {
+        Assert.Equal([new Correction("Versel", "Vercel")], Learn("部署到 Versel 上", "部署到 Vercel 上"));
+        Assert.True(CorrectionLearner.SoundsAlike("Cooper Netties", "Kubernetes")); // KPRNTS / KBRNTS
+        if (!Transliteration.IsAvailable) return;
+        Assert.Equal([new Correction("克劳德", "Claude")], Learn("我在用克劳德写代码", "我在用 Claude 写代码"));
+        Assert.Equal([new Correction("杰森", "JSON")], Learn("返回一个杰森", "返回一个 JSON"));
+        Assert.Equal([new Correction("瑞艾克特", "React")], Learn("这个项目的前端我打算用瑞艾克特来写", "这个项目的前端我打算用 React 来写"));
+    }
+
+    [Fact]
+    public void ReviewSaysWhyAChangeWasNotLearned()
+    {
+        var review = CorrectionLearner.ReviewEdit("Send the report to Mike", "Send the report to Sarah");
+        Assert.Equal(new[] { new CorrectionLearner.Change(new Correction("Mike", "Sarah"), "sounds different") }, review.Changes);
+        Assert.Equal("rewrite", CorrectionLearner.ReviewEdit("Please send the quarterly numbers to the finance team by Friday",
+                                                             "Can we talk about this tomorrow instead").Skipped);
+    }
+
     [Fact]
     public void LearnsDistinctiveCasingOnly()
     {

@@ -19,6 +19,30 @@ import Testing
         #expect(learn("我用的是逻辑鼠标", "我用的是罗技鼠标") == [Correction(heard: "逻辑", corrected: "罗技")])
     }
 
+    @Test func oneWrongCharacterLearnsTheWholeWord() {
+        #expect(learn("我买了一个罗级鼠标", "我买了一个罗技鼠标") == [Correction(heard: "罗级", corrected: "罗技")])
+        // Names the segmenter doesn't know come out as single characters (千|问); the neighbours are taken in.
+        #expect(learn("这个模型叫做千文", "这个模型叫做千问") == [Correction(heard: "千文", corrected: "千问")])
+        #expect(learn("打开非书文档", "打开飞书文档") == [Correction(heard: "非书", corrected: "飞书")])
+        // A particle fixed is grammar, not a word.
+        #expect(learn("他高兴的跑了", "他高兴地跑了").isEmpty)
+    }
+
+    @Test func learnsEnglishThatSoundsAlike() {
+        #expect(learn("部署到 Versel 上", "部署到 Vercel 上") == [Correction(heard: "Versel", corrected: "Vercel")])
+        #expect(learn("我在用克劳德写代码", "我在用 Claude 写代码") == [Correction(heard: "克劳德", corrected: "Claude")])
+        #expect(learn("返回一个杰森", "返回一个 JSON") == [Correction(heard: "杰森", corrected: "JSON")])
+        #expect(learn("这个项目的前端我打算用瑞艾克特来写", "这个项目的前端我打算用 React 来写") == [Correction(heard: "瑞艾克特", corrected: "React")])
+        #expect(CorrectionLearner.soundsAlike("Cooper Netties", "Kubernetes")) // KPRNTS / KBRNTS
+    }
+
+    @Test func reviewSaysWhyAChangeWasNotLearned() {
+        let review = CorrectionLearner.review(original: "Send the report to Mike", edited: "Send the report to Sarah")
+        #expect(review.changes == [.init(correction: Correction(heard: "Mike", corrected: "Sarah"), rejected: "sounds different")])
+        #expect(CorrectionLearner.review(original: "Please send the quarterly numbers to the finance team by Friday",
+                                         edited: "Can we talk about this tomorrow instead").skipped == "rewrite")
+    }
+
     @Test func learnsDistinctiveCasingOnly() {
         #expect(learn("写 swiftui 页面", "写 SwiftUI 页面") == [Correction(heard: "swiftui", corrected: "SwiftUI")])
         #expect(learn("hello there", "Hello there").isEmpty)

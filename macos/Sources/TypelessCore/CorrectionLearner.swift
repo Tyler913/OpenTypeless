@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 /// A word the user fixed by hand after dictating: what speech recognition produced, and what they
 /// changed it to.
@@ -14,7 +15,8 @@ public struct Correction: Sendable, Equatable, Hashable {
 
 /// Learns vocabulary from the edits people make to dictated text, the way Wispr Flow and Typeless do.
 ///
-/// Only small, sound-alike replacements are learned ("TypeList" → "Typeless", "逻辑鼠标" → "罗技鼠标").
+/// Only small, sound-alike replacements are learned ("TypeList" → "Typeless", "逻辑鼠标" → "罗技鼠标", "克劳德" →
+/// "Claude"); a fix of one Chinese character learns the word it belongs to ("罗级鼠标" → "罗技鼠标" learns 罗技).
 /// Everything else is ignored on purpose: rewrites, pure insertions or deletions, changed numbers (facts,
 /// not recognition errors), capitalising the first letter, and swapping one ordinary word for another.
 /// A wrong entry in the vocabulary costs more than a missed one.
@@ -34,21 +36,49 @@ public enum CorrectionLearner {
 
     // MARK: Finding corrections
 
-    /// Learnable corrections between the dictated text and the user's edited version of it.
-    /// `isCommonWord` tells whether a single English word is an ordinary dictionary word.
-    public static func corrections(original: String, edited: String,
-                                   isCommonWord: (String) -> Bool = { _ in false }) -> [Correction] {
-        guard original != edited else { return [] }
-        // A heavy rewrite says nothing about recognition errors.
-        guard PolishMetrics.similarity(original, edited) >= 0.5 else { return [] }
-        let hunks = changes(original: original, edited: edited)
-        guard hunks.count <= 5 else { return [] }
-        var seen = Set<Correction>()
-        return hunks.filter { isLearnable($0, isCommonWord: isCommonWord) && seen.insert($0).inserted }
+    /// One replacement between the dictated text and the edited one, and why it isn't learned (nil when it is).
+    public struct Change: Sendable, Equatable {
+        public let correction: Correction
+        public let rejected: String?
     }
 
-    /// Replacements between two texts, as the smallest runs of changed words (CJK: characters).
-    static func changes(original: String, edited: String) -> [Correction] {
+    /// What the learner made of an edit: why it was skipped as a whole, or each replacement and its verdict.
+    public struct Review: Sendable, Equatable {
+        public var skipped: String?
+        public var changes: [Change]
+
+        public var learnable: [Correction] {
+            var seen = Set<Correction>()
+            return changes.filter { $0.rejected == nil }.map(\.correction).filter { seen.insert($0).inserted }
+        }
+    }
+
+    /// Learnable corrections between the dictated text and the user's edited version of it.
+    /// `isCommonWord` tells whether a single English word is an ordinary dictionary word; `words` splits Chinese
+    /// text into words (see `review`).
+    public static func corrections(original: String, edited: String,
+                                   isCommonWord: (String) -> Bool = { _ in false },
+                                   words: (String) -> [Range<String.Index>] = chineseWords) -> [Correction] {
+        review(original: original, edited: edited, isCommonWord: isCommonWord, words: words).learnable
+    }
+
+    /// Every replacement between the two texts with its verdict. A fix inside Chinese text is widened to the whole
+    /// word it falls in (per `words`, run on the edited text), so correcting one wrong character of 罗级鼠标 learns
+    /// 罗技, heard as 罗级.
+    public static func review(original: String, edited: String,
+                              isCommonWord: (String) -> Bool = { _ in false },
+                              words: (String) -> [Range<String.Index>] = chineseWords) -> Review {
+        guard original != edited else { return Review(skipped: "unchanged", changes: []) }
+        // A heavy rewrite says nothing about recognition errors.
+        guard PolishMetrics.similarity(original, edited) >= 0.5 else { return Review(skipped: "rewrite", changes: []) }
+        let hunks = changes(original: original, edited: edited, words: words(edited))
+        guard hunks.count <= 5 else { return Review(skipped: "\(hunks.count) changes", changes: []) }
+        return Review(skipped: nil, changes: hunks.map { Change(correction: $0, rejected: rejection($0, isCommonWord: isCommonWord)) })
+    }
+
+    /// Replacements between two texts, as the smallest runs of changed words (CJK: characters), each widened to
+    /// whole Chinese words when the edited text's `words` are given.
+    static func changes(original: String, edited: String, words wordRanges: [Range<String.Index>] = []) -> [Correction] {
         let a = tokens(original), b = tokens(edited)
         // Longest common subsequence over token text.
         let n = a.count, m = b.count
@@ -60,54 +90,115 @@ public enum CorrectionLearner {
                 }
             }
         }
-        var result: [Correction] = []
-        var i = 0, j = 0
-        var hunkA: [Token] = [], hunkB: [Token] = []
+        // Hunks as token index ranges, and which original token each unchanged edited token matches.
+        var hunks: [(a: Range<Int>, b: Range<Int>)] = []
+        var matchOf = [Int?](repeating: nil, count: m)
+        var i = 0, j = 0, startA = 0, startB = 0
         func flush() {
-            if !hunkA.isEmpty || !hunkB.isEmpty {
-                result.append(Correction(heard: span(hunkA, in: original), corrected: span(hunkB, in: edited)))
-            }
-            hunkA = []; hunkB = []
+            if i > startA || j > startB { hunks.append((startA..<i, startB..<j)) }
         }
         while i < n || j < m {
             if i < n, j < m, a[i].text == b[j].text {
-                flush(); i += 1; j += 1
+                flush()
+                matchOf[j] = i
+                i += 1; j += 1
+                startA = i; startB = j
             } else if j < m, i == n || lcs[i][j + 1] >= lcs[i + 1][j] {
-                hunkB.append(b[j]); j += 1
+                j += 1
             } else {
-                hunkA.append(a[i]); i += 1
+                i += 1
             }
         }
         flush()
-        return result
+        return hunks.map { hunk in
+            var hunk = hunk
+            if !wordRanges.isEmpty, !hunk.a.isEmpty, !hunk.b.isEmpty {
+                let (left, right) = widening(b, hunk.b, in: edited, words: wordRanges)
+                // Only across unchanged tokens that line up on both sides.
+                var l = 0
+                while l < left, hunk.a.lowerBound - l - 1 >= 0, matchOf[hunk.b.lowerBound - l - 1] == hunk.a.lowerBound - l - 1 { l += 1 }
+                var r = 0
+                while r < right, hunk.a.upperBound + r < n, matchOf[hunk.b.upperBound + r] == hunk.a.upperBound + r { r += 1 }
+                hunk = ((hunk.a.lowerBound - l)..<(hunk.a.upperBound + r), (hunk.b.lowerBound - l)..<(hunk.b.upperBound + r))
+            }
+            return Correction(heard: span(Array(a[hunk.a]), in: original), corrected: span(Array(b[hunk.b]), in: edited))
+        }
+    }
+
+    /// Particles and the like: a fix of one of these is grammar, never part of a word worth learning.
+    private static let particles = Set("的地得了着过吗呢吧啊呀嘛么哦哈")
+    /// Widening a fix never makes a Chinese word longer than this.
+    private static let maxWidenedCharacters = 4
+
+    /// How many tokens to add on the left and right of a hunk of the edited text so it covers whole words. A fix
+    /// that is still a single character after that (the word segmenter splits names it doesn't know, like 千|问 or
+    /// 飞|书) takes in the neighbouring single-character words too.
+    private static func widening(_ tokens: [Token], _ hunk: Range<Int>, in text: String,
+                                 words: [Range<String.Index>]) -> (Int, Int) {
+        let changed = tokens[hunk].map(\.text).joined()
+        guard changed.unicodeScalars.contains(where: TranscriptJoiner.isCJK),
+              !(changed.count == 1 && particles.contains(Character(changed))) else { return (0, 0) }
+        let lower = tokens[hunk.lowerBound].range.lowerBound, upper = tokens[hunk.upperBound - 1].range.upperBound
+        guard var first = words.firstIndex(where: { $0.upperBound > lower }),
+              var last = words.lastIndex(where: { $0.lowerBound < upper }), first <= last else { return (0, 0) }
+        func isSingle(_ index: Int) -> Bool {
+            let word = text[words[index]]
+            return word.count == 1 && word.unicodeScalars.allSatisfy(TranscriptJoiner.isCJK) && !particles.contains(word.first!)
+        }
+        func length() -> Int { text[words[first].lowerBound..<words[last].upperBound].count }
+        if length() == 1 {
+            while first > 0, isSingle(first - 1), words[first - 1].upperBound == words[first].lowerBound,
+                  length() < maxWidenedCharacters { first -= 1 }
+            while last + 1 < words.count, isSingle(last + 1), words[last].upperBound == words[last + 1].lowerBound,
+                  length() < maxWidenedCharacters { last += 1 }
+        }
+        guard length() <= maxWidenedCharacters else { return (0, 0) }
+        let from = min(lower, words[first].lowerBound), to = max(upper, words[last].upperBound)
+        // Only whole tokens: a word boundary inside a Latin token widens nothing on that side.
+        let left = tokens[..<hunk.lowerBound].reversed().prefix { $0.range.lowerBound >= from }.count
+        let right = tokens[hunk.upperBound...].prefix { $0.range.upperBound <= to }.count
+        return (left, right)
+    }
+
+    /// Chinese words, per the system's word segmenter.
+    public static func chineseWords(_ text: String) -> [Range<String.Index>] {
+        let tokenizer = NLTokenizer(unit: .word)
+        tokenizer.string = text
+        tokenizer.setLanguage(.simplifiedChinese)
+        return tokenizer.tokens(for: text.startIndex..<text.endIndex)
     }
 
     static func isLearnable(_ c: Correction, isCommonWord: (String) -> Bool) -> Bool {
+        rejection(c, isCommonWord: isCommonWord) == nil
+    }
+
+    /// Why a replacement isn't learned, or nil when it is.
+    static func rejection(_ c: Correction, isCommonWord: (String) -> Bool) -> String? {
         let heard = c.heard.trimmingCharacters(in: .whitespacesAndNewlines)
         let term = c.corrected.trimmingCharacters(in: .whitespacesAndNewlines)
         // Pure insertions and deletions aren't recognition errors.
-        guard !heard.isEmpty, !term.isEmpty, heard != term else { return false }
-        guard term.count <= 40, latinWords(term).count <= 4 else { return false }
+        guard !heard.isEmpty, !term.isEmpty, heard != term else { return "insertion or deletion" }
+        guard term.count <= 40, latinWords(term).count <= 4 else { return "too long" }
         let cjk = term.unicodeScalars.filter(TranscriptJoiner.isCJK).count
         let letters = term.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
-        guard letters >= 2, cjk <= 8 else { return false }
-        // One changed Chinese character is too little to be a word worth learning.
-        if cjk == letters, cjk < 2 { return false }
+        guard letters >= 2, cjk <= 8 else { return letters < 2 ? "too short" : "too long" }
+        // One Chinese character is too little to be a word worth learning.
+        if cjk == letters, cjk < 2 { return "single character" }
         // Numbers are facts the speaker changed, not something recognition got wrong.
-        guard heard.filter(\.isNumber) == term.filter(\.isNumber) else { return false }
+        guard heard.filter(\.isNumber) == term.filter(\.isNumber) else { return "numbers changed" }
         if heard.lowercased() == term.lowercased() {
             // Only distinctive casing is worth learning (SwiftUI, iOS, GitHub), not "hello" → "Hello".
-            return hasInnerCapital(term)
+            return hasInnerCapital(term) ? nil : "only capitalisation"
         }
         // A different-sounding word is a change of mind, not a mishearing.
-        guard phoneticDistance(heard, term) <= 0.5 else { return false }
+        guard soundsAlike(heard, term) else { return "sounds different" }
         // Swapping one ordinary word for another is an edit, not a name or term.
         let heardWords = latinWords(heard), termWords = latinWords(term)
         if heardWords.count == 1, termWords.count == 1, cjk == 0, !hasInnerCapital(term),
            isCommonWord(heardWords[0]), isCommonWord(termWords[0]) {
-            return false
+            return "ordinary words"
         }
-        return true
+        return nil
     }
 
     // MARK: Helpers
@@ -171,6 +262,72 @@ public enum CorrectionLearner {
     static func phoneticDistance(_ a: String, _ b: String) -> Double {
         let x = Array(phoneticKey(a)), y = Array(phoneticKey(b))
         guard !x.isEmpty, !y.isEmpty else { return 1 }
+        return Double(editDistance(x, y)) / Double(max(x.count, y.count))
+    }
+
+    /// Close enough in spelling (`phoneticDistance`), or in sound: English words that are spelt differently but
+    /// sound alike ("Versel" / "Vercel"), and English terms heard as Chinese (克劳德 / Claude, 杰森 / JSON).
+    static func soundsAlike(_ a: String, _ b: String) -> Bool {
+        if phoneticDistance(a, b) <= 0.5 { return true }
+        let x = Array(soundKey(a)), y = Array(soundKey(b))
+        guard x.count >= 2, y.count >= 2 else { return false }
+        return Double(editDistance(x, y)) / Double(max(x.count, y.count)) <= 1.0 / 3
+    }
+
+    /// How a text sounds: each Latin word (Chinese as pinyin) reduced to its consonant sounds, Metaphone-style.
+    static func soundKey(_ text: String) -> String {
+        let latin = text.applyingTransform(.toLatin, reverse: false) ?? text
+        let plain = (latin.applyingTransform(.stripDiacritics, reverse: false) ?? latin).lowercased()
+        return plain.split { !($0.isASCII && ($0.isLetter || $0.isNumber)) }.map { metaphone(Array($0)) }.joined()
+    }
+
+    /// A simplified Metaphone: consonant sounds of one lowercase word (vowels only at the start, as "A").
+    static func metaphone(_ word: [Character]) -> String {
+        var w = word
+        if w.count >= 2, ["kn", "gn", "pn", "wr", "ae"].contains(String(w[0...1])) { w.removeFirst() }
+        if w.first == "x" { w[0] = "s" }
+        if w.count >= 2, w[0] == "w", w[1] == "h" { w.remove(at: 1) }
+        func at(_ i: Int) -> Character? { i >= 0 && i < w.count ? w[i] : nil }
+        func isVowel(_ c: Character?) -> Bool { c.map { "aeiou".contains($0) } ?? false }
+        var key = ""
+        for (i, c) in w.enumerated() {
+            let prev = at(i - 1), next = at(i + 1), after = at(i + 2)
+            if c == prev, c != "c" { continue }
+            switch c {
+            case "a", "e", "i", "o", "u": if i == 0 { key += "A" }
+            case "b": if !(prev == "m" && next == nil) { key += "B" }
+            case "c":
+                if next == "h" { key += "X" }
+                else if next == "i" && after == "a" { key += "X" }
+                else if let next, "iey".contains(next) { if prev != "s" { key += "S" } }
+                else { key += "K" }
+            case "d": key += next == "g" && after.map { "iey".contains($0) } == true ? "J" : "T"
+            case "g":
+                if next == "h" && !isVowel(after) { continue }
+                if next == "n" && after == nil { continue }
+                if prev == "d", let next, "iey".contains(next) { continue }
+                key += next.map { "iey".contains($0) } == true ? "J" : "K"
+            case "h": if isVowel(next), !(prev.map { "csptg".contains($0) } ?? false) { key += "H" }
+            case "k": if prev != "c" { key += "K" }
+            case "p": key += next == "h" ? "F" : "P"
+            case "q": key += "K"
+            case "s": key += next == "h" || (next == "i" && (after == "o" || after == "a")) ? "X" : "S"
+            case "t":
+                if next == "i" && (after == "o" || after == "a") { key += "X" }
+                else if next == "h" { key += "0" }
+                else if !(next == "c" && after == "h") { key += "T" }
+            case "v": key += "F"
+            case "w", "y": if isVowel(next) { key += c.uppercased() }
+            case "x": key += "KS"
+            case "z": key += "S"
+            default: key += c.isLetter ? c.uppercased() : String(c)
+            }
+        }
+        return key
+    }
+
+    private static func editDistance(_ x: [Character], _ y: [Character]) -> Int {
+        guard !x.isEmpty, !y.isEmpty else { return max(x.count, y.count) }
         var previous = Array(0...y.count)
         for i in 1...x.count {
             var current = [i] + [Int](repeating: 0, count: y.count)
@@ -179,7 +336,7 @@ public enum CorrectionLearner {
             }
             previous = current
         }
-        return Double(previous[y.count]) / Double(max(x.count, y.count))
+        return previous[y.count]
     }
 
     static func phoneticKey(_ text: String) -> String {

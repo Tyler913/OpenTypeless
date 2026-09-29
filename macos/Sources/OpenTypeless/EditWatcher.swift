@@ -15,6 +15,7 @@ final class EditWatcher {
     var onCorrections: (([Correction], _ quiet: Bool) -> Void)?
 
     private struct Session {
+        let app: String?
         let element: AXUIElement
         let inserted: String
         let baseline: String
@@ -31,38 +32,57 @@ final class EditWatcher {
 
     /// Starts watching the focused field, which should now contain `inserted`.
     func watch(inserted: String) {
-        finish(quiet: true)
+        finish(quiet: true, reason: "next paste")
+        let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         // Give the target app a moment to apply the paste before taking the baseline.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self, self.session == nil, let element = Self.focusedElement(),
-                  !Self.isSecure(element), let value = Self.value(of: element),
-                  value.count <= Self.maxFieldLength,
-                  CorrectionLearner.editedRegion(inserted: inserted, before: value, after: value) != nil else { return }
-            self.session = Session(element: element, inserted: inserted, baseline: value, latest: value, started: Date())
+            guard let self, self.session == nil else { return }
+            func skip(_ result: String, _ fields: [String: Any] = [:]) {
+                LearningLog.write("start", app: app, fields.merging(["result": result, "insertedLength": inserted.count]) { $1 })
+            }
+            guard let element = Self.focusedElement() else { return skip("no focused field") }
+            guard !Self.isSecure(element) else { return skip("password field") }
+            guard let value = Self.value(of: element) else { return skip("field text unreadable") }
+            guard value.count <= Self.maxFieldLength else { return skip("field too long", ["fieldLength": value.count]) }
+            guard CorrectionLearner.editedRegion(inserted: inserted, before: value, after: value) != nil else {
+                // Found once spacing is ignored: the app reformatted the text (line breaks, list markers…).
+                let squeeze = { (text: String) in text.filter { !$0.isWhitespace } }
+                return skip("dictated text not found in field", ["fieldLength": value.count,
+                                                                 "foundIgnoringSpaces": squeeze(value).contains(squeeze(inserted))])
+            }
+            skip("watching", ["fieldLength": value.count])
+            self.session = Session(app: app, element: element, inserted: inserted, baseline: value, latest: value, started: Date())
             self.timer = Timer.scheduledTimer(withTimeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.poll() }
             }
         }
     }
 
-    /// Ends the current watch now and reports what was learned.
-    func finish(quiet: Bool) {
+    /// Ends the current watch now and reports what was learned. `reason` is for the learning log.
+    func finish(quiet: Bool, reason: String) {
         timer?.invalidate()
         timer = nil
         guard let session else { return }
         self.session = nil
+        var fields: [String: Any] = ["reason": reason, "seconds": Int(Date().timeIntervalSince(session.started))]
+        defer { LearningLog.write("end", app: session.app, fields) }
         guard session.latest != session.baseline,
               let edited = CorrectionLearner.editedRegion(inserted: session.inserted, before: session.baseline,
-                                                          after: session.latest) else { return }
-        let corrections = CorrectionLearner.corrections(original: session.inserted, edited: edited,
-                                                        isCommonWord: Self.isCommonWord)
+                                                          after: session.latest) else {
+            fields["edited"] = false
+            return
+        }
+        fields["edited"] = true
+        let review = CorrectionLearner.review(original: session.inserted, edited: edited, isCommonWord: Self.isCommonWord)
+        fields.merge(LearningLog.review(review)) { $1 }
+        let corrections = review.learnable
         if !corrections.isEmpty { onCorrections?(corrections, quiet) }
     }
 
     private func poll() {
         guard var session else { return }
         guard let focused = Self.focusedElement(), CFEqual(focused, session.element) else {
-            finish(quiet: false)
+            finish(quiet: false, reason: "focus left the field")
             return
         }
         if let value = Self.value(of: session.element), value != session.latest {
@@ -70,13 +90,13 @@ final class EditWatcher {
             guard value.count <= Self.maxFieldLength,
                   CorrectionLearner.editedRegion(inserted: session.inserted, before: session.baseline, after: value) != nil
             else {
-                finish(quiet: false)
+                finish(quiet: false, reason: "sent, cleared or edited outside the dictated text")
                 return
             }
             session.latest = value
             self.session = session
         }
-        if Date().timeIntervalSince(session.started) > Self.maxDuration { finish(quiet: false) }
+        if Date().timeIntervalSince(session.started) > Self.maxDuration { finish(quiet: false, reason: "2 minutes") }
     }
 
     // MARK: Accessibility

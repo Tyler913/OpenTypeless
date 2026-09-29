@@ -7,8 +7,8 @@ cd "$(dirname "$0")/.."
 report="$(mktemp)"
 trap 'rm -f "$report"' EXIT
 
-status=0
-OPENTYPELESS_PERF=1 OPENTYPELESS_PERF_REPORT="$report" swift test -c release --filter PerformanceTests "$@" || status=$?
+result=0
+OPENTYPELESS_PERF=1 OPENTYPELESS_PERF_REPORT="$report" swift test -c release --filter PerformanceTests "$@" || result=$?
 
 table="$(awk -F'\t' 'BEGIN { print "| Check | Time | Budget | |"; print "|---|--:|--:|---|" }
     { printf "| %s | %.1f ms | %d ms | %s |\n", $1, $2, $3, ($2 <= $3 ? "ok" : "OVER BUDGET") }' "$report")"
@@ -19,4 +19,4 @@ fi
 if [[ -n "$GITHUB_ACTIONS" ]]; then
     awk -F'\t' '$2 > $3 { printf "::error title=Over its performance budget::%s: %.1f ms (budget %d ms)\n", $1, $2, $3 }' "$report"
 fi
-exit $status
+exit $result

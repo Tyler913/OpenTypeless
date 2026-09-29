@@ -1,7 +1,7 @@
 # Runs on every push to main and every pull request into it, but only builds the app whose folder changed:
 #
-#   macos/**     macOS build: tests, then the app zip
-#   windows/**   Windows build: tests, then the x64 and ARM64 zips
+#   macos/**     macOS build: tests and performance budgets, then the app zip
+#   windows/**   Windows build: tests and performance budgets, then the x64 and ARM64 zips
 #   testdata/**  both: the test cases both apps' test suites read, so they count and price the same way
 #   i18n/**      both: the translations both apps embed
 #

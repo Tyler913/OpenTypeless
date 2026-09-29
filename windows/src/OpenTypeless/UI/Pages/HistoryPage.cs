@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -32,6 +33,7 @@ public sealed class HistoryPage : PageBase
         HorizontalContentAlignment = HorizontalAlignment.Stretch,
         VerticalContentAlignment = VerticalAlignment.Stretch,
     };
+    private readonly DispatcherQueueTimer _searchDelay;
     private string? _selection;
     private string? _shownDetail;
 
@@ -46,12 +48,25 @@ public sealed class HistoryPage : PageBase
         Grid.SetRow(_content, 1);
         grid.Children.Add(_content);
         Body.Children.Add(grid);
-        _search.TextChanged += (_, _) => Render();
+        // Every render rebuilds the whole list, so a burst of typing renders once, when it pauses.
+        _searchDelay = DispatcherQueue.GetForCurrentThread().CreateTimer();
+        _searchDelay.Interval = TimeSpan.FromMilliseconds(150);
+        _searchDelay.IsRepeating = false;
+        _searchDelay.Tick += (_, _) => Render();
+        _search.TextChanged += (_, _) =>
+        {
+            _searchDelay.Stop();
+            _searchDelay.Start();
+        };
         _history.Changed += OnHistoryChanged;
         Render();
     }
 
-    protected override void OnClosed() => _history.Changed -= OnHistoryChanged;
+    protected override void OnClosed()
+    {
+        _searchDelay.Stop();
+        _history.Changed -= OnHistoryChanged;
+    }
 
     private void OnHistoryChanged()
     {

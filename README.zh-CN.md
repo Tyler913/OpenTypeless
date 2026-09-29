@@ -248,6 +248,7 @@ docs/images/                README 截图
 cd macos
 swift build
 scripts/test.sh                  # 单元测试，包括一个向 130 秒录音注入故障的模拟服务器
+scripts/perf.sh                  # 发布版构建下的性能预算（音频处理、主线程上的工作），CI 也会运行
 ```
 
 构建出的程序有一些实用的命令行模式（在 `macos/` 下运行）：
@@ -273,6 +274,7 @@ OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapsh
 cd windows
 dotnet build OpenTypeless.slnx
 scripts\test.ps1       # 单元测试，包括一个向 130 秒录音注入故障的模拟服务器
+scripts\perf.ps1       # 发布版构建下的性能预算（音频处理、UI 线程上的工作），CI 也会运行
 ```
 
 命令行工具（`OpenTypeless.Cli.exe`，和应用放在一起发布；使用应用的设置和 Key）：

@@ -248,6 +248,7 @@ Ambas apps incrustan el archivo al compilar, y un texto sin traducción se muest
 cd macos
 swift build
 scripts/test.sh                  # pruebas unitarias, incluido un servidor simulado que inyecta fallos en una grabación de 130 s
+scripts/perf.sh                  # presupuestos de rendimiento en una compilación de release (ruta de audio, trabajo en el hilo principal); la CI también los ejecuta
 ```
 
 Modos de línea de comandos útiles del binario compilado (desde `macos/`):
@@ -273,6 +274,7 @@ OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapsh
 cd windows
 dotnet build OpenTypeless.slnx
 scripts\test.ps1       # pruebas unitarias, incluido un servidor simulado que inyecta fallos en una grabación de 130 s
+scripts\perf.ps1       # presupuestos de rendimiento en una compilación Release (ruta de audio, trabajo en el hilo de la interfaz); la CI también los ejecuta
 ```
 
 Herramientas de línea de comandos (`OpenTypeless.Cli.exe`, distribuida junto a la app; usa los ajustes y las claves de la app):

@@ -30,6 +30,8 @@ public final class Chunker {
 
     private let config: Config
     private var pending: [Int16] = []
+    /// How much of the front of `pending` this append has already handed out as chunks.
+    private var emitted = 0
     private var pendingStart = 0
     private var nextIndex = 0
 
@@ -42,28 +44,41 @@ public final class Chunker {
         pending.append(contentsOf: samples)
         var ready: [AudioChunk] = []
         let maxSamples = AudioFormat.sampleCount(forSeconds: config.maxSeconds)
-        while pending.count >= maxSamples {
+        while pending.count - emitted >= maxSamples {
             let cut = quietestCutPoint()
             ready.append(emit(upTo: cut))
         }
+        dropEmitted()
         return ready
     }
 
     /// Flushes whatever audio is left as the final chunk (nil when nothing is left).
     public func finish() -> AudioChunk? {
         guard !pending.isEmpty else { return nil }
+        defer { dropEmitted() }
         return emit(upTo: pending.count)
     }
 
     private func emit(upTo cut: Int) -> AudioChunk {
-        let chunk = AudioChunk(index: nextIndex, startSample: pendingStart, samples: Array(pending[0..<cut]))
-        pending.removeFirst(cut)
+        let chunk = AudioChunk(index: nextIndex, startSample: pendingStart, samples: Array(pending[emitted..<(emitted + cut)]))
+        emitted += cut
         pendingStart += cut
         nextIndex += 1
         return chunk
     }
 
+    /// Removes what `emit` handed out, once per call rather than once per chunk: removing each chunk from the front
+    /// moved all the audio after it, so re-transcribing a long recording (appended in one go) was quadratic.
+    private func dropEmitted() {
+        pending.removeFirst(emitted)
+        emitted = 0
+    }
+
     private func quietestCutPoint() -> Int {
+        pending.withUnsafeBufferPointer { all in quietestCutPoint(in: UnsafeBufferPointer(rebasing: all[emitted...])) }
+    }
+
+    private func quietestCutPoint(in pending: UnsafeBufferPointer<Int16>) -> Int {
         let lower = AudioFormat.sampleCount(forSeconds: config.minSeconds)
         let upper = min(pending.count, AudioFormat.sampleCount(forSeconds: config.maxSeconds))
         let window = max(1, AudioFormat.sampleCount(forSeconds: config.windowSeconds))

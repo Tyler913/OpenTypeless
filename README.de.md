@@ -248,6 +248,7 @@ Beide Apps betten die Datei beim Build ein, und ein Text ohne Übersetzung ersch
 cd macos
 swift build
 scripts/test.sh                  # Unit-Tests, einschließlich eines Mock-Servers, der Fehler in eine 130-s-Aufnahme einschleust
+scripts/perf.sh                  # Performance-Budgets in einem Release-Build (Audiopfad, Arbeit auf dem Main-Thread); die CI führt sie ebenfalls aus
 ```
 
 Nützliche Kommandozeilenmodi des gebauten Programms (aus `macos/`):
@@ -273,6 +274,7 @@ OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapsh
 cd windows
 dotnet build OpenTypeless.slnx
 scripts\test.ps1       # Unit-Tests, einschließlich eines Mock-Servers, der Fehler in eine 130-s-Aufnahme einschleust
+scripts\perf.ps1       # Performance-Budgets in einem Release-Build (Audiopfad, Arbeit auf dem UI-Thread); die CI führt sie ebenfalls aus
 ```
 
 Kommandozeilenwerkzeuge (`OpenTypeless.Cli.exe`, wird mit der App ausgeliefert und nutzt deren Einstellungen und Schlüssel):

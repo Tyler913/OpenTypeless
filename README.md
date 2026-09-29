@@ -248,6 +248,7 @@ Both apps embed the file at build time, and a string with no translation shows i
 cd macos
 swift build
 scripts/test.sh                  # unit tests, including a mock server that injects failures into a 130 s recording
+scripts/perf.sh                  # performance budgets in a release build (audio path, main-thread work); CI runs them too
 ```
 
 Useful command-line modes of the built binary (from `macos/`):
@@ -273,6 +274,7 @@ OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapsh
 cd windows
 dotnet build OpenTypeless.slnx
 scripts\test.ps1       # unit tests, including a mock server that injects failures into a 130 s recording
+scripts\perf.ps1       # performance budgets in a Release build (audio path, UI-thread work); CI runs them too
 ```
 
 Command-line tools (`OpenTypeless.Cli.exe`, shipped next to the app; it uses the app's settings and keys):

@@ -29,10 +29,10 @@ public struct HedgedPolishResult: Sendable {
 /// first-token time, while the extra spend is limited to the slow tail.
 public enum HedgedPolish {
     /// Fixed on purpose rather than learned at runtime, since flash-model first-token latency is
-    /// stable. Measured from the client (Sep 2026): the flash models we tried average 0.85 s to the
-    /// first token, and OpenRouter's per-provider P50 is about 1 s; the default clean-up model stays
-    /// under 0.6 s, so 0.8 s means the backup only runs when something is actually wrong.
-    public static let defaultHedgeDelay: Double = 0.8
+    /// stable. Measured from the client (Sep 2026): gemini-3.1-flash-lite, the fastest clean-up model,
+    /// has its first token at 0.41 s at the median and 0.49 s at p90, so a first token still missing at
+    /// 0.55 s is already in the slow tail and the backup is worth asking.
+    public static let defaultHedgeDelay: Double = 0.55
 
     public static func run(
         transcript: String,

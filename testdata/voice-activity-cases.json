@@ -1,0 +1,101 @@
+{
+  "_comment": "Shared by the macOS (swift-testing) and Windows (xUnit) test suites, so both apps trim silence and notice pauses the same way. Positions are samples at 16 kHz (480 per 30 ms frame). Each case's audio is its segments in order: 'silence' is zeros; 'tone' is sample i of the segment = trunc(amplitude × sin(0.2 i)); 'noise' is trunc(amplitude × (2 s / 2^31 − 1)) with s = (1103515245 s + 12345) mod 2^31, s starting at 1 for each case.",
+  "trim": [
+    {
+      "name": "silence before and after is cut down to 0.3 s",
+      "segments": [
+        { "kind": "silence", "seconds": 1.0 },
+        { "kind": "tone", "seconds": 2.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 1.5 }
+      ],
+      "start": 11040,
+      "end": 52800
+    },
+    {
+      "name": "speech from start to end: nothing to trim",
+      "segments": [{ "kind": "tone", "seconds": 3.0, "amplitude": 6000 }],
+      "start": 0,
+      "end": 48000
+    },
+    {
+      "name": "no speech at all: nothing is trimmed (such chunks are skipped as silent instead)",
+      "segments": [{ "kind": "silence", "seconds": 2.0 }],
+      "start": 0,
+      "end": 32000
+    },
+    {
+      "name": "a noisy room (about -46 dBFS) still has silence to trim",
+      "segments": [
+        { "kind": "noise", "seconds": 1.0, "amplitude": 300 },
+        { "kind": "tone", "seconds": 2.0, "amplitude": 6000 },
+        { "kind": "noise", "seconds": 1.0, "amplitude": 300 }
+      ],
+      "start": 11040,
+      "end": 52800
+    },
+    {
+      "name": "a soft last word after a pause is kept",
+      "segments": [
+        { "kind": "tone", "seconds": 2.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.5 },
+        { "kind": "tone", "seconds": 0.3, "amplitude": 460 },
+        { "kind": "silence", "seconds": 1.0 }
+      ],
+      "start": 0,
+      "end": 49920
+    },
+    {
+      "name": "silence shorter than the padding stays",
+      "segments": [
+        { "kind": "silence", "seconds": 0.2 },
+        { "kind": "tone", "seconds": 1.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.2 }
+      ],
+      "start": 0,
+      "end": 22400
+    }
+  ],
+  "pauses": [
+    {
+      "name": "speech then a pause",
+      "segments": [
+        { "kind": "tone", "seconds": 2.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.5 }
+      ],
+      "lastSpeechEnd": 32160,
+      "speechAfter": [
+        { "sample": 32160, "includePartial": false, "expected": false },
+        { "sample": 20000, "includePartial": false, "expected": true }
+      ]
+    },
+    {
+      "name": "speech resumes after a pause",
+      "segments": [
+        { "kind": "tone", "seconds": 1.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.4 },
+        { "kind": "tone", "seconds": 0.5, "amplitude": 6000 }
+      ],
+      "lastSpeechEnd": 30240,
+      "speechAfter": [{ "sample": 22000, "includePartial": false, "expected": true }]
+    },
+    {
+      "name": "nothing said yet",
+      "segments": [{ "kind": "silence", "seconds": 1.0 }],
+      "lastSpeechEnd": null,
+      "speechAfter": [{ "sample": 0, "includePartial": true, "expected": false }]
+    },
+    {
+      "name": "a word in the last, unfinished frame counts only at the end of the recording",
+      "segments": [
+        { "kind": "tone", "seconds": 1.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.35 },
+        { "kind": "tone", "seconds": 0.01, "amplitude": 6000 }
+      ],
+      "lastSpeechEnd": 16320,
+      "speechAfter": [
+        { "sample": 21600, "includePartial": false, "expected": false },
+        { "sample": 21600, "includePartial": true, "expected": true }
+      ]
+    }
+  ]
+}

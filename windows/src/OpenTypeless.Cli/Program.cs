@@ -110,7 +110,8 @@ public static class Cli
             Log($"❌ Transcription failed: {error.Message}");
             return 2;
         }
-        Log($"⏱  Transcribed: {released.Elapsed.TotalSeconds:0.0} s after release ({start.Elapsed.TotalSeconds:0.0} s total)");
+        Log($"⏱  Transcribed: {released.Elapsed.TotalSeconds:0.0} s after release ({start.Elapsed.TotalSeconds:0.0} s total)"
+            + (pipeline.TailWasSpeculative ? "; the last segment was transcribed ahead of time, at the final pause" : ""));
         Console.WriteLine($"\n===== Raw transcript ({TextMetrics.CharacterCount(raw)} chars) =====\n{raw}\n");
 
         if (!polish) return 0;

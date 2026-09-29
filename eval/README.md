@@ -78,6 +78,6 @@ Measured with the macOS app on the holdout set, 2 rounds, current prompt, reques
 
 ¹ A temporary slowdown at its provider; two reruns an hour later had p90 0.25–0.27 s.
 
-The mean first-token time across these models is 0.85 s, and OpenRouter's own per-provider P50 latency for flash models is about 1 s. That is where the fixed 0.8 s hedge delay (`HedgedPolish.defaultHedgeDelay` in Swift, `HedgedPolish.DefaultHedgeDelay` in C#) comes from.
+gemini-3.1-flash-lite, the fastest of these, has its first token at 0.41 s at the median and 0.49 s at p90, so a first token still missing at 0.55 s is already in the slow tail. That is where the fixed 0.55 s hedge delay (`HedgedPolish.defaultHedgeDelay` in Swift, `HedgedPolish.DefaultHedgeDelay` in C#) comes from; before, it was 0.8 s, from the 0.85 s mean first-token time across these models.
 
 Prompt change, gemini-3.1-flash-lite: the minimal-edit prompt raised English kept on 63 real mixed-language dictations from 0.65 to 0.96, and similarity from 0.54 to 0.82. Holdout checks went from 58/69 to 46/46, dev checks from 44/54 to 36/36.

@@ -274,18 +274,23 @@ import Testing
 }
 
 @Suite struct TranscriptionLatencyTests {
-    @Test func delayScalesWithAudioAndRecentSpeed() {
+    @Test func delayFollowsTheFittedLineAndTheRouteSpeed() {
         let latency = TranscriptionLatency()
-        #expect(abs(latency.hedgeDelay(forAudioSeconds: 20) - 16) < 1e-6) // no data yet: (0.3 × 20 + 1.5) × 2 + 1
-        latency.record(latency: 2, audioSeconds: 20)   // 0.1 s per audio second
-        latency.record(latency: 4, audioSeconds: 20)   // 0.2
-        latency.record(latency: 12, audioSeconds: 40)  // 0.3
+        // No data yet: 0.39 s + 0.02 s per audio second, plus the 2 s margin.
+        #expect(abs(latency.hedgeDelay(forAudioSeconds: 2) - 2.43) < 1e-6)
+        #expect(abs(latency.hedgeDelay(forAudioSeconds: 28) - 2.95) < 1e-6)
+        latency.record(latency: 1.59, audioSeconds: 10) // 1 s above the line
+        latency.record(latency: 1.79, audioSeconds: 20) // 1 s above
+        latency.record(latency: 30, audioSeconds: 5)    // an outlier, which the median ignores
         #expect(latency.samples == 3)
-        #expect(abs(latency.expected(forAudioSeconds: 20) - 4) < 1e-6) // median 0.2 × 20
-        #expect(abs(latency.hedgeDelay(forAudioSeconds: 20) - 9) < 1e-6)
-        #expect(latency.hedgeDelay(forAudioSeconds: 2) == 3) // never below the minimum
+        #expect(abs(latency.shift - 1) < 1e-6)
+        #expect(abs(latency.expected(forAudioSeconds: 20) - 1.79) < 1e-6)
+        #expect(abs(latency.hedgeDelay(forAudioSeconds: 20) - 3.79) < 1e-6)
         for _ in 0..<3 { latency.record(latency: 500, audioSeconds: 1) }
-        #expect(latency.hedgeDelay(forAudioSeconds: 28) == 25) // nor above the maximum
+        #expect(latency.hedgeDelay(forAudioSeconds: 28) == 25) // never above the maximum
+        let fast = TranscriptionLatency()
+        for _ in 0..<3 { fast.record(latency: 0, audioSeconds: 28) }
+        #expect(fast.hedgeDelay(forAudioSeconds: 1) == 1.5) // nor below the minimum
     }
 }
 
@@ -389,13 +394,17 @@ extension PipelineTests {
     }
 
     /// Primary and backup on separate sessions, so a slow primary can't hold up the backup's request in the mock.
-    private func runWithBackup(_ latency: TranscriptionLatency) async throws -> (String, TranscriptionPipeline) {
-        let pipeline = TranscriptionPipeline(
+    private func pipelineWithBackup(_ latency: TranscriptionLatency) -> TranscriptionPipeline {
+        TranscriptionPipeline(
             client: APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session()),
             options: .init(model: "primary"),
             policy: RetryPolicy(maxAttempts: 1),
             backup: (APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session()), .init(model: "backup")),
             latency: latency)
+    }
+
+    private func runWithBackup(_ latency: TranscriptionLatency) async throws -> (String, TranscriptionPipeline) {
+        let pipeline = pipelineWithBackup(latency)
         pipeline.append(tone(seconds: 2))
         return (try await pipeline.finish(), pipeline)
     }
@@ -409,6 +418,24 @@ extension PipelineTests {
         #expect(text == "backup")
         #expect(Date().timeIntervalSince(start) < 1.4)
         #expect(pipeline.backupChunkCount() == 1 && pipeline.requestUsages().isEmpty)
+    }
+
+    @Test func chunkSentWhileTalkingIsOnlyHedgedOnceTheRecordingEnds() async throws {
+        var models: [String] = []
+        MockOpenRouter.handler = { [self] _, body in
+            MockOpenRouter.lock.withLock { models.append(model(body)) }
+            return (200, Data(#"{"text":"\#(model(body))"}"#.utf8))
+        }
+        MockOpenRouter.delay = { [self] body in model(body) == "primary" ? 1.5 : 0 }
+        defer { MockOpenRouter.delay = nil }
+        let pipeline = pipelineWithBackup(TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1))
+        pipeline.append(tone(seconds: 29)) // the first chunk goes out while the user is still talking
+        try await Task.sleep(nanoseconds: 600_000_000)
+        #expect(MockOpenRouter.lock.withLock { models } == ["primary"]) // late, but nothing waits on it yet
+        let start = Date()
+        _ = try await pipeline.finish()
+        #expect(Date().timeIntervalSince(start) < 0.8) // the first chunk went to the backup at once
+        #expect(pipeline.backupChunkCount() == 2)
     }
 
     @Test func failingPrimaryHandsOverAtOnce() async throws {

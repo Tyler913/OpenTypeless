@@ -156,6 +156,11 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         return cancelled
     }
 
+    /// The recording has ended (`finish` was called), so every chunk still out is holding up the text.
+    private var isFinished: Bool {
+        lock.withLock { finished }
+    }
+
     private func schedule(_ chunk: AudioChunk) {
         lock.lock()
         chunks[chunk.index] = chunk
@@ -228,8 +233,9 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         )
     }
 
-    /// One chunk, on the primary route; with a backup route, the backup is asked too once the primary is late
-    /// (see `TranscriptionLatency`) or has failed, and whichever answers first is used; the other is cancelled.
+    /// One chunk, on the primary route; with a backup route, the backup is asked too once the primary has failed,
+    /// or is late (see `TranscriptionLatency`) and the recording has ended, and whichever answers first is used; the
+    /// other is cancelled.
     private func transcribe(_ chunk: AudioChunk) async throws -> (APIClient.TranscriptionResult, usedBackup: Bool) {
         let start = ProcessInfo.processInfo.systemUptime
         guard let backup else {
@@ -245,6 +251,11 @@ public final class TranscriptionPipeline: @unchecked Sendable {
             }
             group.addTask {
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                // While the user is still talking nothing waits on this chunk yet, so the backup isn't worth paying
+                // for; once the recording ends, a chunk that is late by then is asked of the backup at once.
+                while !Task.isCancelled, !self.isFinished {
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                }
                 return .late
             }
             var backupStarted = false

@@ -35,7 +35,7 @@ failure handling. Only the system-integration layer and the look differ.
 | `UsageLedger.swift` | `UsageLedger.cs` | `WordCount`, per-day `usage.json`, totals, time saved, streaks, heatmap quartiles. `CalendarDay` on macOS is `DateOnly` on Windows. Both suites run `testdata/usage-cases.json`. |
 | `CancelPolicy.swift` | `CancelPolicy.cs` | Esc keeps recordings of 10 s or more, as `cancelled`, for 24 hours. |
 | `AudioSink.swift` | `AudioSink.cs` | Pre-roll while the microphone is kept warm, handed over first when a dictation starts. |
-| `TranscriptionLatency.swift` | `TranscriptionLatency.cs` | Median wait ÷ audio-seconds per route, and the delay before the backup speech-to-text route is asked. `TranscriptionPipeline` races the two routes with a task group on macOS, `Task.WhenAny` on Windows. |
+| `TranscriptionLatency.swift` | `TranscriptionLatency.cs` | Fitted wait-vs-length line, shifted by the route's median residual, and the delay before the backup speech-to-text route is asked (only once the recording has ended). `TranscriptionPipeline` races the two routes with a task group on macOS, `Task.WhenAny` on Windows. |
 | `LivePreviewText.swift` | `LivePreviewText.cs` | The end of the live preview on one line (grapheme-safe: `Character` / `StringInfo`). |
 | `UpdateCheck.swift` | `UpdateCheck.cs` | GitHub release list → newest non-draft, non-prerelease zip named `OpenTypeless-<version>-<platform>.zip` for this platform, numeric version order, `sha256:` digest. |
 

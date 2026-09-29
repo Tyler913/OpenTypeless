@@ -64,6 +64,8 @@ public sealed class TranscriptionPipeline
     private readonly List<RequestUsage> _backupUsages = new();
     private bool _finished;
     private bool _cancelled;
+    /// <summary>Completed by <see cref="Finish"/>: the recording has ended, so every chunk still out is holding up the text.</summary>
+    private readonly TaskCompletionSource _recordingEnded = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <param name="preset">Lets a retry reuse transcripts that already succeeded (keyed by chunk index).</param>
     public TranscriptionPipeline(ApiClient client, TranscriptionOptions options, Chunker.Config? chunkConfig = null,
@@ -107,6 +109,7 @@ public sealed class TranscriptionPipeline
             _finished = true;
             tail = _chunker.Finish();
         }
+        _recordingEnded.TrySetResult();
         if (tail != null) Schedule(tail);
 
         await WaitForAll().ConfigureAwait(false);
@@ -269,8 +272,9 @@ public sealed class TranscriptionPipeline
             cancellationToken: token);
 
     /// <summary>
-    /// One chunk, on the primary route; with a backup route, the backup is asked too once the primary is late
-    /// (see <see cref="TranscriptionLatency"/>) or has failed, and whichever answers first is used; the other is cancelled.
+    /// One chunk, on the primary route; with a backup route, the backup is asked too once the primary has failed, or is
+    /// late (see <see cref="TranscriptionLatency"/>) and the recording has ended, and whichever answers first is used;
+    /// the other is cancelled.
     /// </summary>
     private async Task<(TranscriptionResult Result, bool UsedBackup)> Transcribe(AudioChunk chunk, CancellationToken token)
     {
@@ -284,7 +288,7 @@ public sealed class TranscriptionPipeline
         using var race = CancellationTokenSource.CreateLinkedTokenSource(token);
         // Each on the thread pool, so neither can hold up the other (or the timer) before its first await.
         var primary = Task.Run(() => Attempt(_client, _options, chunk, race.Token), CancellationToken.None);
-        var late = Task.Delay(TimeSpan.FromSeconds(_latency.HedgeDelay(chunk.Duration)), race.Token);
+        var late = Late(_latency.HedgeDelay(chunk.Duration), race.Token);
         Task<TranscriptionResult>? second = null;
         Exception? primaryError = null;
         var backupFailed = false;
@@ -331,6 +335,17 @@ public sealed class TranscriptionPipeline
             // Stops whichever request lost, and the timer.
             race.Cancel();
         }
+    }
+
+    /// <summary>
+    /// Completes once a chunk has been out for <paramref name="seconds"/> and the recording has ended. While the user
+    /// is still talking nothing waits on the chunk yet, so the backup isn't worth paying for; once the recording ends,
+    /// a chunk that is late by then is asked of the backup at once.
+    /// </summary>
+    private async Task Late(double seconds, CancellationToken token)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(seconds), token).ConfigureAwait(false);
+        await _recordingEnded.Task.WaitAsync(token).ConfigureAwait(false);
     }
 
     private async Task WaitForAll()

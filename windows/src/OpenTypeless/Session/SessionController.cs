@@ -236,7 +236,7 @@ public sealed class SessionController
         }
 
         // Whatever the user did to the previous dictation is final now.
-        _editWatcher.Finish(quiet: true);
+        _editWatcher.Finish(quiet: true, "next dictation");
 
         var record = _history.Create();
         record.Status = DictationStatus.Recording;

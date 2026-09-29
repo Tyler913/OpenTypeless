@@ -82,6 +82,13 @@ public static class ProviderIdExtensions
         _ => "",
     };
 
+    /// <summary>A speech-to-text model from another vendor, asked when the main one is late or fails. Empty where the user has to pick one.</summary>
+    public static string DefaultBackupSttModel(this ProviderId id) => id switch
+    {
+        ProviderId.OpenRouter => "openai/gpt-4o-mini-transcribe",
+        _ => "",
+    };
+
     public static string KeyPlaceholder(this ProviderId id) => id switch
     {
         ProviderId.OpenRouter => "sk-or-v1-…",

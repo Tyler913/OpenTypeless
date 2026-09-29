@@ -30,9 +30,13 @@ failure handling. Only the system-integration layer and the look differ.
 | `CorrectionLearner.swift` | `CorrectionLearner.cs`, `Transliteration.cs` | Same diff (LCS over Latin words / CJK characters) and the same filters. Foundation's `.toLatin` transform becomes ICU's `Any-Latin; Latin-ASCII` called from the OS's own ICU (`icu.dll`, Windows 10 1903+), so 逻辑 / 罗技 compare as the same pinyin. Chinese numerals count as digits, like Swift's `Character.isNumber`. |
 | `TranscriptionPipeline.swift` | `TranscriptionPipeline.cs` | Transcribe while talking, ≤ 3 concurrent, skip silent / < 0.3 s chunks, preset transcripts for retries, one extra round for transient failures, `PipelineFailure` with partial text. |
 | `PolishEvaluation.swift` | `PolishEvaluation.cs` | Evaluation-only accounting, durable budget ledger with an exclusive lock file, first-token time, `--provider-routing`, `PolishMetrics` (English kept, similarity). |
-| `Localization.swift` | `Localization.cs` | Inline `L("中文", "English")`, `system / zh / en`, switchable at runtime. |
+| `Localization.swift` | `Localization.cs` | Inline `L("中文", "English")`; other languages looked up in the shared `i18n/strings.json` (Swift: `ExpressibleByStringInterpolation`, C#: an interpolated string handler, both turning the English text into a `{0}` template). `system / zh / en / ja / ko / es / pt / fr / de / ru`, switchable at runtime. |
 | `Usage.swift` | `Usage.cs` | `RequestUsage` from STT / SSE `usage`, token estimate, `ModelPrice`, `CostEstimator` (reported cost vs. price), OpenRouter `PriceCatalog`, `UsageFormat`. |
 | `UsageLedger.swift` | `UsageLedger.cs` | `WordCount`, per-day `usage.json`, totals, time saved, streaks, heatmap quartiles. `CalendarDay` on macOS is `DateOnly` on Windows. Both suites run `testdata/usage-cases.json`. |
+| `CancelPolicy.swift` | `CancelPolicy.cs` | Esc keeps recordings of 10 s or more, as `cancelled`, for 24 hours. |
+| `AudioSink.swift` | `AudioSink.cs` | Pre-roll while the microphone is kept warm, handed over first when a dictation starts. |
+| `TranscriptionLatency.swift` | `TranscriptionLatency.cs` | Median wait ÷ audio-seconds per route, and the delay before the backup speech-to-text route is asked. `TranscriptionPipeline` races the two routes with a task group on macOS, `Task.WhenAny` on Windows. |
+| `LivePreviewText.swift` | `LivePreviewText.cs` | The end of the live preview on one line (grapheme-safe: `Character` / `StringInfo`). |
 | `UpdateCheck.swift` | `UpdateCheck.cs` | GitHub release list → newest non-draft, non-prerelease zip named `OpenTypeless-<version>-<platform>.zip` for this platform, numeric version order, `sha256:` digest. |
 
 ## System integration — macOS API → Windows API
@@ -44,6 +48,8 @@ failure handling. Only the system-integration layer and the look differ.
 | Menu-bar popover | `NSPopover` sized before showing | Borderless WinUI window anchored above the tray, sized to its content before it is shown, closes when it loses focus. |
 | Global hotkey | `CGEventTap` (flagsChanged/keyDown/keyUp) | `WH_KEYBOARD_LL` hook on a dedicated thread with its own message loop (never blocked by UI). Same rules: modifier-only keys, combos swallowed, tap < 0.35 s → hands-free, Esc cancels, another *physical* key within 1 s cancels (injected keys are ignored, like the Logi Options+ case). Alt/Win hotkeys get a masking key so Windows doesn't open the menu bar / Start. |
 | Default hotkey | Fn | **Right Ctrl** (Windows keyboards don't expose Fn to software). See the Hotkey section for presets. |
+| Microphone choice | CoreAudio device list, by UID; `kAudioOutputUnitProperty_CurrentDevice` on the engine's input unit | WASAPI `EnumAudioEndpoints(eCapture)`, by endpoint ID (friendly name from the property store; root-enumerated drivers marked virtual); `GetDevice` when opening, default endpoint when the choice is missing. Default-device changes are only followed when no device is chosen. |
+| Live preview | `SpeechAnalyzer` + `SpeechTranscriber` on the recorded samples | `Windows.Media.SpeechRecognition` continuous dictation (listens to the default microphone itself; needs the speech language pack and online speech recognition). |
 | Recording | `AVAudioEngine` → 16 kHz Int16, rebuilt on route change | WASAPI shared-mode capture with `AUTOCONVERTPCM` (system resampler → 16 kHz mono Int16), event-driven thread; rebuilt on default-device change or device loss so long dictations survive a headset connecting. |
 | Keys | Keychain (one item) | Windows Credential Manager, one generic credential `OpenTypeless/credentials` holding all keys (JSON), legacy import not needed. `OPENROUTER_API_KEY` env override kept. |
 | Preferences | `UserDefaults` | `%LOCALAPPDATA%\OpenTypeless\settings.json` with the same keys and defaults. |
@@ -100,15 +106,15 @@ These follow from how Windows works rather than from missing features:
   recording a new shortcut on the Shortcut page.
 - `OpenTypeless.Cli`: chunk analysis on an 86 s speech file (4 chunks, every cut at a true pause), the full pipeline
   with injected 503s, 44.1 kHz stereo input through the Media Foundation transcoder, and an evaluation dry run.
-- UI: every page in both languages, the tray panel and each HUD state via `--snapshot-ui`, and live on-screen captures.
+- UI: every page in Chinese and English (or one language with `--lang`), the tray panel and each HUD state via `--snapshot-ui`, and live on-screen captures.
 
 ## UI parity checklist
 
 - **Popover**: header (tile, name, status pill), hero ("Hold [keys] and speak", tip), setup warnings with Fix, last failed dictation with Retry, 5 recent items (click to copy, check mark), footer (Settings, History, Quit).
-- **General**: permissions, language (System / 简体中文 / English), open at login (+ error / approval footer), restore clipboard, sounds, maximum recording (1–60 min).
+- **General**: permissions, language (System or one of the nine UI languages), open at login (+ error / approval footer), restore clipboard, sounds, maximum recording (1–60 min).
 - **Shortcut**: current keys (large key caps), record / cancel, presets, how it works, warnings.
 - **Providers**: six expandable cards: usage tags, configured pill, API key (password box + Paste), Base URL (+ Reset), get-a-key link, Test connection.
 - **Models**: STT provider / model (free text + browse, grouped by vendor when > 40) / spoken language; clean-up toggle / provider / model; backup model toggle / provider / model; missing-key banners.
 - **Vocabulary & Style**: vocabulary editor, "Learn from my corrections" with the learned terms (heard as…, date, remove = never learn again), preferences editor.
 - **History**: recording retention picker with the space used; list + detail (status, error, timing, cleaned + raw text, Copy, Re-transcribe, Show in Explorer, Delete).
-- Bilingual UI switching instantly, Esc cancel, max-duration auto stop, < 0.4 s accidental tap discarded, "No speech detected", truncation / answer detection fallbacks.
+- UI language switching instantly, Esc cancel, max-duration auto stop, < 0.4 s accidental tap discarded, "No speech detected", truncation / answer detection fallbacks.

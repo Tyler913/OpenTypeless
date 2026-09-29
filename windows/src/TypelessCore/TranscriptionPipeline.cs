@@ -1,4 +1,10 @@
+using System.Diagnostics;
+using System.Runtime.ExceptionServices;
+
 namespace TypelessCore;
+
+/// <summary>A provider/model to transcribe with.</summary>
+public sealed record TranscriptionRoute(ApiClient Client, TranscriptionOptions Options);
 
 public abstract record ChunkState
 {
@@ -38,6 +44,9 @@ public sealed class TranscriptionPipeline
 {
     private readonly ApiClient _client;
     private readonly TranscriptionOptions _options;
+    /// <summary>Another provider/model, asked too when the primary is late for a chunk or fails (see <see cref="Transcribe"/>).</summary>
+    private readonly TranscriptionRoute? _backup;
+    private readonly TranscriptionLatency _latency;
     private readonly RetryPolicy _policy;
     private readonly Action<int, ChunkState>? _observer;
     private readonly SemaphoreSlim _semaphore = new(3);
@@ -52,16 +61,20 @@ public sealed class TranscriptionPipeline
     private readonly Dictionary<int, Task> _tasks = new();
     /// <summary>Usage of every successful request, retries of the same chunk included (each one was billed).</summary>
     private readonly List<RequestUsage> _usages = new();
+    private readonly List<RequestUsage> _backupUsages = new();
     private bool _finished;
     private bool _cancelled;
 
     /// <param name="preset">Lets a retry reuse transcripts that already succeeded (keyed by chunk index).</param>
     public TranscriptionPipeline(ApiClient client, TranscriptionOptions options, Chunker.Config? chunkConfig = null,
                                  RetryPolicy? policy = null, IReadOnlyDictionary<int, string>? preset = null,
-                                 Action<int, ChunkState>? observer = null)
+                                 Action<int, ChunkState>? observer = null, TranscriptionRoute? backup = null,
+                                 TranscriptionLatency? latency = null)
     {
         _client = client;
         _options = options;
+        _backup = backup;
+        _latency = latency ?? new TranscriptionLatency();
         _policy = policy ?? new RetryPolicy();
         _observer = observer;
         _chunker = new Chunker(chunkConfig);
@@ -130,6 +143,18 @@ public sealed class TranscriptionPipeline
     public List<RequestUsage> Usages()
     {
         lock (_lock) return new List<RequestUsage>(_usages);
+    }
+
+    /// <summary>Usage of the requests the backup route answered (priced with the backup's model).</summary>
+    public List<RequestUsage> BackupUsages()
+    {
+        lock (_lock) return new List<RequestUsage>(_backupUsages);
+    }
+
+    /// <summary>How many chunks the backup route transcribed.</summary>
+    public int BackupChunkCount()
+    {
+        lock (_lock) return _backupUsages.Count;
     }
 
     // MARK: - Private
@@ -216,20 +241,10 @@ public sealed class TranscriptionPipeline
         _observer?.Invoke(chunk.Index, new ChunkState.Transcribing(1));
         try
         {
-            var result = await _client.TranscribeDetailedWithRetry(
-                chunk.Samples, _options, _policy,
-                onRetry: (attempt, error) =>
-                {
-                    if (Environment.GetEnvironmentVariable("OPENTYPELESS_DEBUG") != null)
-                    {
-                        Console.Error.WriteLine($"  chunk {chunk.Index} attempt {attempt} failed: {error}");
-                    }
-                    _observer?.Invoke(chunk.Index, new ChunkState.Transcribing(attempt + 1));
-                },
-                cancellationToken: token).ConfigureAwait(false);
+            var (result, usedBackup) = await Transcribe(chunk, token).ConfigureAwait(false);
             if (result.Usage is { } usage)
             {
-                lock (_lock) _usages.Add(usage);
+                lock (_lock) (usedBackup ? _backupUsages : _usages).Add(usage);
             }
             return (new ChunkState.Done(result.Text), false);
         }
@@ -237,6 +252,84 @@ public sealed class TranscriptionPipeline
         {
             var apiError = ApiException.From(error);
             return (new ChunkState.Failed(apiError.Message), !apiError.IsRetryable);
+        }
+    }
+
+    private Task<TranscriptionResult> Attempt(ApiClient client, TranscriptionOptions options, AudioChunk chunk, CancellationToken token) =>
+        client.TranscribeDetailedWithRetry(
+            chunk.Samples, options, _policy,
+            onRetry: (attempt, error) =>
+            {
+                if (Environment.GetEnvironmentVariable("OPENTYPELESS_DEBUG") != null)
+                {
+                    Console.Error.WriteLine($"  chunk {chunk.Index} attempt {attempt} failed: {error}");
+                }
+                _observer?.Invoke(chunk.Index, new ChunkState.Transcribing(attempt + 1));
+            },
+            cancellationToken: token);
+
+    /// <summary>
+    /// One chunk, on the primary route; with a backup route, the backup is asked too once the primary is late
+    /// (see <see cref="TranscriptionLatency"/>) or has failed, and whichever answers first is used; the other is cancelled.
+    /// </summary>
+    private async Task<(TranscriptionResult Result, bool UsedBackup)> Transcribe(AudioChunk chunk, CancellationToken token)
+    {
+        var clock = Stopwatch.StartNew();
+        if (_backup is not { } backup)
+        {
+            var only = await Attempt(_client, _options, chunk, token).ConfigureAwait(false);
+            _latency.Record(clock.Elapsed.TotalSeconds, chunk.Duration);
+            return (only, false);
+        }
+        using var race = CancellationTokenSource.CreateLinkedTokenSource(token);
+        // Each on the thread pool, so neither can hold up the other (or the timer) before its first await.
+        var primary = Task.Run(() => Attempt(_client, _options, chunk, race.Token), CancellationToken.None);
+        var late = Task.Delay(TimeSpan.FromSeconds(_latency.HedgeDelay(chunk.Duration)), race.Token);
+        Task<TranscriptionResult>? second = null;
+        Exception? primaryError = null;
+        var backupFailed = false;
+        var pending = new List<Task> { primary, late };
+        try
+        {
+            while (pending.Count > 0)
+            {
+                var done = await Task.WhenAny(pending).ConfigureAwait(false);
+                pending.Remove(done);
+                var askBackup = false;
+                if (done == late)
+                {
+                    askBackup = primaryError == null && !late.IsCanceled;
+                }
+                else if (done == primary)
+                {
+                    if (primary.IsCompletedSuccessfully)
+                    {
+                        _latency.Record(clock.Elapsed.TotalSeconds, chunk.Duration);
+                        return (primary.Result, false);
+                    }
+                    var error = primary.Exception?.InnerException ?? ApiException.Cancelled();
+                    if (ApiException.From(error).IsCancelled || backupFailed) ExceptionDispatchInfo.Throw(error);
+                    primaryError = error;
+                    askBackup = true;
+                }
+                else if (done == second)
+                {
+                    if (second.IsCompletedSuccessfully) return (second.Result, true);
+                    backupFailed = true;
+                    if (primaryError != null) ExceptionDispatchInfo.Throw(primaryError);
+                }
+                if (askBackup && second == null)
+                {
+                    second = Task.Run(() => Attempt(backup.Client, backup.Options, chunk, race.Token), CancellationToken.None);
+                    pending.Add(second);
+                }
+            }
+            throw primaryError ?? ApiException.Cancelled();
+        }
+        finally
+        {
+            // Stops whichever request lost, and the timer.
+            race.Cancel();
         }
     }
 

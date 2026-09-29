@@ -17,6 +17,10 @@ final class AppSettings: ObservableObject {
     @AppStorage("polishProvider") var polishProvider: ProviderID = .openrouter
     @AppStorage("polishModel") var polishModel: String = ProviderID.openrouter.defaultChatModel
     @AppStorage("polishEnabled") var polishEnabled: Bool = true
+    /// A second speech-to-text route, asked when the first is late for a chunk or fails (see TranscriptionPipeline).
+    @AppStorage("sttBackupEnabled") var sttBackupEnabled: Bool = false
+    @AppStorage("sttBackupProvider") var sttBackupProvider: ProviderID = .openrouter
+    @AppStorage("sttBackupModel") var sttBackupModel: String = ProviderID.openrouter.defaultBackupSTTModel
     /// A second clean-up model that races the first when it is slow to start (see HedgedPolish).
     @AppStorage("polishBackupEnabled") var polishBackupEnabled: Bool = true
     @AppStorage("polishBackupProvider") var polishBackupProvider: ProviderID = .openrouter
@@ -31,6 +35,12 @@ final class AppSettings: ObservableObject {
     @AppStorage("historyRetention") var historyRetention: HistoryRetention = .month
     /// Look for a new release once a day and download it in the background (see Updater).
     @AppStorage("autoCheckUpdates") var autoCheckUpdates: Bool = true
+    /// The microphone to record from, by CoreAudio UID; "" follows the system default input.
+    @AppStorage("microphone") var microphoneUID: String = ""
+    /// Keep the microphone running between dictations, so recording starts at once with the moment before the key.
+    @AppStorage("keepMicrophoneWarm") var keepMicrophoneWarm: Bool = false
+    /// Show what's being said above the capsule while recording, recognised on this Mac (see LivePreview).
+    @AppStorage("livePreview") var livePreview: Bool = false
     /// Open the Home page when the app starts at login (a manual launch always shows it).
     @AppStorage("showHomeAtLogin") var showHomeAtLogin: Bool = false
     /// The typing speed "time saved" on the Home page is measured against.
@@ -115,6 +125,20 @@ final class AppSettings: ObservableObject {
 
     var sttEndpoint: ProviderEndpoint? { endpoint(for: sttProvider) }
     var polishEndpoint: ProviderEndpoint? { endpoint(for: polishProvider) }
+
+    /// The backup speech-to-text route, when switched on, configured, and actually different from the primary.
+    var sttBackupEndpoint: ProviderEndpoint? {
+        let model = sttBackupModel.trimmingCharacters(in: .whitespaces)
+        guard sttBackupEnabled, !model.isEmpty, sttBackupProvider.supportsSTT, isConfigured(sttBackupProvider),
+              sttBackupProvider != sttProvider || model != sttModel.trimmingCharacters(in: .whitespaces) else { return nil }
+        return endpoint(for: sttBackupProvider)
+    }
+
+    func selectSTTBackupProvider(_ id: ProviderID) {
+        guard id != sttBackupProvider else { return }
+        sttBackupProvider = id
+        sttBackupModel = id.defaultBackupSTTModel
+    }
 
     /// The backup route, when switched on, configured, and actually different from the primary.
     var polishBackupEndpoint: ProviderEndpoint? {

@@ -23,6 +23,14 @@ final class SessionController: ObservableObject {
     private let settings = AppSettings.shared
     private let history = HistoryStore.shared
     private let recorder = AudioRecorder()
+    /// Receives every microphone sample; hands them to the running dictation, or keeps a pre-roll in between.
+    private let sink = AudioSink()
+    /// The input the running recorder was opened on (it may keep running between dictations when warm).
+    private var openDeviceUID: String?
+    /// Audio from before the key was pressed at the start of this dictation (only with a warm microphone).
+    private var preRollSeconds: Double = 0
+    /// On-device recognition shown above the capsule while recording, when Live preview is on.
+    private var preview: LivePreview?
 
     private var pipeline: TranscriptionPipeline?
     private var writer: WAVFileWriter?
@@ -52,6 +60,36 @@ final class SessionController: ObservableObject {
             Task { @MainActor in
                 self?.abort(message: L("录音中断：", "Recording interrupted: ") + error.localizedDescription)
             }
+        }
+        // Set once: while the microphone is kept warm the recorder runs between dictations too.
+        recorder.onSamples = { [sink] samples in sink.deliver(samples) }
+        recorder.onLevel = { [sink, hudModel = hud.model] level in
+            guard sink.isRecording else { return }
+            DispatchQueue.main.async { hudModel.push(level: level) }
+        }
+    }
+
+    private var chosenDeviceUID: String? { settings.microphoneUID.isEmpty ? nil : settings.microphoneUID }
+
+    /// With "Keep microphone ready" on, keeps the recorder running between dictations (on the chosen input), so a
+    /// dictation starts at once and includes the moment before the key; otherwise lets it stop. Called at launch,
+    /// when settings change and after each dictation.
+    func updateWarmMicrophone() {
+        guard state == .idle else { return }
+        if settings.keepMicrophoneWarm, Permissions.microphoneGranted {
+            if recorder.isRecording, openDeviceUID == chosenDeviceUID { return }
+            recorder.stop()
+            recorder.deviceUID = chosenDeviceUID
+            do {
+                try recorder.start()
+                openDeviceUID = chosenDeviceUID
+                note("microphone kept warm")
+            } catch {
+                note("couldn't keep the microphone warm: \(error.localizedDescription)")
+            }
+        } else if recorder.isRecording {
+            recorder.stop()
+            openDeviceUID = nil
         }
     }
 
@@ -98,7 +136,43 @@ final class SessionController: ObservableObject {
 
     func escapePressed() {
         guard state != .idle else { return }
-        cancel(silently: false)
+        if state == .recording, CancelPolicy.keeps(recordedSeconds: counter.seconds - preRollSeconds) {
+            keepCancelledRecording()
+        } else {
+            cancel(silently: false)
+        }
+    }
+
+    /// Esc on a long recording: stop and insert nothing, but keep it. The rest is transcribed in the background
+    /// (no clean-up), so the text is in History for a day, where it can also be re-transcribed.
+    private func keepCancelledRecording() {
+        guard state == .recording, var record, let pipeline else { return }
+        stopCapture()
+        playSound("Pop")
+        record.duration = counter.seconds
+        record.status = .cancelled
+        history.update(record)
+        note(String(format: "cancelled after %.1fs — kept in History", record.duration))
+        reset()
+        hud.show(.error(L("已取消，录音在历史记录中保留 24 小时", "Cancelled — kept in History for 24 hours")), autoHideAfter: 2.5)
+
+        let kept = record
+        Task { [weak self] in
+            var record = kept
+            var raw: String
+            do {
+                raw = try await pipeline.finish()
+            } catch let failure as PipelineFailure {
+                raw = failure.partialText
+            } catch {
+                raw = TranscriptJoiner.join(pipeline.completedTranscripts().sorted { $0.key < $1.key }.map(\.value))
+            }
+            guard let self, self.history.records.contains(where: { $0.id == record.id }) else { return }
+            record.rawText = raw
+            record.chunkTexts = pipeline.completedTranscripts()
+            self.account(&record, pipeline: pipeline, polished: nil)
+            self.history.update(record)
+        }
     }
 
     // MARK: - Recording
@@ -142,23 +216,41 @@ final class SessionController: ObservableObject {
 
         let pipeline = makePipeline(endpoint: sttEndpoint, preset: [:])
         let counter = SampleCounter()
-        let hudModel = hud.model
-        recorder.onSamples = { samples in
+        // A warm recorder on another input (the choice changed) is reopened on the right one.
+        if recorder.isRecording, openDeviceUID != chosenDeviceUID { recorder.stop() }
+        var livePreview: LivePreview?
+        if settings.livePreview {
+            let hudModel = hud.model
+            livePreview = LivePreview { text in
+                let line = LivePreviewText.tail(text)
+                DispatchQueue.main.async { hudModel.preview = line }
+            }
+            livePreview?.start(language: settings.sttLanguage)
+        }
+        preview = livePreview
+        hud.model.preview = ""
+        // Starts with the pre-roll when the microphone was already running.
+        let preRoll = sink.begin { [livePreview] samples in
             writer.append(samples)
             pipeline.append(samples)
             counter.add(samples.count)
+            livePreview?.append(samples)
         }
-        recorder.onLevel = { level in
-            DispatchQueue.main.async { hudModel.push(level: level) }
-        }
-
-        do {
-            try recorder.start()
-        } catch {
-            writer.close()
-            history.delete(record)
-            hud.show(.error(L("无法开始录音：", "Can't start recording: ") + error.localizedDescription), autoHideAfter: 4)
-            return
+        preRollSeconds = AudioFormat.seconds(forSampleCount: preRoll)
+        if !recorder.isRecording {
+            recorder.deviceUID = chosenDeviceUID
+            do {
+                try recorder.start()
+                openDeviceUID = chosenDeviceUID
+            } catch {
+                sink.end()
+                preview?.stop()
+                preview = nil
+                writer.close()
+                history.delete(record)
+                hud.show(.error(L("无法开始录音：", "Can't start recording: ") + error.localizedDescription), autoHideAfter: 4)
+                return
+            }
         }
 
         self.record = record
@@ -182,21 +274,40 @@ final class SessionController: ObservableObject {
         }
     }
 
+    /// How long each speech-to-text route takes, kept while the app runs, so the backup is asked when a chunk is late.
+    private var latencies: [String: TranscriptionLatency] = [:]
+
     private func makePipeline(endpoint: ProviderEndpoint, preset: [Int: String]) -> TranscriptionPipeline {
         let language = settings.sttLanguage.isEmpty ? nil : settings.sttLanguage
+        let backup = settings.sttBackupEndpoint.map {
+            (client: APIClient(endpoint: $0),
+             options: APIClient.TranscriptionOptions(model: settings.sttBackupModel.trimmingCharacters(in: .whitespaces), language: language))
+        }
+        let key = ModelPrice.key(settings.sttProvider, settings.sttModel)
+        let latency = latencies[key] ?? TranscriptionLatency()
+        latencies[key] = latency
         return TranscriptionPipeline(
             client: APIClient(endpoint: endpoint),
             options: .init(model: settings.sttModel, language: language),
-            preset: preset
+            preset: preset,
+            backup: backup,
+            latency: latency
         )
     }
 
     private func stopCapture() {
         maxDurationTimer?.invalidate()
         maxDurationTimer = nil
-        recorder.stop()
-        recorder.onSamples = nil
-        recorder.onLevel = nil
+        // Stopping delivers what the recorder still holds, so a cold recorder stops first. After `end` nothing
+        // reaches the writer; a warm recorder goes back to filling the pre-roll.
+        if !settings.keepMicrophoneWarm {
+            recorder.stop()
+            openDeviceUID = nil
+        }
+        sink.end()
+        preview?.stop()
+        preview = nil
+        hud.model.preview = ""
         writer?.close()
         writer = nil
     }
@@ -207,7 +318,7 @@ final class SessionController: ObservableObject {
         playSound("Pop")
 
         record.duration = counter.seconds
-        if record.duration < 0.4 {
+        if record.duration - preRollSeconds < 0.4 {
             note(String(format: "discarded — only %.2fs of audio", record.duration))
             // Accidental tap.
             pipeline.cancel()
@@ -236,6 +347,8 @@ final class SessionController: ObservableObject {
         do {
             let raw = try await pipeline.finish()
             record.timing = DictationRecord.Timing(transcription: ProcessInfo.processInfo.systemUptime - started)
+            let backupChunks = pipeline.backupChunkCount()
+            if backupChunks > 0 { record.timing?.transcriptionBackupChunks = backupChunks }
             record.chunkTexts = pipeline.completedTranscripts()
             record.rawText = raw
             record.error = nil
@@ -368,7 +481,12 @@ final class SessionController: ObservableObject {
         let transcription = CostEstimator.transcriptions(pipeline.requestUsages(),
                                                          price: prices.price(settings.sttProvider, settings.sttModel),
                                                          preferReported: settings.sttProvider == .openrouter)
-        var unpriced = transcription.unpriced
+        // Chunks the backup speech-to-text route answered are priced with its model.
+        let backup = CostEstimator.transcriptions(pipeline.backupRequestUsages(),
+                                                  price: prices.price(settings.sttBackupProvider, settings.sttBackupModel),
+                                                  preferReported: settings.sttBackupProvider == .openrouter)
+        let transcriptionCost = transcription.cost + backup.cost
+        var unpriced = transcription.unpriced + backup.unpriced
         var cleanup = 0.0
         if let polished, let usage = polished.result.usage {
             if let cost = CostEstimator.chat(usage, price: prices.price(polished.provider, polished.model),
@@ -378,9 +496,9 @@ final class SessionController: ObservableObject {
                 unpriced += 1
             }
         }
-        if transcription.cost + cleanup > 0 { record.cost = (record.cost ?? 0) + transcription.cost + cleanup }
-        note(String(format: "cost: transcription $%.6f, clean-up $%.6f, unpriced requests %d", transcription.cost, cleanup, unpriced))
-        UsageStore.shared.record(&record, transcriptionCost: transcription.cost, cleanupCost: cleanup, unpriced: unpriced)
+        if transcriptionCost + cleanup > 0 { record.cost = (record.cost ?? 0) + transcriptionCost + cleanup }
+        note(String(format: "cost: transcription $%.6f, clean-up $%.6f, unpriced requests %d", transcriptionCost, cleanup, unpriced))
+        UsageStore.shared.record(&record, transcriptionCost: transcriptionCost, cleanupCost: cleanup, unpriced: unpriced)
     }
 
     // MARK: - Retry / cancel
@@ -421,8 +539,14 @@ final class SessionController: ObservableObject {
             stopCapture()
             if let record { history.delete(record) }
         } else if var record {
-            record.status = .failed
-            record.error = L("已取消", "Cancelled")
+            // Cancelled while processing: keep what was transcribed; it can be re-transcribed for a day.
+            if let pipeline {
+                record.chunkTexts = pipeline.completedTranscripts()
+                if record.rawText.isEmpty {
+                    record.rawText = TranscriptJoiner.join(record.chunkTexts.sorted { $0.key < $1.key }.map(\.value))
+                }
+            }
+            record.status = .cancelled
             history.update(record)
         }
         reset()
@@ -443,6 +567,7 @@ final class SessionController: ObservableObject {
 
     private func reset() {
         state = .idle
+        preRollSeconds = 0
         pipeline = nil
         record = nil
         pressedAt = nil

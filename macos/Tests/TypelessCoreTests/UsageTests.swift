@@ -186,6 +186,8 @@ import Testing
         #expect(last[3].date == today && !last[3].isFuture && last[4].isFuture)
         #expect(last[0..<4].map(\.level) == [3, 2, 1, 4]) // 300, 200, 100, 400 words
         #expect(sundayFirst[0][0].level == 0)
+        #expect(last[3].words == 400 && last[3].dictations == 1) // what hovering a day shows
+        #expect(last[4].dictations == 0)
 
         let mondayFirst = ledger.heatmap(today: today, weeks: 1, firstWeekday: 1)
         #expect(mondayFirst[0][0].date == CalendarDay(year: 2026, month: 9, day: 28))
@@ -223,6 +225,89 @@ import Testing
         #expect(abs(reported.cost - 0.003) < 1e-9 && reported.unpriced == 1)
         let perMinute = CostEstimator.transcriptions(usages, price: ModelPrice(perMinute: 0.006), preferReported: false)
         #expect(abs(perMinute.cost - 0.012) < 1e-9 && perMinute.unpriced == 0)
+    }
+}
+
+@Suite struct ConnectionCheckTests {
+    @Test func medianAndSpeed() {
+        #expect(ConnectionCheck.median([900, 120, 100]) == 120)
+        #expect(ConnectionCheck.median([100, 200]) == 150)
+        #expect(ConnectionCheck.median([]) == 0)
+        #expect(ConnectionCheck(message: "", milliseconds: 299).speed == .fast)
+        #expect(ConnectionCheck(message: "", milliseconds: 300).speed == .fine)
+        #expect(ConnectionCheck(message: "", milliseconds: 1000).speed == .slow)
+        #expect(ConnectionCheck(message: "ok", milliseconds: 182.6).summary == "ok · 183 ms")
+    }
+}
+
+@Suite struct AudioSinkTests {
+    /// Collects what the sink hands on (called under the sink's lock, so no extra locking needed here).
+    final class Collector: @unchecked Sendable {
+        var samples: [Int16] = []
+    }
+
+    @Test func handsOverThePreRollFirstAndKeepsOrder() {
+        let sink = AudioSink(preRollSeconds: 0.01) // 160 samples
+        for i in 0..<5 { sink.deliver([Int16](repeating: Int16(i), count: 100)) }
+        #expect(!sink.isRecording)
+        let received = Collector()
+        #expect(sink.begin { received.samples += $0 } == 160)
+        sink.deliver([9, 9])
+        #expect(sink.isRecording)
+        // The last 160 samples before the start (60 × 3, 100 × 4), then what came after.
+        #expect(received.samples == [Int16](repeating: 3, count: 60) + [Int16](repeating: 4, count: 100) + [9, 9])
+
+        sink.end()
+        sink.deliver([7])
+        #expect(received.samples.count == 162) // nothing after the end
+        let next = Collector()
+        #expect(sink.begin { next.samples += $0 } == 1)
+        #expect(next.samples == [7])
+    }
+
+    @Test func startsEmptyWithoutAWarmMicrophone() {
+        let sink = AudioSink()
+        let received = Collector()
+        #expect(sink.begin { received.samples += $0 } == 0)
+        #expect(received.samples.isEmpty)
+    }
+}
+
+@Suite struct TranscriptionLatencyTests {
+    @Test func delayScalesWithAudioAndRecentSpeed() {
+        let latency = TranscriptionLatency()
+        #expect(abs(latency.hedgeDelay(forAudioSeconds: 20) - 16) < 1e-6) // no data yet: (0.3 × 20 + 1.5) × 2 + 1
+        latency.record(latency: 2, audioSeconds: 20)   // 0.1 s per audio second
+        latency.record(latency: 4, audioSeconds: 20)   // 0.2
+        latency.record(latency: 12, audioSeconds: 40)  // 0.3
+        #expect(latency.samples == 3)
+        #expect(abs(latency.expected(forAudioSeconds: 20) - 4) < 1e-6) // median 0.2 × 20
+        #expect(abs(latency.hedgeDelay(forAudioSeconds: 20) - 9) < 1e-6)
+        #expect(latency.hedgeDelay(forAudioSeconds: 2) == 3) // never below the minimum
+        for _ in 0..<3 { latency.record(latency: 500, audioSeconds: 1) }
+        #expect(latency.hedgeDelay(forAudioSeconds: 28) == 25) // nor above the maximum
+    }
+}
+
+@Suite struct LivePreviewTextTests {
+    @Test func keepsTheEndOnOneLine() {
+        #expect(LivePreviewText.tail("hello\nthere") == "hello there")
+        #expect(LivePreviewText.tail("the quick brown fox jumps over the lazy dog", limit: 26) == "…jumps over the lazy dog")
+        let chinese = String(repeating: "我们今天讨论一下", count: 10)
+        #expect(LivePreviewText.tail(chinese) == "…" + String(chinese.suffix(60)))
+        #expect(LivePreviewText.tail("👍👍👍👍", limit: 2) == "…👍👍") // emoji stay whole
+    }
+}
+
+@Suite struct CancelPolicyTests {
+    @Test func keepsLongRecordingsForADay() {
+        #expect(!CancelPolicy.keeps(recordedSeconds: 9.9))
+        #expect(CancelPolicy.keeps(recordedSeconds: 10))
+        #expect(CancelPolicy.keeps(recordedSeconds: 125))
+        let at = Date(timeIntervalSince1970: 1_790_000_000)
+        #expect(CancelPolicy.expiry(of: at) == at.addingTimeInterval(86_400))
+        #expect(!CancelPolicy.isExpired(recordedAt: at, now: at.addingTimeInterval(23.9 * 3600)))
+        #expect(CancelPolicy.isExpired(recordedAt: at, now: at.addingTimeInterval(24 * 3600)))
     }
 }
 
@@ -293,6 +378,81 @@ extension PipelineTests {
         #expect(usages.count >= 3)
         #expect(usages.allSatisfy { $0.cost == 0.001 })
         #expect(abs(usages.reduce(0) { $0 + ($1.audioSeconds ?? 0) } - 65) < 0.5)
+    }
+
+    private func tone(seconds: Double) -> [Int16] {
+        (0..<AudioFormat.sampleCount(forSeconds: seconds)).map { Int16(6000 * sin(Double($0) * 0.2)) }
+    }
+
+    private func model(_ body: Data) -> String {
+        ((try? JSONSerialization.jsonObject(with: body)) as? [String: Any])?["model"] as? String ?? ""
+    }
+
+    /// Primary and backup on separate sessions, so a slow primary can't hold up the backup's request in the mock.
+    private func runWithBackup(_ latency: TranscriptionLatency) async throws -> (String, TranscriptionPipeline) {
+        let pipeline = TranscriptionPipeline(
+            client: APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session()),
+            options: .init(model: "primary"),
+            policy: RetryPolicy(maxAttempts: 1),
+            backup: (APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session()), .init(model: "backup")),
+            latency: latency)
+        pipeline.append(tone(seconds: 2))
+        return (try await pipeline.finish(), pipeline)
+    }
+
+    @Test func slowPrimaryIsOvertakenByTheBackup() async throws {
+        MockOpenRouter.handler = { [self] _, body in (200, Data(#"{"text":"\#(model(body))"}"#.utf8)) }
+        MockOpenRouter.delay = { [self] body in model(body) == "primary" ? 1.5 : 0 }
+        defer { MockOpenRouter.delay = nil }
+        let start = Date()
+        let (text, pipeline) = try await runWithBackup(TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1))
+        #expect(text == "backup")
+        #expect(Date().timeIntervalSince(start) < 1.4)
+        #expect(pipeline.backupChunkCount() == 1 && pipeline.requestUsages().isEmpty)
+    }
+
+    @Test func failingPrimaryHandsOverAtOnce() async throws {
+        MockOpenRouter.handler = { [self] _, body in
+            model(body) == "primary"
+                ? (401, Data(#"{"error":{"message":"bad key"}}"#.utf8))
+                : (200, Data(#"{"text":"backup"}"#.utf8))
+        }
+        let start = Date()
+        let (text, pipeline) = try await runWithBackup(TranscriptionLatency(minimumDelay: 20, maximumDelay: 20))
+        #expect(text == "backup")
+        #expect(Date().timeIntervalSince(start) < 5) // didn't wait for the 20 s delay
+        #expect(pipeline.backupChunkCount() == 1)
+    }
+
+    @Test func fastPrimaryNeverAsksTheBackup() async throws {
+        var models: [String] = []
+        MockOpenRouter.handler = { [self] _, body in
+            MockOpenRouter.lock.withLock { models.append(model(body)) }
+            return (200, Data(#"{"text":"primary"}"#.utf8))
+        }
+        let latency = TranscriptionLatency(minimumDelay: 5, maximumDelay: 5)
+        let (text, pipeline) = try await runWithBackup(latency)
+        #expect(text == "primary")
+        #expect(models == ["primary"])
+        #expect(latency.samples == 1)
+        #expect(pipeline.backupChunkCount() == 0)
+    }
+
+    @Test func connectionCheckTimesSeveralRoundTrips() async throws {
+        var calls = 0
+        MockOpenRouter.handler = { request, _ in
+            calls += 1
+            #expect(request.url?.path.hasSuffix("/key") == true)
+            return (200, Data(#"{"data":{}}"#.utf8))
+        }
+        let check = try await APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session()).checkConnection()
+        #expect(calls == 3)
+        #expect(check.summary.hasPrefix(L("Key 有效", "Key is valid")) && check.summary.hasSuffix(" ms"))
+
+        MockOpenRouter.handler = { _, _ in (401, Data(#"{"error":{"message":"No auth credentials found"}}"#.utf8)) }
+        await #expect(throws: APIError.self) {
+            _ = try await APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session()).checkConnection()
+        }
     }
 
     @Test func fetchesBothOpenRouterModelLists() async throws {

@@ -70,6 +70,15 @@ public enum ProviderID: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
+    /// A speech-to-text model from another vendor, asked when the main one is late or fails. Empty where the user
+    /// has to pick one.
+    public var defaultBackupSTTModel: String {
+        switch self {
+        case .openrouter: return "openai/gpt-4o-mini-transcribe"
+        default: return ""
+        }
+    }
+
     public var keyPlaceholder: String {
         switch self {
         case .openrouter: return "sk-or-v1-…"

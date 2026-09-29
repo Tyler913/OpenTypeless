@@ -1,6 +1,7 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using OpenTypeless.Audio;
 using OpenTypeless.Services;
 using TypelessCore;
 
@@ -17,6 +18,16 @@ public sealed class GeneralPage : PageBase
     private readonly DispatcherQueueTimer _timer;
     private string? _launchError;
     private bool _updating;
+    private readonly MicrophoneTester _tester = new();
+    private readonly CardSection _microphone = new() { Title = L("麦克风", "Microphone") };
+    private readonly ComboBox _micPicker = new() { MinWidth = 220, MaxWidth = 260 };
+    private readonly LevelMeter _meter = new() { Width = 130 };
+    private readonly Button _testButton = new();
+    private readonly CardRow _testRow;
+    private List<MicrophoneInfo> _microphones = [];
+    private MicrophoneInfo? _defaultMicrophone;
+    private string _pickerKey = "";
+    private bool _fillingPicker;
 
     public GeneralPage() : base(SettingsPage.General)
     {
@@ -38,16 +49,53 @@ public sealed class GeneralPage : PageBase
         });
         Body.Children.Add(permissions);
 
+        // Microphone: which input to record from, and a live level meter to check it hears you.
+        _micPicker.SelectionChanged += (_, _) =>
+        {
+            if (_fillingPicker || _micPicker.SelectedItem is not ComboBoxItem { Tag: string id }) return;
+            _settings.MicrophoneId = id;
+            if (_tester.IsRunning) _tester.Start(SelectedMicrophoneId);
+            RefreshMicrophoneFooter();
+        };
+        _microphone.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Microphone, Tint = Tint.Orange, Title = L("输入设备", "Input device"),
+            Subtitle = L("有的电脑默认用的是虚拟麦克风，可以在这里选真正的麦克风", "Some PCs default to a virtual device; pick your real microphone here"),
+            Trailing = _micPicker,
+        });
+        _microphone.Body.Add(new CardDivider());
+        _testButton.Click += (_, _) =>
+        {
+            if (_tester.IsRunning) _tester.Stop(); else _tester.Start(SelectedMicrophoneId);
+        };
+        _testRow = new CardRow
+        {
+            Glyph = Glyphs.Volume, Tint = Tint.Pink, Title = L("测试麦克风", "Test microphone"),
+            Trailing = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { _meter, _testButton } },
+        };
+        _microphone.Body.Add(_testRow);
+        _microphone.Body.Add(new CardDivider());
+        _microphone.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Lightning, Tint = Tint.Orange, Title = L("预热麦克风", "Keep microphone ready"),
+            Subtitle = L("按下快捷键立刻开始录音，并带上按键前的一小段，第一个字不会被吞掉（蓝牙耳机尤其明显）。麦克风会一直开着，蓝牙耳机会切到通话模式，音乐音质会下降。",
+                         "Recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped (noticeable with Bluetooth headsets). The microphone stays on, and Bluetooth headphones switch to call mode, which lowers music quality."),
+            Trailing = Toggle(_settings.KeepMicrophoneWarm, on => _settings.KeepMicrophoneWarm = on),
+        });
+        _tester.Changed += RefreshTester;
+        Body.Children.Add(_microphone);
+        RefreshMicrophones();
+        RefreshTester();
+
         // Appearance
         var appearance = new CardSection { Title = L("外观", "Appearance") };
         var language = new ComboBox { MinWidth = 150 };
-        language.Items.Add(L("跟随系统", "System"));
-        language.Items.Add("简体中文");
-        language.Items.Add("English");
-        language.SelectedIndex = _settings.AppLanguage switch { AppLanguage.Zh => 1, AppLanguage.En => 2, _ => 0 };
+        AppLanguage[] languages = [AppLanguage.System, .. Localization.Supported];
+        foreach (var option in languages) language.Items.Add(option == AppLanguage.System ? L("跟随系统", "System") : option.NativeName());
+        language.SelectedIndex = Math.Max(0, Array.IndexOf(languages, _settings.AppLanguage));
         language.SelectionChanged += (_, _) =>
         {
-            var selected = language.SelectedIndex switch { 1 => AppLanguage.Zh, 2 => AppLanguage.En, _ => AppLanguage.System };
+            var selected = languages[Math.Max(0, language.SelectedIndex)];
             // Deferred: the language switch rebuilds this page.
             DispatcherQueue.TryEnqueue(() => _settings.AppLanguage = selected);
         };
@@ -104,6 +152,14 @@ public sealed class GeneralPage : PageBase
             Glyph = Glyphs.Volume, Tint = Tint.Pink, Title = L("提示音", "Sounds"),
             Subtitle = L("开始和结束录音时播放轻提示音", "Soft chime when recording starts and stops"),
             Trailing = Toggle(_settings.PlaySounds, on => _settings.PlaySounds = on),
+        });
+        dictation.Body.Add(new CardDivider());
+        dictation.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Message, Tint = Tint.Teal, Title = L("实时预览（测试版）", "Live preview (beta)"),
+            Subtitle = L("说话时在录音条上方显示识别到的文字，由 Windows 语音识别提供：需要安装对应语言的语音包，并在「隐私和安全性 → 语音」里打开在线语音识别（语音会发送给微软识别），它使用默认麦克风。只是预览：插入的文字仍然来自语音转文字服务商。",
+                         "Shows what you're saying above the capsule as you talk, recognised by Windows speech recognition. It needs the language's speech pack and online speech recognition on under Privacy & security → Speech (your voice is then sent to Microsoft to recognise), and listens to the default microphone. Only a preview: the inserted text still comes from your speech-to-text provider."),
+            Trailing = Toggle(_settings.LivePreview, on => _settings.LivePreview = on),
         });
         dictation.Body.Add(new CardDivider());
         var minutes = new NumberBox
@@ -169,12 +225,15 @@ public sealed class GeneralPage : PageBase
         {
             RefreshPermissions();
             RefreshLaunchState();
+            RefreshMicrophones();
         };
         _timer.Start();
     }
 
     protected override void OnClosed()
     {
+        _tester.Changed -= RefreshTester;
+        _tester.Stop();
         _timer.Stop();
         _updater.Changed -= RefreshUpdates;
     }
@@ -274,6 +333,66 @@ public sealed class GeneralPage : PageBase
         var toggle = new ToggleSwitch { IsOn = value, OnContent = "", OffContent = "", MinWidth = 0 };
         toggle.Toggled += (_, _) => set(toggle.IsOn);
         return toggle;
+    }
+
+    private string? SelectedMicrophoneId => _settings.MicrophoneId.Length == 0 ? null : _settings.MicrophoneId;
+
+    /// <summary>Refills the device list when a microphone is connected, removed or becomes the default.</summary>
+    private void RefreshMicrophones()
+    {
+        _microphones = AudioRecorder.Microphones();
+        _defaultMicrophone = AudioRecorder.DefaultMicrophone();
+        var chosen = _settings.MicrophoneId;
+        var key = string.Join("|", _microphones.Select(m => m.Id + m.Name)) + "#" + _defaultMicrophone?.Name + "#" + chosen;
+        if (key == _pickerKey) return;
+        _pickerKey = key;
+        _fillingPicker = true;
+        _micPicker.Items.Clear();
+        var systemDefault = L("跟随系统", "System default") + (_defaultMicrophone is { } d ? L($"（{d.Name}）", $" ({d.Name})") : "");
+        _micPicker.Items.Add(new ComboBoxItem { Content = systemDefault, Tag = "" });
+        foreach (var microphone in _microphones) _micPicker.Items.Add(new ComboBoxItem { Content = microphone.Label, Tag = microphone.Id });
+        if (chosen.Length > 0 && _microphones.All(m => m.Id != chosen))
+        {
+            _micPicker.Items.Add(new ComboBoxItem { Content = L("未连接的设备", "Disconnected device"), Tag = chosen });
+        }
+        _micPicker.SelectedItem = _micPicker.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == chosen) ?? _micPicker.Items[0];
+        _fillingPicker = false;
+        RefreshMicrophoneFooter();
+    }
+
+    private void RefreshMicrophoneFooter()
+    {
+        if (_tester.Error is { } error)
+        {
+            _microphone.Footer = error;
+            return;
+        }
+        var chosen = _settings.MicrophoneId;
+        if (chosen.Length == 0)
+        {
+            _microphone.Footer = _defaultMicrophone?.IsVirtual == true
+                ? L("系统默认的输入是虚拟设备，如果听写没有声音，请在上面选择真正的麦克风。",
+                    "The default input is a virtual device. If dictations come out empty, pick your real microphone above.")
+                : null;
+            return;
+        }
+        var device = _microphones.FirstOrDefault(m => m.Id == chosen);
+        _microphone.Footer = device == null
+            ? L("选中的麦克风没有连接，暂时使用系统默认输入。", "The chosen microphone isn't connected, so the default input is used until it's back.")
+            : device.IsVirtual
+                ? L("这是虚拟设备，如果听写没有声音，请换成真正的麦克风。", "This is a virtual device. If dictations come out empty, pick a real microphone.")
+                : null;
+    }
+
+    private void RefreshTester()
+    {
+        _meter.Set(_tester.Level, _tester.Peak);
+        _testButton.Content = _tester.IsRunning ? L("停止", "Stop") : L("测试", "Test");
+        var subtitle = _tester.IsRunning
+            ? L("说几句话，音量条应该随你的声音起伏", "Say something: the bar should rise and fall with your voice")
+            : L("检查选中的设备能不能听到你", "Check that the chosen device can hear you");
+        if (_testRow.Subtitle != subtitle) _testRow.Subtitle = subtitle;
+        RefreshMicrophoneFooter();
     }
 
     private bool? _micShown;

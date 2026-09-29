@@ -4,6 +4,8 @@ import TypelessCore
 struct DictationRecord: Codable, Identifiable, Equatable {
     enum Status: String, Codable {
         case recording, processing, done, polishFailed, failed
+        /// Stopped with Esc after `CancelPolicy.keepAfterSeconds`: transcribed but not inserted, kept for a day.
+        case cancelled
     }
 
     let id: String
@@ -25,6 +27,8 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     struct Timing: Codable, Equatable {
         /// Release → complete raw transcript (only the last chunk is usually left by then).
         var transcription: Double?
+        /// Chunks the backup speech-to-text route answered because the main one was late or failed.
+        var transcriptionBackupChunks: Int?
         var polishFirstToken: Double?
         var polish: Double?
         var polishModel: String?
@@ -34,7 +38,10 @@ struct DictationRecord: Codable, Identifiable, Equatable {
         var summary: String? {
             func secs(_ value: Double) -> String { String(format: "%.1f", value) + L(" 秒", " s") }
             var parts: [String] = []
-            if let transcription { parts.append(L("转写 ", "Transcription ") + secs(transcription)) }
+            if let transcription {
+                let backup = transcriptionBackupChunks.map { $0 == 1 ? L("（备用转写 1 段）", " (backup for 1 segment)") : L("（备用转写 \($0) 段）", " (backup for \($0) segments)") } ?? ""
+                parts.append(L("转写 ", "Transcription ") + secs(transcription) + backup)
+            }
             if let polish {
                 var detail: [String] = []
                 if let polishFirstToken { detail.append(L("首字 ", "first token ") + secs(polishFirstToken)) }
@@ -172,6 +179,15 @@ final class HistoryStore: ObservableObject {
         let now = Date()
         var kept: [DictationRecord] = []
         for (index, record) in records.enumerated() {
+            if record.status == .cancelled {
+                // A cancelled dictation is only a safety net: it goes a day after it was made, whatever the setting.
+                if CancelPolicy.isExpired(recordedAt: record.date, now: now) {
+                    try? FileManager.default.removeItem(at: record.folder)
+                } else {
+                    kept.append(record)
+                }
+                continue
+            }
             let finished = record.status == .done || record.status == .polishFailed
             let expired = retention.maxAge.map { now.timeIntervalSince(record.date) >= $0 } ?? false
             guard finished, expired else { kept.append(record); continue }

@@ -6,11 +6,14 @@ import Testing
 /// and injects failures on demand.
 final class MockOpenRouter: URLProtocol {
     nonisolated(unsafe) static var handler: ((URLRequest, Data) -> (Int, Data))?
+    /// Seconds to hold a response back (answered later on another queue, so other requests aren't held up).
+    nonisolated(unsafe) static var delay: ((Data) -> TimeInterval)?
     nonisolated(unsafe) static var lock = NSLock()
+    private var stopped = false
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-    override func stopLoading() {}
+    override func stopLoading() { MockOpenRouter.lock.withLock { stopped = true } }
 
     override func startLoading() {
         var body = request.httpBody ?? Data()
@@ -25,6 +28,14 @@ final class MockOpenRouter: URLProtocol {
             stream.close()
         }
         let (status, data) = Self.handler!(request, body)
+        let wait = Self.delay?(body) ?? 0
+        guard wait > 0 else { return respond(status, data) }
+        DispatchQueue.global().asyncAfter(deadline: .now() + wait) { [self] in
+            if !MockOpenRouter.lock.withLock({ stopped }) { respond(status, data) }
+        }
+    }
+
+    private func respond(_ status: Int, _ data: Data) {
         let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)

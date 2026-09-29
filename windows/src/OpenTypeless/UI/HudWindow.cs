@@ -59,12 +59,19 @@ public sealed class HudController
 public sealed class HudWindow : Window
 {
     private const double HeightDips = 44;
+    /// <summary>Extra height for the live preview line above the level bars.</summary>
+    private const double PreviewDips = 26;
     private const double BottomMarginDips = 28;
 
     private readonly HudModel _model;
     private readonly Grid _root = new() { Padding = new Thickness(16, 0, 16, 0) };
     private readonly LevelBars _bars;
     private readonly TextBlock _elapsed = new() { FontSize = 13, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _preview = new()
+    {
+        FontSize = 13, MaxWidth = 380, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis,
+        HorizontalAlignment = HorizontalAlignment.Center,
+    };
     private readonly DispatcherQueueTimer _clock;
     private readonly Win32.SUBCLASSPROC _subclass; // kept alive for the window's lifetime
     private bool _visible;
@@ -95,6 +102,8 @@ public sealed class HudWindow : Window
 
         _model.PhaseChanged += Render;
         _model.LevelsChanged += UpdateLevels;
+        _model.PreviewChanged += OnPreviewChanged;
+        _preview.Foreground = Ui.Secondary;
         Render();
     }
 
@@ -121,8 +130,12 @@ public sealed class HudWindow : Window
 
     private void Render()
     {
-        // The level bars and timer are reused: release them from the previous row before rebuilding.
-        foreach (var old in _root.Children.OfType<Panel>()) old.Children.Clear();
+        // The level bars, timer and preview line are reused: release them from the previous layout before rebuilding.
+        foreach (var old in _root.Children.OfType<Panel>())
+        {
+            foreach (var inner in old.Children.OfType<Panel>()) inner.Children.Clear();
+            old.Children.Clear();
+        }
         _root.Children.Clear();
         _clock.Stop();
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
@@ -169,8 +182,30 @@ public sealed class HudWindow : Window
                 row.Children.Add(text);
                 break;
         }
-        _root.Children.Add(row);
+        if (ShowsPreview)
+        {
+            _preview.Text = _model.Preview;
+            _root.Children.Add(new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { _preview, row } });
+        }
+        else
+        {
+            _root.Children.Add(row);
+        }
         if (_visible) Resize(position: false);
+    }
+
+    private bool ShowsPreview => _model.Phase is HudPhase.Recording && _model.Preview.Length > 0;
+    private bool _previewShown;
+
+    private void OnPreviewChanged()
+    {
+        // Growing or shrinking the capsule needs a new layout; otherwise only the text changes.
+        if (ShowsPreview != _previewShown) Render();
+        else if (ShowsPreview)
+        {
+            _preview.Text = _model.Preview;
+            if (_visible) Resize(position: false);
+        }
     }
 
     private static TextBlock Label(string text) => new() { Text = text, FontSize = 13, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center };
@@ -186,16 +221,18 @@ public sealed class HudWindow : Window
     /// <summary>Sizes the capsule to its content, bottom-centre of the screen under the mouse.</summary>
     private void Resize(bool position)
     {
-        _root.Measure(new Windows.Foundation.Size(double.PositiveInfinity, HeightDips));
+        _previewShown = ShowsPreview;
+        var heightDips = _previewShown ? HeightDips + PreviewDips : HeightDips;
+        _root.Measure(new Windows.Foundation.Size(double.PositiveInfinity, heightDips));
         var contentWidth = _root.DesiredSize.Width;
         if (contentWidth <= 1) contentWidth = EstimatedWidth();
-        var widthDips = Math.Clamp(contentWidth + 4, 120, 400);
+        var widthDips = Math.Clamp(contentWidth + 4, 120, 420);
 
         if (position || _centerX == int.MinValue)
         {
             var (work, _, scale) = WindowHelpers.MonitorAtCursor();
             var width = (int)Math.Round(widthDips * scale);
-            var height = (int)Math.Round(HeightDips * scale);
+            var height = (int)Math.Round(heightDips * scale);
             _centerX = (work.Left + work.Right) / 2;
             _bottom = work.Bottom - (int)Math.Round(BottomMarginDips * scale);
             WindowHelpers.PlaceClient(this, new RectInt32(_centerX - width / 2, _bottom - height, width, height));
@@ -204,7 +241,7 @@ public sealed class HudWindow : Window
         {
             var scale = WindowHelpers.Scale(Hwnd);
             var width = (int)Math.Round(widthDips * scale);
-            var height = (int)Math.Round(HeightDips * scale);
+            var height = (int)Math.Round(heightDips * scale);
             WindowHelpers.PlaceClient(this, new RectInt32(_centerX - width / 2, _bottom - height, width, height));
         }
     }

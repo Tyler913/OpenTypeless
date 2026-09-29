@@ -21,7 +21,7 @@
     <!-- Our own Program.Main handles single-instance and the snapshot-ui mode. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <EnableMsixTooling>true</EnableMsixTooling>
-    <!-- The UI is English / Simplified Chinese; skip the Windows App SDK's other language resources. -->
+    <!-- The app's own strings cover every UI language (see TypelessCore/Localization.cs); skip the Windows App SDK's other language resources. -->
     <SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
   </PropertyGroup>
 

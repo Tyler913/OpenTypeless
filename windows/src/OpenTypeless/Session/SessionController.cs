@@ -44,6 +44,14 @@ public sealed class SessionController
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly HistoryStore _history = HistoryStore.Shared;
     private readonly AudioRecorder _recorder = new();
+    /// <summary>Receives every microphone sample; hands them to the running dictation, or keeps a pre-roll in between.</summary>
+    private readonly AudioSink _sink = new();
+    /// <summary>The input the running recorder was opened on (it may keep running between dictations when warm).</summary>
+    private string? _openDeviceId;
+    /// <summary>Audio from before the key was pressed at the start of this dictation (only with a warm microphone).</summary>
+    private double _preRollSeconds;
+    /// <summary>Windows' own recognition shown above the capsule while recording, when Live preview is on.</summary>
+    private LivePreview? _preview;
     private readonly DispatcherQueue _dispatcher = DispatcherQueue.GetForCurrentThread();
 
     private TranscriptionPipeline? _pipeline;
@@ -75,6 +83,46 @@ public sealed class SessionController
         };
         _recorder.OnFailure = error => _dispatcher.TryEnqueue(() =>
             Abort(L("录音中断：", "Recording interrupted: ") + error.Message));
+        // Set once: while the microphone is kept warm the recorder runs between dictations too.
+        _recorder.OnSamples = _sink.Deliver;
+        var hudModel = Hud.Model;
+        _recorder.OnLevel = level =>
+        {
+            if (_sink.IsRecording) _dispatcher.TryEnqueue(() => hudModel.Push(level));
+        };
+    }
+
+    private string? ChosenDeviceId => _settings.MicrophoneId.Length == 0 ? null : _settings.MicrophoneId;
+
+    /// <summary>
+    /// With "Keep microphone ready" on, keeps the recorder running between dictations (on the chosen input), so a
+    /// dictation starts at once and includes the moment before the key; otherwise lets it stop. Called at launch,
+    /// when settings change and after each dictation.
+    /// </summary>
+    public void UpdateWarmMicrophone()
+    {
+        if (State != SessionState.Idle) return;
+        if (_settings.KeepMicrophoneWarm && Permissions.MicrophoneGranted)
+        {
+            if (_recorder.IsRecording && _openDeviceId == ChosenDeviceId) return;
+            _recorder.Stop();
+            _recorder.DeviceId = ChosenDeviceId;
+            try
+            {
+                _recorder.Start();
+                _openDeviceId = ChosenDeviceId;
+                Note("microphone kept warm");
+            }
+            catch (Exception error)
+            {
+                Note("couldn't keep the microphone warm: " + error.Message);
+            }
+        }
+        else if (_recorder.IsRecording)
+        {
+            _recorder.Stop();
+            _openDeviceId = null;
+        }
     }
 
     // MARK: - Hotkey events
@@ -123,7 +171,48 @@ public sealed class SessionController
     public void EscapePressed()
     {
         if (State == SessionState.Idle) return;
-        Cancel(silently: false);
+        if (State == SessionState.Recording && CancelPolicy.Keeps(_counter.Seconds - _preRollSeconds)) KeepCancelledRecording();
+        else Cancel(silently: false);
+    }
+
+    /// <summary>
+    /// Esc on a long recording: stop and insert nothing, but keep it. The rest is transcribed in the background
+    /// (no clean-up), so the text is in History for a day, where it can also be re-transcribed.
+    /// </summary>
+    private void KeepCancelledRecording()
+    {
+        if (State != SessionState.Recording || _record is not { } record || _pipeline is not { } pipeline) return;
+        StopCapture();
+        PlaySound(Sounds.Kind.Stop);
+        record.Duration = _counter.Seconds;
+        record.Status = DictationStatus.Cancelled;
+        _history.Update(record);
+        Note($"cancelled after {record.Duration:0.0}s — kept in History");
+        Reset();
+        Hud.Show(new HudPhase.Error(L("已取消，录音在历史记录中保留 24 小时", "Cancelled — kept in History for 24 hours")), 2.5);
+        _ = Finish();
+
+        async Task Finish()
+        {
+            string raw;
+            try
+            {
+                raw = await pipeline.Finish();
+            }
+            catch (PipelineFailure failure)
+            {
+                raw = failure.PartialText;
+            }
+            catch
+            {
+                raw = TranscriptJoiner.Join(pipeline.CompletedTranscripts().OrderBy(p => p.Key).Select(p => p.Value));
+            }
+            if (_history.Records.All(r => r.Id != record.Id)) return; // deleted meanwhile
+            record.RawText = raw;
+            record.ChunkTexts = pipeline.CompletedTranscripts();
+            Account(record, pipeline, null);
+            _history.Update(record);
+        }
     }
 
     // MARK: - Recording
@@ -166,21 +255,41 @@ public sealed class SessionController
 
         var pipeline = MakePipeline(sttEndpoint, new Dictionary<int, string>());
         var counter = new SampleCounter();
-        var hudModel = Hud.Model;
-        _recorder.OnSamples = samples =>
+        // A warm recorder on another input (the choice changed) is reopened on the right one.
+        if (_recorder.IsRecording && _openDeviceId != ChosenDeviceId) _recorder.Stop();
+        Hud.Model.Preview = "";
+        if (_settings.LivePreview)
+        {
+            var hudModel = Hud.Model;
+            _preview = new LivePreview(text =>
+            {
+                var line = LivePreviewText.Tail(text);
+                _dispatcher.TryEnqueue(() => { if (_preview != null) hudModel.Preview = line; });
+            });
+            _preview.Start(_settings.SttLanguage);
+        }
+        // Starts with the pre-roll when the microphone was already running.
+        var preRoll = _sink.Begin(samples =>
         {
             writer.Append(samples);
             pipeline.Append(samples);
             counter.Add(samples.Length);
-        };
-        _recorder.OnLevel = level => _dispatcher.TryEnqueue(() => hudModel.Push(level));
-
+        });
+        _preRollSeconds = AudioFormat.Seconds(preRoll);
         try
         {
-            _recorder.Start();
+            if (!_recorder.IsRecording)
+            {
+                _recorder.DeviceId = ChosenDeviceId;
+                _recorder.Start();
+                _openDeviceId = ChosenDeviceId;
+            }
         }
         catch (Exception error)
         {
+            _sink.End();
+            _preview?.Stop();
+            _preview = null;
             writer.Close();
             _history.Delete(record);
             Hud.Show(new HudPhase.Error(L("无法开始录音：", "Can't start recording: ") + error.Message), 4);
@@ -208,19 +317,36 @@ public sealed class SessionController
         _maxDurationTimer.Start();
     }
 
+    /// <summary>How long each speech-to-text route takes, kept while the app runs, so the backup is asked when a chunk is late.</summary>
+    private readonly Dictionary<string, TranscriptionLatency> _latencies = new();
+
     private TranscriptionPipeline MakePipeline(ProviderEndpoint endpoint, IReadOnlyDictionary<int, string> preset)
     {
         var language = _settings.SttLanguage.Length == 0 ? null : _settings.SttLanguage;
-        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, language), preset: preset);
+        var backup = _settings.SttBackupEndpoint is { } backupEndpoint
+            ? new TranscriptionRoute(new ApiClient(backupEndpoint), new TranscriptionOptions(_settings.SttBackupModel.Trim(), language))
+            : null;
+        var key = ModelPrice.Key(_settings.SttProvider, _settings.SttModel);
+        if (!_latencies.TryGetValue(key, out var latency)) _latencies[key] = latency = new TranscriptionLatency();
+        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, language), preset: preset,
+                                         backup: backup, latency: latency);
     }
 
     private void StopCapture()
     {
         _maxDurationTimer?.Stop();
         _maxDurationTimer = null;
-        _recorder.Stop();
-        _recorder.OnSamples = null;
-        _recorder.OnLevel = null;
+        // Stopping delivers what the recorder still holds, so a cold recorder stops first. After End nothing reaches
+        // the writer; a warm recorder goes back to filling the pre-roll.
+        if (!_settings.KeepMicrophoneWarm)
+        {
+            _recorder.Stop();
+            _openDeviceId = null;
+        }
+        _sink.End();
+        _preview?.Stop();
+        _preview = null;
+        Hud.Model.Preview = "";
         _writer?.Close();
         _writer = null;
     }
@@ -232,7 +358,7 @@ public sealed class SessionController
         PlaySound(Sounds.Kind.Stop);
 
         record.Duration = _counter.Seconds;
-        if (record.Duration < 0.4)
+        if (record.Duration - _preRollSeconds < 0.4)
         {
             Note($"discarded — only {record.Duration:0.00}s of audio");
             // Accidental tap.
@@ -263,6 +389,7 @@ public sealed class SessionController
         {
             var raw = await pipeline.Finish();
             record.Timing = new DictationTiming { Transcription = started.Elapsed.TotalSeconds };
+            if (pipeline.BackupChunkCount() is var backupChunks and > 0) record.Timing.TranscriptionBackupChunks = backupChunks;
             record.ChunkTexts = pipeline.CompletedTranscripts();
             record.RawText = raw;
             record.Error = null;
@@ -414,6 +541,12 @@ public sealed class SessionController
         var prices = PriceStore.Shared;
         var (transcription, unpriced) = CostEstimator.Transcriptions(
             pipeline.Usages(), prices.Price(_settings.SttProvider, _settings.SttModel), _settings.SttProvider == ProviderId.OpenRouter);
+        // Chunks the backup speech-to-text route answered are priced with its model.
+        var (backupCost, backupUnpriced) = CostEstimator.Transcriptions(
+            pipeline.BackupUsages(), prices.Price(_settings.SttBackupProvider, _settings.SttBackupModel),
+            _settings.SttBackupProvider == ProviderId.OpenRouter);
+        transcription += backupCost;
+        unpriced += backupUnpriced;
         var cleanup = 0.0;
         if (polished?.Result.Usage is { } usage)
         {
@@ -479,8 +612,16 @@ public sealed class SessionController
         }
         else if (_record is { } record)
         {
-            record.Status = DictationStatus.Failed;
-            record.Error = L("已取消", "Cancelled");
+            // Cancelled while processing: keep what was transcribed; it can be re-transcribed for a day.
+            if (_pipeline is { } pipeline)
+            {
+                record.ChunkTexts = pipeline.CompletedTranscripts();
+                if (record.RawText.Length == 0)
+                {
+                    record.RawText = TranscriptJoiner.Join(record.ChunkTexts.OrderBy(p => p.Key).Select(p => p.Value));
+                }
+            }
+            record.Status = DictationStatus.Cancelled;
             _history.Update(record);
         }
         Reset();
@@ -505,6 +646,7 @@ public sealed class SessionController
     private void Reset()
     {
         State = SessionState.Idle;
+        _preRollSeconds = 0;
         _pipeline = null;
         _record = null;
         _pressedAt = null;

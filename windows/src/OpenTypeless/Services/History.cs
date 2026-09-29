@@ -6,7 +6,8 @@ using Microsoft.UI.Dispatching;
 
 namespace OpenTypeless.Services;
 
-public enum DictationStatus { Recording, Processing, Done, PolishFailed, Failed }
+/// <summary><c>Cancelled</c>: stopped with Esc after <see cref="TypelessCore.CancelPolicy.KeepAfterSeconds"/>, transcribed but not inserted, kept for a day.</summary>
+public enum DictationStatus { Recording, Processing, Done, PolishFailed, Failed, Cancelled }
 
 /// <summary>One dictation. Stored as <c>Sessions\&lt;id&gt;\session.json</c> next to its <c>audio.wav</c>, same schema as macOS.</summary>
 public sealed class DictationRecord
@@ -60,6 +61,7 @@ public sealed class DictationRecord
                 "processing" => DictationStatus.Processing,
                 "done" => DictationStatus.Done,
                 "polishFailed" => DictationStatus.PolishFailed,
+                "cancelled" => DictationStatus.Cancelled,
                 _ => DictationStatus.Failed,
             };
 
@@ -70,6 +72,7 @@ public sealed class DictationRecord
                 DictationStatus.Processing => "processing",
                 DictationStatus.Done => "done",
                 DictationStatus.PolishFailed => "polishFailed",
+                DictationStatus.Cancelled => "cancelled",
                 _ => "failed",
             });
     }
@@ -80,6 +83,8 @@ public sealed class DictationTiming
 {
     /// <summary>Release → complete raw transcript (only the last chunk is usually left by then).</summary>
     [JsonPropertyName("transcription")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Transcription { get; set; }
+    /// <summary>Chunks the backup speech-to-text route answered because the main one was late or failed.</summary>
+    [JsonPropertyName("transcriptionBackupChunks")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? TranscriptionBackupChunks { get; set; }
     [JsonPropertyName("polishFirstToken")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? PolishFirstToken { get; set; }
     [JsonPropertyName("polish")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Polish { get; set; }
     [JsonPropertyName("polishModel")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? PolishModel { get; set; }
@@ -95,7 +100,13 @@ public sealed class DictationTiming
         {
             static string Secs(double value) => value.ToString("0.0", CultureInfo.InvariantCulture) + L(" 秒", " s");
             var parts = new List<string>();
-            if (Transcription is { } transcription) parts.Add(L("转写 ", "Transcription ") + Secs(transcription));
+            if (Transcription is { } transcription)
+            {
+                var backup = TranscriptionBackupChunks is { } n
+                    ? n == 1 ? L("（备用转写 1 段）", " (backup for 1 segment)") : L($"（备用转写 {n} 段）", $" (backup for {n} segments)")
+                    : "";
+                parts.Add(L("转写 ", "Transcription ") + Secs(transcription) + backup);
+            }
             if (Polish is { } polish)
             {
                 var detail = new List<string>();
@@ -225,6 +236,20 @@ public sealed class HistoryStore
         for (var index = 0; index < _records.Count; index++)
         {
             var record = _records[index];
+            if (record.Status == DictationStatus.Cancelled)
+            {
+                // A cancelled dictation is only a safety net: it goes a day after it was made, whatever the setting.
+                if (TypelessCore.CancelPolicy.IsExpired(record.Date, now))
+                {
+                    try { Directory.Delete(record.Folder, recursive: true); } catch { }
+                    changed = true;
+                }
+                else
+                {
+                    kept.Add(record);
+                }
+                continue;
+            }
             var finished = record.Status is DictationStatus.Done or DictationStatus.PolishFailed;
             var expired = maxAge is { } age && now - record.Date >= age;
             if (!finished || !expired)

@@ -293,6 +293,8 @@ public class UsageTests
         Assert.True(last[4].IsFuture);
         Assert.Equal([3, 2, 1, 4], last[0..4].Select(c => c.Level)); // 300, 200, 100, 400 words
         Assert.Equal(0, sundayFirst[0][0].Level);
+        Assert.Equal((400, 1), (last[3].Words, last[3].Dictations)); // what hovering a day shows
+        Assert.Equal(0, last[4].Dictations);
 
         var mondayFirst = ledger.Heatmap(today, 1, firstWeekday: 1);
         Assert.Equal(new DateOnly(2026, 9, 28), mondayFirst[0][0].Date);
@@ -339,5 +341,196 @@ public class UsageFormatTests
         var (perMinute, none) = CostEstimator.Transcriptions(usages, new ModelPrice(PerMinute: 0.006), preferReported: false);
         Assert.Equal(0.012, perMinute, 9);
         Assert.Equal(0, none);
+    }
+}
+
+public class CancelPolicyTests
+{
+    [Fact]
+    public void KeepsLongRecordingsForADay()
+    {
+        Assert.False(CancelPolicy.Keeps(9.9));
+        Assert.True(CancelPolicy.Keeps(10));
+        Assert.True(CancelPolicy.Keeps(125));
+        var at = new DateTimeOffset(2026, 9, 28, 19, 14, 0, TimeSpan.Zero);
+        Assert.Equal(at.AddDays(1), CancelPolicy.Expiry(at));
+        Assert.False(CancelPolicy.IsExpired(at, at.AddHours(23.9)));
+        Assert.True(CancelPolicy.IsExpired(at, at.AddHours(24)));
+    }
+}
+
+[Collection("MockServer")]
+public class ConnectionCheckTests
+{
+    [Fact]
+    public async Task TimesSeveralRoundTrips()
+    {
+        var calls = 0;
+        MockOpenRouter.Handler = (request, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            Assert.EndsWith("/key", request.RequestUri!.AbsolutePath);
+            return (200, MockOpenRouter.Utf8("""{"data":{}}"""));
+        };
+        var check = await new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client()).CheckConnection();
+        Assert.Equal(3, calls);
+        Assert.StartsWith(L("Key 有效", "Key is valid"), check.Summary);
+        Assert.EndsWith(" ms", check.Summary);
+        Assert.True(check.Milliseconds >= 0);
+    }
+
+    [Fact]
+    public async Task FailsOnABadKey()
+    {
+        MockOpenRouter.Handler = (_, _) => (401, MockOpenRouter.Utf8("""{"error":{"message":"No auth credentials found"}}"""));
+        var error = await Assert.ThrowsAsync<ApiException>(() => new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client()).CheckConnection());
+        Assert.Equal(401, error.Status);
+    }
+
+    [Fact]
+    public void MedianAndSpeed()
+    {
+        Assert.Equal(120, ConnectionCheck.Median([900, 120, 100]));
+        Assert.Equal(150, ConnectionCheck.Median([100, 200]));
+        Assert.Equal(0, ConnectionCheck.Median([]));
+        Assert.Equal(ConnectionCheck.SpeedRating.Fast, new ConnectionCheck("", 299).Speed);
+        Assert.Equal(ConnectionCheck.SpeedRating.Fine, new ConnectionCheck("", 300).Speed);
+        Assert.Equal(ConnectionCheck.SpeedRating.Slow, new ConnectionCheck("", 1000).Speed);
+        Assert.Equal("ok · 183 ms", new ConnectionCheck("ok", 182.6).Summary);
+    }
+}
+
+public class AudioSinkTests
+{
+    [Fact]
+    public void HandsOverThePreRollFirstAndKeepsOrder()
+    {
+        var sink = new AudioSink(preRollSeconds: 0.01); // 160 samples
+        for (short i = 0; i < 5; i++) sink.Deliver(Enumerable.Repeat(i, 100).ToArray());
+        Assert.False(sink.IsRecording);
+        var received = new List<short>();
+        Assert.Equal(160, sink.Begin(samples => received.AddRange(samples)));
+        sink.Deliver([9, 9]);
+        Assert.True(sink.IsRecording);
+        // The last 160 samples before the start (60 × 3, 100 × 4), then what came after.
+        Assert.Equal(Enumerable.Repeat((short)3, 60).Concat(Enumerable.Repeat((short)4, 100)).Concat(new short[] { 9, 9 }), received);
+
+        sink.End();
+        sink.Deliver([7]);
+        Assert.Equal(162, received.Count); // nothing after the end
+        var next = new List<short>();
+        Assert.Equal(1, sink.Begin(samples => next.AddRange(samples)));
+        Assert.Equal(new short[] { 7 }, next);
+    }
+
+    [Fact]
+    public void StartsEmptyWithoutAWarmMicrophone()
+    {
+        var sink = new AudioSink();
+        var calls = 0;
+        Assert.Equal(0, sink.Begin(_ => calls++));
+        Assert.Equal(0, calls);
+    }
+}
+
+public class TranscriptionLatencyTests
+{
+    [Fact]
+    public void DelayScalesWithAudioAndRecentSpeed()
+    {
+        var latency = new TranscriptionLatency();
+        Assert.Equal(16, latency.HedgeDelay(20), 6); // no data yet: (0.3 × 20 + 1.5) × 2 + 1
+        latency.Record(2, 20);   // 0.1 s per audio second
+        latency.Record(4, 20);   // 0.2
+        latency.Record(12, 40);  // 0.3
+        Assert.Equal(3, latency.Samples);
+        Assert.Equal(4, latency.Expected(20), 6); // median 0.2 × 20
+        Assert.Equal(9, latency.HedgeDelay(20), 6);
+        Assert.Equal(3, latency.HedgeDelay(2), 6); // never below the minimum
+        latency.Record(500, 1);
+        latency.Record(500, 1);
+        latency.Record(500, 1);
+        Assert.Equal(25, latency.HedgeDelay(28), 6); // nor above the maximum
+    }
+}
+
+[Collection("MockServer")]
+public class BackupTranscriptionTests
+{
+    private static short[] Tone(double seconds)
+    {
+        var samples = new short[AudioFormat.SampleCount(seconds)];
+        for (var i = 0; i < samples.Length; i++) samples[i] = (short)(6000 * Math.Sin(i * 0.2));
+        return samples;
+    }
+
+    private static string Model(byte[] body) => (string)JsonNode.Parse(body)!["model"]!;
+
+    private static async Task<(string Text, TranscriptionPipeline Pipeline)> Run(TranscriptionLatency latency)
+    {
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
+        var pipeline = new TranscriptionPipeline(client, new TranscriptionOptions("primary"), policy: new RetryPolicy(MaxAttempts: 1),
+                                                 backup: new TranscriptionRoute(client, new TranscriptionOptions("backup")), latency: latency);
+        pipeline.Append(Tone(2));
+        return (await pipeline.Finish(), pipeline);
+    }
+
+    [Fact]
+    public async Task SlowPrimaryIsOvertakenByTheBackup()
+    {
+        MockOpenRouter.Handler = (_, body) =>
+        {
+            if (Model(body) == "primary") Thread.Sleep(1500);
+            return (200, MockOpenRouter.Utf8($"{{\"text\":\"{Model(body)}\"}}"));
+        };
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var (text, pipeline) = await Run(new TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1));
+        Assert.Equal("backup", text);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1.4));
+        Assert.Equal(1, pipeline.BackupChunkCount());
+        Assert.Empty(pipeline.Usages());
+    }
+
+    [Fact]
+    public async Task FailingPrimaryHandsOverAtOnce()
+    {
+        MockOpenRouter.Handler = (_, body) => Model(body) == "primary"
+            ? (401, MockOpenRouter.Utf8("""{"error":{"message":"bad key"}}"""))
+            : (200, MockOpenRouter.Utf8("""{"text":"backup"}"""));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var (text, pipeline) = await Run(new TranscriptionLatency(minimumDelay: 20, maximumDelay: 20));
+        Assert.Equal("backup", text);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5)); // didn't wait for the 20 s delay
+        Assert.Equal(1, pipeline.BackupChunkCount());
+    }
+
+    [Fact]
+    public async Task FastPrimaryNeverAsksTheBackup()
+    {
+        var models = new List<string>();
+        MockOpenRouter.Handler = (_, body) =>
+        {
+            lock (models) models.Add(Model(body));
+            return (200, MockOpenRouter.Utf8("""{"text":"primary"}"""));
+        };
+        var latency = new TranscriptionLatency(minimumDelay: 5, maximumDelay: 5);
+        var (text, pipeline) = await Run(latency);
+        Assert.Equal("primary", text);
+        Assert.Equal(["primary"], models);
+        Assert.Equal(1, latency.Samples);
+        Assert.Equal(0, pipeline.BackupChunkCount());
+    }
+}
+
+public class LivePreviewTextTests
+{
+    [Fact]
+    public void KeepsTheEndOnOneLine()
+    {
+        Assert.Equal("hello there", LivePreviewText.Tail("hello\nthere"));
+        Assert.Equal("…jumps over the lazy dog", LivePreviewText.Tail("the quick brown fox jumps over the lazy dog", limit: 26));
+        var chinese = string.Concat(Enumerable.Repeat("我们今天讨论一下", 10));
+        Assert.Equal("…" + chinese[^60..], LivePreviewText.Tail(chinese));
+        Assert.Equal("…👍👍", LivePreviewText.Tail("👍👍👍👍", limit: 2)); // emoji stay whole
     }
 }

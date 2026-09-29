@@ -12,6 +12,9 @@ struct GeneralPage: View {
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var launchNeedsApproval = LaunchAtLogin.needsApproval
     @State private var launchError: String?
+    @State private var microphones: [Microphone] = Microphones.all()
+    @State private var defaultMicrophone: Microphone? = Microphones.defaultInput
+    @StateObject private var tester = MicrophoneTester()
     private let timer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -34,12 +37,51 @@ struct GeneralPage: View {
                 }
             }
 
+            CardSection(title: L("麦克风", "Microphone"), footer: microphoneFooter) {
+                CardRow(icon: "mic.circle.fill", iconColor: .orange, title: L("输入设备", "Input device"),
+                        subtitle: L("有的电脑默认用的是虚拟麦克风，可以在这里选真正的麦克风",
+                                    "Some Macs default to a virtual device; pick your real microphone here")) {
+                    Picker("", selection: $settings.microphoneUID) {
+                        Text(L("跟随系统", "System default") + (defaultMicrophone.map { L("（\($0.name)）", " (\($0.name))") } ?? "")).tag("")
+                        ForEach(microphones) { Text($0.label).tag($0.uid) }
+                        if !settings.microphoneUID.isEmpty, !microphones.contains(where: { $0.uid == settings.microphoneUID }) {
+                            Text(L("未连接的设备", "Disconnected device")).tag(settings.microphoneUID)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 240)
+                }
+                CardDivider(inset: 50)
+                CardRow(icon: "waveform", iconColor: .pink, title: L("测试麦克风", "Test microphone"),
+                        subtitle: tester.isRunning
+                            ? L("说几句话，音量条应该随你的声音起伏", "Say something: the bar should rise and fall with your voice")
+                            : L("检查选中的设备能不能听到你", "Check that the chosen device can hear you")) {
+                    HStack(spacing: 10) {
+                        LevelMeter(level: tester.level, peak: tester.peak).frame(width: 130)
+                        Button(tester.isRunning ? L("停止", "Stop") : L("测试", "Test")) {
+                            if tester.isRunning { tester.stop() } else { tester.start(deviceUID: selectedMicrophoneUID) }
+                        }
+                        .controlSize(.small)
+                    }
+                }
+                CardDivider(inset: 50)
+                CardRow(icon: "bolt.fill", iconColor: .yellow, title: L("预热麦克风", "Keep microphone ready"),
+                        subtitle: L("按下快捷键立刻开始录音，并带上按键前的一小段，第一个字不会被吞掉（AirPods 这类耳机尤其明显）。麦克风会一直开着，蓝牙耳机会切到通话模式，音乐音质会下降。",
+                                    "Recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped (noticeable with AirPods). The microphone stays on, and Bluetooth headphones switch to call mode, which lowers music quality.")) {
+                    Toggle("", isOn: $settings.keepMicrophoneWarm).toggleStyle(.switch).labelsHidden()
+                }
+            }
+            .onChange(of: settings.microphoneUID) {
+                if tester.isRunning { tester.start(deviceUID: selectedMicrophoneUID) }
+            }
+
             CardSection(title: L("外观", "Appearance")) {
                 CardRow(icon: "globe", iconColor: .teal, title: L("界面语言", "Language")) {
                     Picker("", selection: $settings.appLanguage) {
                         Text(L("跟随系统", "System")).tag(AppLanguage.system)
-                        Text("简体中文").tag(AppLanguage.zh)
-                        Text("English").tag(AppLanguage.en)
+                        ForEach(AppLanguage.supported) { language in
+                            Text(language.nativeName).tag(language)
+                        }
                     }
                     .labelsHidden()
                     .fixedSize()
@@ -85,6 +127,12 @@ struct GeneralPage: View {
                     Toggle("", isOn: $settings.playSounds).toggleStyle(.switch).labelsHidden()
                 }
                 CardDivider(inset: 50)
+                CardRow(icon: "text.bubble.fill", iconColor: .teal, title: L("实时预览（测试版）", "Live preview (beta)"),
+                        subtitle: L("说话时在录音条上方显示识别到的文字，由这台 Mac 本地识别。只是预览：插入的文字仍然来自语音转文字服务商。第一次使用会下载对应语言的语音模型。",
+                                    "Shows what you're saying above the capsule as you talk, recognised on this Mac. Only a preview: the inserted text still comes from your speech-to-text provider. The first time, macOS downloads a speech model for your language.")) {
+                    Toggle("", isOn: $settings.livePreview).toggleStyle(.switch).labelsHidden()
+                }
+                CardDivider(inset: 50)
                 CardRow(icon: "timer", iconColor: .orange, title: L("单次最长录音", "Maximum recording"),
                         subtitle: L("到时间会自动结束并处理", "Stops and processes automatically at the limit")) {
                     Stepper(L("\(settings.maxRecordingMinutes) 分钟", "\(settings.maxRecordingMinutes) min"),
@@ -108,7 +156,30 @@ struct GeneralPage: View {
             micGranted = Permissions.microphoneGranted
             axGranted = Permissions.accessibilityGranted
             refreshLaunchState()
+            let connected = Microphones.all()
+            if connected != microphones { microphones = connected }
+            let systemDefault = Microphones.defaultInput
+            if systemDefault != defaultMicrophone { defaultMicrophone = systemDefault }
         }
+        .onDisappear { tester.stop() }
+    }
+
+    private var selectedMicrophoneUID: String? { settings.microphoneUID.isEmpty ? nil : settings.microphoneUID }
+
+    private var microphoneFooter: String? {
+        if let error = tester.error { return error }
+        guard !settings.microphoneUID.isEmpty else {
+            return defaultMicrophone?.isVirtual == true
+                ? L("系统默认的输入是虚拟设备，如果听写没有声音，请在上面选择真正的麦克风。",
+                    "The system default input is a virtual device. If dictations come out empty, pick your real microphone above.")
+                : nil
+        }
+        guard let chosen = microphones.first(where: { $0.uid == settings.microphoneUID }) else {
+            return L("选中的麦克风没有连接，暂时使用系统默认输入。", "The chosen microphone isn't connected, so the system default is used until it's back.")
+        }
+        return chosen.isVirtual
+            ? L("这是虚拟设备，如果听写没有声音，请换成真正的麦克风。", "This is a virtual device. If dictations come out empty, pick a real microphone.")
+            : nil
     }
 
     private var launchFooter: String? {
@@ -477,7 +548,7 @@ private struct ProviderCard: View {
     @ObservedObject var settings: AppSettings
     let id: ProviderID
     @Binding var expanded: Bool
-    @State private var testResult: (ok: Bool, text: String)?
+    @State private var testResult: (ok: Bool, text: String, color: Color)?
     @State private var testing = false
 
     var body: some View {
@@ -554,11 +625,12 @@ private struct ProviderCard: View {
                         if let testResult {
                             Label(testResult.text, systemImage: testResult.ok ? "checkmark.circle.fill" : "xmark.octagon.fill")
                                 .font(.system(size: 11.5))
-                                .foregroundStyle(testResult.ok ? .green : .red)
+                                .foregroundStyle(testResult.color)
                                 .lineLimit(2)
                                 .help(testResult.text)
                         }
                         Button(testing ? L("测试中…", "Testing…") : L("测试连接", "Test")) { test() }
+                            .help(L("检查 API Key，并测三次往返延迟取中位数", "Checks the API key and times three round trips (median)"))
                             .disabled(testing || settings.endpoint(for: id) == nil)
                     }
                 }
@@ -581,9 +653,16 @@ private struct ProviderCard: View {
         Task {
             defer { testing = false }
             do {
-                testResult = (true, try await APIClient(endpoint: endpoint).verifyCredentials())
+                // Three round trips; the median latency shows how quickly this provider answers from here.
+                let check = try await APIClient(endpoint: endpoint).checkConnection()
+                let color: Color = switch check.speed {
+                case .fast: .green
+                case .fine: .orange
+                case .slow: .red
+                }
+                testResult = (true, check.summary, color)
             } catch {
-                testResult = (false, APIError.from(error).localizedDescription)
+                testResult = (false, APIError.from(error).localizedDescription, .red)
             }
         }
     }
@@ -613,6 +692,7 @@ struct ModelsPage: View {
     @State private var sttModels: [APIClient.ModelInfo] = []
     @State private var chatModels: [APIClient.ModelInfo] = []
     @State private var backupChatModels: [APIClient.ModelInfo] = []
+    @State private var backupSTTModels: [APIClient.ModelInfo] = []
 
     var body: some View {
         PageScaffold(page: .models) {
@@ -634,17 +714,38 @@ struct ModelsPage: View {
                         subtitle: L("固定语言可以提高准确率；中英混说请选自动", "Fixing it can help accuracy; use Auto for mixed speech")) {
                     Picker("", selection: $settings.sttLanguage) {
                         Text(L("自动检测", "Auto-detect")).tag("")
-                        Text("中文").tag("zh")
-                        Text("English").tag("en")
-                        Text("日本語").tag("ja")
-                        Text("한국어").tag("ko")
+                        ForEach(AppLanguage.supported) { language in
+                            Text(language == .zh ? "中文" : language.nativeName).tag(language.rawValue)
+                        }
                     }
                     .labelsHidden()
                     .fixedSize()
                 }
+                CardDivider(inset: 50)
+                CardRow(icon: "arrow.triangle.branch", iconColor: .orange, title: L("备用语音转文字", "Backup speech-to-text"),
+                        subtitle: L("某一段比平时慢很多（按音频长度和最近的速度估算）或者失败时，同时请求备用服务商，用先返回的那个",
+                                    "If a segment takes much longer than usual (judged by its length and recent speed) or fails, the backup is asked too and the first answer wins")) {
+                    Toggle("", isOn: $settings.sttBackupEnabled).toggleStyle(.switch).labelsHidden()
+                }
+                if settings.sttBackupEnabled {
+                    CardDivider(inset: 50)
+                    CardRow(icon: "building.2", iconColor: .indigo, title: L("备用服务商", "Backup provider")) {
+                        ProviderPicker(selection: settings.sttBackupProvider, options: ProviderID.allCases.filter(\.supportsSTT),
+                                       settings: settings) { settings.selectSTTBackupProvider($0) }
+                    }
+                    CardDivider(inset: 50)
+                    CardRow(icon: "waveform", iconColor: .teal, title: L("备用模型 ID", "Backup model ID"),
+                            subtitle: L("选一个不同厂商的模型，两边不容易同时变慢", "Pick a model from another vendor so both are rarely slow at once")) {
+                        ModelField(text: $settings.sttBackupModel, models: backupSTTModels)
+                    }
+                    CardDivider(inset: 50)
+                    PriceRow(settings: settings, provider: settings.sttBackupProvider, model: settings.sttBackupModel, speech: true)
+                }
             }
             if !settings.isConfigured(settings.sttProvider) {
                 setupBanner(for: settings.sttProvider)
+            } else if settings.sttBackupEnabled, !settings.isConfigured(settings.sttBackupProvider) {
+                setupBanner(for: settings.sttBackupProvider)
             }
 
             CardSection(title: L("文字整理", "Clean-up")) {
@@ -697,6 +798,9 @@ struct ModelsPage: View {
         }
         .task(id: "\(settings.sttProvider.rawValue)|\(settings.apiKey(for: settings.sttProvider).count)") {
             sttModels = await loadModels(settings.sttProvider, speech: true)
+        }
+        .task(id: "\(settings.sttBackupProvider.rawValue)|\(settings.apiKey(for: settings.sttBackupProvider).count)|\(settings.sttBackupEnabled)") {
+            if settings.sttBackupEnabled { backupSTTModels = await loadModels(settings.sttBackupProvider, speech: true) }
         }
         .task(id: "\(settings.polishProvider.rawValue)|\(settings.apiKey(for: settings.polishProvider).count)") {
             chatModels = await loadModels(settings.polishProvider, speech: false)
@@ -930,183 +1034,13 @@ private struct LearnedTermRow: View {
     }
 }
 
-// MARK: - History
-
-struct HistoryPage: View {
-    @ObservedObject var history: HistoryStore
-    @ObservedObject var settings: AppSettings
-    let controller: SessionController
-    @State private var selection: DictationRecord.ID?
-    @State private var storageBytes: Int64?
-
-    var body: some View {
-        PageScaffold(page: .history, scrolls: false) {
-            Card {
-                CardRow(icon: "externaldrive.fill", iconColor: .gray, title: L("录音保存时间", "Keep recordings"),
-                        subtitle: retentionSubtitle) {
-                    Picker("", selection: $settings.historyRetention) {
-                        ForEach(HistoryRetention.allCases) { Text($0.label).tag($0) }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                }
-            }
-            .onChange(of: settings.historyRetention) { history.applyRetention() }
-            .task(id: history.changeCount) {
-                storageBytes = await Task.detached { HistoryStore.storageBytes() }.value
-            }
-
-            if history.records.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "waveform.badge.mic").font(.system(size: 36)).foregroundStyle(.tertiary)
-                    Text(L("还没有听写记录", "No dictations yet")).foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                HStack(alignment: .top, spacing: 14) {
-                    Card {
-                        ScrollView {
-                            LazyVStack(spacing: 2) {
-                                ForEach(history.records) { record in
-                                    HistoryRow(record: record, selected: record.id == selectedID) { selection = record.id }
-                                }
-                            }
-                            .padding(6)
-                        }
-                    }
-                    .frame(width: 250)
-
-                    if let record = history.records.first(where: { $0.id == selectedID }) {
-                        HistoryDetail(record: record, controller: controller, history: history)
-                    }
-                }
-                .frame(maxHeight: .infinity)
-            }
-        }
-    }
-
-    private var selectedID: DictationRecord.ID? { selection ?? history.records.first?.id }
-
-    private var retentionSubtitle: String {
-        let used = storageBytes.map {
-            L("目前占用 ", "Using ") + ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) + L("。", ". ")
-        } ?? ""
-        return used + L("每分钟录音约 1.9 MB。转写失败的录音会一直保留，方便重试。",
-                        "Recordings take about 1.9 MB per minute. Failed dictations keep theirs so you can retry.")
-    }
-}
-
-private struct HistoryRow: View {
-    let record: DictationRecord
-    let selected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Circle().fill(record.status.color).frame(width: 6, height: 6)
-                    Text(record.date.shortStamp).font(.system(size: 11)).foregroundStyle(.secondary)
-                    Spacer()
-                    Text(record.duration.durationLabel).font(.system(size: 11)).foregroundStyle(.tertiary)
-                }
-                Text(record.finalText.isEmpty ? (record.error ?? L("（空）", "(empty)")) : record.finalText)
-                    .font(.system(size: 12.5))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .foregroundStyle(record.finalText.isEmpty ? .secondary : .primary)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(selected ? Color.accentColor.opacity(0.14) : .clear)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct HistoryDetail: View {
-    let record: DictationRecord
-    let controller: SessionController
-    let history: HistoryStore
-
-    var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text(record.date.formatted(date: .abbreviated, time: .shortened)).font(.system(size: 12, weight: .medium))
-                    Text("·").foregroundStyle(.tertiary)
-                    Text(record.duration.durationLabel).font(.system(size: 12)).foregroundStyle(.secondary)
-                    Spacer()
-                    StatusPill(text: record.status.label, color: record.status.color)
-                }
-                if let error = record.error {
-                    Banner(symbol: "exclamationmark.triangle.fill", color: .orange, text: error) { EmptyView() }
-                }
-                // Where the wait after releasing the key went, and what it cost.
-                let summary = [record.timing?.summary, record.cost.map { L("花费 ", "Cost ") + UsageFormat.money($0) }]
-                    .compactMap { $0 }.joined(separator: " · ")
-                if !summary.isEmpty {
-                    Text(summary).font(.system(size: 11)).foregroundStyle(.secondary).textSelection(.enabled)
-                }
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        if let polished = record.polishedText {
-                            TextBlock(title: L("整理后", "Cleaned up"), text: polished)
-                        }
-                        TextBlock(title: L("原始转写", "Raw transcript"), text: record.rawText)
-                    }
-                }
-                HStack(spacing: 8) {
-                    Button(L("复制", "Copy")) { TextInserter.copyToClipboard(record.finalText) }
-                        .disabled(record.finalText.isEmpty)
-                    if record.hasAudio {
-                        Button(L("重新转写", "Re-transcribe")) { controller.retry(record, paste: false) }
-                            .help(L("完成后复制到剪贴板", "Copies the result to the clipboard"))
-                        Button {
-                            NSWorkspace.shared.activateFileViewerSelecting([record.audioURL])
-                        } label: { Image(systemName: "folder") }
-                            .help(L("在访达中显示录音", "Show recording in Finder"))
-                    }
-                    Spacer()
-                    Button(role: .destructive) { history.delete(record) } label: { Image(systemName: "trash") }
-                        .help(L("删除", "Delete"))
-                }
-                .controlSize(.small)
-            }
-            .padding(16)
-        }
-        .frame(maxHeight: .infinity, alignment: .top)
-    }
-}
-
-private struct TextBlock: View {
-    let title: String
-    let text: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-            Text(text.isEmpty ? L("（空）", "(empty)") : text)
-                .font(.system(size: 13))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
-        }
-    }
-}
-
 extension DictationRecord.Status {
     var label: String {
         switch self {
         case .done: return L("完成", "Done")
         case .polishFailed: return L("未整理", "Not cleaned up")
         case .failed: return L("失败", "Failed")
+        case .cancelled: return L("已取消", "Cancelled")
         case .recording, .processing: return L("进行中", "In progress")
         }
     }
@@ -1116,6 +1050,7 @@ extension DictationRecord.Status {
         case .done: return .green
         case .polishFailed: return .orange
         case .failed: return .red
+        case .cancelled: return .gray
         case .recording, .processing: return .blue
         }
     }

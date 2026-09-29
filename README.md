@@ -1,4 +1,8 @@
 <p align="center">
+  <b>English</b> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português</a> · <a href="README.fr.md">Français</a> · <a href="README.de.md">Deutsch</a> · <a href="README.ru.md">Русский</a>
+</p>
+
+<p align="center">
   <img src="macos/Resources/AppIcon.png" width="128" alt="OpenTypeless icon">
 </p>
 
@@ -69,15 +73,19 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 ## Features
 
 - **Global hotkey.** Hold **Fn** (macOS) or **Right Ctrl** (Windows) by default, or record any single modifier (right ⌘, right ⌥, Right Alt, …) or a combination (⌥ Space, Alt + Space, F5, …).
-- **Push-to-talk or hands-free.** Hold to talk; tap once to keep recording hands-free and tap again to finish. **Esc** cancels.
+- **Push-to-talk or hands-free.** Hold to talk; tap once to keep recording hands-free and tap again to finish. **Esc** cancels. After 10 seconds of talking, a cancelled dictation isn't lost: it's transcribed (not inserted) and kept in History for 24 hours.
+- **Choose your microphone** under **Settings → General**, with a live level meter to check it hears you. Virtual devices (meeting and streaming apps) are marked, and a disconnected choice falls back to the system default.
+- **Keep microphone ready** (optional): recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped. The mic stays on, and Bluetooth headphones switch to call mode.
+- **Live preview (beta)**: see the words above the recording capsule as you speak, recognised on the device (macOS SpeechAnalyzer; Windows speech recognition). The inserted text still comes from your provider.
 - **Pastes where your cursor is.** In a text field the text is pasted and your clipboard restored; with no text field focused it goes to the clipboard. Browsers and Electron apps are handled too, and terminals on Windows.
-- **Bring your own provider.** OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek, or any OpenAI-compatible endpoint. Speech-to-text, clean-up and the backup clean-up model can each use a different provider.
+- **Bring your own provider.** OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek, or any OpenAI-compatible endpoint. Speech-to-text, clean-up and the backup clean-up model can each use a different provider. **Test** checks a key and shows the provider's round-trip latency (median of three).
+- **Backup speech-to-text** (optional): when a segment takes much longer than that route usually needs for its length, or fails, a second provider is asked too and the first answer wins.
 - **Custom vocabulary and style preferences** for names, products and jargon.
 - **Learns from your fixes.** Correct a misrecognised word after it's pasted (TypeList → Typeless) and it's added to your vocabulary automatically, along with how it was misheard. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps, and a word you remove is never learned again.
 - **Home page** with what voice typing has done for you: words dictated, time saved against typing (100 wpm by default, adjustable), your speaking speed, what it cost today, this month and in total, and a GitHub-style activity heatmap with streaks. It opens when you launch the app yourself; at login it stays out of the way unless you turn on **Show Home when opened at login**.
 - **Know what you spend.** OpenRouter requests count exactly what OpenRouter billed for them, and its live price list is shown next to each model. For any other provider or a custom endpoint, enter the model's price under **Models** (per million tokens, or per minute of audio for speech-to-text).
-- **History** of every dictation with raw and cleaned text, timing, copy and re-transcribe. Choose how long recordings are kept: not at all, a day, a week, a month, a year, or forever.
-- **Bilingual UI** (English / 简体中文), following the system language or chosen manually.
+- **History** of every dictation, grouped by day and searchable, with raw and cleaned text, timing, cost, copy and re-transcribe. Choose how long recordings are kept: not at all, a day, a week, a month, a year, or forever.
+- **Nine UI languages**: English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch and Русский. The app follows the system language, or pick one under **Settings → General → Language**.
 - **Native design.** Liquid Glass on macOS 26+ with a menu-bar panel; Mica and Acrylic on Windows 11 with a tray panel. Both show a small recording capsule while you talk.
 - **Launch at login.**
 - **Updates itself.** Checks GitHub Releases once a day, downloads a new version in the background and installs it when you click **Restart to update**, never in the middle of a dictation. Downloads are checked against GitHub's SHA-256 before anything is replaced. Turn it off, or check by hand, under **Settings → General → Updates**.
@@ -192,7 +200,7 @@ Reasoning is automatically turned off or set to its minimum for the clean-up mod
 
 ## Privacy
 
-- Audio and text are only sent to the providers you configure.
+- Audio and text are only sent to the providers you configure. With **Live preview** on, macOS recognises speech on the Mac; Windows uses its own speech recognition, which sends your voice to Microsoft when online speech recognition is on (the setting says so).
 - API keys are stored in the macOS Keychain, or in Windows Credential Manager (one entry, `OpenTypeless/credentials`).
 - Usage totals for the Home page (words, speaking time and cost per day, no text) are kept in `usage.json` in the same folder as the settings and history. The OpenRouter price list is downloaded from its public model list (no key, nothing about you) a few times a day.
 - History (audio + transcripts) lives in `~/Library/Application Support/OpenTypeless/Sessions/` on macOS and `%LOCALAPPDATA%\OpenTypeless\` on Windows. Recordings are kept for a month by default (History page: not at all, a day, a week, a month, a year, or forever); after that the text stays among the newest 200 entries. Failed dictations keep their audio so they can be retried.
@@ -216,12 +224,23 @@ windows/                    The Windows app (.NET solution)
   tests/                      xUnit suites
   scripts/                    Build, test and icon scripts
 eval/                       Clean-up test sets and the evaluation guide, shared by both apps
+i18n/                       UI translations (other than Chinese and English), shared by both apps
 docs/DESIGN.md              Architecture and design decisions
 docs/WINDOWS-PORT.md        How each macOS file and system API maps to Windows
 docs/images/                README screenshots
 ```
 
 The clean-up prompt (`Prompts.swift` / `Prompts.cs`) is byte-identical in both apps; change both together and check the result with [eval/](eval/).
+
+### Translations
+
+Every user-facing string is written inline with its Chinese and English text: `L("有新版本 \(version)", "Version \(version) is available")` in Swift, `L($"有新版本 {version}", $"Version {version} is available")` in C#. The other languages live in [`i18n/strings.json`](i18n/strings.json), keyed by the English text with each interpolation numbered in order:
+
+```json
+"Version {0} is available": { "ja": "バージョン {0} が利用可能です", "ko": "버전 {0} 사용 가능", … }
+```
+
+Both apps embed the file at build time, and a string with no translation shows in English. A translation may move the placeholders around but must keep every one of them. After adding or changing a string, add its translations and run `python3 i18n/check.py`: it lists missing, unused and malformed entries, and CI runs it on every pull request. To review a language in context, render the UI with `--snapshot-ui` and `--lang ja` (or any other language code).
 
 ### macOS
 
@@ -269,7 +288,7 @@ OpenTypeless.Cli --transcribe-file speech.m4a --chunks-only
 OpenTypeless.Cli --eval-polish ..\eval\polish-holdout.json --models google/gemini-3.8-flash --out ...
 
 # Render every settings page, the tray panel and the HUD states to PNGs
-# (--lang en|zh for one language, --demo treats permissions as granted; pair it with OPENTYPELESS_DATA_DIR and sample history)
+# (--lang en|zh|ja|… for one language, --demo treats permissions as granted; pair it with OPENTYPELESS_DATA_DIR and sample history)
 OpenTypeless --snapshot-ui C:\temp\snapshots
 ```
 
@@ -295,7 +314,10 @@ GitHub Actions ([`.github/workflows/`](.github/workflows/)) builds only the app 
 | `macos/**` | **macOS build** on a macOS runner: the tests, then the app zip. |
 | `windows/**` | **Windows build** on a Windows runner: the tests, then the x64 and ARM64 zips. |
 | `testdata/**` | Both builds: the shared test cases (word counts, prices, time saved) that both test suites read, so the two apps agree. |
-| Only `docs/`, `eval/`, `README.md` | Nothing to build. |
+| `i18n/**` | Both builds: the translations both apps embed. |
+| Only `docs/`, `eval/`, `README*.md` | Nothing to build. |
+
+Every run also checks the translations (**Translations**, `python3 i18n/check.py`).
 
 Download the zips from a run's **Artifacts** section on the Actions tab. **Actions → macOS build / Windows build → Run workflow** starts a build by hand.
 

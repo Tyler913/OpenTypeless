@@ -308,6 +308,23 @@ public sealed partial class ApiClient
         return L($"连接正常，{models.Count} 个模型可用", $"Connected — {models.Count} models available");
     }
 
+    /// <summary>
+    /// <see cref="VerifyCredentials"/> a few times in a row, timing each round trip. The first one also pays for
+    /// setting up the connection, so the median is what a request costs once the app is running.
+    /// </summary>
+    public async Task<ConnectionCheck> CheckConnection(int attempts = 3, CancellationToken cancellationToken = default)
+    {
+        var message = "";
+        var times = new List<double>();
+        for (var i = 0; i < Math.Max(1, attempts); i++)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            message = await VerifyCredentials(cancellationToken).ConfigureAwait(false);
+            times.Add(clock.Elapsed.TotalMilliseconds);
+        }
+        return new ConnectionCheck(message, ConnectionCheck.Median(times));
+    }
+
     /// <summary>A plain request whose timeout behaves like a lost connection (retryable network error).</summary>
     private async Task<(HttpStatusCode, byte[])> Send(HttpRequestMessage request, double seconds, CancellationToken cancellationToken)
     {
@@ -337,4 +354,24 @@ public sealed partial class ApiClient
 
     internal static List<string> Strings(JsonNode? node) =>
         node is JsonArray array ? array.Select(n => TryString(n, out var s) ? s : null).OfType<string>().ToList() : [];
+}
+
+/// <summary>A working connection and how long a round trip to the provider takes.</summary>
+public sealed record ConnectionCheck(string Message, double Milliseconds)
+{
+    public enum SpeedRating { Fast, Fine, Slow }
+
+    /// <summary>Under 300 ms is fast, under a second fine, anything longer slow.</summary>
+    public SpeedRating Speed => Milliseconds < 300 ? SpeedRating.Fast : Milliseconds < 1000 ? SpeedRating.Fine : SpeedRating.Slow;
+
+    /// <summary>"Key is valid · 182 ms"</summary>
+    public string Summary => Message + $" · {(int)Math.Round(Milliseconds, MidpointRounding.AwayFromZero)} ms";
+
+    public static double Median(IReadOnlyList<double> values)
+    {
+        var sorted = values.Order().ToArray();
+        if (sorted.Length == 0) return 0;
+        var mid = sorted.Length / 2;
+        return sorted.Length % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    }
 }

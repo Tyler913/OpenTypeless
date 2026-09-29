@@ -19,6 +19,8 @@ final class HUDModel: ObservableObject {
     @Published var phase: Phase = .hidden
     @Published var levels: [Float] = Array(repeating: 0, count: 18)
     @Published var startedAt = Date()
+    /// Live preview of what's being said (empty when it's off or hasn't heard anything yet).
+    @Published var preview = ""
 
     func push(level: Float) {
         // Perceptual scaling so normal speech fills the bars.
@@ -39,7 +41,8 @@ final class HUDController {
     let model = HUDModel()
     private var panel: NSPanel?
     private var hideWork: DispatchWorkItem?
-    private static let size = NSSize(width: 380, height: 72)
+    /// Room for the capsule and, above it, the live preview line.
+    private static let size = NSSize(width: 460, height: 112)
 
     func show(_ phase: HUDModel.Phase, autoHideAfter: Double? = nil) {
         hideWork?.cancel()
@@ -94,14 +97,30 @@ struct HUDView: View {
 
     var body: some View {
         GlassEffectContainer {
-            content
-                .font(.system(size: 13, weight: .medium))
-                .padding(.horizontal, 14)
-                .frame(height: 36)
-                .glassEffect(.regular, in: .capsule)
-                .glassEffectID("hud", in: glass)
+            VStack(spacing: 8) {
+                if model.phase == .recording, !model.preview.isEmpty {
+                    Text(model.preview)
+                        .font(.system(size: 13))
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                        .frame(maxWidth: 420)
+                        .padding(.horizontal, 14)
+                        .frame(height: 30)
+                        .glassEffect(.regular, in: .capsule)
+                        .transition(.opacity)
+                }
+                content
+                    .font(.system(size: 13, weight: .medium))
+                    .padding(.horizontal, 14)
+                    .frame(height: 36)
+                    .glassEffect(.regular, in: .capsule)
+                    .glassEffectID("hud", in: glass)
+            }
+            .animation(.easeOut(duration: 0.15), value: model.preview.isEmpty)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The capsule stays where it always was (18 pt above the bottom of the panel); the preview grows upwards.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .padding(.bottom, 18)
         .opacity(model.phase == .hidden ? 0 : 1)
     }
 

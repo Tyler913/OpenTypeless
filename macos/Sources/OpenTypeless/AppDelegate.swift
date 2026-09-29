@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 if self.hotkey.hotkey != self.settings.hotkey { self.hotkey.hotkey = self.settings.hotkey }
                 if self.menuLanguage != AppLanguage.resolved { self.setUpMainMenu() }
+                self.controller.updateWarmMicrophone()
             }
             .store(in: &cancellables)
 
@@ -56,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         controller.refreshModelInfo()
         _ = UsageStore.shared // counts the dictations History already has, the first time
+        controller.updateWarmMicrophone()
         PriceStore.shared.refreshIfStale()
         LaunchAtLogin.enableByDefaultOnce()
         updater.canInstallNow = { [weak self] in self?.controller.state == .idle }

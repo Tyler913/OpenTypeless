@@ -108,6 +108,25 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("polishEnabled", value);
     }
 
+    /// <summary>A second speech-to-text route, asked when the first is late for a chunk or fails (see TranscriptionPipeline).</summary>
+    public bool SttBackupEnabled
+    {
+        get => GetBool("sttBackupEnabled", false);
+        set => SetValue("sttBackupEnabled", value);
+    }
+
+    public ProviderId SttBackupProvider
+    {
+        get => ProviderIdExtensions.Parse(GetString("sttBackupProvider", "")) ?? ProviderId.OpenRouter;
+        set => SetValue("sttBackupProvider", value.RawValue());
+    }
+
+    public string SttBackupModel
+    {
+        get => GetString("sttBackupModel", ProviderId.OpenRouter.DefaultBackupSttModel());
+        set => SetValue("sttBackupModel", value);
+    }
+
     /// <summary>A second clean-up model that races the first when it is slow to start (see HedgedPolish).</summary>
     public bool PolishBackupEnabled
     {
@@ -175,6 +194,27 @@ public sealed class AppSettings : INotifyPropertyChanged
     {
         get => GetBool("learnFromEdits", true);
         set => SetValue("learnFromEdits", value);
+    }
+
+    /// <summary>The microphone to record from, by endpoint ID; "" follows the default input.</summary>
+    public string MicrophoneId
+    {
+        get => GetString("microphone", "");
+        set => SetValue("microphone", value);
+    }
+
+    /// <summary>Keep the microphone running between dictations, so recording starts at once with the moment before the key.</summary>
+    public bool KeepMicrophoneWarm
+    {
+        get => GetBool("keepMicrophoneWarm", false);
+        set => SetValue("keepMicrophoneWarm", value);
+    }
+
+    /// <summary>Show what's being said above the capsule while recording, recognised by Windows (see LivePreview).</summary>
+    public bool LivePreview
+    {
+        get => GetBool("livePreview", false);
+        set => SetValue("livePreview", value);
     }
 
     /// <summary>Open the Home page when the app starts at sign-in (a manual launch always shows it).</summary>
@@ -300,6 +340,25 @@ public sealed class AppSettings : INotifyPropertyChanged
         if (id == PolishProvider) return;
         PolishProvider = id;
         PolishModel = id.DefaultChatModel();
+    }
+
+    /// <summary>The backup speech-to-text route, when switched on, configured, and actually different from the primary.</summary>
+    public ProviderEndpoint? SttBackupEndpoint
+    {
+        get
+        {
+            var model = SttBackupModel.Trim();
+            if (!SttBackupEnabled || model.Length == 0 || !SttBackupProvider.SupportsStt() || !IsConfigured(SttBackupProvider)
+                || (SttBackupProvider == SttProvider && model == SttModel.Trim())) return null;
+            return Endpoint(SttBackupProvider);
+        }
+    }
+
+    public void SelectSttBackupProvider(ProviderId id)
+    {
+        if (id == SttBackupProvider) return;
+        SttBackupProvider = id;
+        SttBackupModel = id.DefaultBackupSttModel();
     }
 
     /// <summary>The backup route, when switched on, configured, and actually different from the primary.</summary>

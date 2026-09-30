@@ -18,12 +18,12 @@ struct InputGainTests {
         let total = AudioFormat.sampleCount(forSeconds: silence * 2 + speech)
         let speechRange = AudioFormat.sampleCount(forSeconds: silence)..<AudioFormat.sampleCount(forSeconds: silence + speech)
         // Uniform noise in −1…1 has an RMS of 1/√3.
-        let unit: Float = 3.squareRoot()
+        let unit = Float(3).squareRoot()
         return (0..<total).map { index in
             var value = noise.next() * noiseLevel * unit
             // Syllables: on for a sixth of a second, off for the next.
             if speechRange.contains(index), (index / (AudioFormat.sampleRate / 6)) % 2 == 0 {
-                value += noise.next() * speechLevel * unit * 2.squareRoot()
+                value += noise.next() * speechLevel * unit * Float(2).squareRoot()
             }
             return value
         }

@@ -95,6 +95,29 @@ public static class TextInserter
     public static void CopyToClipboard(string text) => ClipboardSnapshot.SetText(text, transient: false);
 
     /// <summary>
+    /// A native app whose menu bar is active (after a lone Alt tap) swallows Ctrl+V and reports the menu as focused.
+    /// Leaves that mode the way the user would, with Esc (twice at most: an open menu, then the menu bar). Context
+    /// menus are left alone.
+    /// </summary>
+    public static async Task LeaveMenuMode()
+    {
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var foreground = Win32.GetForegroundWindow();
+            if (foreground == 0) return;
+            var thread = Win32.GetWindowThreadProcessId(foreground, out var pid);
+            if (pid == (uint)Environment.ProcessId) return;
+            var gui = new Win32.GUITHREADINFO { cbSize = Marshal.SizeOf<Win32.GUITHREADINFO>() };
+            if (!Win32.GetGUIThreadInfo(thread, ref gui)
+                || (gui.flags & Win32.GUI_INMENUMODE) == 0 || (gui.flags & Win32.GUI_POPUPMENUMODE) != 0) return;
+            Services.AppLog.Debug("paste", "foreground app is in menu mode; sending Esc");
+            var inputs = new[] { Win32.Key(Win32.VK_ESCAPE, up: false), Win32.Key(Win32.VK_ESCAPE, up: true) };
+            Win32.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Win32.INPUT>());
+            await Task.Delay(50);
+        }
+    }
+
+    /// <summary>
     /// Clipboard messages for the owner window. Returns true when handled. WM_RENDERFORMAT arrives while the
     /// reading app holds the clipboard open, so the data is set without opening it.
     /// </summary>

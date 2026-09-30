@@ -26,8 +26,9 @@ public static class FocusProbe
     private const int UIA_ValueIsReadOnlyPropertyId = 30046;
     private const int UIA_IsTextPatternAvailablePropertyId = 30040;
     private const int UIA_IsKeyboardFocusablePropertyId = 30009;
+    private const int UIA_NativeWindowHandlePropertyId = 30020;
 
-    private const int Edit = 50004, Document = 50030, ComboBox = 50003;
+    private const int Edit = 50004, Document = 50030, ComboBox = 50003, Window = 50032, Pane = 50033;
 
     private static readonly HashSet<int> NonTextControlTypes =
     [
@@ -98,7 +99,12 @@ public static class FocusProbe
                 {
                     // Browsers and Electron apps often report a pane or the window as focused even when the cursor
                     // is in a web text box. So a vague answer there means "can't tell".
-                    return web ? Target.Unknown : Target.NotEditable;
+                    if (web) return Target.Unknown;
+                    // Apps that draw their own controls (WeChat, Qt and DirectUI apps) often don't describe them to
+                    // UI Automation at all: focus then lands on a bare window, whatever the cursor is in. That says
+                    // nothing either; the paste itself tells whether the text landed.
+                    if (controlType is Pane or Window && Int(element, UIA_NativeWindowHandlePropertyId) != 0) return Target.Unknown;
+                    return Target.NotEditable;
                 }
                 return Target.Unknown;
             }

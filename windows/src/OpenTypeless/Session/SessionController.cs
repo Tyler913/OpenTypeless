@@ -635,6 +635,7 @@ public sealed class SessionController
     /// </summary>
     private async Task Deliver(string text, string? notice)
     {
+        if (_deliverByPaste) await TextInserter.LeaveMenuMode();
         var target = _deliverByPaste ? await FocusProbe.FocusedTarget() : FocusProbe.Target.NotEditable;
         if (target == FocusProbe.Target.NotEditable)
         {

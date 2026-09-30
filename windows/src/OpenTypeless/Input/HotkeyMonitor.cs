@@ -53,6 +53,9 @@ public sealed class HotkeyMonitor
     private nint _hook;
     private Win32.LowLevelKeyboardProc? _proc; // kept alive for the lifetime of the hook
 
+    /// <summary>Posted to the hook thread to send the menu mask once the hook has let a key-down through.</summary>
+    private const uint WM_SEND_MENU_MASK = Win32.WM_APP + 1;
+
     /// <summary>Starts the hook thread. Callbacks are delivered on the calling (UI) thread.</summary>
     public void Start()
     {
@@ -75,6 +78,11 @@ public sealed class HotkeyMonitor
         while (Win32.GetMessage(out var msg, 0, 0, 0) > 0)
         {
             if (msg.message == Win32.WM_TIMER && !_isDown) Install();
+            if (msg.message == WM_SEND_MENU_MASK)
+            {
+                SendMenuMask();
+                continue;
+            }
             Win32.TranslateMessage(ref msg);
             Win32.DispatchMessage(ref msg);
         }
@@ -128,13 +136,20 @@ public sealed class HotkeyMonitor
                     HotkeyLog.Debug($"{hotkey.DisplayName} down{(injected ? " (injected)" : "")}");
                     // Alt and Win act on their own release (menu bar / Start menu) unless another key is seen
                     // while they're held; a harmless unassigned key tells Windows they were part of a combo.
-                    if (hotkey.NeedsMenuMask) SendMenuMask();
+                    // Keys sent from inside the hook can reach the system *before* the key being hooked, so a mask
+                    // sent right here would land ahead of the Alt-down and do nothing: the lone Alt release would
+                    // still open the menu bar of a native app, which then swallows the Ctrl+V of the paste.
+                    // Send it from the hook thread's message loop instead, once this key-down has gone through.
+                    if (hotkey.NeedsMenuMask) Win32.PostThreadMessage(_threadId, WM_SEND_MENU_MASK, 0, 0);
                     Fire(OnPress);
                 }
                 else if (up && _isDown)
                 {
                     _isDown = false;
                     HotkeyLog.Debug($"{hotkey.DisplayName} up");
+                    // And once more from inside the hook, which lands ahead of the release while the key is still
+                    // held, in case the tap was too quick for the posted mask. A spare mask is harmless.
+                    if (hotkey.NeedsMenuMask) SendMenuMask();
                     Fire(OnRelease);
                 }
                 // Auto-repeat while held arrives as more key-downs: ignored.

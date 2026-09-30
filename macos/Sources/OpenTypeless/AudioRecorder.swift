@@ -10,8 +10,9 @@ import TypelessCore
 ///
 /// While a call app runs Apple's voice processing, macOS hands other apps the built-in microphone's raw
 /// capsules: three channels, about 30 dB quieter than usual. AVAudioConverter turns three channels into one
-/// as pure silence, so those are averaged here first; then `InputGain` lifts the quiet signal back to a speech
-/// level the pipeline doesn't skip as silence (and leaves normal input alone).
+/// as pure silence, so those are averaged here first, and only then does `InputGain` lift the quiet signal back
+/// to a speech level the pipeline doesn't skip as silence. One- and two-channel inputs (every microphone outside a
+/// call) get no gain at all: their audio reaches the pipeline exactly as before.
 final class AudioRecorder {
     /// Called on the audio thread, in order.
     var onSamples: (([Int16]) -> Void)?
@@ -21,7 +22,7 @@ final class AudioRecorder {
     var onFailure: ((Error) -> Void)?
     /// The input to use, by UID; nil (or a device that isn't connected) means the system default.
     var deviceUID: String?
-    /// Lift abnormally quiet input (off for the diagnostic probe's raw measurement).
+    /// Lift the quiet multi-channel input of a call (off for the diagnostic probe's raw measurement).
     var appliesGain = true
 
     private var engine: AVAudioEngine?
@@ -29,16 +30,26 @@ final class AudioRecorder {
     /// Mono at the input's rate, when the input has more channels than the converter can mix down.
     private var mixFormat: AVAudioFormat?
     private var configObserver: NSObjectProtocol?
-    /// The converter's output: 16 kHz mono float, so the gain works before rounding to 16-bit.
+    /// What the pipeline takes: 16 kHz mono 16-bit, converted to directly from one- and two-channel inputs as always.
+    private let int16Format = AVAudioFormat(
+        commonFormat: .pcmFormatInt16,
+        sampleRate: Double(AudioFormat.sampleRate),
+        channels: 1,
+        interleaved: true
+    )!
+    /// The converter's output for a mixed-down input: float, so the gain works before rounding to 16-bit.
     private let floatFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
         sampleRate: Double(AudioFormat.sampleRate),
         channels: 1,
         interleaved: false
     )!
-    /// Audio thread only.
+    /// Audio thread only; used only while `mixFormat` is set.
     private var gain = InputGain()
     private var reportedGain = false
+    /// The gain last reached on a multi-channel input: a later recording in the same call starts there, so its first
+    /// words are lifted too.
+    private static var learntGain: Float = 20
     private let log = Logger(subsystem: "local.opentypeless.app", category: "audio")
     private(set) var isRecording = false
 
@@ -61,7 +72,6 @@ final class AudioRecorder {
 
     func start() throws {
         guard !isRecording else { return }
-        gain = InputGain()
         reportedGain = false
         try startEngine()
         isRecording = true
@@ -87,12 +97,13 @@ final class AudioRecorder {
         let mixFormat = inputFormat.channelCount > 2
             ? AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: inputFormat.sampleRate, channels: 1, interleaved: false)
             : nil
-        guard let converter = AVAudioConverter(from: mixFormat ?? inputFormat, to: floatFormat) else {
+        guard let converter = AVAudioConverter(from: mixFormat ?? inputFormat, to: mixFormat == nil ? int16Format : floatFormat) else {
             throw RecorderError.converter
         }
         self.converter = converter
         self.mixFormat = mixFormat
         inputChannels = inputFormat.channelCount
+        gain = InputGain(initialGain: mixFormat == nil ? 1 : AudioRecorder.learntGain)
         log.debug("capture started: \(inputFormat.channelCount, privacy: .public) ch at \(inputFormat.sampleRate, privacy: .public) Hz")
 
         input.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { [weak self] buffer, _ in
@@ -111,6 +122,7 @@ final class AudioRecorder {
     }
 
     private func teardown() {
+        if mixFormat != nil, gain.gain > 1 { AudioRecorder.learntGain = gain.gain }
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
         configObserver = nil
         engine?.inputNode.removeTap(onBus: 0)
@@ -140,9 +152,9 @@ final class AudioRecorder {
         } else {
             buffer = input
         }
-        let ratio = floatFormat.sampleRate / buffer.format.sampleRate
+        let ratio = converter.outputFormat.sampleRate / buffer.format.sampleRate
         let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 32
-        guard let output = AVAudioPCMBuffer(pcmFormat: floatFormat, frameCapacity: capacity) else { return }
+        guard let output = AVAudioPCMBuffer(pcmFormat: converter.outputFormat, frameCapacity: capacity) else { return }
 
         var consumed = false
         var error: NSError?
@@ -155,16 +167,25 @@ final class AudioRecorder {
             status.pointee = .haveData
             return buffer
         }
-        guard error == nil, output.frameLength > 0, let channel = output.floatChannelData else { return }
-        var floats = Array(UnsafeBufferPointer(start: channel[0], count: Int(output.frameLength)))
-        if appliesGain {
-            gain.process(&floats)
-            if !reportedGain, gain.gain >= 4 {
-                reportedGain = true
-                log.debug("quiet input: applying \(Int(20 * log10(self.gain.gain)), privacy: .public) dB of gain")
+        guard error == nil, output.frameLength > 0 else { return }
+        let count = Int(output.frameLength)
+        let samples: [Int16]
+        if let channel = output.int16ChannelData {
+            samples = Array(UnsafeBufferPointer(start: channel[0], count: count))
+        } else if let channel = output.floatChannelData {
+            // A mixed-down call microphone: lift it, then round to 16-bit.
+            var floats = Array(UnsafeBufferPointer(start: channel[0], count: count))
+            if appliesGain {
+                gain.process(&floats)
+                if !reportedGain, gain.gain >= 4 {
+                    reportedGain = true
+                    log.debug("quiet input: applying \(Int(20 * log10(self.gain.gain)), privacy: .public) dB of gain")
+                }
             }
+            samples = floats.map { Int16((max(-1, min(1, $0)) * 32767).rounded()) }
+        } else {
+            return
         }
-        let samples = floats.map { Int16((max(-1, min(1, $0)) * 32767).rounded()) }
         onSamples?(samples)
         onLevel?(AudioLevel.rms(samples))
     }

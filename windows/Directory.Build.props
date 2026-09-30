@@ -3,7 +3,7 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>1.3.4</Version>
+    <Version>1.3.5</Version>
     <Product>OpenTypeless</Product>
     <Company>OpenTypeless</Company>
     <Copyright>Copyright (c) 2026 TylerHong</Copyright>

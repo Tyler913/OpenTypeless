@@ -13,7 +13,9 @@ struct InputGainTests {
     }
 
     /// `noiseLevel` throughout, with bursts of speech-like noise at `speechLevel` (RMS) for the middle seconds.
-    private func signal(speechLevel: Float, noiseLevel: Float, silence: Double = 1, speech: Double = 4) -> [Float] {
+    /// Successive syllables are scaled by `syllableLevels` in turn (soft word endings, stressed syllables…).
+    private func signal(speechLevel: Float, noiseLevel: Float, silence: Double = 1, speech: Double = 4,
+                        syllableLevels: [Float] = [1]) -> [Float] {
         var noise = Noise()
         let total = AudioFormat.sampleCount(forSeconds: silence * 2 + speech)
         let speechRange = AudioFormat.sampleCount(forSeconds: silence)..<AudioFormat.sampleCount(forSeconds: silence + speech)
@@ -21,9 +23,12 @@ struct InputGainTests {
         let unit = Float(3).squareRoot()
         return (0..<total).map { index in
             var value = noise.next() * noiseLevel * unit
-            // Syllables: on for a sixth of a second, off for the next.
-            if speechRange.contains(index), (index / (AudioFormat.sampleRate / 6)) % 2 == 0 {
-                value += noise.next() * speechLevel * unit * Float(2).squareRoot()
+            // Syllables, counted from the start of the speech: on for a sixth of a second, off for the next.
+            guard speechRange.contains(index) else { return value }
+            let syllable = (index - speechRange.lowerBound) / (AudioFormat.sampleRate / 6)
+            if syllable % 2 == 0 {
+                let level = syllableLevels[(syllable / 2) % syllableLevels.count]
+                value += noise.next() * speechLevel * level * unit * Float(2).squareRoot()
             }
             return value
         }
@@ -41,14 +46,19 @@ struct InputGainTests {
         Array(samples[AudioFormat.sampleCount(forSeconds: range.lowerBound)..<AudioFormat.sampleCount(forSeconds: range.upperBound)])
     }
 
+    private func processed(_ input: [Float], initialGain: Float = 1) -> (output: [Float], gain: Float) {
+        var output = input
+        var gain = InputGain(initialGain: initialGain)
+        gain.process(&output)
+        return (output, gain.gain)
+    }
+
     @Test func liftsSpeechFromARawCallMicrophone() {
         // About what macOS hands other apps during a call: speech near −60 dBFS over a very low noise floor.
         let input = signal(speechLevel: 0.001, noiseLevel: 0.00003)
         #expect(AudioLevel.isSilent(int16(input))) // skipped as silence without the gain
-        var output = input
-        var gain = InputGain()
-        gain.process(&output)
-        #expect(gain.gain > 10)
+        let (output, gain) = processed(input)
+        #expect(gain > 10)
         #expect(!AudioLevel.isSilent(int16(seconds(output, 2...5))))
         // The pauses after the speech stay silent.
         #expect(AudioLevel.isSilent(int16(seconds(output, 5.2...6))))
@@ -57,38 +67,44 @@ struct InputGainTests {
     @Test func liftsEvenQuieterSpeech() {
         // The quietest a call has measured: speech peaking near −58 dBFS.
         let input = signal(speechLevel: 0.0004, noiseLevel: 0.00002)
-        var output = input
-        var gain = InputGain()
-        gain.process(&output)
-        #expect(gain.gain > 30)
+        let (output, gain) = processed(input)
+        #expect(gain > 30)
         #expect(!AudioLevel.isSilent(int16(seconds(output, 2...5))))
         #expect(AudioLevel.isSilent(int16(seconds(output, 5.2...6))))
     }
 
+    @Test func aLearntGainLiftsTheFirstWords() {
+        let input = signal(speechLevel: 0.0004, noiseLevel: 0.00002)
+        let (output, _) = processed(input, initialGain: 20)
+        #expect(!AudioLevel.isSilent(int16(seconds(output, 1...2))))
+    }
+
     @Test func leavesNormalSpeechAlone() {
         let input = signal(speechLevel: 0.05, noiseLevel: 0.001)
-        var output = input
-        var gain = InputGain()
-        gain.process(&output)
-        // At most a touch on the soft edges of syllables.
-        #expect(gain.gain < 1.2)
-        #expect(energy(output) / energy(input) < 1.05)
+        let (output, gain) = processed(input)
+        #expect(gain == 1)
+        #expect(output == input)
+    }
+
+    @Test func aSoftFirstWordDoesNotBoostNormalSpeech() {
+        // A quiet room, and the dictation starts with soft syllables before the stressed ones.
+        let input = signal(speechLevel: 0.05, noiseLevel: 0.0001, syllableLevels: [0.1, 0.1, 0.2, 1, 0.6])
+        let (output, gain) = processed(input)
+        #expect(gain == 1)
+        #expect(energy(output) / energy(input) < 1.01)
     }
 
     @Test func neverLiftsSilenceIntoSpeech() {
         let input = signal(speechLevel: 0, noiseLevel: 0.0003)
-        var output = input
-        var gain = InputGain()
-        gain.process(&output)
-        #expect(AudioLevel.isSilent(int16(output)))
+        #expect(AudioLevel.isSilent(int16(processed(input).output)))
+        // Not even when starting from a gain learnt earlier.
+        #expect(AudioLevel.isSilent(int16(processed(input, initialGain: 20).output)))
     }
 
     @Test func keepsANoisyFloorUnderTheSilenceThreshold() {
         let input = signal(speechLevel: 0.001, noiseLevel: 0.0002)
-        var output = input
-        var gain = InputGain()
-        gain.process(&output)
-        #expect(gain.gain > 1)
+        let (output, gain) = processed(input)
+        #expect(gain > 1)
         #expect(AudioLevel.isSilent(int16(seconds(output, 5.2...6))))
     }
 

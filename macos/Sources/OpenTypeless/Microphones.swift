@@ -55,6 +55,63 @@ enum Microphones {
         all().first { $0.uid == uid }?.id
     }
 
+    /// The device ID of the system's current default output, if there is one.
+    static var defaultOutputID: AudioDeviceID? {
+        guard let id = uint32(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultOutputDevice),
+              id != AudioObjectID(kAudioObjectUnknown) else { return nil }
+        return id
+    }
+
+    static func name(_ id: AudioDeviceID) -> String {
+        string(id, kAudioObjectPropertyName) ?? "device \(id)"
+    }
+
+    /// An aggregate device (voice processing can't run on one: it builds its own).
+    static func isAggregate(_ id: AudioDeviceID) -> Bool {
+        uint32(id, kAudioDevicePropertyTransportType) == UInt32(kAudioDeviceTransportTypeAggregate)
+    }
+
+    static func isAlive(_ id: AudioDeviceID) -> Bool {
+        (uint32(id, kAudioDevicePropertyDeviceIsAlive) ?? 0) != 0
+    }
+
+    /// Muted in hardware (or by a mute utility), on its input side. Devices without a mute control never are.
+    static func isInputMuted(_ id: AudioDeviceID) -> Bool {
+        var address = address(kAudioDevicePropertyMute, kAudioDevicePropertyScopeInput)
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        return AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr && value != 0
+    }
+
+    /// The input volume (0…1), for devices that have one.
+    static func inputVolume(_ id: AudioDeviceID) -> Float32? {
+        var address = address(kAudioDevicePropertyVolumeScalar, kAudioDevicePropertyScopeInput)
+        var value: Float32 = 0
+        var size = UInt32(MemoryLayout<Float32>.size)
+        return AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr ? value : nil
+    }
+
+    static func nominalSampleRate(_ id: AudioDeviceID) -> Float64 {
+        var address = address(kAudioDevicePropertyNominalSampleRate)
+        var value: Float64 = 0
+        var size = UInt32(MemoryLayout<Float64>.size)
+        return AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr ? value : 0
+    }
+
+    /// Some process is doing I/O on the device (this one included).
+    static func isRunningSomewhere(_ id: AudioDeviceID) -> Bool {
+        (uint32(id, kAudioDevicePropertyDeviceIsRunningSomewhere) ?? 0) != 0
+    }
+
+    /// The process holding the device exclusively (hog mode), or nil when it's shared.
+    static func hogModeOwner(_ id: AudioDeviceID) -> pid_t? {
+        var address = address(kAudioDevicePropertyHogMode)
+        var value: pid_t = -1
+        var size = UInt32(MemoryLayout<pid_t>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr, value != -1 else { return nil }
+        return value
+    }
+
     private static func address(_ selector: AudioObjectPropertySelector,
                                 _ scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> AudioObjectPropertyAddress {
         AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
@@ -75,7 +132,7 @@ enum Microphones {
         return value.takeRetainedValue() as String
     }
 
-    private static func inputChannels(_ id: AudioObjectID) -> Int {
+    static func inputChannels(_ id: AudioObjectID) -> Int {
         var address = address(kAudioDevicePropertyStreamConfiguration, kAudioDevicePropertyScopeInput)
         var size: UInt32 = 0
         guard AudioObjectGetPropertyDataSize(id, &address, 0, nil, &size) == noErr, size > 0 else { return 0 }

@@ -3,35 +3,36 @@ import CoreAudio
 import CoreMedia
 import Foundation
 
-/// `OpenTypeless --mic-probe [seconds]`: records a few seconds through each capture method in turn and reports
-/// what each one heard, to diagnose a microphone that's silent in some situations (e.g. during a call).
+/// `OpenTypeless --mic-probe [seconds]`: records a few seconds through the app's recorder and through the raw capture
+/// paths in turn, and reports what each heard, to diagnose a microphone that's silent in some situations (e.g. during a
+/// call). Speech normally peaks around −20 dBFS; far below that, the pipeline would skip it as silence.
 enum MicProbe {
     @MainActor
     static func run(seconds: Double) async -> Int32 {
         let uid = AppSettings.shared.microphoneUID
         print("OpenTypeless microphone probe — macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
+            _ = await AVCaptureDevice.requestAccess(for: .audio)
+        }
         print("Microphone permission: \(permission)")
         describeDevices(chosenUID: uid.isEmpty ? nil : uid)
         print("\nKeep talking while each method records for \(format(seconds)) s…\n")
 
         var results: [(String, Stats)] = []
-        for mode in [AudioRecorder.Mode.hal, .voiceProcessing] {
-            let stats = Stats()
-            let recorder = AudioRecorder()
-            recorder.deviceUID = uid.isEmpty ? nil : uid
-            recorder.allowsFallback = false
-            recorder.onSamples = { samples in stats.add(samples) }
-            let name = mode == .hal ? "AUHAL (plain)" : "Voice processing"
-            do {
-                try recorder.start(mode: mode)
-                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-                recorder.stop()
-            } catch {
-                stats.error = error.localizedDescription
-            }
-            results.append((name, stats))
-            report(name, stats)
+        let recorded = Stats()
+        let recorder = AudioRecorder()
+        recorder.deviceUID = uid.isEmpty ? nil : uid
+        recorder.onSamples = { samples in recorded.add(samples) }
+        do {
+            try recorder.start()
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            recorded.note = "gain ×\(format(Double(recorder.currentGain)))"
+            recorder.stop()
+        } catch {
+            recorded.error = error.localizedDescription
         }
+        results.append(("OpenTypeless", recorded))
+        report("OpenTypeless", recorded)
 
         let engine = Stats()
         await recordWithEngine(seconds: seconds, uid: uid, into: engine)
@@ -101,9 +102,18 @@ enum MicProbe {
             stats.error = "no input format"
             return
         }
+        let channels = (0..<Int(format.channelCount)).map { _ in Stats() }
         input.installTap(onBus: 0, bufferSize: 2048, format: format) { buffer, _ in
-            guard let samples = buffer.floatChannelData?[0] else { return }
-            stats.add(UnsafeBufferPointer(start: samples, count: Int(buffer.frameLength)))
+            guard let data = buffer.floatChannelData else { return }
+            stats.add(UnsafeBufferPointer(start: data[0], count: Int(buffer.frameLength)))
+            for (index, channel) in channels.enumerated() {
+                channel.add(UnsafeBufferPointer(start: data[index], count: Int(buffer.frameLength)))
+            }
+        }
+        defer {
+            if channels.count > 1 {
+                stats.note = "per channel: " + channels.enumerated().map { "\($0.offset + 1): \($0.element.peakText)" }.joined(separator: ", ")
+            }
         }
         do {
             engine.prepare()
@@ -188,6 +198,8 @@ enum MicProbe {
         private var peak: Float = 0
         private var sumOfSquares: Double = 0
         var error: String?
+        /// Extra detail for the report line.
+        var note: String?
 
         func add(_ values: [Int16]) {
             record(values.count) { index in Float(values[index]) / 32768 }
@@ -220,6 +232,8 @@ enum MicProbe {
             if let error { return "failed (\(error))" }
             if callbacks == 0 { return "no audio at all" }
             if peak == 0 { return "digital silence" }
+            // Speech normally peaks around −20 dBFS; below −40 it's barely there.
+            if peak < 0.01 { return "very quiet (peak \(decibels(peak)) dBFS)" }
             return "audio (peak \(decibels(peak)) dBFS)"
         }
 
@@ -229,6 +243,13 @@ enum MicProbe {
             let rms = samples > 0 ? Float(sqrt(sumOfSquares / Double(samples))) : 0
             let silent = callbacks > 0 ? 100 * silentCallbacks / callbacks : 0
             return "\(callbacks) blocks, \(silent)% exact zeros, peak \(decibels(peak)) dBFS, RMS \(decibels(rms)) dBFS"
+                + (note.map { "; \($0)" } ?? "")
+        }
+
+        var peakText: String {
+            lock.lock()
+            defer { lock.unlock() }
+            return "peak \(decibels(peak)) dBFS"
         }
 
         private func decibels(_ value: Float) -> String {

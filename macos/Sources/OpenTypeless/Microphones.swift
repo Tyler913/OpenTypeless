@@ -71,10 +71,6 @@ enum Microphones {
         uint32(id, kAudioDevicePropertyTransportType) == UInt32(kAudioDeviceTransportTypeAggregate)
     }
 
-    static func isAlive(_ id: AudioDeviceID) -> Bool {
-        (uint32(id, kAudioDevicePropertyDeviceIsAlive) ?? 0) != 0
-    }
-
     /// Muted in hardware (or by a mute utility), on its input side. Devices without a mute control never are.
     static func isInputMuted(_ id: AudioDeviceID) -> Bool {
         var address = address(kAudioDevicePropertyMute, kAudioDevicePropertyScopeInput)

@@ -267,8 +267,8 @@ Useful command-line modes of the built binary (from `macos/`):
 # Evaluate clean-up prompts and models (see eval/README.md)
 .build/debug/OpenTypeless --eval-polish ../eval/polish-holdout.json --model google/gemini-3.8-flash ...
 
-# Microphone silent in some situation (e.g. during a call)? Record a few seconds through each capture method
-# and see which ones hear you (works on the installed app too: /Applications/OpenTypeless.app/Contents/MacOS/OpenTypeless)
+# Microphone silent or too quiet in some situation (e.g. during a call)? Record a few seconds through the app's recorder
+# and the raw capture paths, and compare levels (works on the installed app too: /Applications/OpenTypeless.app/Contents/MacOS/OpenTypeless)
 .build/debug/OpenTypeless --mic-probe 4
 
 # Render the settings pages, menu-bar panel and HUD to PNGs (--live shows them on screen for real Liquid Glass).

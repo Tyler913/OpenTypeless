@@ -14,6 +14,14 @@ if let index = CommandLine.arguments.firstIndex(of: "--transcribe-file"),
     dispatchMain()
 }
 
+// `OpenTypeless --mic-probe [seconds]` records through each capture method in turn and reports what each heard.
+// Run it from Terminal while the microphone misbehaves (e.g. during a call).
+if let index = CommandLine.arguments.firstIndex(of: "--mic-probe") {
+    let seconds = CommandLine.arguments.count > index + 1 ? Double(CommandLine.arguments[index + 1]) ?? 4 : 4
+    Task { @MainActor in exit(await MicProbe.run(seconds: max(1, seconds))) }
+    dispatchMain()
+}
+
 if CommandLine.arguments.contains("--eval-polish") {
     Task { exit(await PolishEval.run()) }
     dispatchMain()

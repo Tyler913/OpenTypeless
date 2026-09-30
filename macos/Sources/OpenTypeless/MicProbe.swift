@@ -26,7 +26,7 @@ enum MicProbe {
         do {
             try recorder.start()
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            recorded.note = "gain ×\(format(Double(recorder.currentGain)))"
+            recorded.note = "\(recorder.inputChannels) ch in, gain ×\(format(Double(recorder.currentGain)))"
             recorder.stop()
         } catch {
             recorded.error = error.localizedDescription

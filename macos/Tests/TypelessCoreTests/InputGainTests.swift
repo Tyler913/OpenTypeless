@@ -54,6 +54,17 @@ struct InputGainTests {
         #expect(AudioLevel.isSilent(int16(seconds(output, 5.2...6))))
     }
 
+    @Test func liftsEvenQuieterSpeech() {
+        // The quietest a call has measured: speech peaking near −58 dBFS.
+        let input = signal(speechLevel: 0.0004, noiseLevel: 0.00002)
+        var output = input
+        var gain = InputGain()
+        gain.process(&output)
+        #expect(gain.gain > 30)
+        #expect(!AudioLevel.isSilent(int16(seconds(output, 2...5))))
+        #expect(AudioLevel.isSilent(int16(seconds(output, 5.2...6))))
+    }
+
     @Test func leavesNormalSpeechAlone() {
         let input = signal(speechLevel: 0.05, noiseLevel: 0.001)
         var output = input

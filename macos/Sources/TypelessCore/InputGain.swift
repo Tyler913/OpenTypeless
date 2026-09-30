@@ -13,8 +13,8 @@ import Foundation
 public struct InputGain {
     /// Speech-frame RMS the gain aims for (about −34 dBFS): quiet but clearly speech. Normal speech is louder.
     public static let targetLevel: Float = 0.02
-    /// At most +32 dB.
-    public static let maximumGain: Float = 40
+    /// At most +36 dB (during a call the raw microphone's speech can sit near −70 dBFS RMS).
+    public static let maximumGain: Float = 63
     /// The noise floor is never lifted above this RMS (about −54 dBFS), half the silence threshold.
     public static let noiseCeiling: Float = 0.002
     /// 20 ms at 16 kHz.

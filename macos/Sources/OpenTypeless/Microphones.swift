@@ -39,8 +39,15 @@ enum Microphones {
 
     /// The system's current default input.
     static var defaultInput: Microphone? {
-        guard let id = uint32(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultInputDevice) else { return nil }
+        guard let id = defaultInputID else { return nil }
         return all().first { $0.id == id }
+    }
+
+    /// The device ID of the system's current default input, if there is one.
+    static var defaultInputID: AudioDeviceID? {
+        guard let id = uint32(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultInputDevice),
+              id != AudioObjectID(kAudioObjectUnknown) else { return nil }
+        return id
     }
 
     /// The device with this UID, if it's connected.

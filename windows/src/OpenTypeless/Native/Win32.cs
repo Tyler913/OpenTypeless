@@ -90,8 +90,10 @@ public static partial class Win32
     // MARK: Input
 
     public const int INPUT_KEYBOARD = 1;
+    public const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
     public const uint KEYEVENTF_KEYUP = 0x0002;
     public const ushort VK_CONTROL = 0x11;
+    public const ushort VK_ESCAPE = 0x1B;
     public const ushort VK_V = 0x56;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -132,10 +134,23 @@ public static partial class Win32
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
-    public static INPUT Key(ushort vk, bool up) => new()
+    /// <summary>
+    /// A key event as a keyboard would send it: with its scan code as well as the virtual key, since some apps
+    /// (Qt-based ones among them) read the scan code and ignore a keystroke without one.
+    /// </summary>
+    public static INPUT Key(ushort vk, bool up, bool extended = false) => new()
     {
         type = INPUT_KEYBOARD,
-        u = new InputUnion { ki = new KEYBDINPUT { wVk = vk, dwFlags = up ? KEYEVENTF_KEYUP : 0, dwExtraInfo = InjectedSignature } },
+        u = new InputUnion
+        {
+            ki = new KEYBDINPUT
+            {
+                wVk = vk,
+                wScan = (ushort)MapVirtualKey(vk, 0 /* MAPVK_VK_TO_VSC */),
+                dwFlags = (up ? KEYEVENTF_KEYUP : 0) | (extended ? KEYEVENTF_EXTENDEDKEY : 0),
+                dwExtraInfo = InjectedSignature,
+            },
+        },
     };
 
     // MARK: Clipboard
@@ -259,6 +274,11 @@ public static partial class Win32
         public int Right;
         public int Bottom;
     }
+
+    /// <summary>GUITHREADINFO flags: the thread is in a menu loop (menu bar, system menu or popup)…</summary>
+    public const uint GUI_INMENUMODE = 0x0004;
+    /// <summary>…started by TrackPopupMenu (a context menu), not from the menu bar or Alt.</summary>
+    public const uint GUI_POPUPMENUMODE = 0x0010;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct GUITHREADINFO

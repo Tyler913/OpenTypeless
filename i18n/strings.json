@@ -107,6 +107,15 @@
     "fr": "Impossible de créer le convertisseur audio",
     "de": "Audiokonverter konnte nicht erstellt werden"
   },
+  "Couldn't open the microphone (error {0})": {
+    "ja": "マイクを開けませんでした（エラー {0}）",
+    "ko": "마이크를 열 수 없습니다 (오류 {0})",
+    "es": "No se pudo abrir el micrófono (error {0})",
+    "pt": "Não foi possível abrir o microfone (erro {0})",
+    "ru": "Не удалось открыть микрофон (ошибка {0})",
+    "fr": "Impossible d’ouvrir le micro (erreur {0})",
+    "de": "Mikrofon konnte nicht geöffnet werden (Fehler {0})"
+  },
   "Yesterday": {
     "ja": "昨日",
     "ko": "어제",

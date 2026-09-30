@@ -21,7 +21,7 @@ From reading several open-source voice-typing apps and the provider documentatio
 
 ```
 key down ─► warm the provider connections
-mic ─► AVAudioEngine ─► 16 kHz mono PCM ─┬─► WAV file on disk (written continuously)
+mic ─► AUHAL (input) ─► 16 kHz mono PCM ─┬─► WAV file on disk (written continuously)
                                          └─► Chunker + pause tracker
                                                │ every 18–28 s: cut at the quietest 0.4 s window
                                                │ at every pause: transcribe the pending audio ahead of time

@@ -228,7 +228,7 @@ Reasoning is automatically turned off or set to its minimum for the clean-up mod
 - Usage totals for the Home page (words, speaking time and cost per day, no text) are kept in `usage.json` in the same folder as the settings and history. The OpenRouter price list is downloaded from its public model list (no key, nothing about you) a few times a day.
 - History (audio + transcripts) lives in `~/Library/Application Support/OpenTypeless/Sessions/` on macOS and `%LOCALAPPDATA%\OpenTypeless\` on Windows. Recordings are kept for a month by default (History page: not at all, a day, a week, a month, a year, or forever); after that the text stays among the newest 200 entries. Failed dictations keep their audio so they can be retried.
 - Update checks send one request a day to `api.github.com` (no account, nothing about you or your dictations); turn them off under **Settings → General → Updates**.
-- Learning from your fixes reads the text field you dictated into, or where it can't, follows the keys you press there, on your computer only, for at most two minutes after a paste and only until you click, switch app or send. Password fields are skipped. It can be turned off under **Vocabulary & Style**.
+- Learning from your fixes reads the text field you dictated into, or where it can't, follows the keys you press there, on your computer only, for at most two minutes after a paste and only until you switch app or send. To see where a double-clicked word is, the selection may be copied with ⌘C / Ctrl+C; your clipboard is put back right away. Password fields are skipped. It can be turned off under **Vocabulary & Style**.
 
 ## Development
 

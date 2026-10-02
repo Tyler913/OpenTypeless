@@ -6,10 +6,12 @@ namespace TypelessCore;
 /// </summary>
 /// <remarks>
 /// It starts as the pasted text with the cursor at its end, and applies typing, Backspace / Delete and the arrow keys,
-/// with or without a selection. Anything it can't follow exactly stops it (<see cref="Apply"/> returns false), and then
-/// only the state before that key counts: the cursor leaving the dictated text (it doesn't know what's around it), a
-/// word jump across Chinese or Japanese text (word boundaries there come from a dictionary), a jump to the start or end
-/// of a line, and up / down.
+/// with or without a selection. A click puts the cursor somewhere it can't see (<see cref="CursorLost"/>); a word
+/// selected by double-clicking or dragging finds it again (<see cref="Select"/>), when that text occurs once in the
+/// dictated text. Anything it can't follow exactly stops it (<see cref="Apply"/> returns false), and then only the state
+/// before that key counts: a key while the cursor is lost, the cursor leaving the dictated text (it doesn't know what's
+/// around it), a word jump across Chinese or Japanese text (word boundaries there come from a dictionary), a jump to the
+/// start or end of a line, and up / down.
 /// </remarks>
 public sealed class TypedEdit
 {
@@ -30,6 +32,8 @@ public sealed class TypedEdit
     /// <summary>Where the cursor is; with <see cref="Anchor"/> it spans the selection.</summary>
     public int Caret { get; private set; }
     public int Anchor { get; private set; }
+    /// <summary>False after a click, until a selection shows where the cursor is.</summary>
+    public bool KnowsCursor { get; private set; } = true;
 
     public TypedEdit(string pasted)
     {
@@ -41,9 +45,35 @@ public sealed class TypedEdit
 
     private (int Start, int End) Selection => (Math.Min(Caret, Anchor), Math.Max(Caret, Anchor));
 
+    /// <summary>A click: the cursor is somewhere unknown until <see cref="Select"/> finds it.</summary>
+    public void CursorLost() => KnowsCursor = false;
+
+    /// <summary>
+    /// The user selected <paramref name="text"/> (double-click, drag): selects it here, if it occurs exactly once. False
+    /// otherwise, and then the cursor stays unknown.
+    /// </summary>
+    public bool Select(string text)
+    {
+        var needle = Graphemes(text);
+        if (needle.Count == 0 || needle.Count > _characters.Count) return false;
+        int? found = null;
+        for (var start = 0; start + needle.Count <= _characters.Count; start++)
+        {
+            if (!_characters.Skip(start).Take(needle.Count).SequenceEqual(needle)) continue;
+            if (found != null) return false; // more than once: can't tell which
+            found = start;
+        }
+        if (found is not { } at) return false;
+        Anchor = at;
+        Caret = at + needle.Count;
+        KnowsCursor = true;
+        return true;
+    }
+
     /// <summary>Applies one key; false when it can't be followed (the state stays as before it).</summary>
     public bool Apply(Key key)
     {
+        if (!KnowsCursor) return false;
         switch (key)
         {
             case Key.Insert insert:

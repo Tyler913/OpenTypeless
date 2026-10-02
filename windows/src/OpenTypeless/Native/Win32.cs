@@ -71,6 +71,21 @@ public static partial class Win32
     public const int WM_RBUTTONDOWN = 0x0204;
     public const int WM_MBUTTONDOWN = 0x0207;
 
+    public const int WM_LBUTTONUP = 0x0202;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MSLLHOOKSTRUCT
+    {
+        public POINT pt;
+        public uint mouseData;
+        public uint flags;
+        public uint time;
+        public nint dwExtraInfo;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern uint GetDoubleClickTime();
+
     public delegate nint LowLevelMouseProc(int nCode, nint wParam, nint lParam);
 
     [DllImport("user32.dll", EntryPoint = "SetWindowsHookEx", SetLastError = true)]
@@ -121,6 +136,7 @@ public static partial class Win32
     public const ushort VK_RETURN = 0x0D;
     public const ushort VK_ESCAPE = 0x1B;
     public const ushort VK_V = 0x56;
+    public const ushort VK_C = 0x43;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct INPUT

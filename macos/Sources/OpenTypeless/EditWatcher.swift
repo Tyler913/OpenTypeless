@@ -129,10 +129,13 @@ final class EditWatcher {
         if let keys = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
             MainActor.assumeIsolated { self?.handle(event) }
         }) { monitors.append(keys) }
-        // A click puts the cursor somewhere the keys can't tell.
-        if let clicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown], handler: { [weak self] _ in
-            MainActor.assumeIsolated { self?.finish(quiet: false, reason: "clicked") }
+        // A click puts the cursor somewhere the keys can't tell; selecting a word (double-click, drag) shows where.
+        if let clicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp], handler: { [weak self] event in
+            MainActor.assumeIsolated { self?.handleClick(event) }
         }) { monitors.append(clicks) }
+        if let menus = NSEvent.addGlobalMonitorForEvents(matching: [.rightMouseDown, .otherMouseDown], handler: { [weak self] _ in
+            MainActor.assumeIsolated { self?.finish(quiet: false, reason: "context menu") }
+        }) { monitors.append(menus) }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.finish(quiet: false, reason: "switched app") }
@@ -193,6 +196,41 @@ final class EditWatcher {
 
     // MARK: Following the keys
 
+    private var mouseDownAt: NSPoint?
+
+    private func handleClick(_ event: NSEvent) {
+        guard var watch, var keys = watch.keys else { return }
+        if event.type == .leftMouseDown {
+            mouseDownAt = NSEvent.mouseLocation
+            keys.cursorLost()
+            watch.keys = keys
+            self.watch = watch
+            return
+        }
+        let dragged = mouseDownAt.map { hypot($0.x - NSEvent.mouseLocation.x, $0.y - NSEvent.mouseLocation.y) > 3 } ?? false
+        mouseDownAt = nil
+        guard event.clickCount >= 2 || dragged else { return } // a plain click: the cursor stays unknown
+        let started = watch.started
+        Task { @MainActor [weak self] in
+            // Let the app apply the selection first.
+            try? await Task.sleep(for: .milliseconds(120))
+            guard let self, let selected = await self.selectedText(pid: watch.pid), self.watch?.started == started,
+                  var current = self.watch, var keys = current.keys else { return }
+            keys.select(selected)
+            current.keys = keys
+            self.watch = current
+        }
+    }
+
+    /// The text selected in the app: from Accessibility where it answers, else copied with ⌘C (the clipboard is put back).
+    private func selectedText(pid: pid_t) async -> String? {
+        if let element = Self.focusedElement(pid: pid), let text = Self.string(element, kAXSelectedTextAttribute), !text.isEmpty {
+            return text
+        }
+        guard !IsSecureEventInputEnabled() else { return nil }
+        return await TextInserter.copySelection()
+    }
+
     private func handle(_ event: NSEvent) {
         guard var watch, var keys = watch.keys else { return }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
@@ -225,6 +263,7 @@ final class EditWatcher {
             guard Self.typesPlainText else { return finish(quiet: false, reason: "input method") }
             key = .insert(characters)
         }
+        guard keys.knowsCursor else { return finish(quiet: false, reason: "clicked somewhere unknown") }
         guard keys.apply(key) else { return finish(quiet: false, reason: "cursor left the dictated text") }
         watch.keys = keys
         self.watch = watch

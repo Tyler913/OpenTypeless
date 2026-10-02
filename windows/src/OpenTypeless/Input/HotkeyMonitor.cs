@@ -15,6 +15,9 @@ public readonly record struct KeyEvent(int VirtualKey, bool IsDown, bool IsInjec
 /// </summary>
 public readonly record struct TypedKey(int VirtualKey, string? Text, bool Ctrl, bool Alt, bool Shift, bool Win, bool InputMethod, bool IsInjected);
 
+/// <summary>A mouse button going down or up (<c>WM_*BUTTON*</c>), where on screen, and when (ms, as in window messages).</summary>
+public readonly record struct MouseButton(int Message, int X, int Y, uint Time);
+
 /// <summary>
 /// Listens globally for the configured hotkey via a low-level keyboard hook (<c>WH_KEYBOARD_LL</c>), the
 /// Windows counterpart of the macOS CGEventTap.
@@ -70,13 +73,13 @@ public sealed class HotkeyMonitor
 
     private nint _mouseHook;
     private Win32.LowLevelMouseProc? _mouseProc;
-    private volatile Action? _onClick;
+    private volatile Action<MouseButton>? _onClick;
 
     /// <summary>
-    /// Calls <paramref name="onClick"/> (on the UI thread) when a mouse button goes down anywhere, or stops with null.
-    /// The mouse hook is only installed while it's wanted.
+    /// Calls <paramref name="onClick"/> (on the UI thread) when a mouse button goes down anywhere, or the left one up;
+    /// stops with null. The mouse hook is only installed while it's wanted.
     /// </summary>
-    public void WatchClicks(Action? onClick)
+    public void WatchClicks(Action<MouseButton>? onClick)
     {
         _onClick = onClick;
         if (_threadId != 0) Win32.PostThreadMessage(_threadId, WM_WATCH_CLICKS, onClick != null ? 1 : 0, 0);
@@ -159,9 +162,12 @@ public sealed class HotkeyMonitor
 
     private nint MouseProc(int nCode, nint wParam, nint lParam)
     {
-        if (nCode >= 0 && (int)wParam is Win32.WM_LBUTTONDOWN or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN && _onClick is { } onClick)
+        if (nCode >= 0 && (int)wParam is Win32.WM_LBUTTONDOWN or Win32.WM_LBUTTONUP or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN
+            && _onClick is { } onClick)
         {
-            _dispatcher?.TryEnqueue(() => onClick());
+            var info = Marshal.PtrToStructure<Win32.MSLLHOOKSTRUCT>(lParam);
+            var button = new MouseButton((int)wParam, info.pt.X, info.pt.Y, info.time);
+            _dispatcher?.TryEnqueue(() => onClick(button));
         }
         return Win32.CallNextHookEx(_mouseHook, nCode, wParam, lParam);
     }

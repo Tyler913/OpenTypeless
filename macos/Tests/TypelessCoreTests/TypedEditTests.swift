@@ -60,4 +60,27 @@ struct TypedEditTests {
         let result = edit("to Quasera", Array(repeating: .deleteBackward(.character), count: 7) + type("Kwazara") + [.right(.character, extend: false)])
         #expect(result == ("to Kwazara", false))
     }
+
+    @Test func aDoubleClickedWordIsFoundAgain() {
+        var edit = TypedEdit(pasted: "please ping Dravik about the release")
+        edit.cursorLost()
+        let typedWhileLost = edit.apply(.insert("x"))
+        #expect(!typedWhileLost)
+        let found = edit.select("Dravik")
+        #expect(found)
+        var followed = true
+        for key in type("Drovik") { followed = edit.apply(key) && followed }
+        #expect(followed)
+        #expect(edit.text == "please ping Drovik about the release")
+    }
+
+    @Test func aClickedSelectionThatOccursTwiceIsAmbiguous() {
+        var edit = TypedEdit(pasted: "the cat and the dog")
+        edit.cursorLost()
+        let twice = edit.select("the"), missing = edit.select("bird")
+        #expect(!twice && !missing && !edit.knowsCursor)
+        let once = edit.select("dog"), typed = edit.apply(.insert("fox"))
+        #expect(once && typed)
+        #expect(edit.text == "the cat and the fox")
+    }
 }

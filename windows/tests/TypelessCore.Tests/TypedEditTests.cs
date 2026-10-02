@@ -64,6 +64,30 @@ public class TypedEditTests
     }
 
     [Fact]
+    public void ADoubleClickedWordIsFoundAgain()
+    {
+        var edit = new TypedEdit("please ping Dravik about the release");
+        edit.CursorLost();
+        Assert.False(edit.Apply(new Key.Insert("x")));
+        Assert.True(edit.Select("Dravik"));
+        Assert.All(Type("Drovik").ToList(), key => Assert.True(edit.Apply(key)));
+        Assert.Equal("please ping Drovik about the release", edit.Text);
+    }
+
+    [Fact]
+    public void AClickedSelectionThatOccursTwiceIsAmbiguous()
+    {
+        var edit = new TypedEdit("the cat and the dog");
+        edit.CursorLost();
+        Assert.False(edit.Select("the"));
+        Assert.False(edit.Select("bird"));
+        Assert.False(edit.KnowsCursor);
+        Assert.True(edit.Select("dog"));
+        Assert.True(edit.Apply(new Key.Insert("fox")));
+        Assert.Equal("the cat and the fox", edit.Text);
+    }
+
+    [Fact]
     public void TheStateBeforeAnUnfollowableKeyIsKept() =>
         Assert.Equal(("to Kwazara", false), Edit("to Quasera", Enumerable.Repeat(Back(), 7).Concat(Type("Kwazara")).Append(Right())));
 }

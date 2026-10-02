@@ -94,6 +94,26 @@ enum TextInserter {
         postKey(CGKeyCode(kVK_Return), flags: [])
     }
 
+    /// The text selected in the frontmost app, read by pressing ⌘C; the clipboard is put back as it was. nil when nothing
+    /// was copied (no selection, or the app didn't answer).
+    @MainActor
+    static func copySelection() async -> String? {
+        let pasteboard = NSPasteboard.general
+        let saved = snapshot(pasteboard)
+        let before = pasteboard.changeCount
+        postKey(CGKeyCode(kVK_ANSI_C), flags: .maskCommand)
+        let clock = ContinuousClock()
+        let deadline = clock.now + .milliseconds(400)
+        while pasteboard.changeCount == before, clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        guard pasteboard.changeCount != before else { return nil }
+        let text = pasteboard.string(forType: .string)
+        pasteboard.clearContents()
+        if !saved.isEmpty { pasteboard.writeObjects(saved) }
+        return text
+    }
+
     private static func snapshot(_ pasteboard: NSPasteboard) -> [NSPasteboardItem] {
         (pasteboard.pasteboardItems ?? []).map { item in
             let copy = NSPasteboardItem()

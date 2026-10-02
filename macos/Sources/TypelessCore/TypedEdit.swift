@@ -4,10 +4,11 @@ import Foundation
 /// text field: for apps whose fields can't be read (many Electron apps, Firefox, WeChat), this is how a fix is seen.
 ///
 /// It starts as the pasted text with the cursor at its end, and applies typing, Backspace / Delete and the arrow keys,
-/// with or without a selection. Anything it can't follow exactly stops it (`apply` returns false), and then only the
-/// state before that key counts: the cursor leaving the dictated text (it doesn't know what's around it), a word
-/// jump across Chinese or Japanese text (macOS moves by dictionary words there), a jump to the start or end of a line,
-/// and up / down.
+/// with or without a selection. A click puts the cursor somewhere it can't see (`cursorLost`); a word selected by
+/// double-clicking or dragging finds it again (`select`), when that text occurs once in the dictated text. Anything it
+/// can't follow exactly stops it (`apply` returns false), and then only the state before that key counts: a key while
+/// the cursor is lost, the cursor leaving the dictated text (it doesn't know what's around it), a word jump across
+/// Chinese or Japanese text (macOS moves by dictionary words there), a jump to the start or end of a line, and up / down.
 public struct TypedEdit: Sendable, Equatable {
     public enum Unit: Sendable { case character, word }
     public enum Key: Sendable, Equatable {
@@ -23,6 +24,8 @@ public struct TypedEdit: Sendable, Equatable {
     /// Where the cursor is; with `anchor` it spans the selection.
     public private(set) var caret: Int
     public private(set) var anchor: Int
+    /// False after a click, until a selection shows where the cursor is.
+    public private(set) var knowsCursor = true
 
     public init(pasted: String) {
         characters = Array(pasted)
@@ -33,8 +36,32 @@ public struct TypedEdit: Sendable, Equatable {
     public var text: String { String(characters) }
     private var selection: Range<Int> { min(caret, anchor)..<max(caret, anchor) }
 
+    /// A click: the cursor is somewhere unknown until `select` finds it.
+    public mutating func cursorLost() {
+        knowsCursor = false
+    }
+
+    /// The user selected `text` (double-click, drag): selects it here, if it occurs exactly once. False otherwise, and
+    /// then the cursor stays unknown.
+    @discardableResult
+    public mutating func select(_ text: String) -> Bool {
+        let needle = Array(text)
+        guard !needle.isEmpty, needle.count <= characters.count else { return false }
+        var found: Int?
+        for start in 0...(characters.count - needle.count) where characters[start..<(start + needle.count)].elementsEqual(needle) {
+            guard found == nil else { return false } // more than once: can't tell which
+            found = start
+        }
+        guard let found else { return false }
+        anchor = found
+        caret = found + needle.count
+        knowsCursor = true
+        return true
+    }
+
     /// Applies one key; false when it can't be followed (the state stays as before it).
     public mutating func apply(_ key: Key) -> Bool {
+        guard knowsCursor else { return false }
         switch key {
         case .insert(let string):
             guard !string.isEmpty else { return false }

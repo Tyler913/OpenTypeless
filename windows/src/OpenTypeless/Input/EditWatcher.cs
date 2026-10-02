@@ -14,8 +14,9 @@ namespace OpenTypeless.Input;
 /// so the fix can be learned (see CorrectionLearner).
 ///
 /// The field is read through UI Automation, locally; nothing leaves the PC. Where it can't be read, the keys pressed
-/// after the paste are followed instead (see TypedEdit). A watch ends when the user leaves the field, sends or clears
-/// it, clicks, switches app, starts another dictation, or after two minutes. Only the state at that point is compared,
+/// after the paste are followed instead (see TypedEdit); a click loses the cursor, and a word selected by double-clicking
+/// or dragging (read with Ctrl+C, the clipboard put back) finds it again. A watch ends when the user leaves the field,
+/// sends or clears it, switches app, starts another dictation, or after two minutes. Only the state at that point is compared,
 /// never a half-finished edit. UI-thread only; the UI Automation calls themselves run on the thread pool with a
 /// timeout, since they go into the other app.
 /// </summary>
@@ -134,12 +135,47 @@ public sealed class EditWatcher
             {
                 if (_session == session) OnKey(session, key);
             });
-            HotkeyMonitor.Shared.WatchClicks(() =>
+            HotkeyMonitor.Shared.WatchClicks(button =>
             {
-                if (_session == session) Finish(quiet: false, "clicked");
+                if (_session == session) OnClick(session, button);
             });
             _timer.Start();
         }
+    }
+
+    private MouseButton? _lastDown;
+    private bool _doubleClick;
+
+    private void OnClick(Session session, MouseButton button)
+    {
+        var keys = session.Keys!;
+        switch (button.Message)
+        {
+            case Win32.WM_LBUTTONDOWN:
+                // A second press soon enough and near enough is a double-click (a low-level hook only sees presses).
+                _doubleClick = _lastDown is { } last && button.Time - last.Time <= Win32.GetDoubleClickTime()
+                               && Math.Abs(button.X - last.X) <= 4 && Math.Abs(button.Y - last.Y) <= 4;
+                _lastDown = button;
+                keys.CursorLost();
+                return;
+            case Win32.WM_LBUTTONUP:
+                var dragged = _lastDown is { } down && (Math.Abs(button.X - down.X) > 4 || Math.Abs(button.Y - down.Y) > 4);
+                if (!_doubleClick && !dragged) return; // a plain click: the cursor stays unknown
+                _ = FindSelection(session);
+                return;
+            default:
+                Finish(quiet: false, "context menu");
+                return;
+        }
+    }
+
+    /// <summary>Reads what the user just selected (Ctrl+C, the clipboard put back) and finds it in the dictated text.</summary>
+    private async Task FindSelection(Session session)
+    {
+        await Task.Delay(120); // let the app apply the selection first
+        if (_session != session) return;
+        var selected = await TextInserter.CopySelection();
+        if (_session == session && !string.IsNullOrEmpty(selected)) session.Keys!.Select(selected);
     }
 
     private void OnKey(Session session, TypedKey key)
@@ -191,6 +227,11 @@ public sealed class EditWatcher
                 }
                 edit = new TypedEdit.Key.Insert(text);
                 break;
+        }
+        if (!keys.KnowsCursor)
+        {
+            Finish(quiet: false, "clicked somewhere unknown");
+            return;
         }
         if (!keys.Apply(edit)) Finish(quiet: false, "cursor left the dictated text");
     }

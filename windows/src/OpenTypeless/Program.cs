@@ -25,6 +25,8 @@ public static class Program
         // Started by the updater from a freshly downloaded copy: install it over the running one, no UI.
         if (args.Contains(Services.UpdateInstaller.Argument)) return Services.UpdateInstaller.Run(args);
 
+        LogExceptionsWhenDebugging();
+
         var snapshot = Array.IndexOf(args, "--snapshot-ui");
         if (snapshot >= 0 && snapshot + 1 < args.Length) SnapshotDirectory = Path.GetFullPath(args[snapshot + 1]);
         LaunchedAtLogin = args.Contains("--autostart");
@@ -60,5 +62,30 @@ public static class Program
         });
         GC.KeepAlive(mutex);
         return SnapshotExitCode;
+    }
+
+    [ThreadStatic] private static bool _loggingException;
+
+    /// <summary>
+    /// With OPENTYPELESS_DEBUG set, every exception goes to debug.log with where it was thrown, even one that's caught.
+    /// An exception thrown in a DispatcherQueue callback never reaches Application.UnhandledException: WinUI ends the
+    /// process with 0xC000027B from CoreMessagingXP.dll, and this is the only trace of what was thrown.
+    /// </summary>
+    private static void LogExceptionsWhenDebugging()
+    {
+        if (Environment.GetEnvironmentVariable("OPENTYPELESS_DEBUG") == null) return;
+        AppDomain.CurrentDomain.FirstChanceException += (_, e) =>
+        {
+            if (_loggingException) return; // writing the log can throw too
+            _loggingException = true;
+            try
+            {
+                Services.AppLog.Debug("exception", $"{e.Exception.GetType().FullName} (0x{e.Exception.HResult:X8}): {e.Exception.Message}\n{Environment.StackTrace}");
+            }
+            finally
+            {
+                _loggingException = false;
+            }
+        };
     }
 }

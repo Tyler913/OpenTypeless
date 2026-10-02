@@ -57,6 +57,17 @@ jobs:
           $escaped = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
           Write-Output "::error title=Build (${{ matrix.arch }}) failed::$escaped"
 
+      # A crash of the app leaves a minidump (Windows Error Reporting's LocalDumps), analysed in "Collect Windows
+      # diagnostics": a native crash such as 0xC000027B says nothing more in the event log.
+      - name: Keep crash dumps
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\OpenTypeless.exe'
+          New-Item -Force $key | Out-Null
+          New-ItemProperty -Force $key -Name DumpFolder -PropertyType ExpandString -Value "$env:RUNNER_TEMP\dumps" | Out-Null
+          New-ItemProperty -Force $key -Name DumpType -PropertyType DWord -Value 1 | Out-Null
+          New-ItemProperty -Force $key -Name DumpCount -PropertyType DWord -Value 10 | Out-Null
+
       # Exercise the actual portable ZIP on both native architectures, not just the publish staging folder. It is
       # unpacked into a folder with a space and Chinese in its name, like many users' folders.
       - name: Check portable package and all UI snapshots
@@ -166,6 +177,23 @@ jobs:
           Write-Output "$($events.Count) Application log errors/warnings"
           $events | Select-Object -First 40 | Format-List TimeCreated, ProviderName, Id, Message | Out-File -Width 400 "$out\events.log"
           Get-Content "$out\events.log" -TotalCount 120
+
+          # What the crash dumps say: the exception code, the stowed exception (the error WinUI was handed) and the
+          # faulting stack, from the Windows SDK's console debugger.
+          $dumps = @(Get-ChildItem "$env:RUNNER_TEMP\dumps" -Filter *.dmp -ErrorAction SilentlyContinue)
+          Write-Output "$($dumps.Count) crash dumps"
+          $debuggerArch = if ('${{ matrix.arch }}' -eq 'arm64') { 'arm64' } else { 'x64' }
+          $cdb = "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\$debuggerArch\cdb.exe"
+          if ($dumps -and -not (Test-Path $cdb)) { Write-Output "No debugger at $cdb; the dumps are in the artifact" }
+          foreach ($dump in $dumps | Select-Object -First 3) {
+            Copy-Item $dump.FullName $out
+            if (-not (Test-Path $cdb)) { continue }
+            $analysis = Join-Path $out "$($dump.BaseName).txt"
+            $job = Start-Job { param($cdb, $dump, $symbols) & $cdb -z $dump -y $symbols -c '.exr -1; !analyze -v; kn 40; q' 2>&1 } `
+              -ArgumentList $cdb, $dump.FullName, "srv*$env:RUNNER_TEMP\symbols*https://msdl.microsoft.com/download/symbols"
+            if (Wait-Job $job -Timeout 300) { Receive-Job $job | Out-File -Width 400 $analysis } else { Stop-Job $job; 'cdb timed out' | Out-File $analysis }
+            Get-Content $analysis | Select-String -Pattern 'ExceptionCode|STOWED|Stowed|HRESULT|EXCEPTION_CODE_STR|SYMBOL_NAME|FAILURE_BUCKET|ERROR_CODE|Message' | Select-Object -First 30
+          }
 
       - uses: actions/upload-artifact@v7
         if: always()

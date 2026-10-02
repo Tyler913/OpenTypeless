@@ -74,6 +74,12 @@ public static class UpdateInstaller
         try
         {
             CopyDirectory(source, target);
+            // A copy set up by the installer keeps its uninstaller, which lives in the same folder.
+            foreach (var file in Directory.GetFiles(backup).Where(f => InstallerRegistration.IsUninstallerFile(Path.GetFileName(f))))
+            {
+                var kept = Path.Combine(target, Path.GetFileName(file));
+                if (!File.Exists(kept)) File.Copy(file, kept);
+            }
         }
         catch
         {

@@ -15,7 +15,6 @@ struct MenuPopoverView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
-            hero
             warnings
             recent
             footer
@@ -39,22 +38,6 @@ struct MenuPopoverView: View {
             case .processing: StatusPill(text: L("处理中", "Processing"), color: .blue)
             }
         }
-    }
-
-    private var hero: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Text(L("按住", "Hold")).font(.system(size: 13))
-                KeyCaps(caps: settings.hotkey.keyCaps)
-                Text(L("说话", "and speak")).font(.system(size: 13))
-            }
-            Text(L("轻点一下进入免手持 · Esc 取消", "Tap once for hands-free · Esc to cancel"))
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .glassEffect(.regular.tint(Color.accentColor.opacity(0.12)), in: .rect(cornerRadius: 18))
     }
 
     @ViewBuilder private var warnings: some View {
@@ -110,11 +93,20 @@ struct MenuPopoverView: View {
             }
             .padding(.horizontal, 4)
             if records.isEmpty {
-                Text(L("还没有记录，按住快捷键试试吧", "Nothing yet — hold the shortcut and try it"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                // Nothing to show yet: how to make the first one.
+                VStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Text(L("按住", "Hold")).foregroundStyle(.secondary)
+                        KeyCaps(caps: settings.hotkey.keyCaps)
+                        Text(L("说话", "and speak")).foregroundStyle(.secondary)
+                    }
+                    .font(.system(size: 12.5))
+                    Text(L("轻点一下进入免手持 · Esc 取消", "Tap once for hands-free · Esc to cancel"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
             } else {
                 VStack(spacing: 1) {
                     ForEach(records) { record in

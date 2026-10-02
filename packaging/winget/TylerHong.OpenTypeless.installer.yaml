@@ -2,20 +2,28 @@
 
 PackageIdentifier: TylerHong.OpenTypeless
 PackageVersion: @VERSION@
-InstallerType: zip
-NestedInstallerType: portable
-NestedInstallerFiles:
-- RelativeFilePath: OpenTypeless\OpenTypeless.exe
-# The exe needs the DLLs next to it, so the folder goes on PATH rather than a symlink to the exe.
-ArchiveBinariesDependOnPath: true
+# windows/installer/OpenTypeless.iss: per-user (no administrator prompt), so the app can update itself in place.
+InstallerType: inno
+Scope: user
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+UpgradeBehavior: install
+# The installer's AppId plus Inno Setup's "_is1"; the app keeps the entry's version current after in-app updates.
+ProductCode: OpenTypeless_is1
+AppsAndFeaturesEntries:
+- DisplayName: OpenTypeless
+  Publisher: TylerHong
+  ProductCode: OpenTypeless_is1
 MinimumOSVersion: 10.0.19041.0
 ReleaseDate: @RELEASE_DATE@
 Installers:
 - Architecture: x64
-  InstallerUrl: https://github.com/Tyler913/OpenTypeless/releases/download/@TAG@/OpenTypeless-@VERSION@-windows-x64.zip
-  InstallerSha256: @WINDOWS_X64_SHA256@
+  InstallerUrl: https://github.com/Tyler913/OpenTypeless/releases/download/@TAG@/OpenTypeless-@VERSION@-windows-x64-setup.exe
+  InstallerSha256: @WINDOWS_X64_SETUP_SHA256@
 - Architecture: arm64
-  InstallerUrl: https://github.com/Tyler913/OpenTypeless/releases/download/@TAG@/OpenTypeless-@VERSION@-windows-arm64.zip
-  InstallerSha256: @WINDOWS_ARM64_SHA256@
+  InstallerUrl: https://github.com/Tyler913/OpenTypeless/releases/download/@TAG@/OpenTypeless-@VERSION@-windows-arm64-setup.exe
+  InstallerSha256: @WINDOWS_ARM64_SETUP_SHA256@
 ManifestType: installer
 ManifestVersion: 1.10.0

@@ -2,7 +2,10 @@
 # Builds OpenTypeless and installs it as the ONE copy on this Mac: /Applications/OpenTypeless.app.
 #
 #   scripts/build-app.sh             build and install into /Applications
-#   scripts/build-app.sh --package   build a distributable zip in dist/ (doesn't touch /Applications)
+#   scripts/build-app.sh --package   build the distributables in dist/ (doesn't touch /Applications), for this Mac's
+#                                    processor: OpenTypeless-<version>-macOS-arm64 (Apple silicon) or -macOS-x64 (Intel)
+#                                      .dmg   what people download: drag the app onto Applications
+#                                      .zip   what the in-app updater and Homebrew install
 #
 # The zip is signed with $OPENTYPELESS_SIGNING_IDENTITY when it's set (the release certificate, set up by CI, see
 # scripts/create-release-cert.sh), and ad hoc otherwise. A stable certificate lets in-app updates keep the
@@ -22,7 +25,7 @@ cd "$(dirname "$0")/.."
 
 APP_NAME="OpenTypeless"
 BUNDLE_ID="local.opentypeless.app"
-VERSION="1.3.7"
+VERSION="1.3.8"
 IDENTITY_NAME="OpenTypeless Dev"
 INSTALLED="/Applications/$APP_NAME.app"
 STAGING_DIR=".build/app-staging"
@@ -31,6 +34,12 @@ LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchS
 PROJECT_DIR="$(pwd)"
 PACKAGE=false
 [[ "${1:-}" == "--package" ]] && PACKAGE=true
+# The release names Intel builds x64, like the Windows ones.
+case "$(uname -m)" in
+    arm64) PLATFORM="macOS-arm64" ;;
+    x86_64) PLATFORM="macOS-x64" ;;
+    *) echo "Unsupported processor: $(uname -m)" >&2; exit 1 ;;
+esac
 
 echo "▸ Compiling (release)…"
 swift build -c release --product "$APP_NAME"
@@ -80,13 +89,26 @@ if $PACKAGE; then
     codesign --verify --deep --strict "$STAGED"
     codesign -d -r- "$STAGED" 2>/dev/null | sed -n 's/^#* *designated => /  Requirement: /p'
     mkdir -p dist
-    ZIP="dist/$APP_NAME-$VERSION-macOS-arm64.zip"
-    rm -f "$ZIP"
+    ZIP="dist/$APP_NAME-$VERSION-$PLATFORM.zip"
+    DMG="dist/$APP_NAME-$VERSION-$PLATFORM.dmg"
+    rm -f "$ZIP" "$DMG"
     ditto -c -k --sequesterRsrc --keepParent "$STAGED" "$ZIP"
+    # The disk image opens to the app next to a link to Applications, to drag it onto.
+    DMG_ROOT="$STAGING_DIR/dmg"
+    mkdir -p "$DMG_ROOT"
+    ditto "$STAGED" "$DMG_ROOT/$APP_NAME.app"
+    ln -s /Applications "$DMG_ROOT/Applications"
+    hdiutil create -quiet -volname "$APP_NAME $VERSION" -srcfolder "$DMG_ROOT" -fs HFS+ -format UDZO -ov "$DMG"
+    hdiutil verify -quiet "$DMG"
+    if [[ -n "${OPENTYPELESS_SIGNING_IDENTITY:-}" ]]; then
+        codesign --force --sign "$OPENTYPELESS_SIGNING_IDENTITY" "$DMG"
+    fi
     "$LSREGISTER" -u "$STAGED" >/dev/null 2>&1 || true
     rm -rf "$STAGING_DIR"
-    echo "✓ Packaged $ZIP ($(du -h "$ZIP" | cut -f1 | xargs))"
-    echo "  SHA-256: $(shasum -a 256 "$ZIP" | cut -d' ' -f1)"
+    for file in "$ZIP" "$DMG"; do
+        echo "✓ Packaged $file ($(du -h "$file" | cut -f1 | xargs))"
+        echo "  SHA-256: $(shasum -a 256 "$file" | cut -d' ' -f1)"
+    done
     exit 0
 elif security find-identity -v -p codesigning | grep -q "$IDENTITY_NAME"; then
     echo "▸ Signing with \"$IDENTITY_NAME\" (stable — permissions survive updates)"

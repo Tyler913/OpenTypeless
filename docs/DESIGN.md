@@ -124,7 +124,7 @@ The Home page (`OpenTypeless/HomePage.swift`, the first sidebar page) shows word
 
 ## Updates
 
-`TypelessCore/UpdateCheck.swift` reads the repository's GitHub release list (no sign-in; the unauthenticated limit of 60 requests an hour is far above one check a day) and picks the newest published, non-prerelease release that carries this platform's zip. Releases are matched by the zip's file name, `OpenTypeless-<version>-macOS-arm64.zip`, not by tag, so a release may hold one app or both.
+`TypelessCore/UpdateCheck.swift` reads the repository's GitHub release list (no sign-in; the unauthenticated limit of 60 requests an hour is far above one check a day) and picks the newest published, non-prerelease release that carries this platform's zip. Releases are matched by the zip's file name, `OpenTypeless-<version>-macOS-arm64.zip` (`-macOS-x64.zip` on an Intel Mac, so each Mac stays on a build for its processor), not by tag, so a release may hold one app or both. The disk images next to them are for people; the updater only reads the zips.
 
 `OpenTypeless/Updater.swift` checks 10 s after launch and then whenever 24 h have passed, if **Check automatically** is on (the default); **Check now** is always available. A newer version is downloaded in the background and installed only when the user clicks **Restart to update**, never during a dictation (the click is then held until the dictation finishes). A skipped version isn't offered by automatic checks.
 

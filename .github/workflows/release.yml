@@ -1,12 +1,18 @@
-# Pushing a version tag builds both apps and drafts one GitHub Release titled "OpenTypeless V<version>" with all
-# three zips attached:
+# Pushing a version tag builds both apps and drafts one GitHub Release titled "OpenTypeless V<version>" with
+# everything attached. For a tag 1.0.2 (or v1.0.2 / V1.0.2):
 #
-#   1.0.2 (or v1.0.2 / V1.0.2)   OpenTypeless-1.0.2-macOS-arm64.zip (signed with the release certificate),
-#                                OpenTypeless-1.0.2-windows-x64.zip and OpenTypeless-1.0.2-windows-arm64.zip
+#   OpenTypeless-1.0.2-macOS-arm64.dmg            Mac with Apple silicon: open, drag the app onto Applications
+#   OpenTypeless-1.0.2-macOS-x64.dmg              Intel Mac
+#   OpenTypeless-1.0.2-windows-x64-setup.exe      Windows installer (Start menu, Settings → Apps, uninstaller)
+#   OpenTypeless-1.0.2-windows-arm64-setup.exe    Windows on ARM installer
+#   OpenTypeless-1.0.2-windows-x64.zip            portable: unzip anywhere and run
+#   OpenTypeless-1.0.2-windows-arm64.zip
+#   OpenTypeless-1.0.2-macOS-arm64.zip            the same apps as the disk images, for the in-app updater and Homebrew
+#   OpenTypeless-1.0.2-macOS-x64.zip              (the Windows updater uses the portable zips)
 #
-# The release is a draft, so nothing is public until you review and publish it; it's marked as the latest release
-# then. Bump the version first (macos/scripts/build-app.sh, windows/Directory.Build.props); the release fails if the
-# zips don't match the tag.
+# The Mac apps are signed with the release certificate. The release is a draft, so nothing is public until you review
+# and publish it; it's marked as the latest release then. Bump the version first (macos/scripts/build-app.sh,
+# windows/Directory.Build.props); the release fails if any file is missing or doesn't match the tag.
 name: Release
 
 on:
@@ -38,15 +44,17 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: dist
+          pattern: OpenTypeless-* # not the UI snapshots
           merge-multiple: true
 
-      - name: Check the zips match the tag's version
+      - name: Check the files match the tag's version
         id: version
         run: |
           version="${GITHUB_REF_NAME#[vV]}"
           ls dist
-          for platform in macOS-arm64 windows-x64 windows-arm64; do
-            [[ -f "dist/OpenTypeless-$version-$platform.zip" ]] || { echo "::error::No OpenTypeless-$version-$platform.zip for tag $GITHUB_REF_NAME: bump the version in both apps and tag again"; exit 1; }
+          for file in macOS-arm64.dmg macOS-x64.dmg macOS-arm64.zip macOS-x64.zip \
+                      windows-x64.zip windows-arm64.zip windows-x64-setup.exe windows-arm64-setup.exe; do
+            [[ -f "dist/OpenTypeless-$version-$file" ]] || { echo "::error::No OpenTypeless-$version-$file for tag $GITHUB_REF_NAME: bump the version in both apps and tag again"; exit 1; }
           done
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -55,5 +63,8 @@ jobs:
           name: OpenTypeless V${{ steps.version.outputs.version }}
           draft: true
           make_latest: true
-          files: dist/*.zip
+          files: |
+            dist/*.dmg
+            dist/*.exe
+            dist/*.zip
           fail_on_unmatched_files: true

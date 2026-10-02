@@ -163,7 +163,6 @@ public sealed class PopoverWindow : Window
     {
         var stack = new StackPanel { Spacing = 14, Padding = new Thickness(14), Width = WidthDips };
         stack.Children.Add(Header());
-        stack.Children.Add(Hero());
         if (Warnings() is { } warnings) stack.Children.Add(warnings);
         stack.Children.Add(Recent());
         stack.Children.Add(Footer());
@@ -193,25 +192,6 @@ public sealed class PopoverWindow : Window
         Grid.SetColumn(pill, 2);
         grid.Children.Add(pill);
         return grid;
-    }
-
-    private FrameworkElement Hero()
-    {
-        var hold = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
-        hold.Children.Add(Centered(Ui.Text(L("按住", "Hold"), 13.5)));
-        hold.Children.Add(new KeyCaps { Caps = _settings.Hotkey.KeyCaps, VerticalAlignment = VerticalAlignment.Center });
-        hold.Children.Add(Centered(Ui.Text(L("说话", "and speak"), 13.5)));
-        var tip = Ui.Text(L("轻点一下进入免手持 · Esc 取消", "Tap once for hands-free · Esc to cancel"), 11.5, foreground: Ui.Secondary);
-        tip.HorizontalAlignment = HorizontalAlignment.Center;
-        return new Border
-        {
-            CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(12, 16, 12, 16),
-            Background = Palette.Brush(Tint.Accent, 0.1),
-            BorderBrush = Palette.Brush(Tint.Accent, 0.18),
-            BorderThickness = new Thickness(1),
-            Child = new StackPanel { Spacing = 10, Children = { hold, tip } },
-        };
     }
 
     private static TextBlock Centered(TextBlock text)
@@ -312,10 +292,14 @@ public sealed class PopoverWindow : Window
 
         if (records.Count == 0)
         {
-            var empty = Ui.Text(L("还没有记录，按住快捷键试试吧", "Nothing yet — hold the shortcut and try it"), 12.5, foreground: Ui.Secondary);
-            empty.HorizontalAlignment = HorizontalAlignment.Center;
-            empty.Margin = new Thickness(0, 14, 0, 14);
-            stack.Children.Add(empty);
+            // Nothing to show yet: how to make the first one.
+            var hold = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+            hold.Children.Add(Centered(Ui.Text(L("按住", "Hold"), 12.5, foreground: Ui.Secondary)));
+            hold.Children.Add(new KeyCaps { Caps = _settings.Hotkey.KeyCaps, VerticalAlignment = VerticalAlignment.Center });
+            hold.Children.Add(Centered(Ui.Text(L("说话", "and speak"), 12.5, foreground: Ui.Secondary)));
+            var tip = Ui.Text(L("轻点一下进入免手持 · Esc 取消", "Tap once for hands-free · Esc to cancel"), 11, foreground: Ui.Tertiary);
+            tip.HorizontalAlignment = HorizontalAlignment.Center;
+            stack.Children.Add(new StackPanel { Spacing = 8, Margin = new Thickness(0, 14, 0, 14), Children = { hold, tip } });
             return stack;
         }
         var list = new StackPanel { Spacing = 1 };

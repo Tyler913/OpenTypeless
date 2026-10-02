@@ -111,16 +111,24 @@ OpenTypeless 就是围绕这个问题做的。
 
 ## 系统要求
 
-- **macOS：** macOS 26 或更高版本，Apple 芯片。
+- **macOS：** macOS 26 或更高版本，Apple 芯片或 Intel 芯片均可（能装 macOS 26 的 Intel Mac：2019 款 16 英寸 MacBook Pro、2020 款四个雷雳接口的 13 英寸 MacBook Pro、2020 款 iMac 和 2019 款 Mac Pro）。
 - **Windows：** Windows 10（2004 或更高版本）或 Windows 11，x64 或 ARM64。
 - 至少一家服务商的 API Key（[OpenRouter](https://openrouter.ai/keys) 最省事：一个 Key 就能覆盖两个步骤）。
 
 ## 在 macOS 上安装
 
+### Homebrew
+
+```bash
+brew install --cask tyler913/tap/opentypeless
+```
+
+Homebrew 会自动选对应芯片的版本，也会替你完成下面的去隔离步骤。之后应用会自己更新，`brew upgrade` 也能跟上。
+
 ### 下载
 
-1. 从 [Releases](https://github.com/Tyler913/OpenTypeless/releases) 下载 `OpenTypeless-<version>-macOS-arm64.zip` 并解压。
-2. 把 **OpenTypeless.app** 移到 **应用程序** 文件夹。
+1. 从 [Releases](https://github.com/Tyler913/OpenTypeless/releases) 下载磁盘映像：Apple 芯片（M1 及以后）选 `OpenTypeless-<version>-macOS-arm64.dmg`，Intel Mac 选 `-macOS-x64.dmg`。（不确定的话看 苹果菜单 → 关于本机：显示“芯片 Apple M…”还是“处理器 Intel”。）
+2. 打开它，把 **OpenTypeless** 拖到 **应用程序** 文件夹。
 3. 这个应用没有经过 Apple 公证（公证需要付费开发者账号），所以 macOS 第一次打开时会拦截，甚至可能提示“已损坏，无法打开”。在终端里移除一次下载隔离标记：
 
    ```bash
@@ -152,7 +160,7 @@ scripts/build-app.sh             # 构建、签名并安装到 /Applications/Ope
 
 `create-signing-cert.sh` 会创建一个本地代码签名身份。没有它，应用会用临时（ad hoc）签名，每次重新构建后 macOS 都会重新请求辅助功能和麦克风权限。
 
-如果要打包发布用的 zip 而不是安装：`scripts/build-app.sh --package` 会生成 `macos/dist/OpenTypeless-<version>-macOS-arm64.zip`（临时签名）并打印它的 SHA-256。
+如果要打包发布用的文件而不是安装：`scripts/build-app.sh --package` 会生成 `macos/dist/OpenTypeless-<version>-macOS-arm64.dmg` 和 `.zip`（Intel Mac 上是 `-macOS-x64`，临时签名）并打印它们的 SHA-256。
 
 `build-app.sh` 会保证机器上只有一份应用。它在一个隐藏的暂存文件夹里组装应用包，移动到 `/Applications`，从 LaunchServices 注销旧副本，并在签名变化时清理过期的隐私授权记录。
 
@@ -164,13 +172,18 @@ scripts/build-app.sh             # 构建、签名并安装到 /Applications/Ope
 
 ## 在 Windows 上安装
 
-### 下载
+### 安装包（推荐）
 
-1. 从 [Releases](https://github.com/Tyler913/OpenTypeless/releases) 下载 `OpenTypeless-<version>-windows-x64.zip`（或 `-arm64`），解压到任意位置（例如 `%LOCALAPPDATA%\Programs`）。
-2. 运行 **OpenTypeless.exe**。它是自包含的：不需要安装其他东西。
-3. 应用没有代码签名，所以 SmartScreen 可能会提示“Windows 已保护你的电脑”：点 **更多信息 → 仍要运行**。
+1. 从 [Releases](https://github.com/Tyler913/OpenTypeless/releases) 下载 `OpenTypeless-<version>-windows-x64-setup.exe`（ARM 版 Windows，比如骁龙笔记本，选 `-arm64-setup.exe`）。
+2. 运行它。应用没有代码签名，所以 SmartScreen 可能会提示“Windows 已保护你的电脑”：点 **更多信息 → 仍要运行**。
 
-之后的版本可以在应用内安装（**设置 → 通用 → 更新**），装到同一个文件夹，不会再弹 SmartScreen。请解压到你有写权限的地方，比如 `%LOCALAPPDATA%\Programs`；如果放在 `Program Files` 里，应用只能给你一个下载链接。
+它只为当前用户安装，不需要管理员权限，装到 `%LOCALAPPDATA%\Programs\OpenTypeless`，并添加开始菜单项、桌面快捷方式（可以取消勾选，默认勾选）和 **设置 → 应用** 里的条目，从那里可以卸载。卸载时你的设置、历史记录和 API Key 会保留。
+
+### 绿色版
+
+不想安装？下载 `OpenTypeless-<version>-windows-x64.zip`（或 `-arm64`），解压到你有写权限的任意位置（例如 `%LOCALAPPDATA%\Programs`），运行 **OpenTypeless.exe**。它是自包含的：不需要装 .NET 或任何东西，除了 `%LOCALAPPDATA%\OpenTypeless` 里的设置，不会往文件夹外写东西。它没有开始菜单项和卸载程序：删掉文件夹就卸载了。
+
+两种方式之后的版本都可以在应用内安装（**设置 → 通用 → 更新**），装到同一个文件夹，不会再弹 SmartScreen。如果放在 `Program Files` 里，应用只能给你一个下载链接。
 
 OpenTypeless 待在**通知区域**（时钟旁边的波形图标）里。Windows 一开始会把新图标藏在溢出区（^）；把它拖到任务栏上，或者在 **设置 → 个性化 → 任务栏 → 其他系统托盘图标** 里打开它。
 
@@ -181,10 +194,10 @@ OpenTypeless 待在**通知区域**（时钟旁边的波形图标）里。Window
 ```powershell
 # 在本仓库克隆目录的 windows\ 下
 powershell -ExecutionPolicy Bypass -File scripts\build.ps1            # 测试、构建，并安装到 %LOCALAPPDATA%\Programs\OpenTypeless
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Package   # 生成 windows\dist\OpenTypeless-<version>-windows-x64.zip
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Package   # 生成 windows\dist\OpenTypeless-<version>-windows-x64.zip 和 -setup.exe
 ```
 
-`build.ps1` 会保证只安装一份：停止正在运行的应用，替换安装文件夹，刷新开始菜单快捷方式，然后启动新版本。ARM 版 Windows 加上 `-Arch arm64`。
+`build.ps1` 会保证只安装一份：停止正在运行的应用，替换安装文件夹，刷新开始菜单快捷方式，然后启动新版本。ARM 版 Windows 加上 `-Arch arm64`。打包安装程序需要 [Inno Setup 6](https://jrsoftware.org/isinfo.php)（`winget install JRSoftware.InnoSetup`），脚本在 [`windows/installer/OpenTypeless.iss`](windows/installer/OpenTypeless.iss)。
 
 开发 Windows 应用不需要 Windows 电脑：每次改动 GitHub Actions 都会构建它（见[持续集成](#持续集成)）。
 
@@ -319,19 +332,19 @@ GitHub Actions（[`.github/workflows/`](.github/workflows/)）只构建你改动
 
 | 你改动了 | 会运行什么 |
 |---|---|
-| `macos/**` | 在 macOS 运行器上执行 **macOS build**：先测试，再打包应用 zip。 |
-| `windows/**` | 在 Windows 运行器上执行 **Windows build**：先测试，再打包 x64 和 ARM64 zip。 |
+| `macos/**` | 在 Apple 芯片和 Intel 两台运行器上执行 **macOS build**：先测试，再各自打包磁盘映像和 zip，检查并启动一遍。 |
+| `windows/**` | 在 x64 和 ARM64 两台运行器上执行 **Windows build**：先测试，再各自打包绿色版 zip 和安装程序；实际运行安装程序、启动应用，再卸载一遍。 |
 | `testdata/**` | 两边都构建：两个测试套件共同读取的测试用例（字数、价格、节省的时间），保证两个应用结果一致。 |
 | `i18n/**` | 两边都构建：两个应用都会嵌入的翻译。 |
 | 只改了 `docs/`、`eval/`、`README*.md` | 什么都不构建。 |
 
 每次运行还会检查翻译（**Translations**，`python3 i18n/check.py`）。
 
-在 Actions 页面某次运行的 **Artifacts** 部分可以下载 zip。**Actions → macOS build / Windows build → Run workflow** 可以手动触发构建。
+在 Actions 页面某次运行的 **Artifacts** 部分可以下载构建结果。**Actions → macOS build / Windows build → Run workflow** 可以手动触发构建。
 
-发布时，把两个应用里的版本号都改掉（`macos/scripts/build-app.sh`、`windows/Directory.Build.props`），然后推送一个标签，`1.0.2`（或 `V1.0.2`）。它会构建两个应用，并创建一个名为 “OpenTypeless V1.0.2” 的**草稿**发布，包含 macOS zip（用发布证书签名）以及 Windows x64 和 ARM64 zip。如果某个 zip 的版本和标签不一致，构建会失败。
+发布时，把两个应用里的版本号都改掉（`macos/scripts/build-app.sh`、`windows/Directory.Build.props`），然后推送一个标签，`1.0.2`（或 `V1.0.2`）。它会构建两个应用，并创建一个名为 “OpenTypeless V1.0.2” 的**草稿**发布，包含八个文件：Apple 芯片和 Intel 的 macOS 磁盘映像和 zip（用发布证书签名），以及 x64 和 ARM64 的 Windows 安装程序和绿色版 zip。缺少任何一个，或者版本和标签不一致，构建都会失败。
 
-检查草稿后手动发布，它就会成为最新版本。已安装的副本会在一天内发现它：应用内更新器会查找最新的、已发布的、非预发布版本中带有对应平台 zip 的那个（`OpenTypeless-<version>-macOS-arm64.zip`、`-windows-x64.zip`、`-windows-arm64.zip`）。把某个发布标记为预发布，就不会推送给用户。
+检查草稿后手动发布，它就会成为最新版本。已安装的副本会在一天内发现它：应用内更新器会查找最新的、已发布的、非预发布版本中带有对应平台 zip 的那个（`OpenTypeless-<version>-macOS-arm64.zip`、`-macOS-x64.zip`、`-windows-x64.zip`、`-windows-arm64.zip`）。把某个发布标记为预发布，就不会推送给用户。发布后还会自动更新 [Homebrew tap 和 WinGet](packaging/README.md)。
 
 **macOS 发布签名（一次性）。** macOS 把辅助功能和麦克风权限绑定在应用的签名上，所以发布版本应该一直用同一个证书签名；否则每次更新后用户都要重新授予这两项权限。运行 `macos/scripts/create-release-cert.sh`，把它生成的 `.p12` 保存在私密的地方，并添加它打印出的两个仓库密钥（`MACOS_SIGNING_CERTIFICATE`、`MACOS_SIGNING_CERTIFICATE_PASSWORD`）。之后发布构建就会用它签名；没有这些密钥时会使用临时签名，并在运行中给出警告。
 

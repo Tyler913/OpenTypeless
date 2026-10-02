@@ -72,6 +72,7 @@ public partial class App : Application
 
         _controller.RefreshModelInfo();
         LaunchAtLogin.RefreshPathIfRegistered();
+        if (!LaunchAtLogin.IsDevelopmentBuild) InstallerRegistration.SyncVersion(Updater.Shared.CurrentVersion.ToString());
         LaunchAtLogin.EnableByDefaultOnce(_settings);
         _ = UsageStore.Shared; // counts the dictations History already has, the first time
         _controller.UpdateWarmMicrophone();

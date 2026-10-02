@@ -5,8 +5,10 @@ Every published release can be installed with Homebrew on macOS and WinGet on Wi
 pre-release): it fills in the files here with the version and the SHA-256 GitHub published for each zip
 ([render.py](render.py)), then
 
-- **Homebrew:** commits the cask to `Casks/opentypeless.rb` in [Tyler913/homebrew-tap](https://github.com/Tyler913/homebrew-tap).
-- **WinGet:** opens a pull request in [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) with the manifests for `TylerHong.OpenTypeless`.
+- **Homebrew:** commits the cask to `Casks/opentypeless.rb` in [Tyler913/homebrew-tap](https://github.com/Tyler913/homebrew-tap). It installs the
+  release's `macOS-arm64` or `macOS-x64` zip, whichever fits the Mac.
+- **WinGet:** opens a pull request in [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) with the manifests for `TylerHong.OpenTypeless`,
+  which run the release's installer (`windows-x64-setup.exe`, `windows-arm64-setup.exe`) silently, for the current user.
 
 ```bash
 python3 packaging/render.py 1.3.7 dist    # the same files, by hand: dist/homebrew/ and dist/winget/
@@ -53,6 +55,5 @@ brew install --cask tyler913/tap/opentypeless
 winget install TylerHong.OpenTypeless
 ```
 
-WinGet installs the zip as a portable app (under `%LOCALAPPDATA%\Microsoft\WinGet\Packages`) and puts its folder on
-`PATH`, without a Start menu entry: start it the first time with **Win + R → `OpenTypeless`**. After that it starts
-at sign-in, and updates itself in place.
+WinGet runs the installer, so the app gets a Start menu entry and an entry under Settings → Apps like any other. The
+app updates itself in place and keeps that entry's version current, so `winget upgrade` sees what's installed.

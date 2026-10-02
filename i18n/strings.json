@@ -2959,5 +2959,248 @@
     "ru": "{0}, {1}",
     "fr": "{0} {1}",
     "de": "{0}, {1}"
+  },
+  "Hold a key and speak. Let go, and clean text appears at your cursor.": {
+    "ja": "キーを押したまま話して、離すと整った文章がカーソル位置に入力されます。",
+    "ko": "키를 누른 채 말하고 손을 떼면 다듬어진 글이 커서 위치에 입력됩니다.",
+    "es": "Mantén una tecla y habla. Al soltarla, el texto limpio aparece en el cursor.",
+    "pt": "Segure uma tecla e fale. Ao soltar, o texto limpo aparece no cursor.",
+    "ru": "Удерживайте клавишу и говорите. Отпустите — и аккуратный текст появится у курсора.",
+    "fr": "Maintenez une touche et parlez. Relâchez-la : un texte propre apparaît au curseur.",
+    "de": "Halte eine Taste gedrückt und sprich. Lass los, und sauberer Text erscheint am Cursor."
+  },
+  "Fully open source · MIT licensed": {
+    "ja": "完全オープンソース · MIT ライセンス",
+    "ko": "완전한 오픈 소스 · MIT 라이선스",
+    "es": "Totalmente de código abierto · Licencia MIT",
+    "pt": "Totalmente de código aberto · Licença MIT",
+    "ru": "Полностью открытый код · Лицензия MIT",
+    "fr": "Entièrement open source · Licence MIT",
+    "de": "Vollständig Open Source · MIT-Lizenz"
+  },
+  "Skip the tour": {
+    "ja": "ガイドをスキップ",
+    "ko": "안내 건너뛰기",
+    "es": "Omitir la guía",
+    "pt": "Pular o tour",
+    "ru": "Пропустить знакомство",
+    "fr": "Passer la visite",
+    "de": "Einführung überspringen"
+  },
+  "Connect a provider": {
+    "ja": "プロバイダに接続",
+    "ko": "제공업체 연결",
+    "es": "Conecta un proveedor",
+    "pt": "Conecte um provedor",
+    "ru": "Подключите провайдера",
+    "fr": "Connectez un fournisseur",
+    "de": "Anbieter verbinden"
+  },
+  "Your recording goes to a provider you choose, with your own API key. OpenRouter is recommended: one key covers both transcription and clean-up.": {
+    "ja": "録音は、あなた自身の API キーで、選んだプロバイダに送られます。おすすめは OpenRouter：1 つのキーで文字起こしと整形の両方に使えます。",
+    "ko": "녹음은 직접 고른 제공업체로 내 API 키를 사용해 전송됩니다. OpenRouter를 추천합니다. 키 하나로 음성 인식과 다듬기를 모두 할 수 있습니다.",
+    "es": "Tu grabación va al proveedor que elijas, con tu propia clave de API. Recomendamos OpenRouter: una sola clave sirve para la transcripción y la limpieza.",
+    "pt": "Sua gravação vai para o provedor que você escolher, com sua própria chave de API. Recomendamos o OpenRouter: uma única chave serve para a transcrição e a limpeza.",
+    "ru": "Запись отправляется выбранному вами провайдеру с вашим собственным API-ключом. Рекомендуем OpenRouter: один ключ подходит и для распознавания, и для очистки.",
+    "fr": "Votre enregistrement est envoyé au fournisseur de votre choix, avec votre propre clé API. OpenRouter est recommandé : une seule clé suffit pour la transcription et le nettoyage.",
+    "de": "Deine Aufnahme geht mit deinem eigenen API-Schlüssel an einen Anbieter deiner Wahl. Empfohlen ist OpenRouter: Ein Schlüssel reicht für Spracherkennung und Bereinigung."
+  },
+  "Recommended": {
+    "ja": "おすすめ",
+    "ko": "추천",
+    "es": "Recomendado",
+    "pt": "Recomendado",
+    "ru": "Рекомендуем",
+    "fr": "Recommandé",
+    "de": "Empfohlen"
+  },
+  "No key yet?": {
+    "ja": "キーをお持ちでない場合",
+    "ko": "아직 키가 없나요?",
+    "es": "¿Aún no tienes clave?",
+    "pt": "Ainda não tem uma chave?",
+    "ru": "Ещё нет ключа?",
+    "fr": "Pas encore de clé ?",
+    "de": "Noch keinen Schlüssel?"
+  },
+  "Create one at {0}": {
+    "ja": "{0} で作成",
+    "ko": "{0}에서 만들기",
+    "es": "Crea una en {0}",
+    "pt": "Crie uma no {0}",
+    "ru": "Создайте его в {0}",
+    "fr": "Créez-en une sur {0}",
+    "de": "Erstelle einen bei {0}"
+  },
+  "You can change them any time in Settings → Models.": {
+    "ja": "「設定 → モデル」でいつでも変更できます。",
+    "ko": "언제든지 ‘설정 → 모델’에서 바꿀 수 있습니다.",
+    "es": "Puedes cambiarlos cuando quieras en Ajustes → Modelos.",
+    "pt": "Você pode trocá-los a qualquer momento em Configurações → Modelos.",
+    "ru": "Их можно поменять в любой момент в разделе «Настройки → Модели».",
+    "fr": "Vous pouvez les changer à tout moment dans Réglages → Modèles.",
+    "de": "Du kannst sie jederzeit unter Einstellungen → Modelle ändern."
+  },
+  "Set up later": {
+    "ja": "あとで設定",
+    "ko": "나중에 설정",
+    "es": "Configurar más tarde",
+    "pt": "Configurar depois",
+    "ru": "Настроить позже",
+    "fr": "Configurer plus tard",
+    "de": "Später einrichten"
+  },
+  "Continue": {
+    "ja": "続ける",
+    "ko": "계속",
+    "es": "Continuar",
+    "pt": "Continuar",
+    "ru": "Продолжить",
+    "fr": "Continuer",
+    "de": "Weiter"
+  },
+  "Try it out": {
+    "ja": "試してみましょう",
+    "ko": "직접 해 보기",
+    "es": "Pruébalo",
+    "pt": "Experimente",
+    "ru": "Попробуйте",
+    "fr": "Essayez",
+    "de": "Probier es aus"
+  },
+  "Click in the box below, hold {0} and say something. Let go, and your words appear here.": {
+    "ja": "下の欄をクリックし、{0} を押したまま何か話してください。離すと、話した内容がここに表示されます。",
+    "ko": "아래 칸을 클릭한 뒤 {0} 키를 누른 채 말해 보세요. 손을 떼면 말한 내용이 여기에 나타납니다.",
+    "es": "Haz clic en el cuadro de abajo, mantén {0} y di algo. Al soltar, tus palabras aparecerán aquí.",
+    "pt": "Clique na caixa abaixo, segure {0} e diga algo. Ao soltar, suas palavras aparecem aqui.",
+    "ru": "Щёлкните в поле ниже, удерживайте {0} и скажите что-нибудь. Отпустите — и ваши слова появятся здесь.",
+    "fr": "Cliquez dans le champ ci-dessous, maintenez {0} et dites quelque chose. Relâchez : vos mots apparaissent ici.",
+    "de": "Klicke in das Feld unten, halte {0} gedrückt und sag etwas. Lass los, und deine Worte erscheinen hier."
+  },
+  "There's no API key yet, so dictation can't work.": {
+    "ja": "API キーがまだないため、音声入力は使えません。",
+    "ko": "아직 API 키가 없어서 받아쓰기를 사용할 수 없습니다.",
+    "es": "Todavía no hay ninguna clave de API, así que el dictado no puede funcionar.",
+    "pt": "Ainda não há uma chave de API, então o ditado não funciona.",
+    "ru": "API-ключа пока нет, поэтому диктовка работать не будет.",
+    "fr": "Aucune clé API pour l’instant : la dictée ne peut pas fonctionner.",
+    "de": "Es gibt noch keinen API-Schlüssel, daher funktioniert das Diktieren nicht."
+  },
+  "Add a key": {
+    "ja": "キーを追加",
+    "ko": "키 추가",
+    "es": "Añadir una clave",
+    "pt": "Adicionar uma chave",
+    "ru": "Добавить ключ",
+    "fr": "Ajouter une clé",
+    "de": "Schlüssel hinzufügen"
+  },
+  "Your words will appear here…": {
+    "ja": "話した内容がここに表示されます…",
+    "ko": "말한 내용이 여기에 나타납니다…",
+    "es": "Tus palabras aparecerán aquí…",
+    "pt": "Suas palavras aparecerão aqui…",
+    "ru": "Здесь появятся ваши слова…",
+    "fr": "Vos mots apparaîtront ici…",
+    "de": "Deine Worte erscheinen hier…"
+  },
+  "Tapping Fn opens the emoji picker?": {
+    "ja": "Fn をタップすると絵文字ピッカーが開きますか？",
+    "ko": "Fn을 탭하면 이모티콘 선택기가 열리나요?",
+    "es": "¿Al tocar Fn se abre el selector de emojis?",
+    "pt": "Tocar em Fn abre o seletor de emojis?",
+    "ru": "Нажатие Fn открывает панель эмодзи?",
+    "fr": "Fn ouvre le sélecteur d’emoji ?",
+    "de": "Fn öffnet die Emoji-Auswahl?"
+  },
+  "In Keyboard Settings, set “Press 🌐 key to” to “Do Nothing”.": {
+    "ja": "キーボード設定で「🌐キーを押して」を「何もしない」に設定してください。",
+    "ko": "키보드 설정에서 ‘🌐 키를 눌러 다음 수행’을 ‘동작 안 함’으로 설정하세요.",
+    "es": "En Ajustes de teclado, pon “Pulsar la tecla 🌐 para” en “No hacer nada”.",
+    "pt": "Em Ajustes de Teclado, defina “Pressionar a tecla 🌐 para” como “Não Fazer Nada”.",
+    "ru": "В настройках клавиатуры выберите для «Нажатие клавиши 🌐» вариант «Ничего не делать».",
+    "fr": "Dans Réglages du clavier, réglez « Appuyer sur la touche 🌐 pour » sur « Ne rien faire ».",
+    "de": "Stelle in den Tastatureinstellungen „🌐-Taste drücken für“ auf „Keine Aktion“."
+  },
+  "Listening…": {
+    "ja": "聞き取り中…",
+    "ko": "듣는 중…",
+    "es": "Escuchando…",
+    "pt": "Ouvindo…",
+    "ru": "Слушаю…",
+    "fr": "Écoute…",
+    "de": "Höre zu…"
+  },
+  "Writing…": {
+    "ja": "整形中…",
+    "ko": "다듬는 중…",
+    "es": "Escribiendo…",
+    "pt": "Escrevendo…",
+    "ru": "Пишу…",
+    "fr": "Rédaction…",
+    "de": "Schreibe…"
+  },
+  "It works! Use it anywhere you can type.": {
+    "ja": "成功です！文字を入力できる場所ならどこでも使えます。",
+    "ko": "성공입니다! 글을 입력할 수 있는 곳이라면 어디서든 쓸 수 있습니다.",
+    "es": "¡Funciona! Úsalo en cualquier lugar donde puedas escribir.",
+    "pt": "Funciona! Use em qualquer lugar onde dá para digitar.",
+    "ru": "Работает! Пользуйтесь везде, где можно печатать.",
+    "fr": "Ça marche ! Utilisez-le partout où vous pouvez écrire.",
+    "de": "Es funktioniert! Nutze es überall, wo du tippen kannst."
+  },
+  "You're all set": {
+    "ja": "準備完了です",
+    "ko": "모든 준비가 끝났습니다",
+    "es": "Todo listo",
+    "pt": "Tudo pronto",
+    "ru": "Всё готово",
+    "fr": "Tout est prêt",
+    "de": "Alles bereit"
+  },
+  "OpenTypeless waits in the menu bar. Hold {0} in any app to dictate.": {
+    "ja": "OpenTypeless はメニューバーで待機しています。どのアプリでも {0} を押したまま話すと入力できます。",
+    "ko": "OpenTypeless는 메뉴 막대에서 대기합니다. 어떤 앱에서든 {0} 키를 누른 채 말하면 받아쓰기가 됩니다.",
+    "es": "OpenTypeless espera en la barra de menús. Mantén {0} en cualquier app para dictar.",
+    "pt": "O OpenTypeless fica na barra de menus. Segure {0} em qualquer app para ditar.",
+    "ru": "OpenTypeless ждёт в строке меню. Удерживайте {0} в любом приложении, чтобы диктовать.",
+    "fr": "OpenTypeless vous attend dans la barre des menus. Maintenez {0} dans n’importe quelle app pour dicter.",
+    "de": "OpenTypeless wartet in der Menüleiste. Halte {0} in einer beliebigen App gedrückt, um zu diktieren."
+  },
+  "OpenTypeless waits in the system tray. Hold {0} in any app to dictate.": {
+    "ja": "OpenTypeless は通知領域で待機しています。どのアプリでも {0} を押したまま話すと入力できます。",
+    "ko": "OpenTypeless는 시스템 트레이에서 대기합니다. 어떤 앱에서든 {0} 키를 누른 채 말하면 받아쓰기가 됩니다.",
+    "es": "OpenTypeless espera en la bandeja del sistema. Mantén {0} en cualquier app para dictar.",
+    "pt": "O OpenTypeless fica na bandeja do sistema. Segure {0} em qualquer app para ditar.",
+    "ru": "OpenTypeless ждёт в области уведомлений. Удерживайте {0} в любом приложении, чтобы диктовать.",
+    "fr": "OpenTypeless vous attend dans la zone de notification. Maintenez {0} dans n’importe quelle app pour dicter.",
+    "de": "OpenTypeless wartet im Infobereich der Taskleiste. Halte {0} in einer beliebigen App gedrückt, um zu diktieren."
+  },
+  "Start dictating": {
+    "ja": "音声入力を始める",
+    "ko": "받아쓰기 시작",
+    "es": "Empezar a dictar",
+    "pt": "Começar a ditar",
+    "ru": "Начать диктовку",
+    "fr": "Commencer à dicter",
+    "de": "Los diktieren"
+  },
+  "Skip": {
+    "ja": "スキップ",
+    "ko": "건너뛰기",
+    "es": "Omitir",
+    "pt": "Pular",
+    "ru": "Пропустить",
+    "fr": "Passer",
+    "de": "Überspringen"
+  },
+  "Step {0} of {1}": {
+    "ja": "ステップ {0}/{1}",
+    "ko": "{1}단계 중 {0}단계",
+    "es": "Paso {0} de {1}",
+    "pt": "Etapa {0} de {1}",
+    "ru": "Шаг {0} из {1}",
+    "fr": "Étape {0} sur {1}",
+    "de": "Schritt {0} von {1}"
   }
 }

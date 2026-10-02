@@ -72,7 +72,7 @@ OpenTypeless 就是围绕这个问题做的。
 
 ## 功能
 
-- **全局快捷键。** 默认按住 **Fn**（macOS）或 **右 Ctrl**（Windows），也可以录制任意单个修饰键（右 ⌘、右 ⌥、右 Alt……）或组合键（⌥ Space、Alt + Space、F5……）。
+- **全局快捷键。** 默认按住 **Fn**（macOS）或 **右 Alt**（Windows），也可以录制任意单个修饰键（右 ⌘、右 ⌥、右 Ctrl……）或组合键（⌥ Space、Alt + Space、F5……）。
 - **按住说话或免手持。** 按住说话；轻点一下进入免手持录音，再点一下结束。**Esc** 取消。说满 10 秒后按 Esc 取消，内容不会丢：会转写成文字（不插入），在历史里保留 24 小时。
 - **选择麦克风**：在 **设置 → 通用** 里选择，并用实时音量条确认它能听到你。虚拟设备（会议、直播软件）会单独标出，选中的设备断开时自动改用系统默认输入。
 - **预热麦克风**（可选）：按下快捷键立刻开始录音，并带上按键前的一小段，第一个字不会被吞掉。麦克风会一直开着，蓝牙耳机会切到通话模式。
@@ -166,6 +166,8 @@ scripts/build-app.sh             # 构建、签名并安装到 /Applications/Ope
 
 ### 首次运行
 
+第一次启动会打开一个简短的引导：欢迎页、填写 API Key（推荐 OpenRouter，附创建链接；会设置好 `microsoft/mai-transcribe-2` 和 `google/gemini-3.1-flash-lite`），再在一个输入框里试一次听写。每一步都可以跳过，引导只出现这一次。如果跳过了：
+
 1. 授予 **麦克风** 和 **辅助功能** 权限（辅助功能用来监听快捷键和粘贴文字）。
 2. 在 **设置 → 服务商** 里添加 API Key。
 3. 如果使用 Fn，建议把 **系统设置 → 键盘 → “按下 🌐 键时”** 设为 **不执行任何操作**，这样轻点 Fn 就不会弹出表情面板。
@@ -203,16 +205,18 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Package   # 生成 w
 
 ### 首次运行
 
+第一次启动会打开和 macOS 一样的简短引导（填写 API Key，再按住右 Alt 试一次听写）。每一步都可以跳过，引导只出现这一次。如果跳过了：
+
 1. 在 **设置 → 服务商** 里添加 API Key。
 2. 确认 **设置 → 隐私和安全性 → 麦克风 → 允许桌面应用访问你的麦克风** 已打开。
-3. 按住右 Ctrl 说话。Windows 不需要辅助功能权限；唯一的限制是它不允许粘贴到以管理员身份运行的应用，这时文字会放到剪贴板里。
+3. 按住右 Alt 说话（不用右 Ctrl，是因为 Copilot+ 电脑把它换成了 Copilot 键；德语、法语等键盘布局里右 Alt 是 AltGr，可以在 **设置 → 快捷键** 里换一个）。Windows 不需要辅助功能权限；唯一的限制是它不允许粘贴到以管理员身份运行的应用，这时文字会放到剪贴板里。
 
 ## 默认模型
 
 | 步骤 | 默认 | 说明 |
 |---|---|---|
 | 语音转文字 | `microsoft/mai-transcribe-2`（OpenRouter） | 任何 OpenRouter 转写模型，或其他服务商兼容 Whisper 的 `/audio/transcriptions`。 |
-| 文字整理 | `google/gemini-3.8-flash`（OpenRouter） | 我们测试中整理效果最好，一段长口述约 0.005 美元。更便宜的可以试试：`qwen/qwen3.7-flash`、`google/gemini-3.1-flash-lite`。 |
+| 文字整理 | `google/gemini-3.8-flash`（OpenRouter） | 我们测试中整理效果最好，一段长口述约 0.005 美元。更便宜的可以试试：`qwen/qwen3.7-flash`、`google/gemini-3.1-flash-lite`（最快，首次启动引导里填 OpenRouter Key 时用的就是它）。 |
 | 备用整理 | `deepseek/deepseek-v4.1-flash`（OpenRouter） | 只有主模型启动慢或失败时才会请求。选一个其他厂商的快速模型。 |
 
 整理模型的推理（reasoning）会自动关闭或设到最低，以降低延迟。

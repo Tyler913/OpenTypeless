@@ -72,7 +72,7 @@ Der Prompt ist auf Entwicklungs- und zurückgehaltenen Testsets abgestimmt (sieh
 
 ## Funktionen
 
-- **Globales Tastenkürzel.** Standardmäßig **Fn** (macOS) oder **rechte Strg-Taste** (Windows) halten, oder eine beliebige einzelne Sondertaste (rechte ⌘, rechte ⌥, rechte Alt …) oder eine Kombination (⌥ Leertaste, Alt + Leertaste, F5 …) aufnehmen.
+- **Globales Tastenkürzel.** Standardmäßig **Fn** (macOS) oder **rechte Alt-Taste** (Windows) halten, oder eine beliebige einzelne Sondertaste (rechte ⌘, rechte ⌥, rechte Strg …) oder eine Kombination (⌥ Leertaste, Alt + Leertaste, F5 …) aufnehmen.
 - **Halten zum Sprechen oder freihändig.** Halten zum Sprechen; einmal tippen, um freihändig weiter aufzunehmen, und nochmal tippen zum Beenden. **Esc** bricht ab. Nach 10 Sekunden Sprechen geht ein abgebrochenes Diktat nicht verloren: Es wird transkribiert (nicht eingefügt) und 24 Stunden im Verlauf aufbewahrt.
 - **Mikrofon wählen** unter **Einstellungen → Allgemein**, mit einer Live-Pegelanzeige, die zeigt, ob es dich hört. Virtuelle Geräte (Meeting- und Streaming-Apps) sind markiert, und ist das gewählte getrennt, wird der Systemstandard verwendet.
 - **Mikrofon bereithalten** (optional): Die Aufnahme beginnt, sobald du die Taste drückst, und enthält den Moment davor, damit das erste Wort nicht abgeschnitten wird. Das Mikrofon bleibt an, und Bluetooth-Kopfhörer wechseln in den Anrufmodus.
@@ -190,7 +190,7 @@ Für die Entwicklung der Windows-App brauchst du keinen Windows-PC: GitHub Actio
 
 1. Füge unter **Einstellungen → Anbieter** einen API-Schlüssel hinzu.
 2. Stelle sicher, dass **Einstellungen → Datenschutz und Sicherheit → Mikrofon → Desktop-Apps den Zugriff auf Ihr Mikrofon erlauben** eingeschaltet ist.
-3. Halte die rechte Strg-Taste und sprich. Windows braucht keine Bedienungshilfen-Berechtigung; die einzige Grenze ist, dass es kein Einfügen in Apps erlaubt, die als Administrator laufen. Dort landet der Text in der Zwischenablage.
+3. Halte die rechte Alt-Taste und sprich (nicht die rechte Strg-Taste, die auf Copilot+ PCs der Copilot-Taste weicht; auf der deutschen Tastatur ist die rechte Alt-Taste aber AltGr für @ und €: Wenn du damit tippst, wähle unter **Einstellungen → Tastenkürzel** eine andere Taste). Windows braucht keine Bedienungshilfen-Berechtigung; die einzige Grenze ist, dass es kein Einfügen in Apps erlaubt, die als Administrator laufen. Dort landet der Text in der Zwischenablage.
 
 ## Standardmodelle
 

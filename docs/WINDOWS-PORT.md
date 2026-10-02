@@ -49,7 +49,7 @@ failure handling. Only the system-integration layer and the look differ.
 | Tray icon states | SF Symbols `waveform` / `waveform.circle.fill` / `ellipsis.circle` | Same three glyphs rasterised at runtime for the current DPI and taskbar theme (light/dark). |
 | Menu-bar popover | `NSPopover` sized before showing | Borderless WinUI window anchored above the tray, sized to its content before it is shown, closes when it loses focus. |
 | Global hotkey | `CGEventTap` (flagsChanged/keyDown/keyUp) | `WH_KEYBOARD_LL` hook on a dedicated thread with its own message loop (never blocked by UI). Same rules: modifier-only keys, combos swallowed, tap < 0.35 s → hands-free, Esc cancels, another *physical* key within 1 s cancels (injected keys are ignored, like the Logi Options+ case). Alt/Win hotkeys get a masking key so Windows doesn't open the menu bar / Start. |
-| Default hotkey | Fn | **Right Ctrl** (Windows keyboards don't expose Fn to software). See the Hotkey section for presets. |
+| Default hotkey | Fn | **Right Alt** (Windows keyboards don't expose Fn to software, and Copilot+ PCs have the Copilot key where Right Ctrl was). Installs from before 1.4.0 keep Right Ctrl. See the Hotkey section for presets. |
 | Microphone choice | CoreAudio device list, by UID; `kAudioOutputUnitProperty_CurrentDevice` on the engine's input unit | WASAPI `EnumAudioEndpoints(eCapture)`, by endpoint ID (friendly name from the property store; root-enumerated drivers marked virtual); `GetDevice` when opening, default endpoint when the choice is missing. Default-device changes are only followed when no device is chosen. |
 | Live preview | `SpeechAnalyzer` + `SpeechTranscriber` on the recorded samples | `Windows.Media.SpeechRecognition` continuous dictation (listens to the default microphone itself; needs the speech language pack and online speech recognition). |
 | Recording | `AVAudioEngine` → 16 kHz, rebuilt on route change; inputs with more than two channels averaged to mono first, and automatic gain for abnormally quiet input (the raw 3-channel mic macOS gives other apps during calls) → Int16 | WASAPI shared-mode capture with `AUTOCONVERTPCM` (system resampler → 16 kHz mono Int16), event-driven thread; rebuilt on default-device change or device loss so long dictations survive a headset connecting. |
@@ -70,7 +70,7 @@ failure handling. Only the system-integration layer and the look differ.
 
 ## Hotkey on Windows
 
-- Modifier-only: Right Ctrl (default), Right Alt, Right Shift, and any modifier the user records (Left/Right Ctrl, Alt, Shift, Win).
+- Modifier-only: Right Alt (default), Right Ctrl, Right Shift, and any modifier the user records (Left/Right Ctrl, Alt, Shift, Win).
 - Combination: any of Ctrl / Alt / Shift / Win + a key, or F1–F24 alone. A plain letter is refused with the same message.
 - `ShadowsCommonShortcut` = only Ctrl + key (the Windows analogue of ⌘ + key).
 
@@ -78,7 +78,7 @@ failure handling. Only the system-integration layer and the look differ.
 
 These follow from how Windows works rather than from missing features:
 
-- **Default hotkey Right Ctrl** instead of Fn (Windows keyboards don't expose Fn). Alt / Win hotkeys send an unassigned
+- **Default hotkey Right Alt** instead of Fn (Windows keyboards don't expose Fn). Alt / Win hotkeys send an unassigned
   masking key so that tapping them doesn't open the menu bar or Start.
 - **Permissions**: only the microphone is a real permission on Windows. The mac "Accessibility" row becomes
   "Keyboard & paste: not required", and pasting into elevated (administrator) apps, which Windows forbids, falls back to

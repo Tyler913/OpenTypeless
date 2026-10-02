@@ -44,6 +44,15 @@ public static class UISnapshots
                 }
                 window.CloseForExit();
 
+                foreach (var step in Enum.GetValues<OnboardingStep>())
+                {
+                    var onboarding = new OnboardingWindow(controller, () => { }, step);
+                    onboarding.Show();
+                    await Task.Delay(900);
+                    await Capture((FrameworkElement)onboarding.Content, Path.Combine(directory, $"onboarding-{language.RawValue()}-{(int)step + 1}.png"));
+                    onboarding.CloseForExit();
+                }
+
                 var popover = new PopoverWindow(controller, _ => { }, () => { });
                 var (work, _, _) = WindowHelpers.MonitorAtCursor();
                 popover.Open(new Win32.RECT { Left = work.Right - 200, Right = work.Right - 180, Top = work.Bottom + 4, Bottom = work.Bottom + 30 });

@@ -72,7 +72,7 @@ Le prompt est ajusté sur des jeux de développement et de test réservés (voir
 
 ## Fonctionnalités
 
-- **Raccourci global.** Maintenez **Fn** (macOS) ou **Ctrl droite** (Windows) par défaut, ou enregistrez n’importe quel modificateur seul (⌘ droite, ⌥ droite, Alt droite…) ou une combinaison (⌥ Espace, Alt + Espace, F5…).
+- **Raccourci global.** Maintenez **Fn** (macOS) ou **Alt droite** (Windows) par défaut, ou enregistrez n’importe quel modificateur seul (⌘ droite, ⌥ droite, Ctrl droite…) ou une combinaison (⌥ Espace, Alt + Espace, F5…).
 - **Appuyer pour parler ou mains libres.** Maintenez pour parler ; appuyez une fois pour continuer à enregistrer mains libres, et une seconde fois pour terminer. **Échap** annule. Après 10 secondes de parole, une dictée annulée n’est pas perdue : elle est transcrite (sans être insérée) et conservée 24 heures dans l’historique.
 - **Choisissez votre micro** dans **Réglages → Général**, avec un indicateur de niveau en direct pour vérifier qu’il vous entend. Les périphériques virtuels (applis de réunion et de streaming) sont signalés, et si le micro choisi est déconnecté, celui par défaut du système prend le relais.
 - **Garder le micro prêt** (facultatif) : l’enregistrement démarre dès que vous appuyez sur la touche et inclut l’instant qui précède, pour que le premier mot ne soit pas coupé. Le micro reste allumé et les écouteurs Bluetooth passent en mode appel.
@@ -190,7 +190,7 @@ Nul besoin d’un PC Windows pour développer l’app Windows : GitHub Actions l
 
 1. Ajoutez une clé API dans **Réglages → Fournisseurs**.
 2. Vérifiez que **Paramètres → Confidentialité et sécurité → Microphone → Autoriser les applications de bureau à accéder à votre microphone** est activé.
-3. Maintenez Ctrl droite et parlez. Windows ne demande aucune autorisation d’accessibilité ; la seule limite est qu’il n’autorise pas le collage dans les apps exécutées en administrateur, où le texte va donc dans le presse-papiers.
+3. Maintenez Alt droite et parlez (Alt droite plutôt que Ctrl droite, que les PC Copilot+ remplacent par la touche Copilot ; sur les dispositions où Alt droite est AltGr, comme l’AZERTY, choisissez une autre touche dans **Réglages → Raccourci**). Windows ne demande aucune autorisation d’accessibilité ; la seule limite est qu’il n’autorise pas le collage dans les apps exécutées en administrateur, où le texte va donc dans le presse-papiers.
 
 ## Modèles par défaut
 

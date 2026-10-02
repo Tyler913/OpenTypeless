@@ -72,7 +72,7 @@ El prompt está ajustado con conjuntos de desarrollo y de prueba reservados (ver
 
 ## Funciones
 
-- **Atajo global.** Mantén **Fn** (macOS) o **Ctrl derecha** (Windows) por defecto, o graba cualquier modificador suelto (⌘ derecha, ⌥ derecha, Alt derecha…) o una combinación (⌥ Espacio, Alt + Espacio, F5…).
+- **Atajo global.** Mantén **Fn** (macOS) o **Alt derecha** (Windows) por defecto, o graba cualquier modificador suelto (⌘ derecha, ⌥ derecha, Ctrl derecha…) o una combinación (⌥ Espacio, Alt + Espacio, F5…).
 - **Mantener para hablar o manos libres.** Mantén para hablar; toca una vez para seguir grabando con las manos libres y vuelve a tocar para terminar. **Esc** cancela. Si ya llevas 10 segundos hablando, un dictado cancelado no se pierde: se transcribe (sin insertarse) y se guarda en el historial 24 horas.
 - **Elige tu micrófono** en **Ajustes → General**, con un medidor de nivel en directo para comprobar que te oye. Los dispositivos virtuales (apps de reuniones y streaming) aparecen marcados, y si el elegido se desconecta se usa el predeterminado del sistema.
 - **Mantener el micrófono listo** (opcional): la grabación empieza en cuanto pulsas la tecla e incluye el instante anterior, así que la primera palabra no se corta. El micrófono queda encendido y los auriculares Bluetooth pasan al modo llamada.
@@ -190,7 +190,7 @@ No hace falta un PC con Windows para desarrollar la app de Windows: GitHub Actio
 
 1. Añade una clave de API en **Ajustes → Proveedores**.
 2. Comprueba que **Configuración → Privacidad y seguridad → Micrófono → Permitir que las aplicaciones de escritorio accedan al micrófono** está activado.
-3. Mantén Ctrl derecha y habla. Windows no necesita permiso de accesibilidad; el único límite es que no permite pegar en apps que se ejecutan como administrador, así que ahí el texto va al portapapeles.
+3. Mantén Alt derecha y habla (Alt derecha y no Ctrl derecha, que los PC Copilot+ sustituyen por la tecla Copilot; en distribuciones donde Alt derecha es AltGr, como la española, elige otra tecla en **Ajustes → Atajo**). Windows no necesita permiso de accesibilidad; el único límite es que no permite pegar en apps que se ejecutan como administrador, así que ahí el texto va al portapapeles.
 
 ## Modelos por defecto
 

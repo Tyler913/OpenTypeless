@@ -33,11 +33,13 @@ public sealed record Hotkey(
     public static readonly Hotkey RightShift = new(VK_RSHIFT, HotkeyModifiers.None, true);
 
     /// <summary>
-    /// Windows keyboards don't expose Fn to software, so the default is Right Ctrl: rarely used on its own
-    /// and harmless when tapped.
+    /// Windows keyboards don't expose Fn to software, so the default is Right Alt: rarely used on its own, and on
+    /// every keyboard, unlike Right Ctrl, which Copilot+ PCs replace with the Copilot key. A lone tap is masked so it
+    /// doesn't open the menu bar, and AltGr combinations still type (they cancel the dictation instead).
+    /// Installs from before 1.4.0 keep Right Ctrl (see AppSettings).
     /// </summary>
-    public static readonly Hotkey Default = RightControl;
-    public static readonly Hotkey[] Presets = [RightControl, RightAlt, RightShift];
+    public static readonly Hotkey Default = RightAlt;
+    public static readonly Hotkey[] Presets = [RightAlt, RightControl, RightShift];
 
     /// <summary>Virtual-key code → the modifier it represents, for keys usable on their own.</summary>
     public static readonly IReadOnlyDictionary<int, HotkeyModifiers> ModifierKeys = new Dictionary<int, HotkeyModifiers>

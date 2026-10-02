@@ -51,6 +51,38 @@ jobs:
           $escaped = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
           Write-Output "::error title=Build (${{ matrix.arch }}) failed::$escaped"
 
+      # The app draws every settings page, the first-launch guide, the popover and the HUD to PNGs (in the
+      # snapshots-windows artifact), to look at the UI without a Windows machine. Once is enough, on the x64 runner.
+      - name: Draw the UI
+        if: matrix.arch == 'x64'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          OPENTYPELESS_DATA_DIR: ${{ runner.temp }}\snapshot-data
+          OPENTYPELESS_DEBUG: '1'
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'snapshots'
+          $exe = (Resolve-Path '.build\publish\OpenTypeless\OpenTypeless.exe').Path
+          $started = Get-Date
+          $app = Start-Process $exe -ArgumentList '--snapshot-ui', $out, '--lang', 'en', '--demo' -PassThru
+          if (-not $app.WaitForExit(180000)) { $app.Kill(); Write-Output '::warning title=Snapshots::The app did not finish drawing its UI' }
+          Write-Output "exit code $($app.ExitCode) after $([int]((Get-Date) - $started).TotalSeconds) s"
+          Get-ChildItem $out -Name -ErrorAction SilentlyContinue
+          if (Test-Path "$out\error.txt") { Get-Content "$out\error.txt"; Write-Output '::warning title=Snapshots::Drawing the UI failed (see error.txt)' }
+          Get-Content "$env:OPENTYPELESS_DATA_DIR\debug.log" -Tail 40 -ErrorAction SilentlyContinue
+          # A crash before the app could write anything shows up in the Windows event log.
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $started } -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -in '.NET Runtime', 'Application Error', 'Windows Error Reporting' } |
+            Select-Object -First 3 | ForEach-Object { $_.Message }
+
+      - uses: actions/upload-artifact@v7
+        if: matrix.arch == 'x64'
+        continue-on-error: true
+        with:
+          name: snapshots-windows
+          path: ${{ runner.temp }}/snapshots
+          if-no-files-found: warn
+
       # Time budgets for the work that runs while you dictate and on the UI thread, in a Release build like the app's
       # (tests/TypelessCore.Tests/PerformanceTests.cs). The timings are on the run's summary page. Once is enough,
       # on the x64 runner.

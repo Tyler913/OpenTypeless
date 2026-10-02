@@ -44,6 +44,13 @@ public sealed class AppSettings : INotifyPropertyChanged
             // A corrupt file falls back to defaults rather than blocking launch.
         }
         _store = loaded ?? new JsonObject();
+        // The hotkey is always stored, so a new default only reaches new installs: one that ran before without
+        // choosing a hotkey had Right Ctrl, the default until 1.4.0, and keeps it.
+        if (_store["hotkey"] == null)
+        {
+            _store["hotkey"] = JsonSerializer.SerializeToNode(File.Exists(_path) ? Hotkey.RightControl : Hotkey.Default);
+            Save();
+        }
         // In CLI mode with OPENROUTER_API_KEY set, don't touch the credential store.
         var cli = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENROUTER_API_KEY"));
         _apiKeys = cli ? new() : Credentials.Load();
@@ -243,6 +250,13 @@ public sealed class AppSettings : INotifyPropertyChanged
     {
         get => Math.Clamp(GetInt("typingWordsPerMinute", UsageTotals.DefaultTypingWordsPerMinute), 10, 300);
         set => SetValue("typingWordsPerMinute", Math.Clamp(value, 10, 300));
+    }
+
+    /// <summary>The first-launch guide has been shown (see Onboarding); it never comes back after that.</summary>
+    public bool DidShowOnboarding
+    {
+        get => GetBool("didShowOnboarding", false);
+        set => SetValue("didShowOnboarding", value);
     }
 
     public bool DidEnableLaunchAtLoginByDefault

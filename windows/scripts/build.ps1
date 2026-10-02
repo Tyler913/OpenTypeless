@@ -25,7 +25,7 @@ $Staging = ".build\publish\$AppName"
 $Installed = Join-Path $env:LOCALAPPDATA "Programs\$AppName"
 
 Write-Host "==> Testing"
-dotnet test tests\TypelessCore.Tests --nologo -v quiet
+dotnet test tests\TypelessCore.Tests --nologo -v quiet --logger "trx;LogFileName=core.trx" --results-directory test-results
 if ($LASTEXITCODE) { throw 'tests failed' }
 
 Write-Host "==> Compiling (release, $Rid)"

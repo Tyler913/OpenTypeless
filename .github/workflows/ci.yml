@@ -11,8 +11,8 @@
 # windows/src/TypelessCore, so its test suite also runs on Linux: it reports in about a minute, long before the
 # Windows build, and a third OS keeps the timing-based tests honest about scheduling.
 #
-# Every run also checks i18n/strings.json against the L(…) strings in both apps (python3 i18n/check.py).
-# Changes to shared files only (docs/, eval/, README*.md) build nothing. A change to a workflow file builds
+# Every run also checks translations, workflow syntax, CI gates and packaging templates.
+# Changes to docs/ and README*.md build nothing. Changes to eval/ build both apps. A change to a workflow file builds
 # the app it belongs to; a change to this file builds both.
 #
 # "CI passed" is the one check to require in branch protection. It fails if any build that ran failed, and
@@ -36,6 +36,7 @@ jobs:
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
@@ -53,12 +54,21 @@ jobs:
               - 'macos/**'
               - 'testdata/**'
               - 'i18n/**'
+              - 'eval/**'
+              - 'scripts/ci/**'
+              - '.github/workflows/release.yml'
+              - '.github/workflows/quality.yml'
               - '.github/workflows/macos.yml'
               - '.github/workflows/ci.yml'
             windows:
+              - 'macos/Sources/TypelessCore/Prompts.swift'
               - 'windows/**'
               - 'testdata/**'
               - 'i18n/**'
+              - 'eval/**'
+              - 'scripts/ci/**'
+              - '.github/workflows/release.yml'
+              - '.github/workflows/quality.yml'
               - '.gitattributes'
               - '.github/workflows/windows.yml'
               - '.github/workflows/ci.yml'
@@ -75,11 +85,27 @@ jobs:
     if: needs.changes.outputs.windows == 'true'
     uses: ./.github/workflows/windows.yml
 
+  # Users' machines don't all run en-US in UTC: the same suite again under a decimal comma (de-DE), Turkish casing
+  # rules (tr-TR, where "i".ToUpper() is "İ") and Chinese with China's time zone (zh-CN, most users), so a price,
+  # duration or date that only formats or parses right in English fails here instead of on someone's desktop.
   pipeline:
-    name: Pipeline tests (Linux)
+    name: Pipeline tests (Linux, ${{ matrix.culture }})
     needs: changes
     if: needs.changes.outputs.windows == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { culture: en-US, locale: en_US.UTF-8, tz: UTC, coverage: true }
+          - { culture: de-DE, locale: de_DE.UTF-8, tz: Europe/Berlin, coverage: false }
+          - { culture: tr-TR, locale: tr_TR.UTF-8, tz: Europe/Istanbul, coverage: false }
+          - { culture: zh-CN, locale: zh_CN.UTF-8, tz: Asia/Shanghai, coverage: false }
+    env:
+      LANG: ${{ matrix.locale }}
+      LC_ALL: ${{ matrix.locale }}
+      TZ: ${{ matrix.tz }}
     steps:
       - uses: actions/checkout@v7
 
@@ -87,24 +113,48 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: TypelessCore tests
-        run: dotnet test windows/tests/TypelessCore.Tests --nologo --logger "console;verbosity=normal"
+      - name: TypelessCore tests (${{ matrix.culture }}, ${{ matrix.tz }})
+        if: ${{ !matrix.coverage }}
+        run: >-
+          dotnet test windows/tests/TypelessCore.Tests --nologo
+          --logger "console;verbosity=normal" --logger "trx;LogFileName=core.trx"
+          --results-directory test-results/dotnet
 
-  translations:
-    name: Translations
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Check i18n/strings.json against the strings in both apps
-        run: python3 i18n/check.py
+      - name: TypelessCore tests and coverage
+        if: ${{ matrix.coverage }}
+        run: >-
+          dotnet test windows/tests/TypelessCore.Tests --nologo
+          --logger "console;verbosity=normal" --logger "trx;LogFileName=core.trx"
+          --results-directory test-results/dotnet --collect "XPlat Code Coverage"
+          --settings windows/tests/coverage.runsettings
+
+      - name: Report core coverage
+        if: ${{ matrix.coverage }}
+        run: |
+          report=$(find test-results/dotnet -name coverage.cobertura.xml -print -quit)
+          test -n "$report"
+          python3 scripts/ci/coverage_summary.py dotnet "$report" --output test-results/dotnet/coverage.md
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: tests-dotnet-linux-${{ matrix.culture }}
+          path: test-results/dotnet
+          if-no-files-found: warn
+
+  quality:
+    name: Shared checks
+    uses: ./.github/workflows/quality.yml
 
   passed:
     name: CI passed
-    needs: [changes, translations, pipeline, macos, windows]
+    needs: [changes, quality, pipeline, macos, windows]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Check that every build that ran succeeded
-        run: |
-          echo "Translations: ${{ needs.translations.result }}, pipeline: ${{ needs.pipeline.result }}, macOS: ${{ needs.macos.result }}, Windows: ${{ needs.windows.result }}"
-          [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "false" ]]
+      - uses: actions/checkout@v7
+      - name: Require all selected builds and shared checks to succeed
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/ci/check_gate.py

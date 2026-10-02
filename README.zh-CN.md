@@ -340,9 +340,18 @@ GitHub Actions（[`.github/workflows/`](.github/workflows/)）只构建你改动
 | `windows/**` | 在 x64 和 ARM64 两台运行器上执行 **Windows build**：先测试，再各自打包绿色版 zip 和安装程序；实际运行安装程序、启动应用，再卸载一遍。 |
 | `testdata/**` | 两边都构建：两个测试套件共同读取的测试用例（字数、价格、节省的时间），保证两个应用结果一致。 |
 | `i18n/**` | 两边都构建：两个应用都会嵌入的翻译。 |
-| 只改了 `docs/`、`eval/`、`README*.md` | 什么都不构建。 |
+| `eval/**`、`scripts/ci/**` | 两边都构建，并运行共享检查。 |
+| 只改了 `docs/`、`README*.md` | 不构建平台应用，仍运行共享检查。 |
 
-每次运行还会检查翻译（**Translations**，`python3 i18n/check.py`）。
+每次 CI 还会执行 **Shared checks**：翻译、工作流语法、评测数据结构和包管理器模板测试。只修改 macOS 提示词也会触发 Windows 的提示词一致性测试。Release 和包管理器发布也执行同一组共享检查。
+
+两个平台的两种架构都必须渲染全部设置页、引导步骤、弹出菜单和五种 HUD 状态，覆盖中英文与明暗主题。缺图、空白图、损坏图片、崩溃和超时都会让 CI 失败；截图和失败日志保留为 artifacts。这是渲染冒烟测试，尚不验证真实点击和视觉基准差异。
+
+每个打包产物还会用自己的转写管线（`--transcribe-file --realtime`：macOS 是应用本体，Windows 是 zip 里的 `OpenTypeless.Cli.exe`）按说话速度"听写"一分钟合成语音，对接本地假服务商（[`scripts/ci/fake_provider.py`](scripts/ci/fake_provider.py)）。第一个请求返回 503，整理结果每次只流式传几个字节；转写和整理结果必须与"说出"的内容完全一致。不使用 API Key，音频不离开运行器。录音文件和 Windows 解压目录的路径都带空格和中文。
+
+Linux 管线测试按四种区域设置各跑一遍：en-US/UTC、de-DE（小数逗号）、tr-TR（土耳其语大小写）、zh-CN/Asia/Shanghai。
+
+macOS 测试和 Linux .NET 测试会上传核心库覆盖率报告；该比例不包含原生应用，也不能证明端到端功能正确。剩余缺口和分阶段方案见[测试覆盖审计与 proposal](docs/TESTING-AUDIT.zh-CN.md)。
 
 在 Actions 页面某次运行的 **Artifacts** 部分可以下载构建结果。**Actions → macOS build / Windows build → Run workflow** 可以手动触发构建。
 

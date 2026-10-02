@@ -88,7 +88,14 @@ public sealed class HomePage : PageBase
         spend.Children.Add(SpendLine(L("累计", "All time"), all));
         _heatmap.Margin = new Thickness(14, 12, 14, 12);
         _heatmap.Ledger = ledger;
-        if (_heatmap.Parent is Panel old) old.Children.Remove(_heatmap);
+        // Out of the card the last render put it in (a Border, from Card.Make): XAML throws when an element that
+        // still has a parent is added again, and thrown from a dispatcher callback (a new price list, a finished
+        // dictation) that ends the app.
+        switch (_heatmap.Parent)
+        {
+            case Border card: card.Child = null; break;
+            case Panel panel: panel.Children.Remove(_heatmap); break;
+        }
         var row = new Grid { ColumnSpacing = 14 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });

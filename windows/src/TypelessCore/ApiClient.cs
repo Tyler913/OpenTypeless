@@ -104,7 +104,8 @@ public sealed partial class ApiClient
 
 // MARK: - Speech to text
 
-public sealed record TranscriptionOptions(string Model, string? Language = null);
+/// <param name="Vocabulary">The user's vocabulary, passed to models that take spelling hints (see <see cref="VocabularyHints"/>).</param>
+public sealed record TranscriptionOptions(string Model, string? Language = null, IReadOnlyList<string>? Vocabulary = null);
 
 /// <summary>A transcript and what producing it used, when the server said.</summary>
 public sealed record TranscriptionResult(string Text, RequestUsage? Usage);
@@ -119,27 +120,47 @@ public sealed partial class ApiClient
     public async Task<TranscriptionResult> TranscribeDetailed(byte[] wav, TranscriptionOptions options, double timeout,
                                                               CancellationToken cancellationToken = default)
     {
-        HttpRequestMessage BuildRequest()
+        try
         {
-            switch (Endpoint.Id.SttFormat())
-            {
-                case SttFormat.OpenRouterJson:
-                    var body = new JsonObject
-                    {
-                        ["model"] = options.Model,
-                        ["input_audio"] = new JsonObject { ["data"] = Convert.ToBase64String(wav), ["format"] = "wav" },
-                    };
-                    if (!string.IsNullOrEmpty(options.Language)) body["language"] = options.Language;
-                    return Request("audio/transcriptions", JsonContent(body));
-                default:
-                    var form = MultipartForm.Transcription(wav, options);
-                    var content = new ByteArrayContent(form.Body);
-                    content.Headers.TryAddWithoutValidation("Content-Type", form.ContentType);
-                    return Request("audio/transcriptions", content);
-            }
+            return await TranscribeOnce(wav, options, timeout, cancellationToken).ConfigureAwait(false);
         }
+        catch (ApiException error) when (error.Kind == ApiErrorKind.Http && error.Status == 400 && HasVocabularyHints(options))
+        {
+            // A provider that stopped taking the hints mustn't stop dictation: the same request without them.
+            return await TranscribeOnce(wav, options with { Vocabulary = null }, timeout, cancellationToken).ConfigureAwait(false);
+        }
+    }
 
-        var request = BuildRequest(); // throws a missing-key error before any network activity
+    internal bool HasVocabularyHints(TranscriptionOptions options) => Endpoint.Id.SttFormat() == SttFormat.OpenRouterJson
+        ? VocabularyHints.OpenRouterProvider(options.Model, options.Vocabulary) != null
+        : VocabularyHints.MultipartPrompt(Endpoint.Id, options.Model, options.Vocabulary) != null;
+
+    /// <summary>The transcription request for one chunk, with the vocabulary hints this model takes.</summary>
+    internal HttpRequestMessage TranscriptionRequest(byte[] wav, TranscriptionOptions options)
+    {
+        switch (Endpoint.Id.SttFormat())
+        {
+            case SttFormat.OpenRouterJson:
+                var body = new JsonObject
+                {
+                    ["model"] = options.Model,
+                    ["input_audio"] = new JsonObject { ["data"] = Convert.ToBase64String(wav), ["format"] = "wav" },
+                };
+                if (!string.IsNullOrEmpty(options.Language)) body["language"] = options.Language;
+                if (VocabularyHints.OpenRouterProvider(options.Model, options.Vocabulary) is { } provider) body["provider"] = provider;
+                return Request("audio/transcriptions", JsonContent(body));
+            default:
+                var form = MultipartForm.Transcription(wav, options, VocabularyHints.MultipartPrompt(Endpoint.Id, options.Model, options.Vocabulary));
+                var content = new ByteArrayContent(form.Body);
+                content.Headers.TryAddWithoutValidation("Content-Type", form.ContentType);
+                return Request("audio/transcriptions", content);
+        }
+    }
+
+    private async Task<TranscriptionResult> TranscribeOnce(byte[] wav, TranscriptionOptions options, double timeout,
+                                                           CancellationToken cancellationToken)
+    {
+        var request = TranscriptionRequest(wav, options); // throws a missing-key error before any network activity
         var (status, data) = await Timeouts.WithTimeout(timeout, async ct =>
         {
             using (request)
@@ -222,15 +243,17 @@ public sealed class MultipartForm
     private void Write(string text) => _body.Write(Encoding.UTF8.GetBytes(text));
 
     /// <summary>
-    /// Only <c>file</c>, <c>model</c> and (optionally) <c>language</c>: some OpenAI-compatible servers reject any
-    /// parameter they don't know, so nothing else is sent.
+    /// Only <c>file</c>, <c>model</c>, and (optionally) <c>language</c> and the vocabulary <c>prompt</c>, which goes only
+    /// to OpenAI and Groq (see <see cref="VocabularyHints"/>): some OpenAI-compatible servers reject any parameter they
+    /// don't know.
     /// </summary>
-    internal static MultipartForm Transcription(byte[] wav, TranscriptionOptions options)
+    internal static MultipartForm Transcription(byte[] wav, TranscriptionOptions options, string? prompt = null)
     {
         var form = new MultipartForm();
         form.AddFile("file", "audio.wav", "audio/wav", wav);
         form.AddField("model", options.Model);
         if (!string.IsNullOrEmpty(options.Language)) form.AddField("language", options.Language);
+        if (!string.IsNullOrEmpty(prompt)) form.AddField("prompt", prompt);
         form.Finish();
         return form;
     }

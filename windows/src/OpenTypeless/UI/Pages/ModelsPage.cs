@@ -37,6 +37,7 @@ public sealed class ModelsPage : PageBase
         {
             _settings.SttModel = text;
             _sttPrice.Show(_settings.SttProvider, text);
+            if (_sttRow != null) _sttRow.Subtitle = VocabularyHintNote();
         };
         _chatField.TextChanged = text =>
         {
@@ -80,6 +81,10 @@ public sealed class ModelsPage : PageBase
     private static CardRow PriceRow(PriceEditor editor) =>
         new() { Glyph = Glyphs.Money, Tint = Tint.Green, Title = L("价格", "Price"), Trailing = editor };
 
+    private string VocabularyHintNote() => VocabularyHints.StyleFor(_settings.SttProvider, _settings.SttModel) != null
+        ? L("你的词汇表会作为拼写提示一起发给这个模型", "Your vocabulary is sent to this model as spelling hints")
+        : L("这个模型不接收词汇提示，词汇表只用于文字整理", "This model takes no vocabulary hints; your vocabulary is used in clean-up only");
+
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is { } name && StructuralProperties.Contains(name)) DispatcherQueue.TryEnqueue(Render);
@@ -118,7 +123,7 @@ public sealed class ModelsPage : PageBase
             Trailing = ProviderPicker(_settings.SttProvider, ProviderIdExtensions.All.Where(p => p.SupportsStt()), _settings.SelectSttProvider),
         });
         stt.Body.Add(new CardDivider());
-        _sttRow = new CardRow { Glyph = Glyphs.Microphone, Tint = Tint.Blue, Title = L("模型", "Model"), Trailing = _sttField };
+        _sttRow = new CardRow { Glyph = Glyphs.Microphone, Tint = Tint.Blue, Title = L("模型", "Model"), Subtitle = VocabularyHintNote(), Trailing = _sttField };
         stt.Body.Add(_sttRow);
         stt.Body.Add(new CardDivider());
         var sttPriceRow = PriceRow(_sttPrice);

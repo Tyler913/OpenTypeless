@@ -71,7 +71,7 @@ public static class Cli
         var start = Stopwatch.StartNew();
         var pipeline = new TranscriptionPipeline(
             client,
-            new TranscriptionOptions(settings.SttModel, settings.SttLanguage.Length == 0 ? null : settings.SttLanguage),
+            new TranscriptionOptions(settings.SttModel, settings.SttLanguage.Length == 0 ? null : settings.SttLanguage, settings.VocabularyList),
             observer: (index, state) =>
             {
                 var t = $"{start.Elapsed.TotalSeconds,5:0.0}s";

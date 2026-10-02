@@ -177,6 +177,20 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("restoreClipboard", value);
     }
 
+    /// <summary>Press Enter once the text is pasted, so a chat message or AI prompt is sent without touching the keyboard.</summary>
+    public bool PressEnterAfterInsert
+    {
+        get => GetBool("pressEnterAfterInsert", false);
+        set => SetValue("pressEnterAfterInsert", value);
+    }
+
+    /// <summary>Mute the speakers while recording (see OutputMute).</summary>
+    public bool MuteWhileRecording
+    {
+        get => GetBool("muteWhileRecording", false);
+        set => SetValue("muteWhileRecording", value);
+    }
+
     public int MaxRecordingMinutes
     {
         get => GetInt("maxRecordingMinutes", 20);

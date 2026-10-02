@@ -1,0 +1,113 @@
+# Publishing a release (not a pre-release) hands it to the package managers:
+#
+#   Homebrew   writes Casks/opentypeless.rb in the Tyler913/homebrew-tap repository, so
+#              `brew install --cask tyler913/tap/opentypeless` installs it and `brew upgrade` sees the new version
+#   WinGet     opens a pull request in microsoft/winget-pkgs with the new version's manifests (TylerHong.OpenTypeless);
+#              it's live for `winget install TylerHong.OpenTypeless` once Microsoft's checks pass and it's merged
+#
+# The cask and manifests are filled in from packaging/ with the checksums GitHub published for the release's zips
+# (packaging/render.py). Each part needs its token as a repository secret, HOMEBREW_TAP_TOKEN and WINGET_TOKEN, and
+# is skipped with a notice until it's set (see packaging/README.md). Actions → Publish to package managers → Run
+# workflow does it again for a release, e.g. after adding a token.
+name: Publish to package managers
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release's tag, e.g. 1.3.7
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  homebrew:
+    name: Homebrew tap
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - name: Check for the tap token
+        id: token
+        run: |
+          if [[ -z "$TAP_TOKEN" ]]; then
+            echo "::notice::HOMEBREW_TAP_TOKEN isn't set, so the Homebrew tap wasn't updated (see packaging/README.md)"
+            echo "set=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "set=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.token.outputs.set == 'true'
+
+      - name: Fill in the cask
+        if: steps.token.outputs.set == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 packaging/render.py "$TAG" dist
+
+      - uses: actions/checkout@v7
+        if: steps.token.outputs.set == 'true'
+        with:
+          repository: Tyler913/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Commit it to the tap
+        if: steps.token.outputs.set == 'true'
+        working-directory: tap
+        run: |
+          mkdir -p Casks
+          cp ../dist/homebrew/opentypeless.rb Casks/opentypeless.rb
+          git add Casks/opentypeless.rb
+          if git diff --cached --quiet; then
+            echo "The cask is already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "opentypeless ${TAG#[vV]}"
+          git push
+
+  winget:
+    name: WinGet
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: windows-latest
+    env:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+    steps:
+      - name: Check for the WinGet token
+        id: token
+        shell: bash
+        run: |
+          if [[ -z "$WINGET_TOKEN" ]]; then
+            echo "::notice::WINGET_TOKEN isn't set, so nothing was submitted to WinGet (see packaging/README.md)"
+            echo "set=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "set=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.token.outputs.set == 'true'
+
+      - name: Fill in the manifests
+        if: steps.token.outputs.set == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python packaging/render.py "$env:TAG" dist
+
+      # wingetcreate forks microsoft/winget-pkgs into the token's account if needed and opens the pull request from there.
+      - name: Submit them to winget-pkgs
+        if: steps.token.outputs.set == 'true'
+        run: |
+          $version = $env:TAG -replace '^[vV]', ''
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe submit --prtitle "New version: TylerHong.OpenTypeless version $version" --token $env:WINGET_TOKEN dist\winget
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -93,6 +93,7 @@ public static partial class Win32
     public const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
     public const uint KEYEVENTF_KEYUP = 0x0002;
     public const ushort VK_CONTROL = 0x11;
+    public const ushort VK_RETURN = 0x0D;
     public const ushort VK_ESCAPE = 0x1B;
     public const ushort VK_V = 0x56;
 

@@ -149,9 +149,25 @@ public sealed class GeneralPage : PageBase
         dictation.Body.Add(new CardDivider());
         dictation.Body.Add(new CardRow
         {
+            Glyph = Glyphs.ReturnKey, Tint = Tint.Green, Title = L("插入后自动回车", "Press Enter after inserting"),
+            Subtitle = L("文字粘贴进去后自动按一次回车，在聊天框或给 AI 写提示词时直接发送。文字只复制到剪贴板时不会按。",
+                         "Presses Enter once the text is pasted, so a chat message or AI prompt is sent right away. Not pressed when the text only goes to the clipboard."),
+            Trailing = Toggle(_settings.PressEnterAfterInsert, on => _settings.PressEnterAfterInsert = on),
+        });
+        dictation.Body.Add(new CardDivider());
+        dictation.Body.Add(new CardRow
+        {
             Glyph = Glyphs.Volume, Tint = Tint.Pink, Title = L("提示音", "Sounds"),
             Subtitle = L("开始和结束录音时播放轻提示音", "Soft chime when recording starts and stops"),
             Trailing = Toggle(_settings.PlaySounds, on => _settings.PlaySounds = on),
+        });
+        dictation.Body.Add(new CardDivider());
+        dictation.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Mute, Tint = Tint.Indigo, Title = L("录音时静音", "Mute audio while recording"),
+            Subtitle = L("录音期间把扬声器静音，音乐和视频不会打扰你说话，结束后自动恢复。",
+                         "Mutes your speakers while you're recording, so music or a video doesn't get in the way, and turns them back on when you stop."),
+            Trailing = Toggle(_settings.MuteWhileRecording, on => _settings.MuteWhileRecording = on),
         });
         dictation.Body.Add(new CardDivider());
         dictation.Body.Add(new CardRow

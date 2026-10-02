@@ -65,6 +65,8 @@ public sealed class SessionController
     /// <summary>Keeps the connections warm while recording (see <see cref="WarmConnections"/>).</summary>
     private DispatcherQueueTimer? _warmTimer;
     private readonly Preconnector _preconnector = new();
+    /// <summary>Silences the speakers while recording, when that's switched on.</summary>
+    private readonly OutputMute _outputMute = new();
     /// <summary>A clean-up started before the key was released, on the transcript a speculative tail gave.</summary>
     private SpeculativePolish? _speculativePolish;
     /// <summary>Clean-ups started ahead of time that finished but were then dropped because the speaker went on: they were billed too.</summary>
@@ -323,6 +325,8 @@ public sealed class SessionController
         Hud.Model.StartedAt = DateTimeOffset.Now;
         Hud.Show(new HudPhase.Recording());
         PlaySound(Sounds.Kind.Start);
+        // After the start sound, which muting would cut off.
+        if (_settings.MuteWhileRecording) _outputMute.Mute(TimeSpan.FromMilliseconds(_settings.PlaySounds ? 300 : 0));
 
         _maxDurationTimer = _dispatcher.CreateTimer();
         _maxDurationTimer.Interval = TimeSpan.FromMinutes(Math.Max(1, _settings.MaxRecordingMinutes));
@@ -375,6 +379,7 @@ public sealed class SessionController
         _maxDurationTimer = null;
         _warmTimer?.Stop();
         _warmTimer = null;
+        _outputMute.Restore();
         // Stopping delivers what the recorder still holds, so a cold recorder stops first. After End nothing reaches
         // the writer; a warm recorder goes back to filling the pre-roll.
         if (!_settings.KeepMicrophoneWarm)
@@ -649,6 +654,9 @@ public sealed class SessionController
         switch (outcome)
         {
             case TextInserter.Outcome.Pasted:
+                // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
+                var sent = _settings.PressEnterAfterInsert;
+                if (sent) await TextInserter.PressEnter();
                 if (notice is { } message)
                 {
                     Finish(new HudPhase.Error(message), 3);
@@ -658,7 +666,7 @@ public sealed class SessionController
                     Reset();
                     Hud.FinishWorking();
                 }
-                if (_settings.LearnFromEdits) _editWatcher.Watch(text);
+                if (_settings.LearnFromEdits && !sent) _editWatcher.Watch(text);
                 break;
             default:
                 Finish(new HudPhase.Copied(), 1.6);

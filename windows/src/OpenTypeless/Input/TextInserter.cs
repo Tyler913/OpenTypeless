@@ -94,6 +94,15 @@ public static class TextInserter
 
     public static void CopyToClipboard(string text) => ClipboardSnapshot.SetText(text, transient: false);
 
+    /// <summary>Presses Enter in the foreground app, after a paste, to send what was inserted.</summary>
+    public static async Task PressEnter()
+    {
+        // Let the app take in the pasted text first (web apps update their state asynchronously).
+        await Task.Delay(120);
+        var inputs = new[] { Win32.Key(Win32.VK_RETURN, up: false), Win32.Key(Win32.VK_RETURN, up: true) };
+        Win32.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Win32.INPUT>());
+    }
+
     /// <summary>
     /// A native app whose menu bar is active (after a lone Alt tap) swallows Ctrl+V and reports the menu as focused.
     /// Leaves that mode the way the user would, with Esc (twice at most: an open menu, then the menu bar). Context

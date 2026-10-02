@@ -43,6 +43,8 @@ final class SessionController: ObservableObject {
     /// Keeps the connections warm while recording (see `warmConnections`).
     private var warmTimer: Timer?
     private let preconnector = Preconnector()
+    /// Silences the speakers while recording, when that's switched on.
+    private let outputMute = OutputMute()
     /// A clean-up started before the key was released, on the transcript a speculative tail gave.
     private var speculativePolish: SpeculativePolish?
     /// Clean-ups started ahead of time that finished but were then dropped because the speaker went on: they were billed too.
@@ -284,6 +286,8 @@ final class SessionController: ObservableObject {
         hud.model.startedAt = Date()
         hud.show(.recording)
         playSound("Tink")
+        // After the start sound, which muting would cut off.
+        if settings.muteWhileRecording { outputMute.mute(after: .milliseconds(settings.playSounds ? 300 : 0)) }
 
         maxDurationTimer = Timer.scheduledTimer(
             withTimeInterval: TimeInterval(max(1, settings.maxRecordingMinutes) * 60), repeats: false
@@ -332,6 +336,7 @@ final class SessionController: ObservableObject {
         maxDurationTimer = nil
         warmTimer?.invalidate()
         warmTimer = nil
+        outputMute.restore()
         // Stopping delivers what the recorder still holds, so a cold recorder stops first. After `end` nothing
         // reaches the writer; a warm recorder goes back to filling the pre-roll.
         if !settings.keepMicrophoneWarm {
@@ -591,13 +596,16 @@ final class SessionController: ObservableObject {
         note("deliver → \(outcome) (focus \(target)) in \(frontmostID)")
         switch outcome {
         case .pasted:
+            // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
+            let sent = settings.pressEnterAfterInsert
+            if sent { await TextInserter.pressReturn() }
             if let notice {
                 finish(showing: .error(notice), hideAfter: 3)
             } else {
                 reset()
                 hud.finishWorking()
             }
-            if settings.learnFromEdits { editWatcher.watch(inserted: text) }
+            if settings.learnFromEdits, !sent { editWatcher.watch(inserted: text) }
         case .notPasted:
             finish(showing: .copied, hideAfter: 1.6)
         case .noPermission:

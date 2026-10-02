@@ -962,6 +962,42 @@
     "fr": "Remet le contenu précédent du presse-papiers après l’insertion",
     "de": "Stellt nach dem Einfügen den vorherigen Inhalt der Zwischenablage wieder her"
   },
+  "Press Return after inserting": {
+    "ja": "挿入後に Return キーを押す",
+    "ko": "삽입 후 Return 키 누르기",
+    "es": "Pulsar Retorno tras insertar",
+    "pt": "Pressionar Return após inserir",
+    "ru": "Нажимать Return после вставки",
+    "fr": "Appuyer sur Retour après l’insertion",
+    "de": "Nach dem Einfügen Return drücken"
+  },
+  "Presses Return once the text is pasted, so a chat message or AI prompt is sent right away. Not pressed when the text only goes to the clipboard.": {
+    "ja": "テキストを貼り付けたあと Return キーを 1 回押すので、チャットのメッセージや AI へのプロンプトがそのまま送信されます。テキストがクリップボードにコピーされただけのときは押しません。",
+    "ko": "텍스트를 붙여 넣은 뒤 Return 키를 한 번 눌러 채팅 메시지나 AI 프롬프트를 바로 보냅니다. 텍스트가 클립보드에만 복사된 경우에는 누르지 않습니다.",
+    "es": "Pulsa Retorno en cuanto se pega el texto, para enviar al momento un mensaje de chat o un prompt de IA. No se pulsa si el texto solo va al portapapeles.",
+    "pt": "Pressiona Return assim que o texto é colado, para enviar na hora uma mensagem de chat ou um prompt de IA. Não é pressionado quando o texto só vai para a área de transferência.",
+    "ru": "Нажимает Return сразу после вставки текста, чтобы сообщение в чате или запрос к ИИ отправлялись сразу. Не нажимается, если текст только скопирован в буфер обмена.",
+    "fr": "Appuie sur Retour dès que le texte est collé, pour envoyer aussitôt un message de chat ou un prompt d’IA. Rien n’est pressé si le texte va seulement dans le presse-papiers.",
+    "de": "Drückt Return, sobald der Text eingefügt ist, damit eine Chatnachricht oder ein KI-Prompt sofort gesendet wird. Nicht, wenn der Text nur in die Zwischenablage kommt."
+  },
+  "Press Enter after inserting": {
+    "ja": "挿入後に Enter キーを押す",
+    "ko": "삽입 후 Enter 키 누르기",
+    "es": "Pulsar Intro tras insertar",
+    "pt": "Pressionar Enter após inserir",
+    "ru": "Нажимать Enter после вставки",
+    "fr": "Appuyer sur Entrée après l’insertion",
+    "de": "Nach dem Einfügen Eingabe drücken"
+  },
+  "Presses Enter once the text is pasted, so a chat message or AI prompt is sent right away. Not pressed when the text only goes to the clipboard.": {
+    "ja": "テキストを貼り付けたあと Enter キーを 1 回押すので、チャットのメッセージや AI へのプロンプトがそのまま送信されます。テキストがクリップボードにコピーされただけのときは押しません。",
+    "ko": "텍스트를 붙여 넣은 뒤 Enter 키를 한 번 눌러 채팅 메시지나 AI 프롬프트를 바로 보냅니다. 텍스트가 클립보드에만 복사된 경우에는 누르지 않습니다.",
+    "es": "Pulsa Intro en cuanto se pega el texto, para enviar al momento un mensaje de chat o un prompt de IA. No se pulsa si el texto solo va al portapapeles.",
+    "pt": "Pressiona Enter assim que o texto é colado, para enviar na hora uma mensagem de chat ou um prompt de IA. Não é pressionado quando o texto só vai para a área de transferência.",
+    "ru": "Нажимает Enter сразу после вставки текста, чтобы сообщение в чате или запрос к ИИ отправлялись сразу. Не нажимается, если текст только скопирован в буфер обмена.",
+    "fr": "Appuie sur Entrée dès que le texte est collé, pour envoyer aussitôt un message de chat ou un prompt d’IA. Rien n’est pressé si le texte va seulement dans le presse-papiers.",
+    "de": "Drückt die Eingabetaste, sobald der Text eingefügt ist, damit eine Chatnachricht oder ein KI-Prompt sofort gesendet wird. Nicht, wenn der Text nur in die Zwischenablage kommt."
+  },
   "Sounds": {
     "ja": "サウンド",
     "ko": "사운드",
@@ -979,6 +1015,24 @@
     "ru": "Тихий сигнал в начале и в конце записи",
     "fr": "Un léger carillon au début et à la fin de l’enregistrement",
     "de": "Leiser Ton bei Start und Ende der Aufnahme"
+  },
+  "Mute audio while recording": {
+    "ja": "録音中は消音",
+    "ko": "녹음 중 음소거",
+    "es": "Silenciar el audio al grabar",
+    "pt": "Silenciar o áudio ao gravar",
+    "ru": "Выключать звук во время записи",
+    "fr": "Couper le son pendant l’enregistrement",
+    "de": "Ton während der Aufnahme stummschalten"
+  },
+  "Mutes your speakers while you're recording, so music or a video doesn't get in the way, and turns them back on when you stop.": {
+    "ja": "録音中はスピーカーを消音して音楽や動画に邪魔されないようにし、録音が終わると元に戻します。",
+    "ko": "녹음하는 동안 스피커를 음소거해 음악이나 동영상이 방해되지 않게 하고, 녹음을 마치면 다시 켭니다.",
+    "es": "Silencia los altavoces mientras grabas para que la música o un vídeo no molesten, y los vuelve a activar al terminar.",
+    "pt": "Silencia os alto-falantes enquanto você grava, para que música ou um vídeo não atrapalhem, e os reativa quando você termina.",
+    "ru": "Выключает динамики, пока идёт запись, чтобы музыка или видео не мешали, и включает их снова, когда вы закончите.",
+    "fr": "Coupe les haut-parleurs pendant l’enregistrement, pour que la musique ou une vidéo ne gêne pas, puis les rétablit à la fin.",
+    "de": "Schaltet die Lautsprecher während der Aufnahme stumm, damit Musik oder ein Video nicht stören, und danach wieder ein."
   },
   "Maximum recording": {
     "ja": "最大録音時間",

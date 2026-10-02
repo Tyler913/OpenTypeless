@@ -205,7 +205,7 @@ O raciocínio (reasoning) do modelo de limpeza é desligado ou reduzido ao míni
 ## Privacidade
 
 - Áudio e texto só são enviados aos provedores que você configurar. Com a **Prévia ao vivo** ligada, o macOS reconhece a fala no Mac; o Windows usa o próprio reconhecimento de fala, que envia sua voz à Microsoft quando o reconhecimento de fala online está ativado (a configuração avisa).
-- As chaves de API ficam no Keychain do macOS ou no Gerenciador de Credenciais do Windows (uma entrada, `OpenTypeless/credentials`).
+- As chaves de API ficam, no macOS, em `~/Library/Application Support/OpenTypeless/credentials.json`, legível só pelo seu usuário (não no Keychain, que pediria a senha a cada atualização de um app autoassinado), ou no Gerenciador de Credenciais do Windows (uma entrada, `OpenTypeless/credentials`).
 - Os totais de uso da página Início (palavras, tempo de fala e custo por dia, sem texto) ficam em `usage.json`, na mesma pasta das configurações e do histórico. A tabela de preços do OpenRouter é baixada da lista pública de modelos (sem chave, nada sobre você) algumas vezes por dia.
 - O histórico (áudio + transcrições) fica em `~/Library/Application Support/OpenTypeless/Sessions/` no macOS e em `%LOCALAPPDATA%\OpenTypeless\` no Windows. As gravações ficam guardadas por um mês por padrão (na página Histórico: nada, um dia, uma semana, um mês, um ano ou para sempre); depois disso, o texto continua entre as 200 entradas mais recentes. Ditados com falha mantêm o áudio para que possam ser repetidos.
 - A verificação de atualizações envia uma solicitação por dia para `api.github.com` (sem conta, nada sobre você ou seus ditados); desative em **Configurações → Geral → Atualizações**.

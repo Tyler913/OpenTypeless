@@ -1,7 +1,7 @@
 import Foundation
 import TypelessCore
 
-/// Isolated OpenRouter benchmark; never initializes AppSettings or reads the Keychain.
+/// Isolated OpenRouter benchmark; never initializes AppSettings or reads the saved keys unless asked.
 /// See eval/README.md for budget, output privacy, repetition and dry-run options.
 enum PolishEval {
     struct Case: Codable {
@@ -61,7 +61,7 @@ enum PolishEval {
             let models = modelNames.split(separator: ",").map(String.init)
             guard !models.isEmpty, Set(models).count == models.count else { throw APIError.badResponse("duplicate/empty models") }
             let dryRun = args.contains("--dry-run")
-            // Opt-in: `--key-from-keychain` uses the key saved by the app instead of the environment.
+            // Opt-in: `--key-from-keychain` (name kept from when keys lived there) uses the key saved by the app.
             let key = args.contains("--key-from-keychain")
                 ? (Credentials.load()["openrouter"] ?? "")
                 : (ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"] ?? "")

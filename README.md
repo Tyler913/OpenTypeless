@@ -111,16 +111,24 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 
 ## Requirements
 
-- **macOS:** macOS 26 or later, Apple Silicon.
+- **macOS:** macOS 26 or later, on Apple silicon or Intel (Intel Macs that run macOS 26: MacBook Pro 16-inch 2019, MacBook Pro 13-inch 2020 with four Thunderbolt ports, iMac 2020 and Mac Pro 2019).
 - **Windows:** Windows 10 (version 2004 or later) or Windows 11, x64 or ARM64.
 - An API key for at least one provider ([OpenRouter](https://openrouter.ai/keys) is the easiest: one key covers both steps).
 
 ## Install on macOS
 
+### Homebrew
+
+```bash
+brew install --cask tyler913/tap/opentypeless
+```
+
+Homebrew picks the build for your Mac and takes care of the quarantine step below. The app updates itself; `brew upgrade` follows along.
+
 ### Download
 
-1. Download `OpenTypeless-<version>-macOS-arm64.zip` from [Releases](https://github.com/Tyler913/OpenTypeless/releases) and unzip it.
-2. Move **OpenTypeless.app** to your **Applications** folder.
+1. Download the disk image from [Releases](https://github.com/Tyler913/OpenTypeless/releases): `OpenTypeless-<version>-macOS-arm64.dmg` for Apple silicon (M1 and later), `-macOS-x64.dmg` for an Intel Mac. (Apple menu → About This Mac says which: "Chip: Apple M…" or "Processor: Intel".)
+2. Open it and drag **OpenTypeless** onto **Applications**.
 3. The app isn't notarized by Apple (that needs a paid developer account), so macOS blocks it on first launch, and may even say it "is damaged and can't be opened". Remove the download quarantine flag once in Terminal:
 
    ```bash
@@ -152,7 +160,7 @@ scripts/build-app.sh             # builds, signs and installs /Applications/Open
 
 `create-signing-cert.sh` creates a local code-signing identity. Without it the app is signed ad hoc, and macOS asks for Accessibility and Microphone permission again after every rebuild.
 
-To make a release zip instead of installing: `scripts/build-app.sh --package` writes `macos/dist/OpenTypeless-<version>-macOS-arm64.zip` (ad-hoc signed) and prints its SHA-256.
+To make the release files instead of installing: `scripts/build-app.sh --package` writes `macos/dist/OpenTypeless-<version>-macOS-arm64.dmg` and `.zip` (`-macOS-x64` on an Intel Mac), ad-hoc signed, and prints their SHA-256.
 
 `build-app.sh` keeps exactly one copy of the app on the machine. It assembles the bundle in a hidden staging folder, moves it into `/Applications`, unregisters stale copies from LaunchServices, and clears outdated privacy entries when the signature changes.
 
@@ -164,13 +172,18 @@ To make a release zip instead of installing: `scripts/build-app.sh --package` wr
 
 ## Install on Windows
 
-### Download
+### Installer (recommended)
 
-1. Download `OpenTypeless-<version>-windows-x64.zip` (or `-arm64`) from [Releases](https://github.com/Tyler913/OpenTypeless/releases) and unzip it anywhere (e.g. `%LOCALAPPDATA%\Programs`).
-2. Run **OpenTypeless.exe**. It's self-contained: nothing else to install.
-3. The app isn't code-signed, so SmartScreen may say "Windows protected your PC": click **More info → Run anyway**.
+1. Download `OpenTypeless-<version>-windows-x64-setup.exe` from [Releases](https://github.com/Tyler913/OpenTypeless/releases) (`-arm64-setup.exe` for Windows on ARM, such as Snapdragon laptops).
+2. Run it. The app isn't code-signed, so SmartScreen may say "Windows protected your PC": click **More info → Run anyway**.
 
-Later versions install from inside the app (**Settings → General → Updates**) into the same folder, with no SmartScreen prompt. Unzip it somewhere you can write to, such as `%LOCALAPPDATA%\Programs`; in `Program Files` the app can only link you to the download.
+It installs for your account only, with no administrator prompt, into `%LOCALAPPDATA%\Programs\OpenTypeless`, and adds a Start menu entry, a desktop shortcut (a checkbox, on by default) and an entry under **Settings → Apps** to uninstall it. Your settings, history and API keys stay when you uninstall.
+
+### Portable
+
+Prefer nothing installed? Download `OpenTypeless-<version>-windows-x64.zip` (or `-arm64`), unzip it anywhere you can write to (e.g. `%LOCALAPPDATA%\Programs`) and run **OpenTypeless.exe**. It's self-contained: no .NET or anything else to install, and nothing written outside its folder except your settings in `%LOCALAPPDATA%\OpenTypeless`. There's no Start menu entry or uninstaller: delete the folder to remove it.
+
+Either way, later versions install from inside the app (**Settings → General → Updates**) into the same folder, with no SmartScreen prompt. In `Program Files` the app can only link you to the download.
 
 OpenTypeless lives in the **notification area** (waveform icon next to the clock). Windows hides new icons in the overflow (^) at first; drag it onto the taskbar, or turn it on under **Settings → Personalization → Taskbar → Other system tray icons**.
 
@@ -181,10 +194,10 @@ Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download). Visual Studio is
 ```powershell
 # from windows\ in a clone of this repository
 powershell -ExecutionPolicy Bypass -File scripts\build.ps1            # tests, builds, installs to %LOCALAPPDATA%\Programs\OpenTypeless
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Package   # writes windows\dist\OpenTypeless-<version>-windows-x64.zip
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Package   # writes windows\dist\OpenTypeless-<version>-windows-x64.zip and -setup.exe
 ```
 
-`build.ps1` keeps exactly one installed copy: it stops the running app, replaces the install folder, refreshes the Start menu shortcut and launches the new build. Add `-Arch arm64` for Windows on ARM.
+`build.ps1` keeps exactly one installed copy: it stops the running app, replaces the install folder, refreshes the Start menu shortcut and launches the new build. Add `-Arch arm64` for Windows on ARM. The installer needs [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`); its script is [`windows/installer/OpenTypeless.iss`](windows/installer/OpenTypeless.iss).
 
 No Windows PC is needed to develop the Windows app: GitHub Actions builds it on every change (see [Continuous integration](#continuous-integration)).
 
@@ -323,19 +336,19 @@ GitHub Actions ([`.github/workflows/`](.github/workflows/)) builds only the app 
 
 | You change | What runs |
 |---|---|
-| `macos/**` | **macOS build** on a macOS runner: the tests, then the app zip. |
-| `windows/**` | **Windows build** on a Windows runner: the tests, then the x64 and ARM64 zips. |
+| `macos/**` | **macOS build** on an Apple silicon and an Intel runner: the tests, then each one's disk image and zip, checked and launched. |
+| `windows/**` | **Windows build** on an x64 and an ARM64 runner: the tests, then each one's portable zip and installer; the installer is run, the app started and uninstalled again. |
 | `testdata/**` | Both builds: the shared test cases (word counts, prices, time saved) that both test suites read, so the two apps agree. |
 | `i18n/**` | Both builds: the translations both apps embed. |
 | Only `docs/`, `eval/`, `README*.md` | Nothing to build. |
 
 Every run also checks the translations (**Translations**, `python3 i18n/check.py`).
 
-Download the zips from a run's **Artifacts** section on the Actions tab. **Actions → macOS build / Windows build → Run workflow** starts a build by hand.
+Download the builds from a run's **Artifacts** section on the Actions tab. **Actions → macOS build / Windows build → Run workflow** starts a build by hand.
 
-To release, bump the version in both apps (`macos/scripts/build-app.sh`, `windows/Directory.Build.props`) and push one tag, `1.0.2` (or `V1.0.2`). It builds both apps and creates one **draft** release, "OpenTypeless V1.0.2", with the macOS zip (signed with the release certificate) and the Windows x64 and ARM64 zips. The build fails if a zip's version doesn't match the tag.
+To release, bump the version in both apps (`macos/scripts/build-app.sh`, `windows/Directory.Build.props`) and push one tag, `1.0.2` (or `V1.0.2`). It builds both apps and creates one **draft** release, "OpenTypeless V1.0.2", with eight files: the macOS disk images and zips for Apple silicon and Intel (signed with the release certificate), and the Windows installers and portable zips for x64 and ARM64. The build fails if any of them is missing or its version doesn't match the tag.
 
-Review the draft and publish it by hand; it becomes the latest release. Installed copies find it within a day: the in-app updater looks for the newest published, non-prerelease release that has a zip for its platform (`OpenTypeless-<version>-macOS-arm64.zip`, `-windows-x64.zip`, `-windows-arm64.zip`). Mark a release as a pre-release to keep it from being offered.
+Review the draft and publish it by hand; it becomes the latest release. Installed copies find it within a day: the in-app updater looks for the newest published, non-prerelease release that has a zip for its platform (`OpenTypeless-<version>-macOS-arm64.zip`, `-macOS-x64.zip`, `-windows-x64.zip`, `-windows-arm64.zip`). Mark a release as a pre-release to keep it from being offered. Publishing also updates the [Homebrew tap and WinGet](packaging/README.md).
 
 **macOS release signing (one time).** macOS ties Accessibility and Microphone permission to the app's signature, so releases should always be signed with the same certificate; otherwise users are asked for both permissions again after every update. Run `macos/scripts/create-release-cert.sh`, keep the `.p12` it writes somewhere private, and add the two repository secrets it prints (`MACOS_SIGNING_CERTIFICATE`, `MACOS_SIGNING_CERTIFICATE_PASSWORD`). Release builds then sign with it; without the secrets they're signed ad hoc, with a warning on the run.
 

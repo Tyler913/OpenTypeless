@@ -1,5 +1,6 @@
-# Builds the Windows app in the cloud, since WinUI 3 only compiles on Windows: runs the tests and the
-# performance budgets, then zips for x64 and ARM64 (download them from the run's Artifacts).
+# Builds the Windows app in the cloud, since WinUI 3 only compiles on Windows, natively for x64 and for ARM64 (each
+# on its own runner): runs the tests (and, once, the performance budgets), then packages the portable zip and the
+# installer, and installs, starts and uninstalls the installer's app (download both from the run's Artifacts).
 #
 #   ci.yml calls it          when a push or pull request changes windows/
 #   release.yml calls it     for a version tag like `1.0.2` (together with the macOS build)
@@ -16,11 +17,15 @@ permissions:
 jobs:
   build:
     name: Build (${{ matrix.arch }})
-    runs-on: windows-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        arch: [x64, arm64]
+        include:
+          - arch: x64
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
     defaults:
       run:
         working-directory: windows
@@ -47,16 +52,57 @@ jobs:
           Write-Output "::error title=Build (${{ matrix.arch }}) failed::$escaped"
 
       # Time budgets for the work that runs while you dictate and on the UI thread, in a Release build like the app's
-      # (tests/TypelessCore.Tests/PerformanceTests.cs). The timings are on the run's summary page. Once is enough:
-      # both builds run on the same x64 machine.
+      # (tests/TypelessCore.Tests/PerformanceTests.cs). The timings are on the run's summary page. Once is enough,
+      # on the x64 runner.
       - name: Performance
         if: matrix.arch == 'x64'
         shell: pwsh
         run: scripts/perf.ps1
 
+      # What a user gets from the installer, run silently the way WinGet runs it: the app in its folder with a Start
+      # menu entry, a desktop shortcut and a Settings → Apps entry for this version; the installed app starts and stays
+      # up; and uninstalling removes all of it, the login entry the app adds on its first run included.
+      - name: Check the installer
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version
+          $setup = (Resolve-Path "dist\OpenTypeless-$version-windows-${{ matrix.arch }}-setup.exe").Path
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\OpenTypeless'
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenTypeless_is1'
+          $startMenu = Join-Path ([Environment]::GetFolderPath('Programs')) 'OpenTypeless.lnk'
+          $desktop = Join-Path ([Environment]::GetFolderPath('Desktop')) 'OpenTypeless.lnk'
+          function Fail($message) { Write-Output "::error title=Installer (${{ matrix.arch }})::$message"; exit 1 }
+
+          $install = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$env:RUNNER_TEMP\install.log" -Wait -PassThru
+          if ($install.ExitCode) { Get-Content "$env:RUNNER_TEMP\install.log" -Tail 40; Fail "setup exited with $($install.ExitCode)" }
+          if (-not (Test-Path "$dir\OpenTypeless.exe")) { Fail "no OpenTypeless.exe in $dir" }
+          if (-not (Test-Path "$dir\unins000.exe")) { Fail 'no uninstaller' }
+          if (-not (Test-Path $startMenu)) { Fail 'no Start menu shortcut' }
+          if (-not (Test-Path $desktop)) { Fail 'no desktop shortcut' }
+          $entry = Get-ItemProperty $key -ErrorAction SilentlyContinue
+          if (-not $entry) { Fail 'no Settings → Apps entry' }
+          if ($entry.DisplayVersion -ne $version) { Fail "the Apps entry says $($entry.DisplayVersion), not $version" }
+
+          $app = Start-Process "$dir\OpenTypeless.exe" -PassThru
+          Start-Sleep -Seconds 15
+          if ($app.HasExited) { Fail "the installed app quit by itself (exit code $($app.ExitCode))" }
+
+          Start-Process "$dir\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          # The uninstaller hands over to a copy of itself and returns at once: wait for the folder to go.
+          for ($i = 0; $i -lt 90 -and (Test-Path $dir); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path $dir) { Fail "$dir is still there after uninstalling: $((Get-ChildItem $dir -Recurse -Name) -join ', ')" }
+          if (Test-Path $startMenu) { Fail 'the Start menu shortcut is still there' }
+          if (Test-Path $desktop) { Fail 'the desktop shortcut is still there' }
+          if (Test-Path $key) { Fail 'the Apps entry is still there' }
+          if (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name OpenTypeless -ErrorAction SilentlyContinue) { Fail 'the login entry is still there' }
+          if (Get-Process OpenTypeless -ErrorAction SilentlyContinue) { Fail 'the app is still running' }
+          Write-Output "The installer installs, the app starts, and the uninstaller removes it"
+
       - uses: actions/upload-artifact@v7
         with:
           name: OpenTypeless-windows-${{ matrix.arch }}
-          path: windows/dist/*.zip
+          path: |
+            windows/dist/*.zip
+            windows/dist/*.exe
           if-no-files-found: error
-          compression-level: 0 # already a zip
+          compression-level: 0 # already compressed

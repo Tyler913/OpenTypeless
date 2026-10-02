@@ -2,7 +2,9 @@
 Builds OpenTypeless and installs it as the ONE copy on this PC: %LOCALAPPDATA%\Programs\OpenTypeless.
 
   scripts\build.ps1                 build, install, add a Start menu shortcut and launch it
-  scripts\build.ps1 -Package        build a distributable zip in dist\ (doesn't touch the installed copy)
+  scripts\build.ps1 -Package        build the distributables in dist\ (doesn't touch the installed copy):
+                                      OpenTypeless-<version>-windows-<arch>.zip         portable: unzip and run
+                                      OpenTypeless-<version>-windows-<arch>-setup.exe   installer (needs Inno Setup 6)
   scripts\build.ps1 -Arch arm64     build for Windows on ARM (default: this PC's architecture)
 
 The app is self-contained (it carries the .NET runtime and the Windows App SDK), so the zip runs on any
@@ -41,9 +43,23 @@ if ($Package) {
     $zip = "dist\$AppName-$Version-windows-$Arch.zip"
     if (Test-Path $zip) { Remove-Item -Force $zip }
     Compress-Archive -Path $Staging -DestinationPath $zip -CompressionLevel Optimal
-    $size = '{0:N1} MB' -f ((Get-Item $zip).Length / 1MB)
-    Write-Host "OK Packaged $zip ($size)"
-    Write-Host "  SHA-256: $((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant())"
+
+    # The installer (installer\OpenTypeless.iss): Inno Setup's compiler, from PATH or its default install folders.
+    $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+    if (-not $iscc) {
+        $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+                  "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+    }
+    if (-not $iscc) { throw 'Inno Setup 6 is needed for the installer: winget install JRSoftware.InnoSetup' }
+    & $iscc /Q "/DAppVersion=$Version" "/DArch=$Arch" "/DSource=$((Resolve-Path $Staging).Path)" installer\OpenTypeless.iss
+    if ($LASTEXITCODE) { throw 'installer build failed' }
+    $setup = "dist\$AppName-$Version-windows-$Arch-setup.exe"
+
+    foreach ($file in @($zip, $setup)) {
+        $size = '{0:N1} MB' -f ((Get-Item $file).Length / 1MB)
+        Write-Host "OK Packaged $file ($size)"
+        Write-Host "  SHA-256: $((Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant())"
+    }
     exit 0
 }
 

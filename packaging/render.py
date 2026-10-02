@@ -17,7 +17,13 @@ import urllib.request
 
 REPO = "Tyler913/OpenTypeless"
 HERE = os.path.dirname(os.path.abspath(__file__))
-PLATFORMS = {"MACOS_ARM64": "macOS-arm64", "WINDOWS_X64": "windows-x64", "WINDOWS_ARM64": "windows-arm64"}
+# The release files the cask and the manifests point at, by placeholder: @MACOS_ARM64_SHA256@ and so on.
+FILES = {
+    "MACOS_ARM64": "macOS-arm64.zip",
+    "MACOS_X64": "macOS-x64.zip",
+    "WINDOWS_X64_SETUP": "windows-x64-setup.exe",
+    "WINDOWS_ARM64_SETUP": "windows-arm64-setup.exe",
+}
 
 
 def request(url):
@@ -51,13 +57,13 @@ def main():
     assets = {asset["name"]: asset for asset in release["assets"]}
 
     values = {"VERSION": version, "TAG": tag, "RELEASE_DATE": (release.get("published_at") or "")[:10]}
-    for key, platform in PLATFORMS.items():
-        name = f"OpenTypeless-{version}-{platform}.zip"
+    for key, suffix in FILES.items():
+        name = f"OpenTypeless-{version}-{suffix}"
         if name not in assets:
             sys.exit(f"{tag} has no {name}")
         values[key + "_SHA256"] = sha256(assets[name])
     # WinGet's own manifests use upper-case checksums.
-    for key in ("WINDOWS_X64", "WINDOWS_ARM64"):
+    for key in ("WINDOWS_X64_SETUP", "WINDOWS_ARM64_SETUP"):
         values[key + "_SHA256"] = values[key + "_SHA256"].upper()
 
     for folder in ("homebrew", "winget"):

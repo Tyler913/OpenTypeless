@@ -100,8 +100,15 @@ public enum UpdateCheck {
     public static let releasesURL = URL(string: "https://api.github.com/repos/\(repository)/releases?per_page=30")!
     public static let releasesPageURL = URL(string: "https://github.com/\(repository)/releases")!
 
-    /// The file-name suffix of this platform's zip: `macOS-arm64`, `windows-x64`, `windows-arm64`.
-    public static let macOSPlatform = "macOS-arm64"
+    /// The file-name suffix of this platform's zip: `macOS-arm64`, `macOS-x64`, `windows-x64`, `windows-arm64`.
+    #if arch(arm64)
+    public static let macOSPlatform = macOSPlatform(arm64: true)
+    #else
+    public static let macOSPlatform = macOSPlatform(arm64: false)
+    #endif
+
+    /// The zip suffix for Apple silicon or Intel: each Mac updates to a build for its own processor.
+    public static func macOSPlatform(arm64: Bool) -> String { arm64 ? "macOS-arm64" : "macOS-x64" }
 
     public static func decode(_ data: Data) throws -> [GitHubRelease] {
         try JSONDecoder().decode([GitHubRelease].self, from: data)

@@ -56,6 +56,9 @@ struct UpdateCheckTests {
         XCTAssertTrue(UpdateCheck.assetVersion("OpenTypeless-1.0.2-windows-arm64.zip", platform: "windows-x64") == nil)
         XCTAssertTrue(UpdateCheck.assetVersion("OpenTypeless--macOS-arm64.zip", platform: "macOS-arm64") == nil)
         XCTAssertTrue(UpdateCheck.assetVersion("Other-1.0.2-macOS-arm64.zip", platform: "macOS-arm64") == nil)
+        XCTAssertTrue(UpdateCheck.assetVersion("OpenTypeless-1.0.2-macOS-x64.zip", platform: "macOS-arm64") == nil)
+        XCTAssertTrue(UpdateCheck.assetVersion("OpenTypeless-1.0.2-macOS-arm64.dmg", platform: "macOS-arm64") == nil)
+        XCTAssertEqual(UpdateCheck.macOSPlatform(arm64: false), "macOS-x64")
     }
 
     @Test func testPicksNewestStableReleaseForMac() throws {

@@ -1,5 +1,6 @@
-# Builds the macOS app on a macOS runner: runs the tests and the performance budgets, then packages the
-# ad-hoc-signed app zip (download it from the run's Artifacts).
+# Builds the macOS app natively for Apple silicon and for Intel, each on its own runner: runs the tests (and, once,
+# the performance budgets), then packages the app as a disk image and a zip, checks them and renders the UI from the
+# packaged app (download both from the run's Artifacts).
 #
 #   ci.yml calls it          when a push or pull request changes macos/
 #   release.yml calls it     for a tag like `1.0.2`
@@ -15,8 +16,16 @@ permissions:
 
 jobs:
   build:
-    name: Build (arm64)
-    runs-on: macos-26
+    name: Build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-26
+          - arch: x64
+            runner: macos-26-intel
     defaults:
       run:
         working-directory: macos
@@ -37,7 +46,9 @@ jobs:
 
       # Time budgets for the work that runs while you dictate and on the main thread, in a release build like the
       # app's (Tests/TypelessCoreTests/PerformanceTests.swift). The timings are on the run's summary page.
+      # Once is enough, on the Apple silicon runner (the Intel one is slower hardware, not slower code).
       - name: Performance
+        if: matrix.arch == 'arm64'
         run: scripts/perf.sh
 
       # Releases are signed with a stable self-signed certificate so that in-app updates keep macOS permissions
@@ -72,9 +83,42 @@ jobs:
       - name: Build and package
         run: scripts/build-app.sh --package
 
+      # What a user gets: the disk image holds a valid, signed app for this processor and a link to Applications, the
+      # zip the same app, and the packaged app starts and draws every page (the PNGs are in the snapshots artifact).
+      - name: Check the packages
+        run: |
+          platform="macOS-${{ matrix.arch }}"
+          expected="$([[ "${{ matrix.arch }}" == arm64 ]] && echo arm64 || echo x86_64)"
+          dmg="$(ls dist/*-$platform.dmg)" zip="$(ls dist/*-$platform.zip)"
+          mount="$RUNNER_TEMP/dmg"
+          mkdir -p "$mount"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg"
+          app="$mount/OpenTypeless.app"
+          [[ -L "$mount/Applications" ]] || { echo "::error::No Applications link in the disk image"; exit 1; }
+          codesign --verify --deep --strict "$app"
+          archs="$(lipo -archs "$app/Contents/MacOS/OpenTypeless")"
+          [[ "$archs" == "$expected" ]] || { echo "::error::The app is built for $archs, not $expected"; exit 1; }
+          ditto -x -k "$zip" "$RUNNER_TEMP/zip"
+          cmp "$app/Contents/MacOS/OpenTypeless" "$RUNNER_TEMP/zip/OpenTypeless.app/Contents/MacOS/OpenTypeless"
+          "$app/Contents/MacOS/OpenTypeless" --snapshot-ui "$RUNNER_TEMP/snapshots" --lang en --demo &
+          pid=$!
+          for _ in {1..120}; do kill -0 $pid 2>/dev/null || break; sleep 1; done
+          if kill -0 $pid 2>/dev/null; then kill $pid; echo "::error::The packaged app didn't finish drawing its UI"; exit 1; fi
+          wait $pid
+          ls "$RUNNER_TEMP/snapshots"
+          [[ -s "$RUNNER_TEMP/snapshots/popover-en.png" ]] || { echo "::error::The packaged app drew no UI"; exit 1; }
+          hdiutil detach "$mount"
+
       - uses: actions/upload-artifact@v7
         with:
-          name: OpenTypeless-macos-arm64
-          path: macos/dist/*.zip
+          name: OpenTypeless-macos-${{ matrix.arch }}
+          path: |
+            macos/dist/*.dmg
+            macos/dist/*.zip
           if-no-files-found: error
-          compression-level: 0 # already a zip
+          compression-level: 0 # already compressed
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: snapshots-macos-${{ matrix.arch }}
+          path: ${{ runner.temp }}/snapshots

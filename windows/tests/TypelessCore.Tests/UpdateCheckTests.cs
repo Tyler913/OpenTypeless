@@ -61,6 +61,8 @@ public class UpdateCheckTests
         Assert.Null(UpdateCheck.AssetVersion("OpenTypeless-1.0.2-macOS-arm64.zip", "windows-arm64"));
         Assert.Null(UpdateCheck.AssetVersion("OpenTypeless--windows-x64.zip", "windows-x64"));
         Assert.Null(UpdateCheck.AssetVersion("Other-1.0.2-windows-x64.zip", "windows-x64"));
+        // The installer sits next to the zip in a release; updates always come from the zip.
+        Assert.Null(UpdateCheck.AssetVersion("OpenTypeless-1.0.2-windows-x64-setup.exe", "windows-x64"));
         Assert.Equal("windows-arm64", UpdateCheck.WindowsPlatform(arm64: true));
     }
 

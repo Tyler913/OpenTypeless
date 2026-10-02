@@ -162,7 +162,7 @@ public sealed class HotkeyMonitor
 
     private nint MouseProc(int nCode, nint wParam, nint lParam)
     {
-        if (nCode >= 0 && (int)wParam is Win32.WM_LBUTTONDOWN or Win32.WM_LBUTTONUP or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN
+        if (nCode >= 0 && (int)wParam is Win32.WM_LBUTTONDOWN or (int)Win32.WM_LBUTTONUP or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN
             && _onClick is { } onClick)
         {
             var info = Marshal.PtrToStructure<Win32.MSLLHOOKSTRUCT>(lParam);

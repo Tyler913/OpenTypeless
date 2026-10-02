@@ -158,7 +158,7 @@ public sealed class EditWatcher
                 _lastDown = button;
                 keys.CursorLost();
                 return;
-            case Win32.WM_LBUTTONUP:
+            case (int)Win32.WM_LBUTTONUP:
                 var dragged = _lastDown is { } down && (Math.Abs(button.X - down.X) > 4 || Math.Abs(button.Y - down.Y) > 4);
                 if (!_doubleClick && !dragged) return; // a plain click: the cursor stays unknown
                 _ = FindSelection(session);

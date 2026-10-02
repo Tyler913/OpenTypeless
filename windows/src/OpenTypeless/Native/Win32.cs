@@ -71,8 +71,6 @@ public static partial class Win32
     public const int WM_RBUTTONDOWN = 0x0204;
     public const int WM_MBUTTONDOWN = 0x0207;
 
-    public const int WM_LBUTTONUP = 0x0202;
-
     [StructLayout(LayoutKind.Sequential)]
     public struct MSLLHOOKSTRUCT
     {

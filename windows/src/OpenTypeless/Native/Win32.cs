@@ -51,6 +51,31 @@ public static partial class Win32
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int GetKeyNameText(int lParam, [Out] char[] lpString, int cchSize);
 
+    [DllImport("user32.dll")]
+    public static extern short GetKeyState(int nVirtKey);
+
+    [DllImport("user32.dll")]
+    public static extern nint GetKeyboardLayout(uint idThread);
+
+    /// <summary>Flag for <see cref="ToUnicodeEx"/>: leave the keyboard state (dead keys) alone (Windows 10 1607+).</summary>
+    public const uint TOUNICODE_NO_STATE_CHANGE = 0x4;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int ToUnicodeEx(uint wVirtKey, uint wScanCode, byte[] lpKeyState, [Out] char[] pwszBuff, int cchBuff,
+                                         uint wFlags, nint dwhkl);
+
+    // MARK: Mouse hook
+
+    public const int WH_MOUSE_LL = 14;
+    public const int WM_LBUTTONDOWN = 0x0201;
+    public const int WM_RBUTTONDOWN = 0x0204;
+    public const int WM_MBUTTONDOWN = 0x0207;
+
+    public delegate nint LowLevelMouseProc(int nCode, nint wParam, nint lParam);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowsHookEx", SetLastError = true)]
+    public static extern nint SetWindowsHookExMouse(int idHook, LowLevelMouseProc lpfn, nint hMod, uint dwThreadId);
+
     // MARK: Message loop
 
     [StructLayout(LayoutKind.Sequential)]

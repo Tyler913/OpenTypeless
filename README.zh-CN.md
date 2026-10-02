@@ -166,6 +166,8 @@ scripts/build-app.sh             # 构建、签名并安装到 /Applications/Ope
 
 ### 首次运行
 
+第一次启动会打开一个简短的引导：欢迎页、填写 API Key（推荐 OpenRouter，附创建链接；会设置好 `microsoft/mai-transcribe-2` 和 `google/gemini-3.1-flash-lite`），再在一个输入框里试一次听写。每一步都可以跳过，引导只出现这一次。如果跳过了：
+
 1. 授予 **麦克风** 和 **辅助功能** 权限（辅助功能用来监听快捷键和粘贴文字）。
 2. 在 **设置 → 服务商** 里添加 API Key。
 3. 如果使用 Fn，建议把 **系统设置 → 键盘 → “按下 🌐 键时”** 设为 **不执行任何操作**，这样轻点 Fn 就不会弹出表情面板。
@@ -203,6 +205,8 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Package   # 生成 w
 
 ### 首次运行
 
+第一次启动会打开和 macOS 一样的简短引导（填写 API Key，再按住右 Ctrl 试一次听写）。每一步都可以跳过，引导只出现这一次。如果跳过了：
+
 1. 在 **设置 → 服务商** 里添加 API Key。
 2. 确认 **设置 → 隐私和安全性 → 麦克风 → 允许桌面应用访问你的麦克风** 已打开。
 3. 按住右 Ctrl 说话。Windows 不需要辅助功能权限；唯一的限制是它不允许粘贴到以管理员身份运行的应用，这时文字会放到剪贴板里。
@@ -212,7 +216,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Package   # 生成 w
 | 步骤 | 默认 | 说明 |
 |---|---|---|
 | 语音转文字 | `microsoft/mai-transcribe-2`（OpenRouter） | 任何 OpenRouter 转写模型，或其他服务商兼容 Whisper 的 `/audio/transcriptions`。 |
-| 文字整理 | `google/gemini-3.8-flash`（OpenRouter） | 我们测试中整理效果最好，一段长口述约 0.005 美元。更便宜的可以试试：`qwen/qwen3.7-flash`、`google/gemini-3.1-flash-lite`。 |
+| 文字整理 | `google/gemini-3.8-flash`（OpenRouter） | 我们测试中整理效果最好，一段长口述约 0.005 美元。更便宜的可以试试：`qwen/qwen3.7-flash`、`google/gemini-3.1-flash-lite`（最快，首次启动引导里填 OpenRouter Key 时用的就是它）。 |
 | 备用整理 | `deepseek/deepseek-v4.1-flash`（OpenRouter） | 只有主模型启动慢或失败时才会请求。选一个其他厂商的快速模型。 |
 
 整理模型的推理（reasoning）会自动关闭或设到最低，以降低延迟。

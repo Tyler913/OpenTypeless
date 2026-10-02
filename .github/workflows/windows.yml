@@ -51,6 +51,27 @@ jobs:
           $escaped = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
           Write-Output "::error title=Build (${{ matrix.arch }}) failed::$escaped"
 
+      # The app draws every settings page, the first-launch guide, the popover and the HUD to PNGs (in the
+      # snapshots-windows artifact), to look at the UI without a Windows machine. Once is enough, on the x64 runner.
+      - name: Draw the UI
+        if: matrix.arch == 'x64'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'snapshots'
+          $app = Start-Process '.build\publish\OpenTypeless\OpenTypeless.exe' -ArgumentList '--snapshot-ui', $out, '--lang', 'en', '--demo' -PassThru
+          if (-not $app.WaitForExit(180000)) { $app.Kill(); Write-Output '::warning title=Snapshots::The app did not finish drawing its UI' }
+          Get-ChildItem $out -Name -ErrorAction SilentlyContinue
+          if (Test-Path "$out\error.txt") { Get-Content "$out\error.txt"; Write-Output '::warning title=Snapshots::Drawing the UI failed (see error.txt)' }
+
+      - uses: actions/upload-artifact@v7
+        if: matrix.arch == 'x64'
+        continue-on-error: true
+        with:
+          name: snapshots-windows
+          path: ${{ runner.temp }}/snapshots
+          if-no-files-found: warn
+
       # Time budgets for the work that runs while you dictate and on the UI thread, in a Release build like the app's
       # (tests/TypelessCore.Tests/PerformanceTests.cs). The timings are on the run's summary page. Once is enough,
       # on the x64 runner.

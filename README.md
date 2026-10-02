@@ -166,6 +166,8 @@ To make the release files instead of installing: `scripts/build-app.sh --package
 
 ### First run
 
+The first launch opens a short guide: a welcome, an API key (OpenRouter recommended, with a link to create one; it sets up `microsoft/mai-transcribe-2` and `google/gemini-3.1-flash-lite`), and a box to try your first dictation in. Every step can be skipped, and the guide never shows again. Without it:
+
 1. Grant **Microphone** and **Accessibility** access (Accessibility is used to listen for the hotkey and paste text).
 2. Add an API key under **Settings → Providers**.
 3. Recommended if you use Fn: set **System Settings → Keyboard → "Press 🌐 key to"** to **Do Nothing**, so tapping Fn doesn't open the emoji picker.
@@ -203,6 +205,8 @@ No Windows PC is needed to develop the Windows app: GitHub Actions builds it on 
 
 ### First run
 
+The first launch opens the same short guide as on macOS (API key, then a first dictation with Right Ctrl). Every step can be skipped, and it never shows again. Without it:
+
 1. Add an API key under **Settings → Providers**.
 2. Make sure **Settings → Privacy & security → Microphone → Let desktop apps access your microphone** is on.
 3. Hold Right Ctrl and talk. Windows needs no accessibility permission; the one limit is that it doesn't allow pasting into apps running as administrator, so there the text goes to the clipboard.
@@ -212,7 +216,7 @@ No Windows PC is needed to develop the Windows app: GitHub Actions builds it on 
 | Step | Default | Notes |
 |---|---|---|
 | Speech-to-text | `microsoft/mai-transcribe-2` (OpenRouter) | Any OpenRouter transcription model, or Whisper-compatible `/audio/transcriptions` elsewhere. |
-| Clean-up | `google/gemini-3.8-flash` (OpenRouter) | Best clean-up in our tests, at about $0.005 per long dictation. Cheaper options to try: `qwen/qwen3.7-flash`, `google/gemini-3.1-flash-lite`. |
+| Clean-up | `google/gemini-3.8-flash` (OpenRouter) | Best clean-up in our tests, at about $0.005 per long dictation. Cheaper options to try: `qwen/qwen3.7-flash`, `google/gemini-3.1-flash-lite` (the fastest, and what the first-launch guide sets up with an OpenRouter key). |
 | Backup clean-up | `deepseek/deepseek-v4.1-flash` (OpenRouter) | Only asked when the main model is slow to start or fails. Pick a fast model from another vendor. |
 
 Reasoning is automatically turned off or set to its minimum for the clean-up model, to keep latency low.

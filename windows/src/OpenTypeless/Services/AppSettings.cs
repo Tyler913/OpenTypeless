@@ -245,6 +245,13 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("typingWordsPerMinute", Math.Clamp(value, 10, 300));
     }
 
+    /// <summary>The first-launch guide has been shown (see Onboarding); it never comes back after that.</summary>
+    public bool DidShowOnboarding
+    {
+        get => GetBool("didShowOnboarding", false);
+        set => SetValue("didShowOnboarding", value);
+    }
+
     public bool DidEnableLaunchAtLoginByDefault
     {
         get => GetBool("didEnableLaunchAtLoginByDefault", false);

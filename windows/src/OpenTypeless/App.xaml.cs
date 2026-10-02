@@ -21,6 +21,7 @@ public partial class App : Application
     private TrayIcon _tray = null!;
     private PopoverWindow _popover = null!;
     private SettingsWindow? _settingsWindow;
+    private OnboardingWindow? _onboarding;
     private DispatcherQueue? _dispatcher;
 
     public App()
@@ -68,7 +69,10 @@ public partial class App : Application
         var dispatcher = DispatcherQueue.GetForCurrentThread();
         _dispatcher = dispatcher;
         // Launching the app again (Start menu, Explorer) shows Home, like reopening it on macOS.
-        Program.ActivationRequested += () => dispatcher.TryEnqueue(() => ShowSettings(SettingsPage.Home));
+        Program.ActivationRequested += () => dispatcher.TryEnqueue(() =>
+        {
+            if (_onboarding != null) _onboarding.Show(); else ShowSettings(SettingsPage.Home);
+        });
 
         _controller.RefreshModelInfo();
         LaunchAtLogin.RefreshPathIfRegistered();
@@ -81,8 +85,19 @@ public partial class App : Application
         Updater.Shared.Quit = Quit;
         Updater.Shared.Start();
 
-        // First run: ask for what we need up front, so the first dictation just works.
-        if (!Permissions.MicrophoneGranted) ShowSettings(SettingsPage.General);
+        // The very first launch shows the guide; it marks itself as seen as soon as it appears.
+        if (Onboarding.ShouldShow(_settings))
+        {
+            _settings.DidShowOnboarding = true;
+            _onboarding = new OnboardingWindow(_controller, () =>
+            {
+                _onboarding = null;
+                ShowSetupOrHome();
+            });
+            _onboarding.Show();
+        }
+        // Otherwise ask for what we need up front, so the first dictation just works.
+        else if (!Permissions.MicrophoneGranted) ShowSettings(SettingsPage.General);
         else if (!_settings.IsConfigured(_settings.SttProvider)) ShowSettings(SettingsPage.Providers);
         // A manual launch opens Home (new tray icons start hidden in the overflow area, so it also shows the app is
         // running); starting at sign-in stays in the tray unless the user asked for Home then too.
@@ -102,6 +117,14 @@ public partial class App : Application
         }
     }
 
+    /// <summary>After the guide: the page for whatever is still missing, or Home.</summary>
+    private void ShowSetupOrHome()
+    {
+        if (!Permissions.MicrophoneGranted) ShowSettings(SettingsPage.General);
+        else if (!_settings.IsConfigured(_settings.SttProvider)) ShowSettings(SettingsPage.Providers);
+        else ShowSettings(SettingsPage.Home);
+    }
+
     private void ShowSettings(SettingsPage? page)
     {
         _settingsWindow ??= new SettingsWindow(_controller);
@@ -113,6 +136,7 @@ public partial class App : Application
         _popover.Dismiss();
         if (_controller.State != SessionController.SessionState.Idle) _controller.Cancel(silently: true);
         _tray.Dispose();
+        _onboarding?.CloseForExit();
         _settingsWindow?.CloseForExit();
         Exit();
     }

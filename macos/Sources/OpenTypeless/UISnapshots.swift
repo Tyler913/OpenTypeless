@@ -39,6 +39,17 @@ enum UISnapshots {
                     save(NSHostingView(rootView: view), size: NSSize(width: 660, height: 620), to: url)
                 }
             }
+            for step in OnboardingStep.allCases {
+                let url = dir.appendingPathComponent("onboarding-\(language.rawValue)-\(step.rawValue + 1).png")
+                let view = OnboardingView(controller: controller, step: step, finish: {})
+                if live {
+                    let window = OnboardingWindowController.makeWindow(view)
+                    window.center()
+                    showAndCapture(window, to: url)
+                } else {
+                    save(NSHostingView(rootView: view.background(Color(nsColor: .windowBackgroundColor))), size: OnboardingView.size, to: url)
+                }
+            }
             let popover = MenuPopoverView(controller: controller, openSettings: { _ in }, close: {})
                 .background(Color(nsColor: .windowBackgroundColor))
             let host = NSHostingView(rootView: popover)

@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkey = HotkeyMonitor.shared
     private let updater = Updater.shared
     private lazy var settingsWindow = SettingsWindowController(controller: controller)
+    private lazy var onboarding = OnboardingWindowController(controller: controller) { [weak self] in self?.showSetupOrHome() }
     private var statusItem: NSStatusItem!
     private var popover: StatusPopover!
     private var cancellables: Set<AnyCancellable> = []
@@ -65,7 +66,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updater.canInstallNow = { [weak self] in self?.controller.state == .idle }
         updater.start()
 
-        // First run: ask for what we need up front, so the first dictation just works.
+        // The very first launch shows the guide, which asks for the microphone and Accessibility on its "Try it" step.
+        if Onboarding.shouldShow(settings) {
+            onboarding.show()
+            return
+        }
+        // Otherwise ask for what we need up front, so the first dictation just works.
         if !Permissions.microphoneGranted { Permissions.requestMicrophone { _ in } }
         if !Permissions.accessibilityGranted {
             Permissions.promptAccessibility()
@@ -78,14 +84,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// After the guide: the page for whatever is still missing, or Home.
+    private func showSetupOrHome() {
+        if !Permissions.accessibilityGranted {
+            settingsWindow.show(page: .general)
+        } else if !settings.isConfigured(settings.sttProvider) {
+            settingsWindow.show(page: .providers)
+        } else {
+            settingsWindow.show(page: .home)
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // Quitting mid-recording mustn't leave the speakers muted.
         OutputMute.restoreLeftover()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        // Opening the app again from Finder/Spotlight shows Home.
-        settingsWindow.show(page: .home)
+        // Opening the app again from Finder/Spotlight shows Home (or the guide, while it's open).
+        if onboarding.isShown { onboarding.bringToFront() } else { settingsWindow.show(page: .home) }
         return false
     }
 

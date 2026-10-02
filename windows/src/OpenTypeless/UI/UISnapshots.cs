@@ -35,24 +35,29 @@ public static class UISnapshots
             foreach (var language in languages)
             {
                 settings.AppLanguage = language;
-                var window = new SettingsWindow(controller);
-                foreach (var page in SettingsPageInfo.All)
-                {
-                    window.Show(page);
-                    await Task.Delay(900);
-                    await Capture((FrameworkElement)window.Content, Path.Combine(directory, $"settings-{language.RawValue()}-{page.RawValue()}.png"));
-                }
-                window.CloseForExit();
-
                 foreach (var step in Enum.GetValues<OnboardingStep>())
                 {
+                    var name = $"onboarding-{language.RawValue()}-{(int)step + 1}";
+                    AppLog.Debug("snapshot", name);
                     var onboarding = new OnboardingWindow(controller, () => { }, step);
                     onboarding.Show();
                     await Task.Delay(900);
-                    await Capture((FrameworkElement)onboarding.Content, Path.Combine(directory, $"onboarding-{language.RawValue()}-{(int)step + 1}.png"));
+                    await Capture((FrameworkElement)onboarding.Content, Path.Combine(directory, name + ".png"));
                     onboarding.CloseForExit();
                 }
 
+                var window = new SettingsWindow(controller);
+                foreach (var page in SettingsPageInfo.All)
+                {
+                    var name = $"settings-{language.RawValue()}-{page.RawValue()}";
+                    AppLog.Debug("snapshot", name);
+                    window.Show(page);
+                    await Task.Delay(900);
+                    await Capture((FrameworkElement)window.Content, Path.Combine(directory, name + ".png"));
+                }
+                window.CloseForExit();
+
+                AppLog.Debug("snapshot", $"popover-{language.RawValue()}");
                 var popover = new PopoverWindow(controller, _ => { }, () => { });
                 var (work, _, _) = WindowHelpers.MonitorAtCursor();
                 popover.Open(new Win32.RECT { Left = work.Right - 200, Right = work.Right - 180, Top = work.Bottom + 4, Bottom = work.Bottom + 30 });
@@ -74,6 +79,7 @@ public static class UISnapshots
             ];
             foreach (var (name, phase) in phases)
             {
+                AppLog.Debug("snapshot", name);
                 hud.Show(phase);
                 await Task.Delay(600);
                 await Capture((FrameworkElement)hud.Window.Content, Path.Combine(directory, name + ".png"));

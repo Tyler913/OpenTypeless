@@ -17,7 +17,6 @@ public sealed class HomePage : PageBase
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly UsageStore _usage = UsageStore.Shared;
     private readonly PriceStore _prices = PriceStore.Shared;
-    private readonly ActivityHeatmap _heatmap = new();
 
     public HomePage(SettingsWindow window) : base(SettingsPage.Home)
     {
@@ -86,21 +85,14 @@ public sealed class HomePage : PageBase
         spend.Children.Add(SpendLine(L("本月", "This month"), month));
         spend.Children.Add(new CardDivider { Inset = 14 });
         spend.Children.Add(SpendLine(L("累计", "All time"), all));
-        _heatmap.Margin = new Thickness(14, 12, 14, 12);
-        _heatmap.Ledger = ledger;
-        // Out of the card the last render put it in (a Border, from Card.Make): XAML throws when an element that
-        // still has a parent is added again, and thrown from a dispatcher callback (a new price list, a finished
-        // dictation) that ends the app.
-        switch (_heatmap.Parent)
-        {
-            case Border card: card.Child = null; break;
-            case Panel panel: panel.Children.Remove(_heatmap); break;
-        }
+        // A new heatmap on every render: XAML refuses (E_INVALIDARG) to put an element into a second card, and one
+        // thrown from a dispatcher callback (a new price list, a finished dictation) ends the app with 0xC000027B.
+        var heatmap = new ActivityHeatmap { Margin = new Thickness(14, 12, 14, 12), Ledger = ledger };
         var row = new Grid { ColumnSpacing = 14 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
         row.Children.Add(TitledCard(L("花费", "Spend"), spend));
-        var activity = TitledCard(L("活跃度", "Activity"), _heatmap);
+        var activity = TitledCard(L("活跃度", "Activity"), heatmap);
         Grid.SetColumn(activity, 1);
         row.Children.Add(activity);
         var footer = Ui.Text(SpendFooter(), 11.5, foreground: Ui.Secondary, wrap: true);

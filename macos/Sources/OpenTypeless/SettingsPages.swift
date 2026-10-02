@@ -716,7 +716,10 @@ struct ModelsPage: View {
                                    settings: settings) { settings.selectSTTProvider($0) }
                 }
                 CardDivider(inset: 50)
-                CardRow(icon: "waveform", iconColor: .blue, title: L("模型", "Model")) {
+                CardRow(icon: "waveform", iconColor: .blue, title: L("模型", "Model"),
+                        subtitle: VocabularyHints.style(provider: settings.sttProvider, model: settings.sttModel) != nil
+                            ? L("你的词汇表会作为拼写提示一起发给这个模型", "Your vocabulary is sent to this model as spelling hints")
+                            : L("这个模型不接收词汇提示，词汇表只用于文字整理", "This model takes no vocabulary hints; your vocabulary is used in clean-up only")) {
                     ModelField(text: $settings.sttModel, models: sttModels)
                 }
                 CardDivider(inset: 50)

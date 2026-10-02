@@ -30,7 +30,8 @@ enum CLI {
         let start = Date()
         let pipeline = TranscriptionPipeline(
             client: client,
-            options: .init(model: settings.sttModel, language: settings.sttLanguage.isEmpty ? nil : settings.sttLanguage),
+            options: .init(model: settings.sttModel, language: settings.sttLanguage.isEmpty ? nil : settings.sttLanguage,
+                           vocabulary: settings.vocabularyList),
             observer: { index, state in
                 let t = String(format: "%5.1fs", Date().timeIntervalSince(start))
                 switch state {

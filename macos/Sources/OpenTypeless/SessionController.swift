@@ -316,14 +316,15 @@ final class SessionController: ObservableObject {
         let language = settings.sttLanguage.isEmpty ? nil : settings.sttLanguage
         let backup = settings.sttBackupEndpoint.map {
             (client: APIClient(endpoint: $0),
-             options: APIClient.TranscriptionOptions(model: settings.sttBackupModel.trimmingCharacters(in: .whitespaces), language: language))
+             options: APIClient.TranscriptionOptions(model: settings.sttBackupModel.trimmingCharacters(in: .whitespaces), language: language,
+                                                     vocabulary: settings.vocabularyList))
         }
         let key = ModelPrice.key(settings.sttProvider, settings.sttModel)
         let latency = latencies[key] ?? TranscriptionLatency()
         latencies[key] = latency
         return TranscriptionPipeline(
             client: APIClient(endpoint: endpoint),
-            options: .init(model: settings.sttModel, language: language),
+            options: .init(model: settings.sttModel, language: language, vocabulary: settings.vocabularyList),
             preset: preset,
             backup: backup,
             latency: latency,

@@ -6,10 +6,11 @@ import TypelessCore
 /// After a dictation is pasted, keeps an eye on that text field to see whether the user fixes any word
 /// in it, so the fix can be learned (see CorrectionLearner).
 ///
-/// The field is read through Accessibility, locally; nothing leaves the Mac. Many apps don't let their fields be read
-/// that way (Electron apps such as Claude, Discord, Slack or Codex, Firefox, WeChat): they are first asked to turn on
-/// their accessibility support, and where the field still can't be read, the keys pressed after the paste are followed
-/// instead (see TypedEdit). A watch ends when the user leaves the field, sends or clears it, starts another dictation,
+/// The field is read through Accessibility, locally; nothing leaves the Mac. Electron apps (Claude, Discord, Slack,
+/// Codex…) publish no focused element until their accessibility tree is switched on, so an app that shows none is asked
+/// once with AXManualAccessibility, then asked again a few times while it builds the tree. Where the field still can't
+/// be read (WeChat, ChatGPT's composer, Firefox here), the keys pressed after the paste are followed instead (see
+/// TypedEdit). A watch ends when the user leaves the field, sends or clears it, starts another dictation,
 /// or after two minutes. Only the state at that point is compared, never a half-finished edit.
 @MainActor
 final class EditWatcher {
@@ -26,6 +27,7 @@ final class EditWatcher {
 
     private struct Watch {
         let app: String?
+        let pid: pid_t
         let inserted: String
         let started: Date
         var field: FieldSession?
@@ -41,28 +43,42 @@ final class EditWatcher {
     private static let maxDuration: TimeInterval = 120
     /// Big documents and terminal scrollback aren't worth re-reading twice a second.
     private static let maxFieldLength = 50_000
-    /// Apps already asked to turn on their accessibility support, by process ID.
-    private var enabledApps: Set<pid_t> = []
+    /// How often, and how far apart, an app that shows no focused field is asked again.
+    private static let focusAttempts = 5
+    private static let focusRetryDelay: TimeInterval = 0.3
+    private var generation = 0
 
     /// Starts watching the focused field, which should now contain `inserted`.
     func watch(inserted: String) {
         finish(quiet: true, reason: "next paste")
         guard let front = NSWorkspace.shared.frontmostApplication else { return }
-        let app = front.bundleIdentifier
-        let asked = enableAccessibility(front)
-        // Give the target app a moment to apply the paste before taking the baseline (and, the first time, to build
-        // the accessibility tree it was just asked for).
-        DispatchQueue.main.asyncAfter(deadline: .now() + (asked ? 0.9 : 0.4)) { [weak self] in
-            guard let self, self.watch == nil, NSWorkspace.shared.frontmostApplication == front else { return }
-            self.begin(app: app, inserted: inserted, askedForAccessibility: asked)
+        let generation = generation
+        // Give the target app a moment to apply the paste before taking the baseline.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            self?.locate(front, inserted: inserted, attempt: 1, generation: generation)
         }
     }
 
-    private func begin(app: String?, inserted: String, askedForAccessibility: Bool) {
-        var fields: [String: Any] = ["insertedLength": inserted.count]
-        if askedForAccessibility { fields["askedForAccessibility"] = true }
+    /// Finds the focused field, switching on an Electron app's accessibility tree when it shows none and asking again
+    /// while the tree is built.
+    private func locate(_ front: NSRunningApplication, inserted: String, attempt: Int, generation: Int) {
+        guard generation == self.generation, watch == nil, NSWorkspace.shared.frontmostApplication == front else { return }
+        let pid = front.processIdentifier
+        let element = Self.focusedElement(pid: pid)
+        if element == nil || element.flatMap(Self.value(of:)) == nil, attempt < Self.focusAttempts {
+            if attempt == 1, element == nil { Self.switchOnAccessibility(pid) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.focusRetryDelay) { [weak self] in
+                self?.locate(front, inserted: inserted, attempt: attempt + 1, generation: generation)
+            }
+            return
+        }
+        begin(app: front.bundleIdentifier, pid: pid, element: element, inserted: inserted, attempts: attempt)
+    }
+
+    private func begin(app: String?, pid: pid_t, element: AXUIElement?, inserted: String, attempts: Int) {
+        var fields: [String: Any] = ["insertedLength": inserted.count, "attempts": attempts]
         let unreadable: String
-        if let element = Self.focusedElement() {
+        if let element {
             if Self.isSecure(element) {
                 LearningLog.write("start", app: app, fields.merging(["result": "password field"]) { $1 })
                 return
@@ -74,7 +90,7 @@ final class EditWatcher {
                 }
                 if CorrectionLearner.editedRegion(inserted: inserted, before: value, after: value) != nil {
                     LearningLog.write("start", app: app, fields.merging(["result": "watching", "fieldLength": value.count]) { $1 })
-                    start(Watch(app: app, inserted: inserted, started: Date(),
+                    start(Watch(app: app, pid: pid, inserted: inserted, started: Date(),
                                 field: FieldSession(element: element, baseline: value, latest: value)))
                     return
                 }
@@ -91,12 +107,17 @@ final class EditWatcher {
         }
         // The field can't be compared: follow the keys instead.
         fields["field"] = unreadable
+        // Secure input is on while a password field has keyboard focus, also in apps whose fields can't be seen.
+        guard !IsSecureEventInputEnabled() else {
+            LearningLog.write("start", app: app, fields.merging(["result": "password field"]) { $1 })
+            return
+        }
         guard Self.typesPlainText else {
             LearningLog.write("start", app: app, fields.merging(["result": "input method active"]) { $1 })
             return
         }
         LearningLog.write("start", app: app, fields.merging(["result": "following keys"]) { $1 })
-        start(Watch(app: app, inserted: inserted, started: Date(), keys: TypedEdit(pasted: inserted)))
+        start(Watch(app: app, pid: pid, inserted: inserted, started: Date(), keys: TypedEdit(pasted: inserted)))
     }
 
     private func start(_ watch: Watch) {
@@ -120,6 +141,7 @@ final class EditWatcher {
 
     /// Ends the current watch now and reports what was learned. `reason` is for the learning log.
     func finish(quiet: Bool, reason: String) {
+        generation += 1
         timer?.invalidate()
         timer = nil
         monitors.forEach(NSEvent.removeMonitor)
@@ -154,7 +176,7 @@ final class EditWatcher {
         guard var watch else { return }
         if Date().timeIntervalSince(watch.started) > Self.maxDuration { return finish(quiet: false, reason: "2 minutes") }
         guard let field = watch.field else { return }
-        guard let focused = Self.focusedElement(), CFEqual(focused, field.element) else {
+        guard let focused = Self.focusedElement(pid: watch.pid), CFEqual(focused, field.element) else {
             return finish(quiet: false, reason: "focus left the field")
         }
         if let value = Self.value(of: field.element), value != field.latest {
@@ -219,43 +241,53 @@ final class EditWatcher {
 
     // MARK: Accessibility
 
-    /// Browsers that build their accessibility tree for assistive apps that set AXEnhancedUserInterface.
-    private static let browsers: Set<String> = [
-        "org.mozilla.firefox", "org.mozilla.firefoxdeveloperedition", "org.mozilla.nightly", "com.google.Chrome",
-        "com.google.Chrome.canary", "com.brave.Browser", "com.microsoft.edgemac", "company.thebrowser.Browser", "com.vivaldi.Vivaldi",
-    ]
-
-    /// Asks an app whose fields can't be read to turn on its accessibility support, once per process. Electron apps
-    /// (Claude, Discord, Slack, VS Code…) take AXManualAccessibility, which changes nothing else; browsers take
-    /// AXEnhancedUserInterface. Returns whether it asked just now.
-    private func enableAccessibility(_ app: NSRunningApplication) -> Bool {
-        let pid = app.processIdentifier
-        guard AXIsProcessTrusted(), !enabledApps.contains(pid), Self.focusedElement().flatMap(Self.value(of:)) == nil else { return false }
-        enabledApps.insert(pid)
-        let element = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(element, 0.2)
-        AXUIElementSetAttributeValue(element, "AXManualAccessibility" as CFString, kCFBooleanTrue)
-        if Self.browsers.contains(app.bundleIdentifier ?? "") {
-            AXUIElementSetAttributeValue(element, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
-        }
-        return true
+    /// Electron apps (Claude, Discord, Slack, VS Code…) build their accessibility tree when this is set, and it changes
+    /// nothing else. AXEnhancedUserInterface is left alone on purpose: it puts the app in screen-reader mode, which in
+    /// Chromium apps such as Claude takes keyboard focus away from the field being typed in (seen by OpenWhispr).
+    private static func switchOnAccessibility(_ pid: pid_t) {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.2)
+        AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
     }
 
-    private static func focusedElement() -> AXUIElement? {
+    /// The focused element of this app, asked of the app itself (some answer that but not the system-wide query), or
+    /// else system-wide.
+    private static func focusedElement(pid: pid_t) -> AXUIElement? {
         guard AXIsProcessTrusted() else { return nil }
-        let system = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(system, 0.2)
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &value) == .success,
-              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
-        let element = value as! AXUIElement
-        AXUIElementSetMessagingTimeout(element, 0.2)
-        return element
+        for source in [AXUIElementCreateApplication(pid), AXUIElementCreateSystemWide()] {
+            AXUIElementSetMessagingTimeout(source, 0.2)
+            var value: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(source, kAXFocusedUIElementAttribute as CFString, &value) == .success,
+                  let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { continue }
+            let element = value as! AXUIElement
+            AXUIElementSetMessagingTimeout(element, 0.2)
+            // A dormant Chromium tree reports the window itself as focused.
+            if string(element, kAXRoleAttribute) == kAXWindowRole { continue }
+            return element
+        }
+        return nil
     }
 
+    /// The field's text: its value, or for editors that have none (rich text, web content), the text of its whole range.
     private static func value(of element: AXUIElement) -> String? {
         var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success else { return nil }
+        if AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success, let text = value as? String {
+            return text
+        }
+        var count: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute as CFString, &count) == .success,
+              let length = count as? Int, length <= maxFieldLength + 1 else { return nil }
+        var range = CFRange(location: 0, length: length)
+        guard let rangeValue = AXValueCreate(.cfRange, &range) else { return nil }
+        var text: CFTypeRef?
+        guard AXUIElementCopyParameterizedAttributeValue(element, kAXStringForRangeParameterizedAttribute as CFString,
+                                                         rangeValue, &text) == .success else { return nil }
+        return text as? String
+    }
+
+    private static func string(_ element: AXUIElement, _ attribute: String) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
         return value as? String
     }
 

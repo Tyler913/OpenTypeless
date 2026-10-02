@@ -5,7 +5,7 @@ import ServiceManagement
 import SwiftUI
 import TypelessCore
 
-/// User preferences. API keys live in the keychain; everything else in UserDefaults.
+/// User preferences. API keys live in a private file (see Credentials); everything else in UserDefaults.
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
@@ -58,7 +58,7 @@ final class AppSettings: ObservableObject {
     @Published private(set) var modelPrices: [String: ModelPrice]
 
     private init() {
-        // In CLI mode with OPENROUTER_API_KEY set, don't touch the keychain (avoids an access prompt).
+        // In CLI mode with OPENROUTER_API_KEY set, the saved keys aren't needed.
         let cli = !(ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"] ?? "").isEmpty
         apiKeys = cli ? [:] : Credentials.load()
         baseURLs = (UserDefaults.standard.dictionary(forKey: "baseURLs") as? [String: String]) ?? [:]
@@ -277,37 +277,63 @@ enum LaunchAtLogin {
     }
 }
 
-/// All provider keys in one keychain item, so the app touches the keychain once at launch.
+/// All provider keys in one JSON file only this user can read (Application Support/OpenTypeless/credentials.json).
+/// Not the keychain: the app is self-signed, so every update has a new signature and macOS would ask for the
+/// login password again before letting it read its own keys.
 enum Credentials {
-    private static let service = "OpenTypeless"
-    private static let account = "credentials"
-    private static let legacyAccount = "openrouter"
+    /// The real Application Support folder, not `AppPaths.support`, which OPENTYPELESS_SUPPORT_DIR can move.
+    static var file: URL {
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("OpenTypeless", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+                                                 attributes: [.posixPermissions: 0o700])
+        return directory.appendingPathComponent("credentials.json")
+    }
+
+    private static let movedFromKeychainKey = "credentialsMovedFromKeychain"
 
     static func load() -> [String: String] {
-        if let data = read(account), let keys = try? JSONDecoder().decode([String: String].self, from: data) {
-            return keys
+        if let data = try? Data(contentsOf: file) {
+            return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
         }
-        // v0.1 stored a single OpenRouter key.
-        if let data = read(legacyAccount), let key = String(data: data, encoding: .utf8), !key.isEmpty {
-            let keys = ["openrouter": key]
-            save(keys)
-            delete(legacyAccount)
-            return keys
-        }
-        return [:]
+        // Earlier versions kept the keys in the keychain: read them there once (the last prompt) and move them.
+        guard !UserDefaults.standard.bool(forKey: movedFromKeychainKey) else { return [:] }
+        let keys = LegacyKeychain.load()
+        save(keys)
+        UserDefaults.standard.set(true, forKey: movedFromKeychainKey)
+        return keys
     }
 
     static func save(_ keys: [String: String]) {
-        delete(account)
-        guard !keys.isEmpty, let data = try? JSONEncoder().encode(keys) else { return }
-        let add: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
-        ]
-        SecItemAdd(add as CFDictionary, nil)
+        guard !keys.isEmpty, let data = try? JSONEncoder().encode(keys) else {
+            try? FileManager.default.removeItem(at: file)
+            return
+        }
+        let url = file
+        // Created owner-only (0600) from the start, then swapped in whole.
+        let temporary = url.deletingLastPathComponent().appendingPathComponent(".credentials-\(UUID().uuidString)")
+        guard FileManager.default.createFile(atPath: temporary.path, contents: data,
+                                             attributes: [.posixPermissions: 0o600]) else { return }
+        if (try? FileManager.default.replaceItemAt(url, withItemAt: temporary)) == nil {
+            try? FileManager.default.removeItem(at: temporary)
+        }
+    }
+}
+
+/// Where earlier versions kept the keys; read once to move them to the file, and left in place, since removing
+/// the item could ask for the password a second time.
+private enum LegacyKeychain {
+    private static let service = "OpenTypeless"
+
+    static func load() -> [String: String] {
+        if let data = read("credentials"), let keys = try? JSONDecoder().decode([String: String].self, from: data) {
+            return keys
+        }
+        // v0.1 stored a single OpenRouter key.
+        if let data = read("openrouter"), let key = String(data: data, encoding: .utf8), !key.isEmpty {
+            return ["openrouter": key]
+        }
+        return [:]
     }
 
     private static func read(_ account: String) -> Data? {
@@ -321,15 +347,6 @@ enum Credentials {
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else { return nil }
         return item as? Data
-    }
-
-    private static func delete(_ account: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ]
-        SecItemDelete(query as CFDictionary)
     }
 }
 

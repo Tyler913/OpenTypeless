@@ -205,7 +205,7 @@ Reasoning is automatically turned off or set to its minimum for the clean-up mod
 ## Privacy
 
 - Audio and text are only sent to the providers you configure. With **Live preview** on, macOS recognises speech on the Mac; Windows uses its own speech recognition, which sends your voice to Microsoft when online speech recognition is on (the setting says so).
-- API keys are stored in the macOS Keychain, or in Windows Credential Manager (one entry, `OpenTypeless/credentials`).
+- API keys are stored on macOS in `~/Library/Application Support/OpenTypeless/credentials.json`, readable only by your user (not the Keychain, which would ask for your password after every update of a self-signed app), or in Windows Credential Manager (one entry, `OpenTypeless/credentials`).
 - Usage totals for the Home page (words, speaking time and cost per day, no text) are kept in `usage.json` in the same folder as the settings and history. The OpenRouter price list is downloaded from its public model list (no key, nothing about you) a few times a day.
 - History (audio + transcripts) lives in `~/Library/Application Support/OpenTypeless/Sessions/` on macOS and `%LOCALAPPDATA%\OpenTypeless\` on Windows. Recordings are kept for a month by default (History page: not at all, a day, a week, a month, a year, or forever); after that the text stays among the newest 200 entries. Failed dictations keep their audio so they can be retried.
 - Update checks send one request a day to `api.github.com` (no account, nothing about you or your dictations); turn them off under **Settings → General → Updates**.

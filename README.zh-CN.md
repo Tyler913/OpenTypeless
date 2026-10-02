@@ -205,7 +205,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Package   # 生成 w
 ## 隐私
 
 - 音频和文字只会发送给你配置的服务商。打开 **实时预览** 时，macOS 在本机识别语音；Windows 使用系统自带的语音识别，开启在线语音识别时语音会发送给微软（设置里有说明）。
-- API Key 保存在 macOS 钥匙串，或 Windows 凭据管理器（一条记录，`OpenTypeless/credentials`）。
+- API Key 在 macOS 上保存在 `~/Library/Application Support/OpenTypeless/credentials.json`，仅当前用户可读（不用钥匙串：自签名的 app 每次更新后钥匙串都会再要一次密码），或 Windows 凭据管理器（一条记录，`OpenTypeless/credentials`）。
 - 主页的使用统计（每天的字数、说话时长和花费，不含文字）保存在 `usage.json` 里，和设置、历史在同一个文件夹。OpenRouter 价格表每天从它公开的模型列表下载几次（不需要 Key，不含任何关于你的信息）。
 - 历史（音频 + 转写）在 macOS 上位于 `~/Library/Application Support/OpenTypeless/Sessions/`，在 Windows 上位于 `%LOCALAPPDATA%\OpenTypeless\`。录音默认保存一个月（在历史页面可选：不保存、一天、一周、一个月、一年或永久）；之后文字仍保留在最新的 200 条记录里。转写失败的听写会保留音频，方便重试。
 - 检查更新每天向 `api.github.com` 发送一次请求（不需要账号，不含任何关于你或你的听写的信息）；可以在 **设置 → 通用 → 更新** 里关闭。

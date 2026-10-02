@@ -416,7 +416,7 @@ public sealed class AudioRecorder
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct PropVariant
+    internal struct PropVariant
     {
         public ushort vt;
         public ushort reserved1, reserved2, reserved3;
@@ -449,10 +449,10 @@ public sealed class AudioRecorder
     }
 
     [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
-    private class MMDeviceEnumeratorComObject;
+    internal class MMDeviceEnumeratorComObject;
 
     [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDeviceEnumerator
+    internal interface IMMDeviceEnumerator
     {
         [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IMMDeviceCollection? devices);
         [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice? endpoint);
@@ -462,7 +462,7 @@ public sealed class AudioRecorder
     }
 
     [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDevice
+    internal interface IMMDevice
     {
         [PreserveSig] int Activate(ref Guid iid, int clsCtx, nint activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object instance);
         [PreserveSig] int OpenPropertyStore(int access, out IPropertyStore? properties);
@@ -471,14 +471,14 @@ public sealed class AudioRecorder
     }
 
     [ComImport, Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDeviceCollection
+    internal interface IMMDeviceCollection
     {
         [PreserveSig] int GetCount(out uint count);
         [PreserveSig] int Item(uint index, out IMMDevice? device);
     }
 
     [ComImport, Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IPropertyStore
+    internal interface IPropertyStore
     {
         [PreserveSig] int GetCount(out uint count);
         [PreserveSig] int GetAt(uint index, out PropertyKey key);

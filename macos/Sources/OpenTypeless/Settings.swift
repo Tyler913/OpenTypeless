@@ -31,6 +31,10 @@ final class AppSettings: ObservableObject {
     @AppStorage("extraInstructions") var extraInstructions: String = ""
     @AppStorage("playSounds") var playSounds: Bool = true
     @AppStorage("restoreClipboard") var restoreClipboard: Bool = true
+    /// Press Return once the text is pasted, so a chat message or AI prompt is sent without touching the keyboard.
+    @AppStorage("pressEnterAfterInsert") var pressEnterAfterInsert: Bool = false
+    /// Mute the speakers while recording (see OutputMute).
+    @AppStorage("muteWhileRecording") var muteWhileRecording: Bool = false
     @AppStorage("maxRecordingMinutes") var maxRecordingMinutes: Int = 20
     @AppStorage("historyRetention") var historyRetention: HistoryRetention = .month
     /// Look for a new release once a day and download it in the background (see Updater).

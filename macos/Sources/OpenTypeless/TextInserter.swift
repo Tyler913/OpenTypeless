@@ -86,6 +86,14 @@ enum TextInserter {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
+    /// Presses Return in the frontmost app, after a paste, to send what was inserted.
+    @MainActor
+    static func pressReturn() async {
+        // Let the app take in the pasted text first (web apps update their state asynchronously).
+        try? await Task.sleep(for: .milliseconds(120))
+        postKey(CGKeyCode(kVK_Return), flags: [])
+    }
+
     private static func snapshot(_ pasteboard: NSPasteboard) -> [NSPasteboardItem] {
         (pasteboard.pasteboardItems ?? []).map { item in
             let copy = NSPasteboardItem()
@@ -97,12 +105,16 @@ enum TextInserter {
     }
 
     private static func postCommandV() {
+        postKey(CGKeyCode(kVK_ANSI_V), flags: .maskCommand)
+    }
+
+    /// Explicit flags, so a modifier still held (or stuck) doesn't turn the key into a shortcut.
+    private static func postKey(_ key: CGKeyCode, flags: CGEventFlags) {
         let source = CGEventSource(stateID: .privateState)
-        let vKey = CGKeyCode(kVK_ANSI_V)
-        guard let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true),
-              let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false) else { return }
-        down.flags = .maskCommand
-        up.flags = .maskCommand
+        guard let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) else { return }
+        down.flags = flags
+        up.flags = flags
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
     }

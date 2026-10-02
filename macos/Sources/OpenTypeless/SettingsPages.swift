@@ -122,9 +122,21 @@ struct GeneralPage: View {
                     Toggle("", isOn: $settings.restoreClipboard).toggleStyle(.switch).labelsHidden()
                 }
                 CardDivider(inset: 50)
+                CardRow(icon: "return", iconColor: .green, title: L("插入后自动回车", "Press Return after inserting"),
+                        subtitle: L("文字粘贴进去后自动按一次回车，在聊天框或给 AI 写提示词时直接发送。文字只复制到剪贴板时不会按。",
+                                    "Presses Return once the text is pasted, so a chat message or AI prompt is sent right away. Not pressed when the text only goes to the clipboard.")) {
+                    Toggle("", isOn: $settings.pressEnterAfterInsert).toggleStyle(.switch).labelsHidden()
+                }
+                CardDivider(inset: 50)
                 CardRow(icon: "speaker.wave.2.fill", iconColor: .pink, title: L("提示音", "Sounds"),
                         subtitle: L("开始和结束录音时播放轻提示音", "Soft chime when recording starts and stops")) {
                     Toggle("", isOn: $settings.playSounds).toggleStyle(.switch).labelsHidden()
+                }
+                CardDivider(inset: 50)
+                CardRow(icon: "speaker.slash.fill", iconColor: .indigo, title: L("录音时静音", "Mute audio while recording"),
+                        subtitle: L("录音期间把扬声器静音，音乐和视频不会打扰你说话，结束后自动恢复。",
+                                    "Mutes your speakers while you're recording, so music or a video doesn't get in the way, and turns them back on when you stop.")) {
+                    Toggle("", isOn: $settings.muteWhileRecording).toggleStyle(.switch).labelsHidden()
                 }
                 CardDivider(inset: 50)
                 CardRow(icon: "text.bubble.fill", iconColor: .teal, title: L("实时预览（测试版）", "Live preview (beta)"),

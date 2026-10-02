@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The speakers a crash left muted mid-recording are turned back on.
+        OutputMute.restoreLeftover()
         setUpMainMenu()
         setUpStatusItem()
 
@@ -74,6 +76,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // A manual launch opens Home; starting at login stays in the menu bar unless the user asked for Home then too.
             settingsWindow.show(page: .home)
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Quitting mid-recording mustn't leave the speakers muted.
+        OutputMute.restoreLeftover()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

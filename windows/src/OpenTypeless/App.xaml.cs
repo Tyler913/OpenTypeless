@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using OpenTypeless.Audio;
 using OpenTypeless.Input;
 using OpenTypeless.Services;
 using OpenTypeless.Session;
@@ -42,6 +43,8 @@ public partial class App : Application
             return;
         }
 
+        // The speakers a crash left muted mid-recording are turned back on.
+        OutputMute.RestoreLeftover();
         _controller = new SessionController();
         _tray = new TrayIcon();
         TextInserter.ClipboardOwner = _tray.Hwnd;

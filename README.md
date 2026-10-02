@@ -78,6 +78,8 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 - **Keep microphone ready** (optional): recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped. The mic stays on, and Bluetooth headphones switch to call mode.
 - **Live preview (beta)**: see the words above the recording capsule as you speak, recognised on the device (macOS SpeechAnalyzer; Windows speech recognition). The inserted text still comes from your provider.
 - **Pastes where your cursor is.** In a text field the text is pasted and your clipboard restored; with no text field focused it goes to the clipboard. Browsers and Electron apps are handled too, and terminals on Windows.
+- **Press Return after inserting** (optional, Enter on Windows): the text is sent as soon as it's pasted, so a chat message or AI prompt goes out without touching the keyboard.
+- **Mute audio while recording** (optional): your speakers are muted while you talk, so music or a video doesn't get in the way, and turned back on when you stop.
 - **Bring your own provider.** OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek, or any OpenAI-compatible endpoint. Speech-to-text, clean-up and the backup clean-up model can each use a different provider. **Test** checks a key and shows the provider's round-trip latency (median of three).
 - **Backup speech-to-text** (optional): when a segment takes much longer than that route usually needs for its length, or fails, a second provider is asked too and the first answer wins.
 - **Custom vocabulary and style preferences** for names, products and jargon.

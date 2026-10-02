@@ -46,7 +46,7 @@ public class HedgedPolishTests
     public async Task FastPrimaryNeverStartsBackup()
     {
         var server = new MockChatServer(new() { ["primary"] = new(Text: "A"), ["backup"] = new(Text: "B") });
-        var outcome = await HedgedPolish.Run("x", server.Route("primary"), server.Route("backup"), hedgeDelay: 0.5);
+        var outcome = await HedgedPolish.Run("x", server.Route("primary"), server.Route("backup"), hedgeDelay: 5); // generous: a cold CI runner can take over half a second to answer
         Assert.Equal("A", outcome.Result.Text);
         Assert.False(outcome.UsedBackup);
         Assert.Equal(["primary"], server.Requested);

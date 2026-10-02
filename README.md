@@ -72,7 +72,7 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 
 ## Features
 
-- **Global hotkey.** Hold **Fn** (macOS) or **Right Ctrl** (Windows) by default, or record any single modifier (right ⌘, right ⌥, Right Alt, …) or a combination (⌥ Space, Alt + Space, F5, …).
+- **Global hotkey.** Hold **Fn** (macOS) or **Right Alt** (Windows) by default, or record any single modifier (right ⌘, right ⌥, Right Ctrl, …) or a combination (⌥ Space, Alt + Space, F5, …).
 - **Push-to-talk or hands-free.** Hold to talk; tap once to keep recording hands-free and tap again to finish. **Esc** cancels. After 10 seconds of talking, a cancelled dictation isn't lost: it's transcribed (not inserted) and kept in History for 24 hours.
 - **Choose your microphone** under **Settings → General**, with a live level meter to check it hears you. Virtual devices (meeting and streaming apps) are marked, and a disconnected choice falls back to the system default.
 - **Keep microphone ready** (optional): recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped. The mic stays on, and Bluetooth headphones switch to call mode.
@@ -205,11 +205,11 @@ No Windows PC is needed to develop the Windows app: GitHub Actions builds it on 
 
 ### First run
 
-The first launch opens the same short guide as on macOS (API key, then a first dictation with Right Ctrl). Every step can be skipped, and it never shows again. Without it:
+The first launch opens the same short guide as on macOS (API key, then a first dictation with Right Alt). Every step can be skipped, and it never shows again. Without it:
 
 1. Add an API key under **Settings → Providers**.
 2. Make sure **Settings → Privacy & security → Microphone → Let desktop apps access your microphone** is on.
-3. Hold Right Ctrl and talk. Windows needs no accessibility permission; the one limit is that it doesn't allow pasting into apps running as administrator, so there the text goes to the clipboard.
+3. Hold Right Alt and talk (Right Alt rather than Right Ctrl, which Copilot+ PCs replace with the Copilot key; on layouts where Right Alt is AltGr, such as German or French, pick another key under **Settings → Shortcut**). Windows needs no accessibility permission; the one limit is that it doesn't allow pasting into apps running as administrator, so there the text goes to the clipboard.
 
 ## Default models
 

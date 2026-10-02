@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
+using OpenTypeless.Input;
 using OpenTypeless.Native;
 using OpenTypeless.Services;
 using OpenTypeless.Session;
@@ -571,6 +572,14 @@ public sealed class OnboardingWindow : Window
         _tryStatus = new TextBlock { FontSize = 12, FontWeight = FontWeights.Medium, HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MinHeight = 18 };
         panel.Children.Add(_tryStatus);
         UpdateTryStatus();
+
+        if (hotkey.IsModifierOnly && hotkey.KeyCode == Hotkey.VK_RMENU)
+        {
+            panel.Children.Add(Centered(Ui.Text(
+                L("在德语、法语等键盘布局里，右 Alt 是 AltGr，用来输入 @、€ 等字符。如果你要用它打字，请换一个快捷键。",
+                  "On keyboard layouts such as German or French, Right Alt is AltGr and types characters like @ and €. If you use it for typing, pick another shortcut."),
+                11.5, foreground: Ui.Secondary, wrap: true), maxWidth: 520));
+        }
         return panel;
     }
 

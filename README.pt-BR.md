@@ -72,7 +72,7 @@ O prompt é ajustado com conjuntos de desenvolvimento e de teste reservados (vej
 
 ## Recursos
 
-- **Atalho global.** Segure **Fn** (macOS) ou **Ctrl direito** (Windows) por padrão, ou grave qualquer modificador sozinho (⌘ direito, ⌥ direito, Alt direito…) ou uma combinação (⌥ Espaço, Alt + Espaço, F5…).
+- **Atalho global.** Segure **Fn** (macOS) ou **Alt direito** (Windows) por padrão, ou grave qualquer modificador sozinho (⌘ direito, ⌥ direito, Ctrl direito…) ou uma combinação (⌥ Espaço, Alt + Espaço, F5…).
 - **Segurar para falar ou mãos livres.** Segure para falar; toque uma vez para continuar gravando com as mãos livres e toque de novo para terminar. **Esc** cancela. Depois de 10 segundos falando, um ditado cancelado não se perde: é transcrito (sem ser inserido) e fica no Histórico por 24 horas.
 - **Escolha seu microfone** em **Configurações → Geral**, com um medidor de nível ao vivo para conferir que ele ouve você. Dispositivos virtuais (apps de reunião e streaming) aparecem marcados, e se o escolhido for desconectado o padrão do sistema é usado.
 - **Manter o microfone pronto** (opcional): a gravação começa no instante em que você pressiona a tecla e inclui o momento anterior, então a primeira palavra não é cortada. O microfone fica ligado e fones Bluetooth passam para o modo de chamada.
@@ -190,7 +190,7 @@ Não é preciso um PC com Windows para desenvolver o app do Windows: o GitHub Ac
 
 1. Adicione uma chave de API em **Configurações → Provedores**.
 2. Confirme que **Configurações → Privacidade e segurança → Microfone → Permitir que aplicativos da área de trabalho acessem seu microfone** está ativado.
-3. Segure o Ctrl direito e fale. O Windows não precisa de permissão de acessibilidade; o único limite é que ele não permite colar em apps executados como administrador, então nesses casos o texto vai para a área de transferência.
+3. Segure o Alt direito e fale (Alt direito em vez de Ctrl direito, que os PCs Copilot+ trocam pela tecla Copilot; em layouts onde o Alt direito é AltGr, como o ABNT2, escolha outra tecla em **Configurações → Atalho**). O Windows não precisa de permissão de acessibilidade; o único limite é que ele não permite colar em apps executados como administrador, então nesses casos o texto vai para a área de transferência.
 
 ## Modelos padrão
 

@@ -365,11 +365,11 @@ public sealed class SessionController
     {
         var language = _settings.SttLanguage.Length == 0 ? null : _settings.SttLanguage;
         var backup = _settings.SttBackupEndpoint is { } backupEndpoint
-            ? new TranscriptionRoute(new ApiClient(backupEndpoint), new TranscriptionOptions(_settings.SttBackupModel.Trim(), language))
+            ? new TranscriptionRoute(new ApiClient(backupEndpoint), new TranscriptionOptions(_settings.SttBackupModel.Trim(), language, _settings.VocabularyList))
             : null;
         var key = ModelPrice.Key(_settings.SttProvider, _settings.SttModel);
         if (!_latencies.TryGetValue(key, out var latency)) _latencies[key] = latency = new TranscriptionLatency();
-        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, language), preset: preset,
+        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, language, _settings.VocabularyList), preset: preset,
                                          backup: backup, latency: latency, onSpeculation: onSpeculation);
     }
 

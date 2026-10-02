@@ -67,10 +67,13 @@ extension APIClient {
         public var model: String
         /// ISO-639-1 code, or nil for auto-detect.
         public var language: String?
+        /// The user's vocabulary, passed to models that take spelling hints (see VocabularyHints).
+        public var vocabulary: [String]
 
-        public init(model: String, language: String? = nil) {
+        public init(model: String, language: String? = nil, vocabulary: [String] = []) {
             self.model = model
             self.language = language
+            self.vocabulary = vocabulary
         }
     }
 
@@ -87,6 +90,26 @@ extension APIClient {
 
     /// `transcribe`, plus the `usage` the server reported (OpenRouter includes the cost).
     public func transcribeDetailed(wav: Data, options: TranscriptionOptions, timeout: Double) async throws -> TranscriptionResult {
+        do {
+            return try await transcribeOnce(wav: wav, options: options, timeout: timeout)
+        } catch APIError.http(status: 400, message: _) where hasVocabularyHints(options) {
+            // A provider that stopped taking the hints mustn't stop dictation: the same request without them.
+            var plain = options
+            plain.vocabulary = []
+            return try await transcribeOnce(wav: wav, options: plain, timeout: timeout)
+        }
+    }
+
+    func hasVocabularyHints(_ options: TranscriptionOptions) -> Bool {
+        switch endpoint.id.sttFormat {
+        case .openRouterJSON: return VocabularyHints.openRouterProvider(model: options.model, vocabulary: options.vocabulary) != nil
+        case .multipart:
+            return VocabularyHints.multipartPrompt(provider: endpoint.id, model: options.model, vocabulary: options.vocabulary) != nil
+        }
+    }
+
+    /// The transcription request for one chunk, with the vocabulary hints this model takes.
+    func transcriptionRequest(wav: Data, options: TranscriptionOptions, timeout: Double) throws -> URLRequest {
         var request: URLRequest
         switch endpoint.id.sttFormat {
         case .openRouterJSON:
@@ -95,14 +118,22 @@ extension APIClient {
                 "input_audio": ["data": wav.base64EncodedString(), "format": "wav"],
             ]
             if let language = options.language, !language.isEmpty { body["language"] = language }
+            if let provider = VocabularyHints.openRouterProvider(model: options.model, vocabulary: options.vocabulary) {
+                body["provider"] = provider
+            }
             request = try self.request(path: "audio/transcriptions", idleTimeout: timeout)
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         case .multipart:
-            let form = MultipartForm.transcription(wav: wav, options: options)
+            let prompt = VocabularyHints.multipartPrompt(provider: endpoint.id, model: options.model, vocabulary: options.vocabulary)
+            let form = MultipartForm.transcription(wav: wav, options: options, prompt: prompt)
             request = try self.request(path: "audio/transcriptions", idleTimeout: timeout, contentType: form.contentType)
             request.httpBody = form.body
         }
+        return request
+    }
 
+    private func transcribeOnce(wav: Data, options: TranscriptionOptions, timeout: Double) async throws -> TranscriptionResult {
+        let request = try transcriptionRequest(wav: wav, options: options, timeout: timeout)
         let session = self.session
         let (data, response) = try await withTimeout(timeout) { [request] in
             try await session.data(for: request)
@@ -179,13 +210,14 @@ public struct MultipartForm {
         body.append(Data("--\(boundary)--\r\n".utf8))
     }
 
-    /// Only `file`, `model` and (optionally) `language`: some OpenAI-compatible servers reject any
-    /// parameter they don't know, so nothing else is sent.
-    static func transcription(wav: Data, options: APIClient.TranscriptionOptions) -> MultipartForm {
+    /// Only `file`, `model`, and (optionally) `language` and the vocabulary `prompt`, which goes only to OpenAI and Groq
+    /// (see VocabularyHints): some OpenAI-compatible servers reject any parameter they don't know.
+    static func transcription(wav: Data, options: APIClient.TranscriptionOptions, prompt: String? = nil) -> MultipartForm {
         var form = MultipartForm()
         form.addFile("file", filename: "audio.wav", mimeType: "audio/wav", data: wav)
         form.addField("model", options.model)
         if let language = options.language, !language.isEmpty { form.addField("language", language) }
+        if let prompt, !prompt.isEmpty { form.addField("prompt", prompt) }
         form.finish()
         return form
     }

@@ -14,8 +14,8 @@ public sealed class StylePage : PageBase
     private readonly CardSection _learning = new()
     {
         Title = L("自动学习", "Learning"),
-        Footer = L("粘贴后如果你在输入框里改了某个识别错的词（比如把 TypeList 改成 Typeless），离开输入框或发送后会自动把它加进词汇表。只学发音相近的改动，不学改写、改数字和普通词替换。输入框内容只在本机读取。",
-                   "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. The field is read on this PC only."),
+        Footer = L("粘贴后如果你改了某个识别错的词（比如把 TypeList 改成 Typeless），离开输入框或发送后会自动把它加进词汇表。能读取的输入框直接比较前后内容；读不到的会跟随你粘贴后的按键，但用中文、日文、韩文输入法打的字跟随不了。只学发音相近的改动，不学改写、改数字和普通词替换。一切都在本机完成。",
+                   "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Where the field can be read, its text is compared; where it can't, the keys you press after the paste are followed, though not text typed with a Chinese, Japanese or Korean input method. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. All of it stays on this PC."),
     };
 
     public StylePage() : base(SettingsPage.Style)
@@ -23,8 +23,8 @@ public sealed class StylePage : PageBase
         var vocabulary = new CardSection
         {
             Title = L("专有名词 / 词汇表", "Vocabulary"),
-            Footer = L("用逗号或换行分隔。整理时会按这里的写法纠正识别错误，比如人名、产品名、项目名。",
-                       "Comma- or line-separated. Clean-up uses these spellings to fix recognition errors — names, products, projects."),
+            Footer = L("用逗号或换行分隔，比如人名、产品名、项目名。支持的语音模型会把它们当作拼写提示，整理时也会按这里的写法纠正识别错误。",
+                       "Comma- or line-separated: names, products, projects. Speech-to-text models that take them get these as spelling hints, and clean-up uses these spellings to fix recognition errors."),
         };
         _vocabulary = Editor(_settings.Vocabulary, 110, text => _settings.Vocabulary = text);
         vocabulary.Body.Add(_vocabulary);

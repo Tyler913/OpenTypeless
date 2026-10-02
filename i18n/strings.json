@@ -1817,15 +1817,6 @@
     "fr": "Vocabulaire",
     "de": "Vokabular"
   },
-  "Comma- or line-separated. Clean-up uses these spellings to fix recognition errors — names, products, projects.": {
-    "ja": "カンマまたは改行で区切ります。整形時にこの表記で認識ミスを修正します（人名、製品名、プロジェクト名など）。",
-    "ko": "쉼표나 줄바꿈으로 구분합니다. 다듬기 단계에서 이 표기로 인식 오류를 고칩니다 — 이름, 제품, 프로젝트 등.",
-    "es": "Separados por comas o líneas. La limpieza usa estas grafías para corregir errores de reconocimiento: nombres, productos, proyectos.",
-    "pt": "Separados por vírgula ou linha. A limpeza usa essas grafias para corrigir erros de reconhecimento — nomes, produtos, projetos.",
-    "ru": "Через запятую или с новой строки. Очистка использует это написание, чтобы исправлять ошибки распознавания — имена, продукты, проекты.",
-    "fr": "Séparés par des virgules ou des retours à la ligne. Le nettoyage utilise ces graphies pour corriger les erreurs de reconnaissance — noms, produits, projets.",
-    "de": "Durch Kommas oder Zeilenumbrüche getrennt. Die Bereinigung korrigiert mit diesen Schreibweisen Erkennungsfehler – Namen, Produkte, Projekte."
-  },
   "Learning": {
     "ja": "学習",
     "ko": "학습",
@@ -1834,15 +1825,6 @@
     "ru": "Обучение",
     "fr": "Apprentissage",
     "de": "Lernen"
-  },
-  "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. The field is read on this Mac only.": {
-    "ja": "ペースト後に誤認識された単語を修正すると（例：TypeList → Typeless）、入力欄を離れるか送信した時点で語彙に追加されます。学習するのは発音が似ている修正だけで、書き換えや数字の変更、普通の単語の置き換えは学習しません。入力欄の内容はこの Mac 上でのみ読み取ります。",
-    "ko": "붙여넣은 뒤 잘못 인식된 단어를 고치면(예: TypeList → Typeless) 입력란을 벗어나거나 전송할 때 어휘에 추가됩니다. 발음이 비슷한 수정만 학습하며, 고쳐 쓰기나 숫자 변경, 일반 단어 교체는 학습하지 않습니다. 입력란 내용은 이 Mac에서만 읽습니다.",
-    "es": "Si corriges una palabra mal reconocida después de pegar (por ejemplo, TypeList → Typeless), se añade al vocabulario cuando sales del campo o envías. Solo se aprenden correcciones de sonido parecido, nunca reescrituras, números cambiados ni sustituciones de palabras corrientes. El campo solo se lee en este Mac.",
-    "pt": "Se você corrigir uma palavra mal reconhecida depois de colar (por exemplo, TypeList → Typeless), ela é adicionada ao vocabulário quando você sai do campo ou envia. Só são aprendidas correções de som parecido, nunca reescritas, números alterados ou trocas de palavras comuns. O campo é lido apenas neste Mac.",
-    "ru": "Если после вставки вы исправите неверно распознанное слово (например, TypeList → Typeless), оно попадёт в словарь, когда вы покинете поле или отправите текст. Запоминаются только исправления похожих по звучанию слов — не переформулировки, не изменённые числа и не замены обычных слов. Поле читается только на этом Mac.",
-    "fr": "Si vous corrigez un mot mal reconnu après le collage (par exemple TypeList → Typeless), il est ajouté au vocabulaire quand vous quittez le champ ou envoyez. Seules les corrections de sonorité proche sont apprises, jamais les reformulations, les nombres modifiés ou les remplacements de mots courants. Le champ n’est lu que sur ce Mac.",
-    "de": "Wenn du nach dem Einfügen ein falsch erkanntes Wort korrigierst (etwa TypeList → Typeless), wird es beim Verlassen des Felds oder beim Senden ins Vokabular übernommen. Gelernt werden nur ähnlich klingende Korrekturen, nie Umformulierungen, geänderte Zahlen oder normale Wortwechsel. Das Feld wird nur auf diesem Mac gelesen."
   },
   "Learn from my corrections": {
     "ja": "自分の修正から学習",
@@ -2482,15 +2464,6 @@
     "ru": "В раскладках вроде немецкой или французской правый Alt — это AltGr, он вводит символы вроде @ и €. Если вы им пользуетесь, выберите другое сочетание.",
     "fr": "Sur les dispositions de clavier comme l’allemand ou le français, Alt droite est AltGr et sert à taper @ ou €. Si vous l’utilisez pour la saisie, choisissez un autre raccourci.",
     "de": "Bei Tastaturlayouts wie Deutsch oder Französisch ist die rechte Alt-Taste AltGr und tippt Zeichen wie @ und €. Wenn du sie zum Schreiben nutzt, wähle ein anderes Kürzel."
-  },
-  "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. The field is read on this PC only.": {
-    "ja": "ペースト後に誤認識された単語を修正すると（例：TypeList → Typeless）、入力欄を離れるか送信した時点で語彙に追加されます。学習するのは発音が似ている修正だけで、書き換えや数字の変更、普通の単語の置き換えは学習しません。入力欄の内容はこの PC 上でのみ読み取ります。",
-    "ko": "붙여넣은 뒤 잘못 인식된 단어를 고치면(예: TypeList → Typeless) 입력란을 벗어나거나 전송할 때 어휘에 추가됩니다. 발음이 비슷한 수정만 학습하며, 고쳐 쓰기나 숫자 변경, 일반 단어 교체는 학습하지 않습니다. 입력란 내용은 이 PC에서만 읽습니다.",
-    "es": "Si corriges una palabra mal reconocida después de pegar (por ejemplo, TypeList → Typeless), se añade al vocabulario cuando sales del campo o envías. Solo se aprenden correcciones de sonido parecido, nunca reescrituras, números cambiados ni sustituciones de palabras corrientes. El campo solo se lee en este PC.",
-    "pt": "Se você corrigir uma palavra mal reconhecida depois de colar (por exemplo, TypeList → Typeless), ela é adicionada ao vocabulário quando você sai do campo ou envia. Só são aprendidas correções de som parecido, nunca reescritas, números alterados ou trocas de palavras comuns. O campo é lido apenas neste PC.",
-    "ru": "Если после вставки вы исправите неверно распознанное слово (например, TypeList → Typeless), оно попадёт в словарь, когда вы покинете поле или отправите текст. Запоминаются только исправления похожих по звучанию слов — не переформулировки, не изменённые числа и не замены обычных слов. Поле читается только на этом ПК.",
-    "fr": "Si vous corrigez un mot mal reconnu après le collage (par exemple TypeList → Typeless), il est ajouté au vocabulaire quand vous quittez le champ ou envoyez. Seules les corrections de sonorité proche sont apprises, jamais les reformulations, les nombres modifiés ou les remplacements de mots courants. Le champ n’est lu que sur ce PC.",
-    "de": "Wenn du nach dem Einfügen ein falsch erkanntes Wort korrigierst (etwa TypeList → Typeless), wird es beim Verlassen des Felds oder beim Senden ins Vokabular übernommen. Gelernt werden nur ähnlich klingende Korrekturen, nie Umformulierungen, geänderte Zahlen oder normale Wortwechsel. Das Feld wird nur auf diesem PC gelesen."
   },
   "A plain key would break normal typing — combine it with Ctrl / Alt / Shift / Win, or press a single modifier / F1–F24.": {
     "ja": "単独の文字キーは通常の入力を妨げます。Ctrl / Alt / Shift / Win と組み合わせるか、修飾キー1つ / F1–F24 を押してください。",
@@ -3202,5 +3175,50 @@
     "ru": "Шаг {0} из {1}",
     "fr": "Étape {0} sur {1}",
     "de": "Schritt {0} von {1}"
+  },
+  "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Where the field can be read, its text is compared; where it can't (WeChat, Firefox, Electron apps…), the keys you press after the paste are followed, though not text typed with a Chinese, Japanese or Korean input method. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. All of it stays on this Mac.": {
+    "ja": "ペースト後に誤認識された単語を修正すると（例：TypeList → Typeless）、入力欄を離れるか送信した時点で語彙に追加されます。読み取れる入力欄は前後の内容を比べ、読み取れないもの（WeChat、Firefox、Electron アプリなど）はペースト後のキー入力を追います。ただし日本語・中国語・韓国語の入力メソッドで入力した文字は追えません。学習するのは発音が似ている修正だけで、書き換えや数字の変更、普通の単語の置き換えは学習しません。すべてこの Mac 上で行われます。",
+    "ko": "붙여넣은 뒤 잘못 인식된 단어를 고치면(예: TypeList → Typeless) 입력란을 벗어나거나 전송할 때 어휘에 추가됩니다. 읽을 수 있는 입력란은 전후 내용을 비교하고, 읽을 수 없는 경우(WeChat, Firefox, Electron 앱 등)에는 붙여넣은 뒤 누른 키를 따라갑니다. 단, 한국어·중국어·일본어 입력기로 입력한 글자는 따라갈 수 없습니다. 발음이 비슷한 수정만 학습하며, 고쳐 쓰기나 숫자 변경, 일반 단어 교체는 학습하지 않습니다. 모든 처리는 이 Mac에서 이루어집니다.",
+    "es": "Si corriges una palabra mal reconocida después de pegar (por ejemplo, TypeList → Typeless), se añade al vocabulario cuando sales del campo o envías. Si el campo se puede leer, se compara su texto; si no (WeChat, Firefox, apps de Electron…), se siguen las teclas que pulsas después de pegar, aunque no el texto escrito con un método de entrada chino, japonés o coreano. Solo se aprenden correcciones de sonido parecido, nunca reescrituras, números cambiados ni sustituciones de palabras corrientes. Todo se queda en este Mac.",
+    "pt": "Se você corrigir uma palavra mal reconhecida depois de colar (por exemplo, TypeList → Typeless), ela é adicionada ao vocabulário quando você sai do campo ou envia. Se o campo puder ser lido, o texto dele é comparado; se não (WeChat, Firefox, apps Electron…), as teclas que você pressiona depois de colar são seguidas, mas não o texto digitado com um método de entrada chinês, japonês ou coreano. Só são aprendidas correções de som parecido, nunca reescritas, números alterados ou trocas de palavras comuns. Tudo fica neste Mac.",
+    "ru": "Если после вставки вы исправите неверно распознанное слово (например, TypeList → Typeless), оно попадёт в словарь, когда вы покинете поле или отправите текст. Если поле можно прочитать, сравнивается его текст; если нет (WeChat, Firefox, приложения на Electron…), отслеживаются клавиши, нажатые после вставки, — но не текст, набранный китайским, японским или корейским методом ввода. Запоминаются только исправления похожих по звучанию слов — не переформулировки, не изменённые числа и не замены обычных слов. Всё происходит только на этом Mac.",
+    "fr": "Si vous corrigez un mot mal reconnu après le collage (par exemple TypeList → Typeless), il est ajouté au vocabulaire quand vous quittez le champ ou envoyez. Si le champ peut être lu, son texte est comparé ; sinon (WeChat, Firefox, apps Electron…), les touches pressées après le collage sont suivies, mais pas le texte saisi avec une méthode de saisie chinoise, japonaise ou coréenne. Seules les corrections de sonorité proche sont apprises, jamais les reformulations, les nombres modifiés ou les remplacements de mots courants. Tout reste sur ce Mac.",
+    "de": "Wenn du nach dem Einfügen ein falsch erkanntes Wort korrigierst (etwa TypeList → Typeless), wird es beim Verlassen des Felds oder beim Senden ins Vokabular übernommen. Lässt sich das Feld lesen, wird sein Text verglichen; sonst (WeChat, Firefox, Electron-Apps …) werden die Tasten verfolgt, die du nach dem Einfügen drückst – nicht aber Text, der mit einer chinesischen, japanischen oder koreanischen Eingabemethode getippt wird. Gelernt werden nur ähnlich klingende Korrekturen, nie Umformulierungen, geänderte Zahlen oder normale Wortwechsel. Alles bleibt auf diesem Mac."
+  },
+  "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Where the field can be read, its text is compared; where it can't, the keys you press after the paste are followed, though not text typed with a Chinese, Japanese or Korean input method. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. All of it stays on this PC.": {
+    "ja": "ペースト後に誤認識された単語を修正すると（例：TypeList → Typeless）、入力欄を離れるか送信した時点で語彙に追加されます。読み取れる入力欄は前後の内容を比べ、読み取れないものはペースト後のキー入力を追います。ただし日本語・中国語・韓国語の入力メソッドで入力した文字は追えません。学習するのは発音が似ている修正だけで、書き換えや数字の変更、普通の単語の置き換えは学習しません。すべてこの PC 上で行われます。",
+    "ko": "붙여넣은 뒤 잘못 인식된 단어를 고치면(예: TypeList → Typeless) 입력란을 벗어나거나 전송할 때 어휘에 추가됩니다. 읽을 수 있는 입력란은 전후 내용을 비교하고, 읽을 수 없는 경우에는 붙여넣은 뒤 누른 키를 따라갑니다. 단, 한국어·중국어·일본어 입력기로 입력한 글자는 따라갈 수 없습니다. 발음이 비슷한 수정만 학습하며, 고쳐 쓰기나 숫자 변경, 일반 단어 교체는 학습하지 않습니다. 모든 처리는 이 PC에서 이루어집니다.",
+    "es": "Si corriges una palabra mal reconocida después de pegar (por ejemplo, TypeList → Typeless), se añade al vocabulario cuando sales del campo o envías. Si el campo se puede leer, se compara su texto; si no, se siguen las teclas que pulsas después de pegar, aunque no el texto escrito con un método de entrada chino, japonés o coreano. Solo se aprenden correcciones de sonido parecido, nunca reescrituras, números cambiados ni sustituciones de palabras corrientes. Todo se queda en este PC.",
+    "pt": "Se você corrigir uma palavra mal reconhecida depois de colar (por exemplo, TypeList → Typeless), ela é adicionada ao vocabulário quando você sai do campo ou envia. Se o campo puder ser lido, o texto dele é comparado; se não, as teclas que você pressiona depois de colar são seguidas, mas não o texto digitado com um método de entrada chinês, japonês ou coreano. Só são aprendidas correções de som parecido, nunca reescritas, números alterados ou trocas de palavras comuns. Tudo fica neste PC.",
+    "ru": "Если после вставки вы исправите неверно распознанное слово (например, TypeList → Typeless), оно попадёт в словарь, когда вы покинете поле или отправите текст. Если поле можно прочитать, сравнивается его текст; если нет, отслеживаются клавиши, нажатые после вставки, — но не текст, набранный китайским, японским или корейским методом ввода. Запоминаются только исправления похожих по звучанию слов — не переформулировки, не изменённые числа и не замены обычных слов. Всё происходит только на этом ПК.",
+    "fr": "Si vous corrigez un mot mal reconnu après le collage (par exemple TypeList → Typeless), il est ajouté au vocabulaire quand vous quittez le champ ou envoyez. Si le champ peut être lu, son texte est comparé ; sinon, les touches pressées après le collage sont suivies, mais pas le texte saisi avec une méthode de saisie chinoise, japonaise ou coréenne. Seules les corrections de sonorité proche sont apprises, jamais les reformulations, les nombres modifiés ou les remplacements de mots courants. Tout reste sur ce PC.",
+    "de": "Wenn du nach dem Einfügen ein falsch erkanntes Wort korrigierst (etwa TypeList → Typeless), wird es beim Verlassen des Felds oder beim Senden ins Vokabular übernommen. Lässt sich das Feld lesen, wird sein Text verglichen; sonst werden die Tasten verfolgt, die du nach dem Einfügen drückst – nicht aber Text, der mit einer chinesischen, japanischen oder koreanischen Eingabemethode getippt wird. Gelernt werden nur ähnlich klingende Korrekturen, nie Umformulierungen, geänderte Zahlen oder normale Wortwechsel. Alles bleibt auf diesem PC."
+  },
+  "Comma- or line-separated: names, products, projects. Speech-to-text models that take them get these as spelling hints, and clean-up uses these spellings to fix recognition errors.": {
+    "ja": "カンマまたは改行で区切ります（人名、製品名、プロジェクト名など）。対応する文字起こしモデルには綴りのヒントとして渡し、整形時にもこの表記で認識ミスを修正します。",
+    "ko": "쉼표나 줄바꿈으로 구분합니다(이름, 제품, 프로젝트 등). 이를 지원하는 음성 인식 모델에는 철자 힌트로 전달되고, 다듬기 단계에서도 이 표기로 인식 오류를 고칩니다.",
+    "es": "Separados por comas o líneas: nombres, productos, proyectos. Los modelos de voz a texto que lo admiten los reciben como pistas de ortografía, y la limpieza usa estas grafías para corregir errores de reconocimiento.",
+    "pt": "Separados por vírgula ou linha: nomes, produtos, projetos. Os modelos de voz para texto que aceitam recebem esses termos como dicas de grafia, e a limpeza usa essas grafias para corrigir erros de reconhecimento.",
+    "ru": "Через запятую или с новой строки: имена, продукты, проекты. Модели распознавания речи, которые это поддерживают, получают их как подсказки написания, а очистка использует это написание, чтобы исправлять ошибки распознавания.",
+    "fr": "Séparés par des virgules ou des retours à la ligne : noms, produits, projets. Les modèles de transcription qui l’acceptent les reçoivent comme indications d’orthographe, et le nettoyage utilise ces graphies pour corriger les erreurs de reconnaissance.",
+    "de": "Durch Kommas oder Zeilenumbrüche getrennt: Namen, Produkte, Projekte. Spracherkennungsmodelle, die das unterstützen, bekommen sie als Schreibhinweise, und die Bereinigung korrigiert mit diesen Schreibweisen Erkennungsfehler."
+  },
+  "Your vocabulary is sent to this model as spelling hints": {
+    "ja": "語彙を綴りのヒントとしてこのモデルに渡します",
+    "ko": "어휘를 철자 힌트로 이 모델에 함께 보냅니다",
+    "es": "Tu vocabulario se envía a este modelo como pistas de ortografía",
+    "pt": "Seu vocabulário é enviado a este modelo como dicas de grafia",
+    "ru": "Ваш словарь передаётся этой модели как подсказки написания",
+    "fr": "Votre vocabulaire est envoyé à ce modèle comme indications d’orthographe",
+    "de": "Dein Vokabular geht als Schreibhinweise an dieses Modell"
+  },
+  "This model takes no vocabulary hints; your vocabulary is used in clean-up only": {
+    "ja": "このモデルは語彙のヒントを受け付けません。語彙は整形でのみ使われます",
+    "ko": "이 모델은 어휘 힌트를 받지 않으며, 어휘는 다듬기에만 쓰입니다",
+    "es": "Este modelo no admite pistas de vocabulario; tu vocabulario solo se usa en la limpieza",
+    "pt": "Este modelo não aceita dicas de vocabulário; seu vocabulário só é usado na limpeza",
+    "ru": "Эта модель не принимает подсказки из словаря; словарь используется только при очистке",
+    "fr": "Ce modèle n’accepte pas d’indications de vocabulaire ; votre vocabulaire ne sert qu’au nettoyage",
+    "de": "Dieses Modell nimmt keine Vokabelhinweise an; dein Vokabular wird nur bei der Bereinigung genutzt"
   }
 }

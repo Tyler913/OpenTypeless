@@ -166,6 +166,31 @@ public static class TextInserter
         return false;
     }
 
+    /// <summary>
+    /// The text selected in the foreground app, read by pressing Ctrl+C; the clipboard is put back as it was. Null when
+    /// nothing was copied (no selection, or the app didn't answer).
+    /// </summary>
+    public static async Task<string?> CopySelection()
+    {
+        var saved = ClipboardSnapshot.Take();
+        var before = Win32.GetClipboardSequenceNumber();
+        var inputs = new[]
+        {
+            Win32.Key(Win32.VK_CONTROL, up: false),
+            Win32.Key(Win32.VK_C, up: false),
+            Win32.Key(Win32.VK_C, up: true),
+            Win32.Key(Win32.VK_CONTROL, up: true),
+        };
+        Win32.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Win32.INPUT>());
+        var clock = Stopwatch.StartNew();
+        while (Win32.GetClipboardSequenceNumber() == before && clock.ElapsedMilliseconds < 400) await Task.Delay(20);
+        if (Win32.GetClipboardSequenceNumber() == before) return null;
+        await Task.Delay(30); // let the app finish writing its formats
+        var text = ClipboardSnapshot.ReadText();
+        saved.Restore();
+        return text;
+    }
+
     private static void PostControlV()
     {
         var inputs = new[]
@@ -237,6 +262,31 @@ public sealed class ClipboardSnapshot
         {
             Win32.EmptyClipboard();
             foreach (var (format, data) in _items) Put(format, data);
+        }
+        finally
+        {
+            Win32.CloseClipboard();
+        }
+    }
+
+    /// <summary>The clipboard's text, or null.</summary>
+    public static string? ReadText()
+    {
+        if (!Open()) return null;
+        try
+        {
+            var handle = Win32.GetClipboardData(Win32.CF_UNICODETEXT);
+            if (handle == 0) return null;
+            var pointer = Win32.GlobalLock(handle);
+            if (pointer == 0) return null;
+            try
+            {
+                return Marshal.PtrToStringUni(pointer);
+            }
+            finally
+            {
+                Win32.GlobalUnlock(handle);
+            }
         }
         finally
         {

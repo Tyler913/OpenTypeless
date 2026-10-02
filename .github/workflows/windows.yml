@@ -18,6 +18,7 @@ jobs:
   build:
     name: Build (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -36,6 +37,11 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r ../scripts/ci/requirements.txt
+
       # The same script used locally: runs the tests, publishes the app and CLI self-contained, zips them.
       - name: Test, build and package
         id: build
@@ -51,36 +57,44 @@ jobs:
           $escaped = $tail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
           Write-Output "::error title=Build (${{ matrix.arch }}) failed::$escaped"
 
-      # The app draws every settings page, the first-launch guide, the popover and the HUD to PNGs (in the
-      # snapshots-windows artifact), to look at the UI without a Windows machine. Once is enough, on the x64 runner.
-      - name: Draw the UI
-        if: matrix.arch == 'x64'
-        continue-on-error: true
+      # Exercise the actual portable ZIP on both native architectures, not just the publish staging folder. It is
+      # unpacked into a folder with a space and Chinese in its name, like many users' folders.
+      - name: Check portable package and all UI snapshots
+        timeout-minutes: 15
         shell: pwsh
-        env:
-          OPENTYPELESS_DATA_DIR: ${{ runner.temp }}\snapshot-data
-          OPENTYPELESS_DEBUG: '1'
         run: |
-          $out = Join-Path $env:RUNNER_TEMP 'snapshots'
-          $exe = (Resolve-Path '.build\publish\OpenTypeless\OpenTypeless.exe').Path
-          $started = Get-Date
-          $app = Start-Process $exe -ArgumentList '--snapshot-ui', $out, '--lang', 'en', '--demo' -PassThru
-          if (-not $app.WaitForExit(180000)) { $app.Kill(); Write-Output '::warning title=Snapshots::The app did not finish drawing its UI' }
-          Write-Output "exit code $($app.ExitCode) after $([int]((Get-Date) - $started).TotalSeconds) s"
-          Get-ChildItem $out -Name -ErrorAction SilentlyContinue
-          if (Test-Path "$out\error.txt") { Get-Content "$out\error.txt"; Write-Output '::warning title=Snapshots::Drawing the UI failed (see error.txt)' }
-          Get-Content "$env:OPENTYPELESS_DATA_DIR\debug.log" -Tail 40 -ErrorAction SilentlyContinue
-          # A crash before the app could write anything shows up in the Windows event log.
-          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $started } -ErrorAction SilentlyContinue |
-            Where-Object { $_.ProviderName -in '.NET Runtime', 'Application Error', 'Windows Error Reporting' } |
-            Select-Object -First 3 | ForEach-Object { $_.Message }
+          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version
+          $zip = (Resolve-Path "dist\OpenTypeless-$version-windows-${{ matrix.arch }}.zip").Path
+          $portable = Join-Path $env:RUNNER_TEMP 'OpenTypeless 便携版'
+          Expand-Archive $zip -DestinationPath $portable
+          $exe = Join-Path $portable 'OpenTypeless\OpenTypeless.exe'
+          if (-not (Test-Path $exe)) { throw 'Portable ZIP has no OpenTypeless.exe' }
+          python ../scripts/ci/run_snapshots.py $exe "$env:RUNNER_TEMP/snapshots"
+          if ($LASTEXITCODE) { throw 'Native UI rendering smoke test failed' }
+
+      # A minute of synthetic speech through the portable ZIP's OpenTypeless.Cli.exe (--transcribe-file --realtime)
+      # against a local fake provider (scripts/ci/fake_provider.py): chunking at pauses, a retry after a 503, joining
+      # and the streamed clean-up, in the self-contained release build users get. No API key, no network.
+      - name: Dictate through the packaged app
+        timeout-minutes: 8
+        shell: pwsh
+        run: |
+          $cli = Join-Path $env:RUNNER_TEMP 'OpenTypeless 便携版\OpenTypeless\OpenTypeless.Cli.exe'
+          python ../scripts/ci/run_dictation.py $cli "$env:RUNNER_TEMP\dictation\听写 测试"
+          if ($LASTEXITCODE) { throw 'Dictation through the packaged app failed' }
 
       - uses: actions/upload-artifact@v7
-        if: matrix.arch == 'x64'
-        continue-on-error: true
+        if: always()
         with:
-          name: snapshots-windows
+          name: snapshots-windows-${{ matrix.arch }}
           path: ${{ runner.temp }}/snapshots
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: dictation-windows-${{ matrix.arch }}
+          path: ${{ runner.temp }}/dictation
           if-no-files-found: warn
 
       # Time budgets for the work that runs while you dictate and on the UI thread, in a Release build like the app's
@@ -95,6 +109,7 @@ jobs:
       # menu entry, a desktop shortcut and a Settings → Apps entry for this version; the installed app starts and stays
       # up; and uninstalling removes all of it, the login entry the app adds on its first run included.
       - name: Check the installer
+        timeout-minutes: 8
         shell: pwsh
         run: |
           $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version
@@ -119,9 +134,16 @@ jobs:
           Start-Sleep -Seconds 15
           if ($app.HasExited) { Fail "the installed app quit by itself (exit code $($app.ExitCode))" }
 
-          Start-Process "$dir\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
-          # The uninstaller hands over to a copy of itself and returns at once: wait for the folder to go.
-          for ($i = 0; $i -lt 90 -and (Test-Path $dir); $i++) { Start-Sleep -Seconds 1 }
+          $uninstall = Start-Process "$dir\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$env:RUNNER_TEMP\uninstall.log" -Wait -PassThru
+          if ($uninstall.ExitCode) { Fail "uninstaller exited with $($uninstall.ExitCode)" }
+          # The child uninstaller can remove the folder before shortcuts/registry entries. Wait for all
+          # postconditions together, then fail on any leftovers; never delete them to make the test pass.
+          for ($i = 0; $i -lt 90; $i++) {
+            $login = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name OpenTypeless -ErrorAction SilentlyContinue
+            if (-not ((Test-Path $dir) -or (Test-Path $startMenu) -or (Test-Path $desktop) -or
+                      (Test-Path $key) -or $login -or (Get-Process OpenTypeless -ErrorAction SilentlyContinue))) { break }
+            Start-Sleep -Seconds 1
+          }
           if (Test-Path $dir) { Fail "$dir is still there after uninstalling: $((Get-ChildItem $dir -Recurse -Name) -join ', ')" }
           if (Test-Path $startMenu) { Fail 'the Start menu shortcut is still there' }
           if (Test-Path $desktop) { Fail 'the desktop shortcut is still there' }
@@ -129,6 +151,26 @@ jobs:
           if (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name OpenTypeless -ErrorAction SilentlyContinue) { Fail 'the login entry is still there' }
           if (Get-Process OpenTypeless -ErrorAction SilentlyContinue) { Fail 'the app is still running' }
           Write-Output "The installer installs, the app starts, and the uninstaller removes it"
+
+      - name: Collect Windows diagnostics
+        if: always()
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'windows-diagnostics'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item build.log, test-results\* "$out" -Recurse -ErrorAction SilentlyContinue
+          Copy-Item "$env:RUNNER_TEMP\install.log", "$env:RUNNER_TEMP\uninstall.log" "$out" -ErrorAction SilentlyContinue
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = (Get-Date).AddHours(-1) } -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -in '.NET Runtime', 'Application Error', 'Windows Error Reporting' } |
+            Select-Object -First 20 TimeCreated, ProviderName, Message | Format-List |
+            Out-File "$out\events.log"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: diagnostics-windows-${{ matrix.arch }}
+          path: ${{ runner.temp }}/windows-diagnostics
+          if-no-files-found: warn
 
       - uses: actions/upload-artifact@v7
         with:

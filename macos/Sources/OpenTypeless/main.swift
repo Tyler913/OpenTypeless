@@ -31,8 +31,13 @@ let app = NSApplication.shared
 
 if let index = CommandLine.arguments.firstIndex(of: "--snapshot-ui"), CommandLine.arguments.count > index + 1 {
     app.setActivationPolicy(.accessory)
-    MainActor.assumeIsolated { UISnapshots.run(outputDirectory: CommandLine.arguments[index + 1]) }
-    exit(0)
+    do {
+        try MainActor.assumeIsolated { try UISnapshots.run(outputDirectory: CommandLine.arguments[index + 1]) }
+        exit(0)
+    } catch {
+        fputs("UI snapshot failed: \(error.localizedDescription)\n", stderr)
+        exit(1)
+    }
 }
 
 app.setActivationPolicy(.accessory)

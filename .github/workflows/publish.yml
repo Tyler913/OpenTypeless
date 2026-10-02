@@ -27,7 +27,12 @@ env:
   TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
 jobs:
+  quality:
+    name: Shared checks
+    uses: ./.github/workflows/quality.yml
+
   homebrew:
+    needs: quality
     name: Homebrew tap
     if: ${{ !github.event.release.prerelease }}
     runs-on: ubuntu-latest
@@ -77,6 +82,7 @@ jobs:
           git push
 
   winget:
+    needs: quality
     name: WinGet
     if: ${{ !github.event.release.prerelease }}
     runs-on: windows-latest

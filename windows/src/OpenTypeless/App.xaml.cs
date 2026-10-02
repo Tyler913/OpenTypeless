@@ -27,11 +27,29 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        if (Program.SnapshotDirectory != null)
+        {
+            var arguments = Environment.GetCommandLineArgs();
+            if (arguments.Contains("--dark")) RequestedTheme = ApplicationTheme.Dark;
+            else if (arguments.Contains("--light")) RequestedTheme = ApplicationTheme.Light;
+        }
         // Hidden windows are all we have most of the time; only Quit ends the app.
         DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
         UnhandledException += (_, e) =>
         {
             AppLog.Debug("app", "unhandled: " + e.Exception);
+            if (Program.SnapshotDirectory is { } directory)
+            {
+                Program.SnapshotExitCode = 1;
+                try
+                {
+                    Directory.CreateDirectory(directory);
+                    File.WriteAllText(Path.Combine(directory, "error.txt"), e.Exception.ToString());
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+                Exit();
+            }
             e.Handled = true;
         };
     }

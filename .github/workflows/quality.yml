@@ -1,0 +1,35 @@
+name: Shared checks
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Translations, workflow validation and CI regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r scripts/ci/requirements.txt
+      - name: Check translations in both apps
+        run: python i18n/check.py
+      - name: Test CI gates, coverage reports, snapshots and packaging templates
+        run: python -m unittest discover -s scripts/ci -p 'test_*.py' -v
+      # The release binary, checked against the release's checksums: seconds, where building it with Go took a minute.
+      - name: Validate workflow syntax, expressions and reusable workflow contracts
+        env:
+          VERSION: 1.7.12
+        run: |
+          base="https://github.com/rhysd/actionlint/releases/download/v$VERSION"
+          cd "$RUNNER_TEMP"
+          curl -fsSLO "$base/actionlint_${VERSION}_linux_amd64.tar.gz" -O "$base/actionlint_${VERSION}_checksums.txt"
+          sha256sum --check --ignore-missing "actionlint_${VERSION}_checksums.txt"
+          tar -xzf "actionlint_${VERSION}_linux_amd64.tar.gz" actionlint
+          cd "$GITHUB_WORKSPACE"
+          "$RUNNER_TEMP/actionlint" -shellcheck= -pyflakes=

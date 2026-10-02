@@ -25,6 +25,10 @@ permissions:
   contents: read
 
 jobs:
+  quality:
+    name: Shared checks
+    uses: ./.github/workflows/quality.yml
+
   macos:
     name: macOS
     uses: ./.github/workflows/macos.yml
@@ -36,7 +40,7 @@ jobs:
 
   release:
     name: Draft release
-    needs: [macos, windows]
+    needs: [quality, macos, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write

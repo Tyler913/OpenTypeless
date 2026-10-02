@@ -11,6 +11,8 @@ public static class Program
     /// <summary><c>OpenTypeless.exe --snapshot-ui &lt;dir&gt;</c> renders every settings page, the popover and the HUD states to PNGs.</summary>
     public static string? SnapshotDirectory { get; private set; }
 
+    internal static int SnapshotExitCode { get; set; }
+
     /// <summary>Started by the login Run entry rather than by the user.</summary>
     public static bool LaunchedAtLogin { get; private set; }
 
@@ -57,6 +59,6 @@ public static class Program
             _ = new App();
         });
         GC.KeepAlive(mutex);
-        return 0;
+        return SnapshotExitCode;
     }
 }

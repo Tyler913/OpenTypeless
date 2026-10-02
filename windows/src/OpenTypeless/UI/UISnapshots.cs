@@ -20,7 +20,6 @@ public static class UISnapshots
 {
     public static async Task Run(string directory)
     {
-        Directory.CreateDirectory(directory);
         var args = Environment.GetCommandLineArgs();
         Permissions.AssumeGranted = args.Contains("--demo");
         var lang = Array.IndexOf(args, "--lang") is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
@@ -29,9 +28,10 @@ public static class UISnapshots
             : [AppLanguage.Zh, AppLanguage.En];
         var settings = AppSettings.Shared;
         var original = settings.AppLanguage;
-        var controller = new SessionController();
         try
         {
+            Directory.CreateDirectory(directory);
+            var controller = new SessionController();
             foreach (var language in languages)
             {
                 settings.AppLanguage = language;
@@ -83,6 +83,7 @@ public static class UISnapshots
         }
         catch (Exception error)
         {
+            Program.SnapshotExitCode = 1;
             await File.WriteAllTextAsync(Path.Combine(directory, "error.txt"), error.ToString());
         }
         finally
@@ -96,6 +97,8 @@ public static class UISnapshots
     {
         var bitmap = new RenderTargetBitmap();
         await bitmap.RenderAsync(element);
+        if (bitmap.PixelWidth == 0 || bitmap.PixelHeight == 0)
+            throw new InvalidOperationException($"The UI rendered no pixels: {path}");
         var pixels = (await bitmap.GetPixelsAsync()).ToArray();
         // Backdrops (Mica, Acrylic) aren't part of the XAML tree, so composite over the theme's window colour.
         var background = element.ActualTheme == ElementTheme.Dark ? (byte)32 : (byte)243;

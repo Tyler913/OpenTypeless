@@ -344,9 +344,18 @@ GitHub Actions ([`.github/workflows/`](.github/workflows/)) builds only the app 
 | `windows/**` | **Windows build** on an x64 and an ARM64 runner: the tests, then each one's portable zip and installer; the installer is run, the app started and uninstalled again. |
 | `testdata/**` | Both builds: the shared test cases (word counts, prices, time saved) that both test suites read, so the two apps agree. |
 | `i18n/**` | Both builds: the translations both apps embed. |
-| Only `docs/`, `eval/`, `README*.md` | Nothing to build. |
+| `eval/**`, `scripts/ci/**` | Both builds, plus the shared validation checks. |
+| Only `docs/`, `README*.md` | No platform build; shared checks still run. |
 
-Every run also checks the translations (**Translations**, `python3 i18n/check.py`).
+Every CI run checks translations, workflow syntax, evaluation fixture structure and packaging templates (**Shared checks**). A macOS prompt change also runs the Windows tests that check prompt parity. Release and package-manager publishing run the same shared checks.
+
+Both architectures of both apps must render all settings pages, onboarding steps, the popover and five HUD states in English/Chinese and light/dark themes. Missing, blank or corrupt images, crashes and timeouts fail CI; screenshots and failure logs are retained as artifacts. These are rendering smoke tests, not interaction tests or visual baseline comparisons.
+
+Each packaged build also dictates a minute of synthetic speech through its own pipeline (`--transcribe-file --realtime`: the macOS app binary, `OpenTypeless.Cli.exe` from the Windows zip) against a local fake provider ([`scripts/ci/fake_provider.py`](scripts/ci/fake_provider.py)). The first request fails with 503 and the clean-up streams a few bytes at a time; the transcript and clean-up must come out exactly as spoken. No API key is used and no audio leaves the runner. The recording and the Windows zip sit in folders with spaces and Chinese in their names.
+
+The Linux pipeline tests run four times: en-US/UTC, de-DE (decimal comma), tr-TR (Turkish casing) and zh-CN/Asia/Shanghai.
+
+Core-library coverage reports are attached to macOS test runs and the Linux .NET test run. They do not measure the native app or prove end-to-end correctness. See the [coverage audit and testing proposal](docs/TESTING-AUDIT.zh-CN.md) for the remaining gaps.
 
 Download the builds from a run's **Artifacts** section on the Actions tab. **Actions → macOS build / Windows build → Run workflow** starts a build by hand.
 

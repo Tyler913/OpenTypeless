@@ -3220,5 +3220,86 @@
     "ru": "Эта модель не принимает подсказки из словаря; словарь используется только при очистке",
     "fr": "Ce modèle n’accepte pas d’indications de vocabulaire ; votre vocabulaire ne sert qu’au nettoyage",
     "de": "Dieses Modell nimmt keine Vokabelhinweise an; dein Vokabular wird nur bei der Bereinigung genutzt"
+  },
+  "Host": {
+    "ja": "ホスト",
+    "ko": "호스트",
+    "es": "Host",
+    "pt": "Host",
+    "ru": "Хост",
+    "fr": "Hébergeur",
+    "de": "Host"
+  },
+  "Automatic (fastest)": {
+    "ja": "自動（最速）",
+    "ko": "자동 (가장 빠름)",
+    "es": "Automático (el más rápido)",
+    "pt": "Automático (o mais rápido)",
+    "ru": "Автоматически (самый быстрый)",
+    "fr": "Automatique (le plus rapide)",
+    "de": "Automatisch (schnellster)"
+  },
+  "Automatic (by price)": {
+    "ja": "自動（価格順）",
+    "ko": "자동 (가격 기준)",
+    "es": "Automático (por precio)",
+    "pt": "Automático (por preço)",
+    "ru": "Автоматически (по цене)",
+    "fr": "Automatique (selon le prix)",
+    "de": "Automatisch (nach Preis)"
+  },
+  "OpenRouter uses whichever host is answering fastest": {
+    "ja": "OpenRouter がその時点で最も速く応答するホストを使います",
+    "ko": "OpenRouter가 지금 가장 빠르게 응답하는 호스트를 사용합니다",
+    "es": "OpenRouter usa el host que responda más rápido en ese momento",
+    "pt": "O OpenRouter usa o host que estiver respondendo mais rápido",
+    "ru": "OpenRouter использует хост, который сейчас отвечает быстрее всех",
+    "fr": "OpenRouter utilise l’hébergeur qui répond le plus vite",
+    "de": "OpenRouter nimmt den Host, der gerade am schnellsten antwortet"
+  },
+  "{0} is asked first; if it errors or is down, OpenRouter falls back to the fastest other host": {
+    "ja": "まず {0} にリクエストします。エラーや停止時は、OpenRouter が最も速い別のホストに切り替えます",
+    "ko": "먼저 {0}에 요청합니다. 오류가 나거나 중단되면 OpenRouter가 가장 빠른 다른 호스트로 전환합니다",
+    "es": "Primero se pregunta a {0}; si falla o no está disponible, OpenRouter pasa al host más rápido de los demás",
+    "pt": "{0} é consultado primeiro; se falhar ou estiver fora do ar, o OpenRouter passa para o host mais rápido entre os outros",
+    "ru": "Сначала запрос идёт к {0}; если он ошибается или недоступен, OpenRouter переключается на самый быстрый из остальных хостов",
+    "fr": "{0} est sollicité en premier ; en cas d’erreur ou d’indisponibilité, OpenRouter passe à l’hébergeur le plus rapide parmi les autres",
+    "de": "Zuerst wird {0} gefragt; bei einem Fehler oder Ausfall weicht OpenRouter auf den schnellsten anderen Host aus"
+  },
+  "Served by {0}. For speech to text OpenRouter picks by price and can't be told which.": {
+    "ja": "提供元：{0}。音声認識では OpenRouter が価格でホストを選び、指定はできません。",
+    "ko": "제공: {0}. 음성 인식은 OpenRouter가 가격으로 호스트를 고르며 지정할 수 없습니다.",
+    "es": "Lo sirven {0}. Para la transcripción, OpenRouter elige por precio y no se le puede indicar cuál.",
+    "pt": "Servido por {0}. Para a transcrição, o OpenRouter escolhe pelo preço e não é possível indicar qual.",
+    "ru": "Обслуживают: {0}. Для распознавания речи OpenRouter выбирает хост по цене, указать его нельзя.",
+    "fr": "Servi par {0}. Pour la transcription, OpenRouter choisit selon le prix et on ne peut pas lui imposer un hébergeur.",
+    "de": "Bereitgestellt von {0}. Für die Spracherkennung wählt OpenRouter nach Preis; vorgeben lässt sich das nicht."
+  },
+  " To always use Groq, choose Groq as the provider and add a Groq key.": {
+    "ja": "常に Groq を使うには、プロバイダを Groq にして Groq のキーを入力してください。",
+    "ko": " 항상 Groq를 쓰려면 제공업체를 Groq로 바꾸고 Groq 키를 입력하세요.",
+    "es": " Para usar siempre Groq, elige Groq como proveedor y añade una clave de Groq.",
+    "pt": " Para usar sempre o Groq, escolha o Groq como provedor e adicione uma chave do Groq.",
+    "ru": " Чтобы всегда использовать Groq, выберите Groq как провайдера и добавьте ключ Groq.",
+    "fr": " Pour toujours utiliser Groq, choisissez Groq comme fournisseur et ajoutez une clé Groq.",
+    "de": " Um immer Groq zu nutzen, wähle Groq als Anbieter und trage einen Groq-Schlüssel ein."
+  },
+  "{0} / 1M in": {
+    "ja": "入力 {0} / 100万",
+    "ko": "입력 {0} / 100만",
+    "es": "{0} / 1M entrada",
+    "pt": "{0} / 1M entrada",
+    "ru": "{0} / 1 млн входных",
+    "fr": "{0} / 1M en entrée",
+    "de": "{0} / 1 Mio. Eingabe"
+  },
+  "{0}% up": {
+    "ja": "稼働率 {0}%",
+    "ko": "가동률 {0}%",
+    "es": "{0} % disponible",
+    "pt": "{0}% disponível",
+    "ru": "доступность {0}%",
+    "fr": "{0} % de disponibilité",
+    "de": "{0} % verfügbar"
   }
 }

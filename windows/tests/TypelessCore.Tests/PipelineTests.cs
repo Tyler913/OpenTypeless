@@ -270,6 +270,56 @@ public class PipelineTests
     }
 
     [Fact]
+    public void PolishAsksTheChosenHostFirst()
+    {
+        var client = new ApiClient(Endpoint(ProviderId.OpenRouter));
+        var automatic = client.PolishBody("x", new PolishOptions("m"), true)["provider"]!.AsObject();
+        Assert.Equal("latency", (string?)automatic["sort"]);
+        Assert.False(automatic.ContainsKey("order"));
+        var pinned = client.PolishBody("x", new PolishOptions("m", Host: "groq"), true)["provider"]!.AsObject();
+        // The chosen host goes first, and the others stay behind it in case it's down.
+        Assert.Equal(new[] { "groq" }, pinned["order"]!.AsArray().Select(n => (string?)n));
+        Assert.True((bool)pinned["allow_fallbacks"]!);
+        Assert.Equal("latency", (string?)pinned["sort"]);
+        Assert.False(client.PolishBody("x", new PolishOptions("m", Host: " "), true)["provider"]!.AsObject().ContainsKey("order"));
+        // Only OpenRouter routes between hosts.
+        Assert.False(new ApiClient(Endpoint(ProviderId.Groq)).PolishBody("x", new PolishOptions("m", Host: "groq"), true).ContainsKey("provider"));
+    }
+
+    [Fact]
+    public void HostsAreParsedCheapestFirst()
+    {
+        var json = """
+            {"data":{"id":"openai/gpt-oss-120b","endpoints":[
+              {"provider_name":"Groq","tag":"groq","pricing":{"prompt":"0.00000015"},"uptime_last_30m":100},
+              {"provider_name":"DeepInfra","tag":"deepinfra/bf16","pricing":{"prompt":"0.000000037"},"uptime_last_30m":96.5},
+              {"provider_name":"DeepInfra","tag":"deepinfra/bf16","pricing":{"prompt":"0.000000037"}},
+              {"provider_name":"Odd","pricing":{"prompt":"0"}},
+              {"provider_name":"Cerebras","tag":"cerebras/fp16","pricing":{}}
+            ]}}
+            """;
+        var hosts = ApiClient.ParseHosts(MockOpenRouter.Utf8(json));
+        Assert.Equal(new[] { "deepinfra/bf16", "groq", "cerebras/fp16" }, hosts.Select(h => h.Tag));
+        Assert.Equal(new ModelHost("deepinfra/bf16", "DeepInfra", 0.000000037, 96.5), hosts[0]);
+        Assert.Null(hosts[2].InputPrice);
+        Assert.Empty(ApiClient.ParseHosts(MockOpenRouter.Utf8("{}")));
+        Assert.Empty(ApiClient.ParseHosts(MockOpenRouter.Utf8("not json")));
+    }
+
+    [Fact]
+    public async Task ListHostsAsksForTheModelsEndpoints()
+    {
+        MockOpenRouter.Handler = (request, _) =>
+        {
+            Assert.EndsWith("/models/openai/gpt-oss-120b/endpoints", request.RequestUri!.AbsolutePath);
+            return (200, MockOpenRouter.Utf8("""{"data":{"endpoints":[{"provider_name":"Groq","tag":"groq"}]}}"""));
+        };
+        var client = new ApiClient(Endpoint(ProviderId.OpenRouter), MockOpenRouter.Client());
+        Assert.Equal(new[] { "groq" }, (await client.ListHosts("openai/gpt-oss-120b:nitro")).Select(h => h.Tag));
+        Assert.Empty(await new ApiClient(Endpoint(ProviderId.Groq), MockOpenRouter.Client()).ListHosts("a/b"));
+    }
+
+    [Fact]
     public async Task PolishRetriesWithoutRejectedParameter()
     {
         var bodies = new List<JsonNode>();

@@ -279,8 +279,54 @@ public sealed record ModelInfo(string Id, string Name, IReadOnlyList<string> Sup
     }
 }
 
+/// <summary>One company serving a model on OpenRouter.</summary>
+/// <param name="Tag">What a request names it by in <c>provider.order</c>, e.g. "groq" or "deepinfra/fp8".</param>
+/// <param name="InputPrice">Input price, USD per token (per second of audio for speech models).</param>
+/// <param name="Uptime">Share of requests that succeeded over the last 30 minutes, 0–100.</param>
+public sealed record ModelHost(string Tag, string Name, double? InputPrice = null, double? Uptime = null);
+
 public sealed partial class ApiClient
 {
+    /// <summary>The hosts serving an OpenRouter model, cheapest first, from GET /models/{id}/endpoints.</summary>
+    public async Task<List<ModelHost>> ListHosts(string model, CancellationToken cancellationToken = default)
+    {
+        // A variant suffix (":nitro", ":free") isn't part of the path.
+        var id = model.Trim().Split(':')[0];
+        if (!IsOpenRouter || !id.Contains('/')) return [];
+        using var request = new HttpRequestMessage(HttpMethod.Get, Url("models/" + id + "/endpoints"));
+        var (status, data) = await Send(request, 20, cancellationToken).ConfigureAwait(false);
+        // An ID OpenRouter doesn't know: nothing to choose from.
+        if ((int)status == 404) return [];
+        if (!IsSuccess(status)) throw ApiException.Http((int)status, ErrorMessage(data));
+        return ParseHosts(data);
+    }
+
+    internal static List<ModelHost> ParseHosts(byte[] data)
+    {
+        JsonArray? rows;
+        try
+        {
+            rows = ((JsonNode.Parse(data) as JsonObject)?["data"] as JsonObject)?["endpoints"] as JsonArray;
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+        if (rows is null) return [];
+        var seen = new HashSet<string>();
+        var hosts = new List<ModelHost>();
+        foreach (var node in rows)
+        {
+            if (node is not JsonObject row || !TryString(row["tag"], out var tag) || tag.Length == 0 || !seen.Add(tag)) continue;
+            double? price = TryString((row["pricing"] as JsonObject)?["prompt"], out var text)
+                && double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var p) ? p : null;
+            double? uptime = row["uptime_last_30m"] is JsonValue value && value.TryGetValue<double>(out var u) ? u : null;
+            hosts.Add(new ModelHost(tag, TryString(row["provider_name"], out var name) ? name : tag, price, uptime));
+        }
+        return hosts.OrderBy(h => h.InputPrice ?? double.PositiveInfinity).ThenBy(h => h.Name, StringComparer.Ordinal)
+            .ThenBy(h => h.Tag, StringComparer.Ordinal).ToList();
+    }
+
     /// <summary>GET /models. On OpenRouter, <c>outputModality: "transcription"</c> lists STT models.</summary>
     public async Task<List<ModelInfo>> ListModels(string? outputModality = null, CancellationToken cancellationToken = default)
     {

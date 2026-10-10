@@ -133,7 +133,8 @@ public static class Cli
             PolishRoute Route(ProviderEndpoint endpoint, string model) => new(new ApiClient(endpoint), new PolishOptions(
                 model, settings.VocabularyList, settings.ExtraInstructions,
                 endpoint.Id == ProviderId.OpenRouter ? models?.FirstOrDefault(m => m.Id == model) : null,
-                Misheard: settings.MisheardHints));
+                Misheard: settings.MisheardHints,
+                Host: endpoint.Id == ProviderId.OpenRouter ? settings.OpenRouterHost(model) : null));
             var outcome = await HedgedPolish.Run(raw, Route(polishEndpoint, settings.PolishModel.Trim()),
                                                  backupEndpoint is null ? null : Route(backupEndpoint, settings.PolishBackupModel.Trim()));
             var result = outcome.Result;

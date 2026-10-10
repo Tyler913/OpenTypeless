@@ -10,15 +10,19 @@ public struct PolishOptions: Sendable {
     public var modelInfo: APIClient.ModelInfo?
     /// Replaces the built-in system prompt (used by the prompt evaluation tool).
     public var systemPromptOverride: String?
+    /// The OpenRouter host (an endpoint tag such as "groq" or "deepinfra/fp8") the user wants this model served by;
+    /// nil lets OpenRouter pick the fastest.
+    public var host: String?
 
     public init(model: String, vocabulary: [String] = [], misheard: [Correction] = [], extraInstructions: String = "",
-                modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil) {
+                modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil) {
         self.model = model
         self.vocabulary = vocabulary
         self.misheard = misheard
         self.extraInstructions = extraInstructions
         self.modelInfo = modelInfo
         self.systemPromptOverride = systemPromptOverride
+        self.host = host
     }
 }
 
@@ -97,6 +101,14 @@ extension APIClient {
         "allow_fallbacks": true,
     ]
 
+    /// `polishRouting`, with the user's chosen host tried first. Should that host be down or busy, OpenRouter still
+    /// falls back to the others, fastest first, so a dictation never fails over the choice.
+    static func polishRouting(host: String?) -> [String: Any] {
+        var routing = polishRouting
+        if let host = host?.trimmingCharacters(in: .whitespaces), !host.isEmpty { routing["order"] = [host] }
+        return routing
+    }
+
     /// Builds the chat request body. Optional tuning parameters are only sent where they're known to
     /// be accepted: OpenRouter normalises them for every model, while e.g. OpenAI's reasoning models
     /// reject `temperature`.
@@ -113,7 +125,7 @@ extension APIClient {
         guard includeOptional else { return body }
         if isOpenRouter {
             body["max_tokens"] = max(1024, transcript.count * 3)
-            body["provider"] = Self.polishRouting
+            body["provider"] = Self.polishRouting(host: options.host)
             if let reasoning = ReasoningConfig.body(for: options.modelInfo) { body["reasoning"] = reasoning }
             if options.modelInfo?.supportedParameters.contains("temperature") ?? true { body["temperature"] = 0.2 }
         } else if endpoint.id != .openai {

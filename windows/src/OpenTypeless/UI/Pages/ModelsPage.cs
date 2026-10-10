@@ -28,6 +28,9 @@ public sealed class ModelsPage : PageBase
     private readonly PriceEditor _chatPrice = new(speech: false);
     private readonly PriceEditor _backupPrice = new(speech: false);
     private readonly PriceEditor _sttBackupPrice = new(speech: true);
+    private readonly HostPicker _sttHost = new(speech: true);
+    private readonly HostPicker _chatHost = new(speech: false);
+    private readonly HostPicker _backupHost = new(speech: false);
 
     public ModelsPage(SettingsWindow window, SessionController controller) : base(SettingsPage.Models)
     {
@@ -37,12 +40,14 @@ public sealed class ModelsPage : PageBase
         {
             _settings.SttModel = text;
             _sttPrice.Show(_settings.SttProvider, text);
+            _sttHost.Show(_settings.SttProvider, text);
             if (_sttRow != null) _sttRow.Subtitle = VocabularyHintNote();
         };
         _chatField.TextChanged = text =>
         {
             _settings.PolishModel = text;
             _chatPrice.Show(_settings.PolishProvider, text);
+            _chatHost.Show(_settings.PolishProvider, text);
             _controller.RefreshModelInfo();
         };
         _sttBackupField.TextChanged = text =>
@@ -54,6 +59,7 @@ public sealed class ModelsPage : PageBase
         {
             _settings.PolishBackupModel = text;
             _backupPrice.Show(_settings.PolishBackupProvider, text);
+            _backupHost.Show(_settings.PolishBackupProvider, text);
             _controller.RefreshModelInfo();
         };
         _settings.PropertyChanged += OnSettingsChanged;
@@ -104,6 +110,7 @@ public sealed class ModelsPage : PageBase
             if (editor.Row != null) editor.Row.Trailing = null;
             editor.Row = null;
         }
+        foreach (var picker in new[] { _sttHost, _chatHost, _backupHost }) picker.Detach();
         _chatRow = null;
         _backupRow = null;
         _sttField.Text = _settings.SttModel;
@@ -125,6 +132,7 @@ public sealed class ModelsPage : PageBase
         stt.Body.Add(new CardDivider());
         _sttRow = new CardRow { Glyph = Glyphs.Microphone, Tint = Tint.Blue, Title = L("模型", "Model"), Subtitle = VocabularyHintNote(), Trailing = _sttField };
         stt.Body.Add(_sttRow);
+        _sttHost.AddTo(stt.Body);
         stt.Body.Add(new CardDivider());
         var sttPriceRow = PriceRow(_sttPrice);
         _sttPrice.Row = sttPriceRow;
@@ -209,6 +217,7 @@ public sealed class ModelsPage : PageBase
                 Trailing = _chatField,
             };
             polish.Body.Add(_chatRow);
+            _chatHost.AddTo(polish.Body);
             polish.Body.Add(new CardDivider());
             var chatPriceRow = PriceRow(_chatPrice);
             _chatPrice.Row = chatPriceRow;
@@ -249,6 +258,7 @@ public sealed class ModelsPage : PageBase
                     Trailing = _backupField,
                 };
                 polish.Body.Add(_backupRow);
+                _backupHost.AddTo(polish.Body);
                 polish.Body.Add(new CardDivider());
                 var backupPriceRow = PriceRow(_backupPrice);
                 _backupPrice.Row = backupPriceRow;
@@ -267,6 +277,9 @@ public sealed class ModelsPage : PageBase
         }
 
         ShowPrices();
+        _sttHost.Show(_settings.SttProvider, _settings.SttModel);
+        if (_settings.PolishEnabled) _chatHost.Show(_settings.PolishProvider, _settings.PolishModel);
+        if (_settings.PolishEnabled && _settings.PolishBackupEnabled) _backupHost.Show(_settings.PolishBackupProvider, _settings.PolishBackupModel);
         LoadModelsIfNeeded();
     }
 
@@ -537,5 +550,146 @@ internal sealed class PriceEditor : UserControl
         };
         box.ValueChanged += (_, e) => changed(double.IsNaN(e.NewValue) ? null : Math.Max(0, e.NewValue));
         return box;
+    }
+}
+
+/// <summary>
+/// Which company serves an OpenRouter model. For clean-up: whichever answers fastest, or one the user picks (asked
+/// first, with OpenRouter falling back to the others). For speech to text it can't be picked: OpenRouter ignores
+/// routing on /audio/transcriptions and chooses by price (tested Oct 2026), so the row only says so. Shown only
+/// when the model has more than one host (or one was picked before).
+/// </summary>
+internal sealed class HostPicker
+{
+    private readonly bool _speech;
+    private readonly AppSettings _settings = AppSettings.Shared;
+    private readonly CardDivider _divider = new();
+    private readonly CardRow _row;
+    private List<ModelHost> _hosts = [];
+    private string _model = "";
+    private string? _loaded;
+    private int _version;
+
+    public HostPicker(bool speech)
+    {
+        _speech = speech;
+        _row = new CardRow { Glyph = Glyphs.Globe, Tint = Tint.Gray, Title = L("托管方", "Host") };
+        SetVisible(false);
+    }
+
+    private UIElementCollection? _body;
+
+    /// <summary>Puts the divider and row at the end of a card (after the model row).</summary>
+    public void AddTo(UIElementCollection body)
+    {
+        Detach();
+        _body = body;
+        body.Add(_divider);
+        body.Add(_row);
+    }
+
+    /// <summary>Takes the divider and row out of the card a previous render put them in, so they can be reused.</summary>
+    public void Detach()
+    {
+        _body?.Remove(_divider);
+        _body?.Remove(_row);
+        _body = null;
+    }
+
+    public void Show(ProviderId provider, string model)
+    {
+        _model = model.Trim();
+        var key = provider == ProviderId.OpenRouter ? _model : "";
+        if (key == _loaded)
+        {
+            Refresh();
+            return;
+        }
+        _loaded = key;
+        _hosts = [];
+        Refresh();
+        if (key.Length > 0) _ = Load(key, ++_version);
+    }
+
+    private async Task Load(string model, int version)
+    {
+        // Typing a model ID changes it on every key: wait for a pause before asking.
+        await Task.Delay(400);
+        if (version != _version || _settings.Endpoint(ProviderId.OpenRouter) is not { } endpoint) return;
+        List<ModelHost> hosts;
+        try
+        {
+            hosts = await new ApiClient(endpoint).ListHosts(model);
+        }
+        catch
+        {
+            hosts = [];
+        }
+        if (version != _version) return;
+        _hosts = hosts;
+        Refresh();
+    }
+
+    private void Refresh()
+    {
+        var chosen = _speech || _loaded is not { Length: > 0 } ? null : _settings.OpenRouterHost(_model);
+        SetVisible(_loaded is { Length: > 0 } && (_hosts.Count > 1 || chosen != null));
+        if (_speech)
+        {
+            var names = string.Join(", ", _hosts.Select(h => h.Name).Distinct());
+            var text = L($"由 {names} 提供。语音转文字由 OpenRouter 按价格挑选，不能指定。",
+                         $"Served by {names}. For speech to text OpenRouter picks by price and can't be told which.");
+            if (_hosts.Any(h => h.Tag.StartsWith("groq", StringComparison.Ordinal)))
+                text += L("想一直用 Groq，就把服务商换成 Groq 并填上它的 Key。", " To always use Groq, choose Groq as the provider and add a Groq key.");
+            _row.Subtitle = text;
+            _row.Trailing = Ui.Text(L("自动（按价格）", "Automatic (by price)"), 12.5, foreground: Ui.Secondary);
+            return;
+        }
+
+        var automatic = L("自动（最快）", "Automatic (fastest)");
+        _row.Subtitle = chosen is null
+            ? L("OpenRouter 选当下延迟最低的托管方", "OpenRouter uses whichever host is answering fastest")
+            : L($"先请求 {Label(chosen)}；它出错或不可用时，OpenRouter 自动换最快的另一家",
+                $"{Label(chosen)} is asked first; if it errors or is down, OpenRouter falls back to the fastest other host");
+        var flyout = new MenuFlyout();
+        flyout.Items.Add(Item(automatic, null, chosen is null));
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        if (chosen != null && _hosts.All(h => h.Tag != chosen)) flyout.Items.Add(Item(chosen, chosen, true));
+        foreach (var host in _hosts) flyout.Items.Add(Item(Detail(host), host.Tag, host.Tag == chosen));
+        _row.Trailing = new DropDownButton { Content = chosen is null ? automatic : Label(chosen), Flyout = flyout };
+    }
+
+    private ToggleMenuFlyoutItem Item(string text, string? tag, bool isChecked)
+    {
+        var item = new ToggleMenuFlyoutItem { Text = text, IsChecked = isChecked };
+        item.Click += (_, _) =>
+        {
+            _settings.SetOpenRouterHost(tag, _model);
+            Refresh();
+        };
+        return item;
+    }
+
+    /// <summary>"DeepInfra · turbo" for the tag "deepinfra/turbo".</summary>
+    private string Label(string tag)
+    {
+        if (_hosts.FirstOrDefault(h => h.Tag == tag) is not { } host) return tag;
+        var slash = tag.IndexOf('/');
+        return slash < 0 ? host.Name : host.Name + " · " + tag[(slash + 1)..];
+    }
+
+    /// <summary>"DeepInfra · turbo — $0.15 / 1M in · 98% up"</summary>
+    private string Detail(ModelHost host)
+    {
+        var parts = new List<string>();
+        if (host.InputPrice is { } price)
+            parts.Add(L($"输入 {UsageFormat.Rate(price * 1_000_000)} / 百万", $"{UsageFormat.Rate(price * 1_000_000)} / 1M in"));
+        if (host.Uptime is { } uptime && uptime < 99.5) parts.Add(L($"可用率 {(int)uptime}%", $"{(int)uptime}% up"));
+        return Label(host.Tag) + (parts.Count == 0 ? "" : " — " + string.Join(" · ", parts));
+    }
+
+    private void SetVisible(bool visible)
+    {
+        _divider.Visibility = _row.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
     }
 }

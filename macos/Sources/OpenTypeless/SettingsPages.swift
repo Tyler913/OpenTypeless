@@ -722,6 +722,9 @@ struct ModelsPage: View {
                             : L("这个模型不接收词汇提示，词汇表只用于文字整理", "This model takes no vocabulary hints; your vocabulary is used in clean-up only")) {
                     ModelField(text: $settings.sttModel, models: sttModels)
                 }
+                if settings.sttProvider == .openrouter {
+                    SpeechHostRow(settings: settings, model: settings.sttModel)
+                }
                 CardDivider(inset: 50)
                 PriceRow(settings: settings, provider: settings.sttProvider, model: settings.sttModel, speech: true)
                 CardDivider(inset: 50)
@@ -780,6 +783,9 @@ struct ModelsPage: View {
                                 ? L("推理会自动关闭或降到最低，以减少延迟", "Reasoning is turned off or minimised for speed") : nil) {
                         ModelField(text: $settings.polishModel, models: chatModels)
                     }
+                    if settings.polishProvider == .openrouter {
+                        HostRow(settings: settings, model: settings.polishModel)
+                    }
                     CardDivider(inset: 50)
                     PriceRow(settings: settings, provider: settings.polishProvider, model: settings.polishModel, speech: false)
                     CardDivider(inset: 50)
@@ -798,6 +804,9 @@ struct ModelsPage: View {
                         CardRow(icon: "cpu", iconColor: .pink, title: L("备用模型 ID", "Backup model ID"),
                                 subtitle: L("选一个不同厂商的快速模型，两边不容易同时变慢", "Pick a fast model from another vendor so both are rarely slow at once")) {
                             ModelField(text: $settings.polishBackupModel, models: backupChatModels)
+                        }
+                        if settings.polishBackupProvider == .openrouter {
+                            HostRow(settings: settings, model: settings.polishBackupModel)
                         }
                         CardDivider(inset: 50)
                         PriceRow(settings: settings, provider: settings.polishBackupProvider, model: settings.polishBackupModel, speech: false)
@@ -875,6 +884,112 @@ private struct ProviderPicker: View {
             Text(selection.displayName)
         }
         .fixedSize()
+    }
+}
+
+/// Which company serves an OpenRouter clean-up model: whichever answers fastest, or one the user picks. Shown only when
+/// the model has more than one host (or one was picked before).
+private struct HostRow: View {
+    @ObservedObject var settings: AppSettings
+    let model: String
+    @State private var hosts: [APIClient.ModelHost] = []
+
+    var body: some View {
+        // A stack rather than a Group: an empty Group is no view at all, so its task would never run.
+        VStack(spacing: 0) {
+            if hosts.count > 1 || chosen != nil {
+                CardDivider(inset: 50)
+                CardRow(icon: "server.rack", iconColor: .gray, title: L("托管方", "Host"), subtitle: subtitle) {
+                    Menu {
+                        Button {
+                            settings.setOpenRouterHost(nil, for: model)
+                        } label: {
+                            if chosen == nil { Label(automatic, systemImage: "checkmark") } else { Text(automatic) }
+                        }
+                        Divider()
+                        if let chosen, !hosts.contains(where: { $0.tag == chosen }) {
+                            Label(chosen, systemImage: "checkmark")
+                        }
+                        ForEach(hosts) { host in
+                            Button {
+                                settings.setOpenRouterHost(host.tag, for: model)
+                            } label: {
+                                if host.tag == chosen { Label(detail(host), systemImage: "checkmark") } else { Text(detail(host)) }
+                            }
+                        }
+                    } label: {
+                        Text(chosen.map(label) ?? automatic)
+                    }
+                    .fixedSize()
+                }
+            }
+        }
+        .task(id: model) {
+            hosts = []
+            guard let endpoint = settings.endpoint(for: .openrouter) else { return }
+            hosts = (try? await APIClient(endpoint: endpoint).listHosts(model: model)) ?? []
+        }
+    }
+
+    private var chosen: String? { settings.openRouterHost(for: model) }
+    private var automatic: String { L("自动（最快）", "Automatic (fastest)") }
+
+    private var subtitle: String {
+        guard let chosen else {
+            return L("OpenRouter 选当下延迟最低的托管方", "OpenRouter uses whichever host is answering fastest")
+        }
+        return L("先请求 \(label(chosen))；它出错或不可用时，OpenRouter 自动换最快的另一家",
+                 "\(label(chosen)) is asked first; if it errors or is down, OpenRouter falls back to the fastest other host")
+    }
+
+    /// "DeepInfra · turbo" for the tag "deepinfra/turbo".
+    private func label(_ tag: String) -> String {
+        guard let host = hosts.first(where: { $0.tag == tag }) else { return tag }
+        let variant = tag.split(separator: "/", maxSplits: 1).dropFirst().first.map { " · \($0)" } ?? ""
+        return host.name + variant
+    }
+
+    /// "DeepInfra · turbo — $0.15 / 1M in · 98% up"
+    private func detail(_ host: APIClient.ModelHost) -> String {
+        var parts: [String] = []
+        if let price = host.inputPrice { parts.append(L("输入 \(UsageFormat.rate(price * 1_000_000)) / 百万", "\(UsageFormat.rate(price * 1_000_000)) / 1M in")) }
+        if let uptime = host.uptime, uptime < 99.5 { parts.append(L("可用率 \(Int(uptime))%", "\(Int(uptime))% up")) }
+        return label(host.tag) + (parts.isEmpty ? "" : " — " + parts.joined(separator: " · "))
+    }
+}
+
+/// Why an OpenRouter speech model served by several hosts has no host choice: OpenRouter ignores routing on
+/// /audio/transcriptions and picks by price (tested Oct 2026: `order`, `only` and `ignore` all made no difference).
+private struct SpeechHostRow: View {
+    @ObservedObject var settings: AppSettings
+    let model: String
+    @State private var hosts: [APIClient.ModelHost] = []
+
+    var body: some View {
+        // A stack rather than a Group: an empty Group is no view at all, so its task would never run.
+        VStack(spacing: 0) {
+            if hosts.count > 1 {
+                CardDivider(inset: 50)
+                CardRow(icon: "server.rack", iconColor: .gray, title: L("托管方", "Host"), subtitle: subtitle) {
+                    Text(L("自动（按价格）", "Automatic (by price)")).font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .task(id: model) {
+            hosts = []
+            guard let endpoint = settings.endpoint(for: .openrouter) else { return }
+            hosts = (try? await APIClient(endpoint: endpoint).listHosts(model: model)) ?? []
+        }
+    }
+
+    private var subtitle: String {
+        let names = ListFormatter.localizedString(byJoining: Array(NSOrderedSet(array: hosts.map(\.name))) as? [String] ?? [])
+        var text = L("由 \(names) 提供。语音转文字由 OpenRouter 按价格挑选，不能指定。",
+                     "Served by \(names). For speech to text OpenRouter picks by price and can't be told which.")
+        if hosts.contains(where: { $0.tag.hasPrefix("groq") }) {
+            text += L("想一直用 Groq，就把服务商换成 Groq 并填上它的 Key。", " To always use Groq, choose Groq as the provider and add a Groq key.")
+        }
+        return text
     }
 }
 

@@ -635,7 +635,8 @@ final class SessionController: ObservableObject {
             vocabulary: settings.vocabularyList,
             misheard: settings.misheardHints,
             extraInstructions: settings.extraInstructions,
-            modelInfo: endpoint.id == .openrouter ? modelInfo[model] : nil
+            modelInfo: endpoint.id == .openrouter ? modelInfo[model] : nil,
+            host: endpoint.id == .openrouter ? settings.openRouterHost(for: model) : nil
         ))
     }
 

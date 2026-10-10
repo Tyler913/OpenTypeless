@@ -694,7 +694,8 @@ public sealed class SessionController
             _settings.VocabularyList,
             _settings.ExtraInstructions,
             endpoint.Id == ProviderId.OpenRouter ? _modelInfo.GetValueOrDefault(model) : null,
-            Misheard: _settings.MisheardHints));
+            Misheard: _settings.MisheardHints,
+            Host: endpoint.Id == ProviderId.OpenRouter ? _settings.OpenRouterHost(model) : null));
     }
 
     /// <summary>

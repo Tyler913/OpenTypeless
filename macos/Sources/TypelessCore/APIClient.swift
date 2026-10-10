@@ -280,6 +280,57 @@ extension APIClient {
         }
     }
 
+    /// One company serving a model on OpenRouter.
+    public struct ModelHost: Sendable, Hashable, Identifiable {
+        /// What a request names it by in `provider.order`, e.g. "groq" or "deepinfra/fp8".
+        public let tag: String
+        public let name: String
+        /// Input price, USD per token (per second of audio for speech models).
+        public let inputPrice: Double?
+        /// Share of requests that succeeded over the last 30 minutes, 0–100.
+        public let uptime: Double?
+
+        public var id: String { tag }
+
+        public init(tag: String, name: String, inputPrice: Double? = nil, uptime: Double? = nil) {
+            self.tag = tag
+            self.name = name
+            self.inputPrice = inputPrice
+            self.uptime = uptime
+        }
+    }
+
+    /// The hosts serving an OpenRouter model, cheapest first, from GET /models/{id}/endpoints.
+    public func listHosts(model: String) async throws -> [ModelHost] {
+        // A variant suffix (":nitro", ":free") isn't part of the path.
+        let id = model.trimmingCharacters(in: .whitespaces).split(separator: ":").first.map(String.init) ?? ""
+        guard isOpenRouter, id.contains("/") else { return [] }
+        var request = URLRequest(url: url("models/\(id)/endpoints"))
+        request.timeoutInterval = 20
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.badResponse("no HTTP response") }
+        // An ID OpenRouter doesn't know: nothing to choose from.
+        if http.statusCode == 404 { return [] }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.http(status: http.statusCode, message: Self.errorMessage(from: data))
+        }
+        return Self.parseHosts(data)
+    }
+
+    static func parseHosts(_ data: Data) -> [ModelHost] {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let model = object["data"] as? [String: Any],
+              let rows = model["endpoints"] as? [[String: Any]] else { return [] }
+        var seen = Set<String>()
+        let hosts = rows.compactMap { row -> ModelHost? in
+            guard let tag = row["tag"] as? String, !tag.isEmpty, seen.insert(tag).inserted else { return nil }
+            let price = ((row["pricing"] as? [String: Any])?["prompt"] as? String).flatMap(Double.init)
+            return ModelHost(tag: tag, name: (row["provider_name"] as? String) ?? tag, inputPrice: price,
+                             uptime: (row["uptime_last_30m"] as? NSNumber)?.doubleValue)
+        }
+        return hosts.sorted { ($0.inputPrice ?? .infinity, $0.name, $0.tag) < ($1.inputPrice ?? .infinity, $1.name, $1.tag) }
+    }
+
     /// Verifies the key/URL work: OpenRouter's /models is public, so check its key endpoint instead.
     public func verifyCredentials() async throws -> String {
         if isOpenRouter {

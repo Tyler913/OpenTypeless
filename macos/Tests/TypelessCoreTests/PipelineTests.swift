@@ -228,6 +228,51 @@ extension PipelineTests {
         #expect(Set(bare.keys) == ["model", "stream", "messages"])
     }
 
+    @Test func polishAsksTheChosenHostFirst() {
+        let client = APIClient(endpoint: endpoint(.openrouter))
+        let automatic = client.polishBody(transcript: "x", options: PolishOptions(model: "m"), includeOptional: true)
+        let routing = automatic["provider"] as? [String: Any]
+        #expect(routing?["sort"] as? String == "latency" && routing?["order"] == nil)
+        let pinned = client.polishBody(transcript: "x", options: PolishOptions(model: "m", host: "groq"), includeOptional: true)
+        let pinnedRouting = pinned["provider"] as? [String: Any]
+        // The chosen host goes first, and the others stay behind it in case it's down.
+        #expect(pinnedRouting?["order"] as? [String] == ["groq"])
+        #expect(pinnedRouting?["allow_fallbacks"] as? Bool == true && pinnedRouting?["sort"] as? String == "latency")
+        let blank = client.polishBody(transcript: "x", options: PolishOptions(model: "m", host: " "), includeOptional: true)
+        #expect((blank["provider"] as? [String: Any])?["order"] == nil)
+        // Only OpenRouter routes between hosts.
+        let groq = APIClient(endpoint: endpoint(.groq)).polishBody(transcript: "x", options: PolishOptions(model: "m", host: "groq"),
+                                                                   includeOptional: true)
+        #expect(groq["provider"] == nil)
+    }
+
+    @Test func hostsAreParsedCheapestFirst() {
+        let json = #"""
+        {"data":{"id":"openai/gpt-oss-120b","endpoints":[
+          {"provider_name":"Groq","tag":"groq","pricing":{"prompt":"0.00000015"},"uptime_last_30m":100},
+          {"provider_name":"DeepInfra","tag":"deepinfra/bf16","pricing":{"prompt":"0.000000037"},"uptime_last_30m":96.5},
+          {"provider_name":"DeepInfra","tag":"deepinfra/bf16","pricing":{"prompt":"0.000000037"}},
+          {"provider_name":"Odd","pricing":{"prompt":"0"}},
+          {"provider_name":"Cerebras","tag":"cerebras/fp16","pricing":{}}
+        ]}}
+        """#
+        let hosts = APIClient.parseHosts(Data(json.utf8))
+        #expect(hosts.map(\.tag) == ["deepinfra/bf16", "groq", "cerebras/fp16"])
+        #expect(hosts[0].name == "DeepInfra" && hosts[0].uptime == 96.5 && hosts[0].inputPrice == 0.000000037)
+        #expect(hosts[2].inputPrice == nil)
+        #expect(APIClient.parseHosts(Data("{}".utf8)).isEmpty)
+    }
+
+    @Test func listHostsAsksForTheModelsEndpoints() async throws {
+        MockOpenRouter.handler = { request, _ in
+            #expect(request.url?.path.hasSuffix("/models/openai/gpt-oss-120b/endpoints") == true)
+            return (200, Data(#"{"data":{"endpoints":[{"provider_name":"Groq","tag":"groq"}]}}"#.utf8))
+        }
+        let client = APIClient(endpoint: endpoint(.openrouter), session: MockOpenRouter.session())
+        #expect(try await client.listHosts(model: "openai/gpt-oss-120b:nitro").map(\.tag) == ["groq"])
+        #expect(try await APIClient(endpoint: endpoint(.groq), session: MockOpenRouter.session()).listHosts(model: "a/b").isEmpty)
+    }
+
     @Test func polishRetriesWithoutRejectedParameter() async throws {
         var bodies: [[String: Any]] = []
         MockOpenRouter.handler = { _, body in

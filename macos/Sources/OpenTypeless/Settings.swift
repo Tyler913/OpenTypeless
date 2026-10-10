@@ -60,6 +60,8 @@ final class AppSettings: ObservableObject {
     @Published private(set) var baseURLs: [String: String]
     /// Prices the user entered for models of providers other than OpenRouter (whose prices are live), by `ModelPrice.key`.
     @Published private(set) var modelPrices: [String: ModelPrice]
+    /// The OpenRouter host the user picked for a clean-up model (endpoint tag, by model ID); none means automatic.
+    @Published private(set) var openRouterHosts: [String: String]
 
     private init() {
         // In CLI mode with OPENROUTER_API_KEY set, the saved keys aren't needed.
@@ -71,6 +73,7 @@ final class AppSettings: ObservableObject {
         forgottenTerms = Set(UserDefaults.standard.stringArray(forKey: "forgottenVocabulary") ?? [])
         modelPrices = UserDefaults.standard.data(forKey: "modelPrices")
             .flatMap { try? JSONDecoder().decode([String: ModelPrice].self, from: $0) } ?? [:]
+        openRouterHosts = (UserDefaults.standard.dictionary(forKey: "openRouterHosts") as? [String: String]) ?? [:]
     }
 
     // MARK: Hotkey
@@ -169,6 +172,20 @@ final class AppSettings: ObservableObject {
         guard id != polishBackupProvider else { return }
         polishBackupProvider = id
         polishBackupModel = id.defaultBackupChatModel
+    }
+
+    // MARK: OpenRouter hosts
+
+    /// The host to ask first for this model, or nil to let OpenRouter pick the fastest.
+    func openRouterHost(for model: String) -> String? {
+        openRouterHosts[model.trimmingCharacters(in: .whitespaces)]
+    }
+
+    func setOpenRouterHost(_ host: String?, for model: String) {
+        let model = model.trimmingCharacters(in: .whitespaces)
+        guard !model.isEmpty else { return }
+        openRouterHosts[model] = host?.isEmpty == false ? host : nil
+        UserDefaults.standard.set(openRouterHosts, forKey: "openRouterHosts")
     }
 
     // MARK: Model prices

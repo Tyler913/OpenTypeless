@@ -408,6 +408,33 @@ public sealed class AppSettings : INotifyPropertyChanged
         PolishBackupModel = id.DefaultBackupChatModel();
     }
 
+    // MARK: OpenRouter hosts
+
+    /// <summary>The OpenRouter host (endpoint tag) to ask first for this clean-up model, or null to let OpenRouter pick the fastest.</summary>
+    public string? OpenRouterHost(string model)
+    {
+        lock (_lock)
+            return (_store["openRouterHosts"] as JsonObject)?[model.Trim()] is JsonValue v && v.TryGetValue<string>(out var host)
+                && host.Length > 0 ? host : null;
+    }
+
+    public void SetOpenRouterHost(string? host, string model)
+    {
+        model = model.Trim();
+        if (model.Length == 0) return;
+        lock (_lock)
+        {
+            if (_store["openRouterHosts"] is not JsonObject hosts)
+            {
+                hosts = new JsonObject();
+                _store["openRouterHosts"] = hosts;
+            }
+            if (string.IsNullOrWhiteSpace(host)) hosts.Remove(model); else hosts[model] = host.Trim();
+            Save();
+        }
+        Raise("OpenRouterHosts");
+    }
+
     // MARK: Model prices
 
     /// <summary>The price the user entered for a model of a provider other than OpenRouter (whose prices are live).</summary>

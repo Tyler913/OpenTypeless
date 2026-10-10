@@ -14,7 +14,12 @@ public sealed record PolishOptions(
     /// <summary>Replaces the built-in system prompt (used by the prompt evaluation tool).</summary>
     string? SystemPromptOverride = null,
     /// <summary>Earlier recognition errors the user fixed by hand, shown to the model as hints.</summary>
-    IReadOnlyList<Correction>? Misheard = null);
+    IReadOnlyList<Correction>? Misheard = null,
+    /// <summary>
+    /// The OpenRouter host (an endpoint tag such as "groq" or "deepinfra/fp8") the user wants this model served by;
+    /// null lets OpenRouter pick the fastest.
+    /// </summary>
+    string? Host = null);
 
 public static class ReasoningConfig
 {
@@ -107,6 +112,17 @@ public sealed partial class ApiClient
     };
 
     /// <summary>
+    /// <see cref="PolishRouting()"/>, with the user's chosen host tried first. Should that host be down or busy,
+    /// OpenRouter still falls back to the others, fastest first, so a dictation never fails over the choice.
+    /// </summary>
+    internal static JsonObject PolishRouting(string? host)
+    {
+        var routing = PolishRouting();
+        if (!string.IsNullOrWhiteSpace(host)) routing["order"] = new JsonArray(host.Trim());
+        return routing;
+    }
+
+    /// <summary>
     /// Builds the chat request body. Optional tuning parameters are only sent where they're known to
     /// be accepted: OpenRouter normalises them for every model, while e.g. OpenAI's reasoning models
     /// reject <c>temperature</c>.
@@ -132,7 +148,7 @@ public sealed partial class ApiClient
         if (IsOpenRouter)
         {
             body["max_tokens"] = Math.Max(1024, TextMetrics.CharacterCount(transcript) * 3);
-            body["provider"] = PolishRouting();
+            body["provider"] = PolishRouting(options.Host);
             if (ReasoningConfig.Body(options.ModelInfo) is { } reasoning) body["reasoning"] = reasoning;
             if (options.ModelInfo?.SupportedParameters.Contains("temperature") ?? true) body["temperature"] = 0.2;
         }

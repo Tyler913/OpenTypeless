@@ -23,6 +23,10 @@ final class EditWatcher {
         let element: AXUIElement
         let baseline: String
         var latest: String
+        /// Keys pressed since `latest` was read, and whether the last was Return: what tells a dictation that was sent
+        /// from one deleted to be typed again, when the field empties.
+        var keysSinceRead = 0
+        var returnPressed = false
     }
 
     private struct Watch {
@@ -33,6 +37,8 @@ final class EditWatcher {
         var field: FieldSession?
         /// Following the keys, when the field can't be read.
         var keys: TypedEdit?
+        /// Keys seen, for the learning log: none at all means the key monitor heard nothing.
+        var keyEvents = 0
     }
 
     private var watch: Watch?
@@ -43,10 +49,19 @@ final class EditWatcher {
     private static let maxDuration: TimeInterval = 120
     /// Big documents and terminal scrollback aren't worth re-reading twice a second.
     private static let maxFieldLength = 50_000
-    /// How often, and how far apart, an app that shows no focused field is asked again.
-    private static let focusAttempts = 5
+    /// How often, and how far apart, an app that shows no focused field (or not yet the pasted text) is asked again:
+    /// about two seconds in all. Chrome builds its tree a while after being asked, which `prepare()` does while the
+    /// user is still speaking; waiting much longer would leave the first keys of an edit unfollowed.
+    private static let focusAttempts = 8
     private static let focusRetryDelay: TimeInterval = 0.3
     private var generation = 0
+
+    /// Asks the app being dictated into to build its accessibility tree now, while the user is still speaking, so its
+    /// field can be read by the time the text is pasted.
+    func prepare() {
+        guard AXIsProcessTrusted(), let front = NSWorkspace.shared.frontmostApplication else { return }
+        Self.switchOnAccessibility(front.processIdentifier)
+    }
 
     /// Starts watching the focused field, which should now contain `inserted`.
     func watch(inserted: String) {
@@ -65,8 +80,11 @@ final class EditWatcher {
         guard generation == self.generation, watch == nil, NSWorkspace.shared.frontmostApplication == front else { return }
         let pid = front.processIdentifier
         let element = Self.focusedElement(pid: pid)
-        if element == nil || element.flatMap(Self.value(of:)) == nil, attempt < Self.focusAttempts {
-            if attempt == 1, element == nil { Self.switchOnAccessibility(pid) }
+        let found = element.flatMap(Self.value(of:)).map {
+            CorrectionLearner.editedRegion(inserted: inserted, before: $0, after: $0) != nil
+        } ?? false
+        if !found, attempt < Self.focusAttempts {
+            if attempt == 1 { Self.switchOnAccessibility(pid) }
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.focusRetryDelay) { [weak self] in
                 self?.locate(front, inserted: inserted, attempt: attempt + 1, generation: generation)
             }
@@ -101,6 +119,7 @@ final class EditWatcher {
                 unreadable = "dictated text not found in field"
             } else {
                 unreadable = "field text unreadable"
+                fields["role"] = Self.string(element, kAXRoleAttribute) ?? NSNull()
             }
         } else {
             unreadable = "no focused field"
@@ -125,7 +144,15 @@ final class EditWatcher {
         timer = Timer.scheduledTimer(withTimeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
         }
-        guard watch.keys != nil else { return }
+        guard watch.keys != nil else {
+            // A fix is often followed by Return within one poll, and the field is cleared once sent: read it at every
+            // key too, which usually still finds the fixed text (the event comes about when the app gets it, not
+            // reliably before).
+            if let keys = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
+                MainActor.assumeIsolated { self?.fieldKey(event) }
+            }) { monitors.append(keys) }
+            return
+        }
         if let keys = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
             MainActor.assumeIsolated { self?.handle(event) }
         }) { monitors.append(keys) }
@@ -136,14 +163,20 @@ final class EditWatcher {
         if let menus = NSEvent.addGlobalMonitorForEvents(matching: [.rightMouseDown, .otherMouseDown], handler: { [weak self] _ in
             MainActor.assumeIsolated { self?.finish(quiet: false, reason: "context menu") }
         }) { monitors.append(menus) }
+        let pid = watch.pid
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.finish(quiet: false, reason: "switched app") }
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            // The same app activating again (a window of its own coming forward) isn't leaving it.
+            guard app?.processIdentifier != pid else { return }
+            let to = app?.bundleIdentifier
+            MainActor.assumeIsolated { self?.finish(quiet: false, reason: "switched app", to: to) }
         }
     }
 
-    /// Ends the current watch now and reports what was learned. `reason` is for the learning log.
-    func finish(quiet: Bool, reason: String) {
+    /// Ends the current watch now and reports what was learned. `reason` is for the learning log, as is `to`, the app
+    /// switched to.
+    func finish(quiet: Bool, reason: String, to: String? = nil) {
         generation += 1
         timer?.invalidate()
         timer = nil
@@ -155,6 +188,8 @@ final class EditWatcher {
         self.watch = nil
         var fields: [String: Any] = ["reason": reason, "seconds": Int(Date().timeIntervalSince(watch.started)),
                                      "mode": watch.keys != nil ? "keys" : "field"]
+        if watch.keys != nil { fields["keyEvents"] = watch.keyEvents }
+        if let to { fields["to"] = to }
         defer { LearningLog.write("end", app: watch.app, fields) }
         let edited: String?
         if let keys = watch.keys {
@@ -185,13 +220,30 @@ final class EditWatcher {
         if let value = Self.value(of: field.element), value != field.latest {
             // Sent, cleared or rewritten beyond the dictated text: judge the last state that still made sense.
             guard value.count <= Self.maxFieldLength,
-                  CorrectionLearner.editedRegion(inserted: watch.inserted, before: field.baseline, after: value) != nil
+                  let region = CorrectionLearner.editedRegion(inserted: watch.inserted, before: field.baseline, after: value,
+                                                              allowingBlank: true)
             else {
                 return finish(quiet: false, reason: "sent, cleared or edited outside the dictated text")
             }
+            if region.allSatisfy(\.isWhitespace) {
+                // Emptied by Return or with no key pressed (the send button): sent. Otherwise deleted to be typed
+                // again; the last text stays the one to judge until there is new text.
+                if field.returnPressed || field.keysSinceRead == 0 { return finish(quiet: false, reason: "sent or cleared") }
+                return
+            }
             watch.field?.latest = value
+            watch.field?.keysSinceRead = 0
+            watch.field?.returnPressed = false
             self.watch = watch
         }
+    }
+
+    private func fieldKey(_ event: NSEvent) {
+        guard var watch, watch.field != nil else { return }
+        watch.field?.keysSinceRead += 1
+        watch.field?.returnPressed = [kVK_Return, kVK_ANSI_KeypadEnter].contains(Int(event.keyCode))
+        self.watch = watch
+        poll()
     }
 
     // MARK: Following the keys
@@ -233,6 +285,8 @@ final class EditWatcher {
 
     private func handle(_ event: NSEvent) {
         guard var watch, var keys = watch.keys else { return }
+        watch.keyEvents += 1
+        self.watch = watch
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let command = flags.contains(.command), option = flags.contains(.option), shift = flags.contains(.shift)
         let unit: TypedEdit.Unit = option ? .word : .character
@@ -280,12 +334,15 @@ final class EditWatcher {
 
     // MARK: Accessibility
 
-    /// Electron apps (Claude, Discord, Slack, VS Code…) build their accessibility tree when this is set, and it changes
-    /// nothing else. AXEnhancedUserInterface is left alone on purpose: it puts the app in screen-reader mode, which in
-    /// Chromium apps such as Claude takes keyboard focus away from the field being typed in (seen by OpenWhispr).
+    /// Electron apps (Claude, Discord, Slack, VS Code…) build their accessibility tree when AXManualAccessibility is
+    /// set, and it changes nothing else. Google Chrome and Firefox don't know that attribute; they switch theirs on when
+    /// an assistive app reads their role. AXEnhancedUserInterface is left alone on purpose: it puts the app in
+    /// screen-reader mode, which in Chromium apps such as Claude takes keyboard focus away from the field being typed in
+    /// (seen by OpenWhispr).
     private static func switchOnAccessibility(_ pid: pid_t) {
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.2)
+        _ = string(app, kAXRoleAttribute)
         AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
     }
 

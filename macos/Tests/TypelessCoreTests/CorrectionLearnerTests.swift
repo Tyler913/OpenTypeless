@@ -36,6 +36,41 @@ import Testing
         #expect(CorrectionLearner.soundsAlike("Cooper Netties", "Kubernetes")) // KPRNTS / KBRNTS
     }
 
+    @Test func learnsFixesThatAreMostOfAShortDictation() {
+        // One fixed word is most of a short dictation; that's no rewrite.
+        #expect(learn("我用克劳德", "我用 Claude") == [Correction(heard: "克劳德", corrected: "Claude")])
+        #expect(learn("逻辑", "罗技") == [Correction(heard: "逻辑", corrected: "罗技")])
+        // Two changes that leave little of it are.
+        #expect(CorrectionLearner.review(original: "我用克劳德", edited: "你用 Claude 吗").skipped == "rewrite")
+    }
+
+    @Test func leavesPunctuationOutOfFixes() {
+        #expect(learn("我在用 TypeList。", "我在用 Typeless") == [Correction(heard: "TypeList", corrected: "Typeless")])
+        #expect(CorrectionLearner.review(original: "好的，明天见", edited: "好的。明天见").skipped == "punctuation only")
+        // Joiners that belong to the word stay.
+        #expect(learn("后端用 Note JS。", "后端用 Node.js。") == [Correction(heard: "Note JS", corrected: "Node.js")])
+    }
+
+    @Test func learnsEnglishTermsHeardAsChinese() {
+        // From a real learning log: Chinese recognition wrote JetBrains as 经解散了, which sounds little like it.
+        #expect(learn("我用的是经解散了。", "我用的是 Jetbrains") == [Correction(heard: "经解散了", corrected: "Jetbrains")])
+        // Translating into an everyday word is an edit, not a mishearing.
+        let review = CorrectionLearner.review(original: "去商店买东西", edited: "去 store 买东西") { $0 == "store" }
+        #expect(review.learnable.isEmpty)
+        #expect(CorrectionLearner.review(original: "去商店买东西", edited: "去 STORE 买东西") { $0 == "store" }.learnable.isEmpty)
+    }
+
+    @Test func ignoresPinyinReadMidComposition() {
+        // A field read while the input method still shows the letters being typed.
+        #expect(CorrectionLearner.review(original: "我用的是逻辑鼠标", edited: "我用的是luoj鼠标").learnable.isEmpty)
+        #expect(learn("用经解散了", "用jetbrains").isEmpty)
+    }
+
+    @Test func findsAnEmptiedDictationOnlyWhenAsked() {
+        #expect(CorrectionLearner.editedRegion(inserted: "克劳德", before: "克劳德", after: "", allowingBlank: true) == "")
+        #expect(CorrectionLearner.editedRegion(inserted: "克劳德", before: "克劳德", after: "") == nil)
+    }
+
     @Test func reviewSaysWhyAChangeWasNotLearned() {
         let review = CorrectionLearner.review(original: "Send the report to Mike", edited: "Send the report to Sarah")
         #expect(review.changes == [.init(correction: Correction(heard: "Mike", corrected: "Sarah"), rejected: "sounds different")])
@@ -66,6 +101,12 @@ import Testing
         #expect(CorrectionLearner.editedRegion(inserted: "我在用 TypeList 写东西", before: before, after: "") == nil)
         #expect(CorrectionLearner.editedRegion(inserted: "我在用 TypeList 写东西", before: before,
                                                after: "Hello team,\n我在用 TypeList 写东西\nThanks") == nil)
+        // A composer that held only the dictation is cleared when it's sent: that is no fix, and must not
+        // replace the fixed text seen just before.
+        #expect(CorrectionLearner.editedRegion(inserted: "我在用 TypeList 写东西", before: "我在用 TypeList 写东西",
+                                               after: "我在用 Typeless 写东西") == "我在用 Typeless 写东西")
+        #expect(CorrectionLearner.editedRegion(inserted: "我在用 TypeList 写东西", before: "我在用 TypeList 写东西", after: "") == nil)
+        #expect(CorrectionLearner.editedRegion(inserted: "我在用 TypeList 写东西", before: "我在用 TypeList 写东西", after: "\n") == nil)
     }
 
     @Test func tokenizesTechnicalWords() {

@@ -25,13 +25,16 @@ public enum CorrectionLearner {
 
     /// The text that now sits where the dictated text was inserted. `before` is the field's content
     /// right after the paste, `after` its content now. Returns nil when that can't be told reliably: the
-    /// dictated text isn't found, or the field changed outside it (sent, cleared, edited elsewhere).
-    public static func editedRegion(inserted: String, before: String, after: String) -> String? {
+    /// dictated text isn't found, the field changed outside it (sent, cleared, edited elsewhere), or nothing is left
+    /// of it. A field that held only the dictation still "contains" it once sent and cleared, so an empty region
+    /// means sent, not a fix; `allowingBlank` returns it anyway, for telling that apart from deleting it to retype it.
+    public static func editedRegion(inserted: String, before: String, after: String, allowingBlank: Bool = false) -> String? {
         let inserted = normalizeNewlines(inserted), before = normalizeNewlines(before), after = normalizeNewlines(after)
         guard !inserted.isEmpty, let range = before.range(of: inserted, options: .backwards) else { return nil }
         let prefix = before[..<range.lowerBound], suffix = before[range.upperBound...]
         guard after.count >= prefix.count + suffix.count, after.hasPrefix(prefix), after.hasSuffix(suffix) else { return nil }
-        return String(after.dropFirst(prefix.count).dropLast(suffix.count))
+        let region = String(after.dropFirst(prefix.count).dropLast(suffix.count))
+        return !allowingBlank && region.allSatisfy(\.isWhitespace) ? nil : region
     }
 
     // MARK: Finding corrections
@@ -69,15 +72,23 @@ public enum CorrectionLearner {
                               isCommonWord: (String) -> Bool = { _ in false },
                               words: (String) -> [Range<String.Index>] = chineseWords) -> Review {
         guard original != edited else { return Review(skipped: "unchanged", changes: []) }
-        // A heavy rewrite says nothing about recognition errors.
-        guard PolishMetrics.similarity(original, edited) >= 0.5 else { return Review(skipped: "rewrite", changes: []) }
+        // A heavy rewrite says nothing about recognition errors. In a short dictation, though, one fixed word is most of
+        // the text ("用克劳德" → "用 Claude"), so there a single replacement still goes on to be judged by itself.
+        let similar = PolishMetrics.similarity(original, edited) >= 0.5
+        guard similar || original.count <= shortDictation else { return Review(skipped: "rewrite", changes: []) }
         let hunks = changes(original: original, edited: edited, words: words(edited))
+        guard !hunks.isEmpty else { return Review(skipped: "punctuation only", changes: []) }
+        guard similar || hunks.count == 1 else { return Review(skipped: "rewrite", changes: []) }
         guard hunks.count <= 5 else { return Review(skipped: "\(hunks.count) changes", changes: []) }
         return Review(skipped: nil, changes: hunks.map { Change(correction: $0, rejected: rejection($0, isCommonWord: isCommonWord)) })
     }
 
+    /// Up to this many characters, a dictation is short enough that one replacement can be most of it.
+    private static let shortDictation = 40
+
     /// Replacements between two texts, as the smallest runs of changed words (CJK: characters), each widened to
-    /// whole Chinese words when the edited text's `words` are given.
+    /// whole Chinese words when the edited text's `words` are given. Punctuation at either end of a replacement is
+    /// left out ("经解散了。" → "Jetbrains" is 经解散了 → Jetbrains), and changes of punctuation alone aren't listed.
     static func changes(original: String, edited: String, words wordRanges: [Range<String.Index>] = []) -> [Correction] {
         let a = tokens(original), b = tokens(edited)
         // Longest common subsequence over token text. The tokens both texts start and end with are left out of the
@@ -122,7 +133,7 @@ public enum CorrectionLearner {
             }
         }
         flush()
-        return hunks.map { hunk in
+        return hunks.compactMap { hunk in
             var hunk = hunk
             if !wordRanges.isEmpty, !hunk.a.isEmpty, !hunk.b.isEmpty {
                 let (left, right) = widening(b, hunk.b, in: edited, words: wordRanges)
@@ -133,8 +144,22 @@ public enum CorrectionLearner {
                 while r < right, hunk.a.upperBound + r < n, matchOf[hunk.b.upperBound + r] == hunk.a.upperBound + r { r += 1 }
                 hunk = ((hunk.a.lowerBound - l)..<(hunk.a.upperBound + r), (hunk.b.lowerBound - l)..<(hunk.b.upperBound + r))
             }
-            return Correction(heard: span(Array(a[hunk.a]), in: original), corrected: span(Array(b[hunk.b]), in: edited))
+            let heard = trimmingPunctuation(hunk.a, a), corrected = trimmingPunctuation(hunk.b, b)
+            guard !heard.isEmpty || !corrected.isEmpty else { return nil }
+            return Correction(heard: span(Array(a[heard]), in: original), corrected: span(Array(b[corrected]), in: edited))
         }
+    }
+
+    /// The range without the punctuation tokens at its ends.
+    private static func trimmingPunctuation(_ range: Range<Int>, _ tokens: [Token]) -> Range<Int> {
+        func isPunctuation(_ index: Int) -> Bool {
+            let text = tokens[index].text
+            return text.count == 1 && (text.first!.isPunctuation || text.first!.isSymbol)
+        }
+        var range = range
+        while !range.isEmpty, isPunctuation(range.lowerBound) { range = (range.lowerBound + 1)..<range.upperBound }
+        while !range.isEmpty, isPunctuation(range.upperBound - 1) { range = range.lowerBound..<(range.upperBound - 1) }
+        return range
     }
 
     /// Particles and the like: a fix of one of these is grammar, never part of a word worth learning.
@@ -202,8 +227,15 @@ public enum CorrectionLearner {
             // Only distinctive casing is worth learning (SwiftUI, iOS, GitHub), not "hello" → "Hello".
             return hasInnerCapital(term) ? nil : "only capitalisation"
         }
+        // Lowercase letters over Chinese are what a pinyin input method shows before a word is chosen, read from the
+        // field mid-composition, rather than an English term ("逻辑" → "luoj").
+        if heard.unicodeScalars.contains(where: isHan),
+           term.allSatisfy({ ($0.isASCII && $0.isLowercase) || $0 == " " || $0 == "'" }) {
+            return "pinyin being typed"
+        }
         // A different-sounding word is a change of mind, not a mishearing.
-        guard soundsAlike(heard, term) else { return "sounds different" }
+        guard soundsAlike(heard, term) || isTermHeardAsChinese(heard, term, isCommonWord: isCommonWord)
+        else { return "sounds different" }
         // Swapping one ordinary word for another is an edit, not a name or term.
         let heardWords = latinWords(heard), termWords = latinWords(term)
         if heardWords.count == 1, termWords.count == 1, cjk == 0, !hasInnerCapital(term),
@@ -211,6 +243,25 @@ public enum CorrectionLearner {
             return "ordinary words"
         }
         return nil
+    }
+
+    /// An English name or term that recognition wrote as Chinese words, which can sound little like it once turned
+    /// into pinyin ("经解散了" for "JetBrains"): a short run of Chinese replaced by one or two Latin words that aren't
+    /// everyday words, so translating ("商店" → "store") still isn't learned.
+    static func isTermHeardAsChinese(_ heard: String, _ term: String, isCommonWord: (String) -> Bool) -> Bool {
+        let han = heard.unicodeScalars.filter(isHan).count
+        let words = latinWords(term)
+        guard (2...6).contains(han), latinWords(heard).isEmpty, !term.unicodeScalars.contains(where: TranscriptJoiner.isCJK),
+              (1...2).contains(words.count) else { return false }
+        return !words.contains { isCommonWord($0.lowercased()) }
+    }
+
+    /// A Chinese character (not kana, hangul or full-width punctuation).
+    private static func isHan(_ s: Unicode.Scalar) -> Bool {
+        switch s.value {
+        case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF: true
+        default: false
+        }
     }
 
     // MARK: Helpers

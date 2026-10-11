@@ -40,12 +40,23 @@ public sealed class EditWatcher
         public TypedEdit? Keys { get; } = keys;
         public nint Window { get; } = Win32.GetForegroundWindow();
         public DateTimeOffset Started { get; } = DateTimeOffset.Now;
+        /// <summary>Keys seen, for the learning log: none at all means the hook heard nothing.</summary>
+        public int KeyEvents { get; set; }
+        /// <summary>
+        /// Keys pressed since <see cref="Latest"/> was read, and whether the last was Enter: what tells a dictation that
+        /// was sent from one deleted to be typed again, when the field empties.
+        /// </summary>
+        public int KeysSinceRead { get; set; }
+        public bool ReturnPressed { get; set; }
     }
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(0.5);
     private static readonly TimeSpan MaxDuration = TimeSpan.FromSeconds(120);
     /// <summary>Big documents and terminal scrollback aren't worth re-reading twice a second.</summary>
     private const int MaxFieldLength = 50_000;
+    /// <summary>How often, and how far apart, an app that shows no readable field (or not yet the pasted text) is asked again.</summary>
+    private const int FocusAttempts = 6;
+    private static readonly TimeSpan FocusRetryDelay = TimeSpan.FromMilliseconds(300);
     /// <summary>A hung app must never pile up reads.</summary>
     private const int ReadTimeoutMs = 400;
 
@@ -54,6 +65,7 @@ public sealed class EditWatcher
     private Session? _session;
     private int _generation;
     private bool _polling;
+    private bool _pollAgain;
 
     public EditWatcher()
     {
@@ -69,6 +81,7 @@ public sealed class EditWatcher
         Finish(quiet: true, "next paste");
         var generation = _generation;
         var app = ForegroundApp();
+        var window = Win32.GetForegroundWindow();
         _ = Start();
 
         void Log(string result, JsonObject? fields = null)
@@ -84,13 +97,28 @@ public sealed class EditWatcher
             // Give the target app a moment to apply the paste before taking the baseline.
             await Task.Delay(400);
             if (generation != _generation) return;
-            var field = await Read<(IUIAutomationElement Element, string? Text, bool Password)>(() =>
+            (IUIAutomationElement Element, string? Text, bool Password)? field = null;
+            // Chromium and Electron apps build their UI Automation tree a while after first being asked, and a slow app
+            // may not show the pasted text yet: ask again for about two seconds before following the keys instead.
+            for (var attempt = 1; attempt <= FocusAttempts; attempt++)
             {
-                if (FocusedElement() is not { } element) return null;
-                if (IsPassword(element)) return (element, null, true);
-                return (element, Text(element, MaxFieldLength + 1), false);
-            });
-            if (generation != _generation) return;
+                if (attempt > 1) await Task.Delay(FocusRetryDelay);
+                if (generation != _generation) return;
+                field = await Read<(IUIAutomationElement Element, string? Text, bool Password)>(() =>
+                {
+                    if (FocusedElement() is not { } element) return null;
+                    if (IsPassword(element)) return (element, null, true);
+                    return (element, Text(element, MaxFieldLength + 1), false);
+                });
+                if (generation != _generation) return;
+                if (Win32.GetForegroundWindow() != window)
+                {
+                    Log("switched app");
+                    return;
+                }
+                if (field is { Password: true } || field is { Text: { } text } && CorrectionLearner.EditedRegion(inserted, text, text) != null)
+                    break;
+            }
             var details = new JsonObject();
             string unreadable;
             if (field is not { } found)
@@ -115,6 +143,17 @@ public sealed class EditWatcher
             {
                 Log("watching", new JsonObject { ["fieldLength"] = value.Length });
                 _session = new Session(app, inserted, found.Element, value, null);
+                var watching = _session;
+                // A fix is often followed by Enter within one poll, and the field is cleared once sent: read it at every
+                // key too, which usually still finds the fixed text (the read is queued, so not reliably before the app
+                // applies the key).
+                HotkeyMonitor.Shared.KeyObserver = key => _dispatcher.TryEnqueue(() =>
+                {
+                    if (_session != watching) return;
+                    watching.KeysSinceRead++;
+                    watching.ReturnPressed = key.VirtualKey == 0x0D;
+                    _ = Poll();
+                });
                 _timer.Start();
                 return;
             }
@@ -182,6 +221,7 @@ public sealed class EditWatcher
     {
         const int VK_BACK = 0x08, VK_TAB = 0x09, VK_RETURN = 0x0D, VK_ESCAPE = 0x1B, VK_LEFT = 0x25, VK_RIGHT = 0x27, VK_DELETE = 0x2E;
         var keys = session.Keys!;
+        session.KeyEvents++;
         // AltGr is Ctrl+Alt: a key that types something with both held is text.
         var altGr = key.Ctrl && key.Alt && key.Text != null;
         var shortcut = (key.Ctrl || key.Alt || key.Win) && !altGr;
@@ -266,6 +306,7 @@ public sealed class EditWatcher
             ["seconds"] = (int)(DateTimeOffset.Now - session.Started).TotalSeconds,
             ["mode"] = session.Keys != null ? "keys" : "field",
         };
+        if (session.Keys != null) fields["keyEvents"] = session.KeyEvents;
         var edited = session.Keys is { } keys
             ? keys.Text != session.Inserted ? keys.Text : null
             : session.Latest != session.Baseline ? CorrectionLearner.EditedRegion(session.Inserted, session.Baseline, session.Latest) : null;
@@ -285,7 +326,12 @@ public sealed class EditWatcher
 
     private async Task Poll()
     {
-        if (_polling || _session is not { } session) return;
+        if (_polling)
+        {
+            _pollAgain = true; // a key asked while a read was out: read again once it's back
+            return;
+        }
+        if (_session is not { } session) return;
         if (session.Keys != null)
         {
             if (Win32.GetForegroundWindow() != session.Window) Finish(quiet: false, "switched app");
@@ -311,18 +357,35 @@ public sealed class EditWatcher
             if (state is { Text: { } value } && value != session.Latest)
             {
                 // Sent, cleared or rewritten beyond the dictated text: judge the last state that still made sense.
-                if (value.Length > MaxFieldLength || CorrectionLearner.EditedRegion(session.Inserted, session.Baseline, value) == null)
+                var region = value.Length > MaxFieldLength
+                    ? null
+                    : CorrectionLearner.EditedRegion(session.Inserted, session.Baseline, value, allowingBlank: true);
+                if (region == null)
                 {
                     Finish(quiet: false, "sent, cleared or edited outside the dictated text");
                     return;
                 }
+                if (string.IsNullOrWhiteSpace(region))
+                {
+                    // Emptied by Enter or with no key pressed (the send button): sent. Otherwise deleted to be typed
+                    // again; the last text stays the one to judge until there is new text.
+                    if (session.ReturnPressed || session.KeysSinceRead == 0) Finish(quiet: false, "sent or cleared");
+                    return;
+                }
                 session.Latest = value;
+                session.KeysSinceRead = 0;
+                session.ReturnPressed = false;
             }
             if (DateTimeOffset.Now - session.Started > MaxDuration) Finish(quiet: false, "2 minutes");
         }
         finally
         {
             _polling = false;
+            if (_pollAgain)
+            {
+                _pollAgain = false;
+                if (_session == session) _ = Poll();
+            }
         }
     }
 

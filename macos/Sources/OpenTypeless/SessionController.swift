@@ -211,6 +211,7 @@ final class SessionController: ObservableObject {
 
         // Whatever the user did to the previous dictation is final now.
         editWatcher.finish(quiet: true, reason: "next dictation")
+        if settings.learnFromEdits { editWatcher.prepare() }
 
         var record = history.create()
         record.status = .recording

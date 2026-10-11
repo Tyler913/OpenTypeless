@@ -25,9 +25,12 @@ public static class CorrectionLearner
     /// <summary>
     /// The text that now sits where the dictated text was inserted. <paramref name="before"/> is the field's content
     /// right after the paste, <paramref name="after"/> its content now. Returns null when that can't be told reliably: the
-    /// dictated text isn't found, or the field changed outside it (sent, cleared, edited elsewhere).
+    /// dictated text isn't found, the field changed outside it (sent, cleared, edited elsewhere), or nothing is left
+    /// of it. A field that held only the dictation still "contains" it once sent and cleared, so an empty region
+    /// means sent, not a fix; <paramref name="allowingBlank"/> returns it anyway, for telling that apart from deleting
+    /// it to retype it.
     /// </summary>
-    public static string? EditedRegion(string inserted, string before, string after)
+    public static string? EditedRegion(string inserted, string before, string after, bool allowingBlank = false)
     {
         inserted = NormalizeNewlines(inserted);
         before = NormalizeNewlines(before);
@@ -39,7 +42,8 @@ public static class CorrectionLearner
         var suffix = before[(start + inserted.Length)..];
         if (after.Length < prefix.Length + suffix.Length
             || !after.StartsWith(prefix, StringComparison.Ordinal) || !after.EndsWith(suffix, StringComparison.Ordinal)) return null;
-        return after[prefix.Length..(after.Length - suffix.Length)];
+        var region = after[prefix.Length..(after.Length - suffix.Length)];
+        return !allowingBlank && string.IsNullOrWhiteSpace(region) ? null : region;
     }
 
     // MARK: Finding corrections
@@ -71,16 +75,25 @@ public static class CorrectionLearner
                                     Func<string, IReadOnlyList<(int Start, int End)>?>? words = null)
     {
         if (original == edited) return new Review("unchanged", []);
-        // A heavy rewrite says nothing about recognition errors.
-        if (PolishMetrics.Similarity(original, edited) < 0.5) return new Review("rewrite", []);
+        // A heavy rewrite says nothing about recognition errors. In a short dictation, though, one fixed word is most of
+        // the text ("用克劳德" → "用 Claude"), so there a single replacement still goes on to be judged by itself.
+        var similar = PolishMetrics.Similarity(original, edited) >= 0.5;
+        if (!similar && TextMetrics.CharacterCount(original) > ShortDictation) return new Review("rewrite", []);
         var hunks = Changes(original, edited, words?.Invoke(edited));
+        if (hunks.Count == 0) return new Review("punctuation only", []);
+        if (!similar && hunks.Count > 1) return new Review("rewrite", []);
         if (hunks.Count > 5) return new Review($"{hunks.Count} changes", []);
         return new Review(null, hunks.Select(c => new Change(c, Rejection(c, isCommonWord ?? (_ => false)))).ToList());
     }
 
+    /// <summary>Up to this many characters, a dictation is short enough that one replacement can be most of it.</summary>
+    private const int ShortDictation = 40;
+
     /// <summary>
     /// Replacements between two texts, as the smallest runs of changed words (CJK: characters), each widened to
-    /// whole Chinese words when the edited text's <paramref name="words"/> are given.
+    /// whole Chinese words when the edited text's <paramref name="words"/> are given. Punctuation at either end of a
+    /// replacement is left out ("经解散了。" → "Jetbrains" is 经解散了 → Jetbrains), and changes of punctuation alone
+    /// aren't listed.
     /// </summary>
     internal static List<Correction> Changes(string original, string edited, IReadOnlyList<(int Start, int End)>? words = null)
     {
@@ -149,9 +162,22 @@ public static class CorrectionLearner
                 while (l < left && a0 - l - 1 >= 0 && matchOf[b0 - l - 1] == a0 - l - 1) l++;
                 while (r < right && a1 + r < n && matchOf[b1 + r] == a1 + r) r++;
             }
-            result.Add(new Correction(Span(a, a0 - l, a1 + r, original), Span(b, b0 - l, b1 + r, edited)));
+            var (h0, h1) = TrimmingPunctuation(a, a0 - l, a1 + r);
+            var (c0, c1) = TrimmingPunctuation(b, b0 - l, b1 + r);
+            if (h1 > h0 || c1 > c0) result.Add(new Correction(Span(a, h0, h1, original), Span(b, c0, c1, edited)));
         }
         return result;
+    }
+
+    /// <summary>The token range without the punctuation tokens at its ends.</summary>
+    private static (int Start, int End) TrimmingPunctuation(List<Token> tokens, int start, int end)
+    {
+        bool IsPunctuation(int index) =>
+            Rune.DecodeFromUtf16(tokens[index].Text, out var rune, out var length) == System.Buffers.OperationStatus.Done
+            && length == tokens[index].Text.Length && (Rune.IsPunctuation(rune) || Rune.IsSymbol(rune));
+        while (end > start && IsPunctuation(start)) start++;
+        while (end > start && IsPunctuation(end - 1)) end--;
+        return (start, end);
     }
 
     /// <summary>Particles and the like: a fix of one of these is grammar, never part of a word worth learning.</summary>
@@ -224,8 +250,11 @@ public static class CorrectionLearner
             // Only distinctive casing is worth learning (SwiftUI, iOS, GitHub), not "hello" → "Hello".
             return HasInnerCapital(term) ? null : "only capitalisation";
         }
+        // Lowercase letters over Chinese are what a pinyin input method shows before a word is chosen, read from the
+        // field mid-composition, rather than an English term ("逻辑" → "luoj").
+        if (heard.EnumerateRunes().Any(IsHan) && term.All(c => c is >= 'a' and <= 'z' or ' ' or '\'')) return "pinyin being typed";
         // A different-sounding word is a change of mind, not a mishearing.
-        if (!SoundsAlike(heard, term)) return "sounds different";
+        if (!SoundsAlike(heard, term) && !IsTermHeardAsChinese(heard, term, isCommonWord)) return "sounds different";
         // Swapping one ordinary word for another is an edit, not a name or term.
         var heardWords = LatinWords(heard);
         var termWords = LatinWords(term);
@@ -236,6 +265,23 @@ public static class CorrectionLearner
         }
         return null;
     }
+
+    /// <summary>
+    /// An English name or term that recognition wrote as Chinese words, which can sound little like it once turned
+    /// into pinyin ("经解散了" for "JetBrains"): a short run of Chinese replaced by one or two Latin words that aren't
+    /// everyday words, so translating ("商店" → "store") still isn't learned.
+    /// </summary>
+    internal static bool IsTermHeardAsChinese(string heard, string term, Func<string, bool> isCommonWord)
+    {
+        var han = heard.EnumerateRunes().Count(IsHan);
+        var words = LatinWords(term);
+        if (han is < 2 or > 6 || LatinWords(heard).Count > 0 || term.EnumerateRunes().Any(TranscriptJoiner.IsCJK)
+            || words.Count is < 1 or > 2) return false;
+        return !words.Any(word => isCommonWord(word.ToLowerInvariant()));
+    }
+
+    /// <summary>A Chinese character (not kana, hangul or full-width punctuation).</summary>
+    private static bool IsHan(Rune r) => r.Value is >= 0x3400 and <= 0x4DBF or >= 0x4E00 and <= 0x9FFF or >= 0xF900 and <= 0xFAFF;
 
     // MARK: Helpers
 

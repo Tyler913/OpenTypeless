@@ -208,6 +208,51 @@ public class CorrectionLearnerTests
     }
 
     [Fact]
+    public void LearnsFixesThatAreMostOfAShortDictation()
+    {
+        // Two changes that leave little of it are a rewrite.
+        Assert.Equal("rewrite", CorrectionLearner.ReviewEdit("我用克劳德", "你用 Claude 吗").Skipped);
+        if (!Transliteration.IsAvailable) return;
+        // One fixed word is most of a short dictation; that's no rewrite.
+        Assert.Equal([new Correction("克劳德", "Claude")], Learn("我用克劳德", "我用 Claude"));
+        Assert.Equal([new Correction("逻辑", "罗技")], Learn("逻辑", "罗技"));
+    }
+
+    [Fact]
+    public void LeavesPunctuationOutOfFixes()
+    {
+        Assert.Equal([new Correction("TypeList", "Typeless")], Learn("我在用 TypeList。", "我在用 Typeless"));
+        Assert.Equal("punctuation only", CorrectionLearner.ReviewEdit("好的，明天见", "好的。明天见").Skipped);
+        // Joiners that belong to the word stay.
+        Assert.Equal([new Correction("Note JS", "Node.js")], Learn("后端用 Note JS。", "后端用 Node.js。"));
+    }
+
+    [Fact]
+    public void LearnsEnglishTermsHeardAsChinese()
+    {
+        // From a real learning log: Chinese recognition wrote JetBrains as 经解散了, which sounds little like it.
+        Assert.Equal([new Correction("经解散了", "Jetbrains")], Learn("我用的是经解散了。", "我用的是 Jetbrains"));
+        // Translating into an everyday word is an edit, not a mishearing.
+        Assert.Empty(CorrectionLearner.ReviewEdit("去商店买东西", "去 store 买东西", word => word == "store").Learnable);
+        Assert.Empty(CorrectionLearner.ReviewEdit("去商店买东西", "去 STORE 买东西", word => word == "store").Learnable);
+    }
+
+    [Fact]
+    public void IgnoresPinyinReadMidComposition()
+    {
+        // A field read while the input method still shows the letters being typed.
+        Assert.Empty(CorrectionLearner.ReviewEdit("我用的是逻辑鼠标", "我用的是luoj鼠标").Learnable);
+        Assert.Empty(Learn("用经解散了", "用jetbrains"));
+    }
+
+    [Fact]
+    public void FindsAnEmptiedDictationOnlyWhenAsked()
+    {
+        Assert.Equal("", CorrectionLearner.EditedRegion("克劳德", "克劳德", "", allowingBlank: true));
+        Assert.Null(CorrectionLearner.EditedRegion("克劳德", "克劳德", ""));
+    }
+
+    [Fact]
     public void ReviewSaysWhyAChangeWasNotLearned()
     {
         var review = CorrectionLearner.ReviewEdit("Send the report to Mike", "Send the report to Sarah");
@@ -248,6 +293,12 @@ public class CorrectionLearnerTests
         // Sent and cleared, or edited outside the dictated text: can't tell what changed.
         Assert.Null(CorrectionLearner.EditedRegion("我在用 TypeList 写东西", before, ""));
         Assert.Null(CorrectionLearner.EditedRegion("我在用 TypeList 写东西", before, "Hello team,\n我在用 TypeList 写东西\nThanks"));
+        // A composer that held only the dictation is cleared when it's sent: that is no fix, and must not
+        // replace the fixed text seen just before.
+        Assert.Equal("我在用 Typeless 写东西",
+                     CorrectionLearner.EditedRegion("我在用 TypeList 写东西", "我在用 TypeList 写东西", "我在用 Typeless 写东西"));
+        Assert.Null(CorrectionLearner.EditedRegion("我在用 TypeList 写东西", "我在用 TypeList 写东西", ""));
+        Assert.Null(CorrectionLearner.EditedRegion("我在用 TypeList 写东西", "我在用 TypeList 写东西", "\r\n"));
     }
 
     [Fact]

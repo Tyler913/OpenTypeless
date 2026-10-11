@@ -33,8 +33,11 @@ itself, and `brew upgrade --greedy` (or the next release's cask) catches up.
 
 ### WinGet
 
-1. Create a [classic personal access token](https://github.com/settings/tokens/new) with the **`public_repo`** scope
-   (wingetcreate forks microsoft/winget-pkgs into your account and opens the pull request from the fork).
+1. Create a [classic personal access token](https://github.com/settings/tokens/new) with the **`public_repo`** and
+   **`workflow`** scopes (wingetcreate forks microsoft/winget-pkgs into your account and opens the pull request from
+   the fork). `workflow` is needed to bring the fork up to date: without it, once microsoft/winget-pkgs changes one of
+   its own workflows, every submission fails with "The forked repository could not be synced with the upstream
+   commits".
 2. Add it as the secret **`WINGET_TOKEN`**.
 
 The first submission adds a new package, so Microsoft's moderators review it by hand (usually a few days); later

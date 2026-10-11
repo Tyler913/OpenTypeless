@@ -3,7 +3,9 @@
 #   Homebrew   writes Casks/opentypeless.rb in the Tyler913/homebrew-tap repository, so
 #              `brew install --cask tyler913/tap/opentypeless` installs it and `brew upgrade` sees the new version
 #   WinGet     opens a pull request in microsoft/winget-pkgs with the new version's manifests (TylerHong.OpenTypeless);
-#              it's live for `winget install TylerHong.OpenTypeless` once Microsoft's checks pass and it's merged
+#              it's live for `winget install TylerHong.OpenTypeless` once Microsoft's checks pass and it's merged. It
+#              submits nothing while the package's first pull request is still being reviewed, or when this version's
+#              pull request is already open
 #
 # The cask and manifests are filled in from packaging/ with the checksums GitHub published for the release's zips
 # (packaging/render.py). Each part needs its token as a repository secret, HOMEBREW_TAP_TOKEN and WINGET_TOKEN, and
@@ -87,33 +89,99 @@ jobs:
     if: ${{ !github.event.release.prerelease }}
     runs-on: windows-latest
     env:
-      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+      OWNER: ${{ github.repository_owner }} # whose WINGET_TOKEN it is: the fork and the pull requests are theirs
     steps:
+      # Only whether it's set: the token itself goes to the two steps that use it below, and nowhere else.
       - name: Check for the WinGet token
         id: token
         shell: bash
+        env:
+          HAS_TOKEN: ${{ secrets.WINGET_TOKEN != '' }}
         run: |
-          if [[ -z "$WINGET_TOKEN" ]]; then
+          if [[ "$HAS_TOKEN" != true ]]; then
             echo "::notice::WINGET_TOKEN isn't set, so nothing was submitted to WinGet (see packaging/README.md)"
             echo "set=false" >> "$GITHUB_OUTPUT"
           else
             echo "set=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v7
+      # Microsoft reviews a package's first version by hand. Until that pull request is merged the package isn't in
+      # winget-pkgs, and submitting another version would open a second New-Package pull request, so this waits for it.
+      # A version whose pull request is already open (e.g. this run again by hand) isn't submitted twice either.
+      - name: Check winget-pkgs for pull requests still open
+        id: pending
         if: steps.token.outputs.set == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${TAG#[vV]}"
+          prs="$(gh api -X GET search/issues \
+            -f q="repo:microsoft/winget-pkgs is:pr is:open author:$OWNER \"TylerHong.OpenTypeless\" in:title" \
+            --jq '.items[] | select(.title | contains("TylerHong.OpenTypeless")) | "#\(.number) \(.title)"')"
+          echo "Open pull requests for TylerHong.OpenTypeless by $OWNER: ${prs:-none}"
+          skip() { echo "::notice::$1"; echo "submit=false" >> "$GITHUB_OUTPUT"; exit 0; }
+          while read -r number title; do
+            if [[ "$title" == *" version $version" ]]; then
+              skip "TylerHong.OpenTypeless $version is already waiting in microsoft/winget-pkgs $number, so it wasn't submitted again"
+            fi
+          done <<< "$prs"
+          if [[ -n "$prs" ]] && ! err="$(gh api repos/microsoft/winget-pkgs/contents/manifests/t/TylerHong/OpenTypeless --silent 2>&1)"; then
+            [[ "$err" == *"HTTP 404"* ]] || { echo "::error::Couldn't look up TylerHong.OpenTypeless in microsoft/winget-pkgs: $err"; exit 1; }
+            skip "TylerHong.OpenTypeless isn't in winget-pkgs yet and its first pull request (microsoft/winget-pkgs ${prs%% *}) is still being reviewed, so $version wasn't submitted: that would open a second New-Package pull request. Once it's merged, run this workflow for the latest release."
+          fi
+          echo "submit=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        if: steps.pending.outputs.submit == 'true'
 
       - name: Fill in the manifests
-        if: steps.token.outputs.set == 'true'
+        if: steps.pending.outputs.submit == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: python packaging/render.py "$env:TAG" dist
 
-      # wingetcreate forks microsoft/winget-pkgs into the token's account if needed and opens the pull request from there.
+      # wingetcreate opens the pull request from the token owner's fork of winget-pkgs (making the fork if there's none
+      # yet), which has to be up to date first. Doing that here rather than leaving it to wingetcreate says what's wrong
+      # when it fails: it also brings over winget-pkgs' own workflow changes, which takes a token with the workflow scope.
+      - name: Bring the winget-pkgs fork up to date
+        if: steps.pending.outputs.submit == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          if ! err="$(gh api "repos/$OWNER/winget-pkgs" --silent 2>&1)"; then
+            [[ "$err" == *"HTTP 404"* ]] || { echo "::error::WINGET_TOKEN doesn't work: $err"; exit 1; }
+            echo "$OWNER has no fork of winget-pkgs yet: wingetcreate makes one"
+            exit 0
+          fi
+          if ! gh repo sync "$OWNER/winget-pkgs" --source microsoft/winget-pkgs; then
+            echo "::error::Couldn't bring $OWNER/winget-pkgs up to date with microsoft/winget-pkgs: the WINGET_TOKEN needs the public_repo and workflow scopes (see packaging/README.md)"
+            exit 1
+          fi
+
+      # A fixed release of wingetcreate, checked against its SHA-256 (listed in the release's wingetcreate.exe.txt)
+      # before it runs. For a newer one, change both.
+      - name: Download wingetcreate
+        if: steps.pending.outputs.submit == 'true'
+        env:
+          WINGETCREATE_VERSION: v1.12.13.0
+          WINGETCREATE_SHA256: 24042BD37915805615E6CF969AC57C6439124C3FE85823327F5F3FB24BD9FFEA
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'wingetcreate.exe'
+          Invoke-WebRequest "https://github.com/microsoft/winget-create/releases/download/$env:WINGETCREATE_VERSION/wingetcreate.exe" -OutFile $exe
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+          if ($hash -ne $env:WINGETCREATE_SHA256) {
+            Write-Output "::error::wingetcreate.exe $env:WINGETCREATE_VERSION has the SHA-256 $hash, not $env:WINGETCREATE_SHA256"
+            exit 1
+          }
+
+      # wingetcreate reads the token from WINGET_CREATE_GITHUB_TOKEN (it warns that --token may end up in the log).
       - name: Submit them to winget-pkgs
-        if: steps.token.outputs.set == 'true'
+        if: steps.pending.outputs.submit == 'true'
+        env:
+          WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: |
           $version = $env:TAG -replace '^[vV]', ''
-          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
-          .\wingetcreate.exe submit --prtitle "New version: TylerHong.OpenTypeless version $version" --token $env:WINGET_TOKEN dist\winget
+          & (Join-Path $env:RUNNER_TEMP 'wingetcreate.exe') submit --no-open --prtitle "New version: TylerHong.OpenTypeless version $version" dist\winget
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

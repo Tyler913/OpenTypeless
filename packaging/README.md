@@ -39,7 +39,12 @@ itself, and `brew upgrade --greedy` (or the next release's cask) catches up.
 
 The first submission adds a new package, so Microsoft's moderators review it by hand (usually a few days); later
 versions are checked automatically. Watch the pull request: a moderator may ask for a change, or the automated
-check may flag the unsigned exe for a closer look.
+check may flag the unsigned exe for a closer look. Until it's merged, releases submit nothing to WinGet (another
+version would open a second New-Package pull request), with a notice on the run; once it's merged, run the workflow
+for the latest release. A version whose pull request is already open isn't submitted again either.
+
+The workflow runs a fixed release of wingetcreate, checked against its SHA-256 (`WINGETCREATE_VERSION` and
+`WINGETCREATE_SHA256` in the workflow), and brings your winget-pkgs fork up to date before submitting.
 
 Then publish the release as usual, or run the workflow for a release that's already out
 (**Actions → Publish to package managers → Run workflow**, with its tag). Until a token is set, its part is skipped

@@ -84,7 +84,7 @@ public sealed class SessionController
     /// <summary>A clean-up started before the key was released, on the transcript a speculative tail gave.</summary>
     private SpeculativePolish? _speculativePolish;
     /// <summary>Clean-ups started ahead of time that finished but were then dropped because the speaker went on: they were billed too.</summary>
-    private readonly List<HedgedPolishResult> _discardedPolishes = new();
+    private readonly List<SegmentedPolishResult> _discardedPolishes = new();
     private Dictionary<string, ModelInfo> _modelInfo = new();
     /// <summary>False when retrying from the history page, or once the screen locked: the result goes to the clipboard instead.</summary>
     private bool _deliverByPaste = true;
@@ -240,6 +240,7 @@ public sealed class SessionController
         record.Status = DictationStatus.Cancelled;
         _history.Update(record);
         Note($"cancelled after {record.Duration:0.0}s — kept in History");
+        var discarded = TakeDiscardedPolishes();
         Reset();
         Hud.Show(new HudPhase.Error(L("已取消，录音在历史记录中保留 24 小时", "Cancelled — kept in History for 24 hours")), 2.5);
         _keptInBackground.Add(record.Id);
@@ -263,13 +264,13 @@ public sealed class SessionController
             if (!_keptInBackground.Remove(record.Id))
             {
                 // Retried from History meanwhile: that run owns the record now. Only what this one spent is counted.
-                Account(record, pipeline, null);
+                Account(record, pipeline, null, discarded);
                 return;
             }
             if (_history.Records.All(r => r.Id != record.Id)) return; // deleted meanwhile
             record.RawText = raw;
             record.ChunkTexts = pipeline.CompletedTranscripts();
-            Account(record, pipeline, null);
+            Account(record, pipeline, null, discarded);
             _history.Update(record);
         }
     }
@@ -531,7 +532,7 @@ public sealed class SessionController
             if (raw.Trim().Length == 0)
             {
                 record.Status = DictationStatus.Done;
-                Account(record, pipeline, null);
+                Account(record, pipeline, null, TakeDiscardedPolishes());
                 _history.Update(record);
                 Finish(new HudPhase.Error(L("没有识别到语音", "No speech detected")), 2);
                 return;
@@ -544,7 +545,7 @@ public sealed class SessionController
             record.RawText = failure.PartialText;
             record.Status = DictationStatus.Failed;
             record.Error = failure.Message;
-            Account(record, pipeline, null);
+            Account(record, pipeline, null, TakeDiscardedPolishes());
             _history.Update(record);
             LastError = failure.Message;
             Finish(new HudPhase.Error(L("转写失败，可在托盘菜单重试", "Failed — retry from the tray menu")), 4);
@@ -554,7 +555,7 @@ public sealed class SessionController
             if (ApiException.From(error).IsCancelled) return;
             record.Status = DictationStatus.Failed;
             record.Error = error.Message;
-            Account(record, pipeline, null);
+            Account(record, pipeline, null, TakeDiscardedPolishes());
             _history.Update(record);
             LastError = error.Message;
             Finish(new HudPhase.Error(error.Message), 5);
@@ -578,13 +579,13 @@ public sealed class SessionController
     {
         var text = record.RawText;
         string? notice = null;
-        HedgedPolishResult? polished = null;
+        SegmentedPolishResult? polished = null;
 
         if (_settings.PolishEnabled)
         {
             // When the speaker paused before letting go and said nothing more, the clean-up of this very transcript
             // started while they were still holding the key: take it over (often it's already done).
-            Task<HedgedPolishResult> polishing;
+            Task<SegmentedPolishResult> polishing;
             var ahead = 0.0;
             CancellationTokenRegistration adopted = default;
             // One that already failed (while recording) gets a fresh attempt instead.
@@ -610,7 +611,6 @@ public sealed class SessionController
             {
                 var outcome = await polishing;
                 polished = outcome;
-                var result = outcome.Result;
                 // The wait after the key was released: a clean-up started ahead of time had a head start.
                 var firstToken = Math.Max(0, outcome.FirstTokenSeconds - ahead);
                 var total = Math.Max(0, outcome.TotalSeconds - ahead);
@@ -621,16 +621,22 @@ public sealed class SessionController
                     timing.PolishModel = outcome.Model;
                     timing.UsedBackup = outcome.UsedBackup;
                 }
-                Note($"polish: {outcome.Model}{(outcome.UsedBackup ? " (backup)" : "")}, first token {firstToken:0.00}s, total {total:0.00}s");
-                if (result.Truncated || Prompts.LooksLikeAnAnswer(record.RawText, result.Text))
+                var fallbacks = outcome.Fallbacks;
+                Note($"polish: {outcome.Model}{(outcome.UsedBackup ? " (backup)" : "")}, {outcome.Parts.Count} part(s), first token {firstToken:0.00}s, total {total:0.00}s"
+                     + (fallbacks.Count == 0 ? "" : "; inserted as spoken: " + string.Join(", ", fallbacks.Select(p => p.Fallback.ToString().ToLowerInvariant()))));
+                if (fallbacks.Count == outcome.Parts.Count)
                 {
+                    // Cut off, an answer, a summary or a translation rather than the speaker's text, part after part.
                     notice = L("未整理，已插入原文", "Inserted without clean-up");
+                    record.Error = fallbacks.Select(p => p.Error).FirstOrDefault(e => e != null)?.Message;
                     record.Status = DictationStatus.PolishFailed;
                 }
                 else
                 {
-                    text = result.Text;
-                    record.PolishedText = result.Text;
+                    // A part whose clean-up was unusable goes in as spoken, between the parts that were cleaned up.
+                    if (fallbacks.Count > 0) notice = L("部分未整理，已插入原文", "Partly inserted without clean-up");
+                    text = outcome.Text;
+                    record.PolishedText = outcome.Text;
                     record.Status = DictationStatus.Done;
                 }
             }
@@ -653,8 +659,7 @@ public sealed class SessionController
         if (record.Status == DictationStatus.PolishFailed) record.PolishedText = null;
 
         // Taken now: once the text is in, the next dictation may already be collecting its own.
-        var discarded = _discardedPolishes.ToList();
-        _discardedPolishes.Clear();
+        var discarded = TakeDiscardedPolishes();
         if (IsCurrent(generation, token))
         {
             Hud.Model.Progress.Reach(new ProcessingProgress.Milestone.Delivered());
@@ -677,7 +682,7 @@ public sealed class SessionController
     // MARK: - Clean-up ahead of time
 
     /// <summary>A clean-up of <c>Raw</c>, started while recording.</summary>
-    private sealed record SpeculativePolish(string Raw, Stopwatch Started, Task<HedgedPolishResult> Task, CancellationTokenSource Cancel,
+    private sealed record SpeculativePolish(string Raw, Stopwatch Started, Task<SegmentedPolishResult> Task, CancellationTokenSource Cancel,
                                             PartialRelay Partials);
 
     /// <summary>
@@ -700,6 +705,9 @@ public sealed class SessionController
         if (raw != null && raw == _speculativePolish?.Raw) return;
         DropSpeculativePolish();
         if (raw is null || raw.Trim().Length == 0) return;
+        // Only a transcript short enough for one request: a long one would go out as several at every pause, and its
+        // parts are cleaned up in parallel once the key is released anyway.
+        if (SegmentedPolish.NeedsParts(raw)) return;
         var cancel = new CancellationTokenSource();
         var partials = new PartialRelay();
         var task = Polish(raw, partials.Send, cancel.Token);
@@ -715,6 +723,18 @@ public sealed class SessionController
         _speculativePolish = null;
         if (speculative.Task.IsCompletedSuccessfully) _discardedPolishes.Add(speculative.Task.Result);
         else speculative.Cancel.Cancel();
+    }
+
+    /// <summary>
+    /// The clean-ups done ahead of time that this dictation won't use, for its costs: the one still held is dropped first,
+    /// so it isn't left for <see cref="Reset"/> to drop after the costs were written (and then lost).
+    /// </summary>
+    private List<SegmentedPolishResult> TakeDiscardedPolishes()
+    {
+        DropSpeculativePolish();
+        var discarded = _discardedPolishes.ToList();
+        _discardedPolishes.Clear();
+        return discarded;
     }
 
     /// <summary>Moves the bar as the clean-up streams in: its first token, then its length against the transcript's.</summary>
@@ -792,7 +812,7 @@ public sealed class SessionController
         }
     }
 
-    private async Task<HedgedPolishResult> Polish(string raw, Action<string>? onPartial, CancellationToken token)
+    private async Task<SegmentedPolishResult> Polish(string raw, Action<string>? onPartial, CancellationToken token)
     {
         if (_settings.PolishEndpoint is not { } endpoint || !_settings.IsConfigured(_settings.PolishProvider))
         {
@@ -800,8 +820,7 @@ public sealed class SessionController
         }
         var primary = Route(endpoint, _settings.PolishModel);
         var backup = _settings.PolishBackupEndpoint is { } backupEndpoint ? Route(backupEndpoint, _settings.PolishBackupModel) : null;
-        return await new RetryPolicy(MaxAttempts: 2).Run((_, ct) => HedgedPolish.Run(raw, primary, backup, cancellationToken: ct, onPartial: onPartial),
-                                                         cancellationToken: token);
+        return await SegmentedPolish.Run(raw, primary, backup, onPartial, token);
     }
 
     private PolishRoute Route(ProviderEndpoint endpoint, string model)
@@ -817,12 +836,13 @@ public sealed class SessionController
     }
 
     /// <summary>
-    /// Prices what this run's requests used (the speech-to-text of every chunk sent, and the clean-up answer that was
-    /// kept) and adds it, with the dictation's words once it's finished, to the Home page totals.
+    /// Prices what this run's requests used (the speech-to-text of every chunk sent, and every clean-up answer, used or
+    /// not, with the hedge's cancelled requests) and adds it, with the dictation's words once it's finished, to the Home
+    /// page totals.
     /// </summary>
     /// <param name="discarded">Clean-ups done ahead of time for a transcript the speaker then went on from.</param>
-    private void Account(DictationRecord record, TranscriptionPipeline pipeline, HedgedPolishResult? polished,
-                         IReadOnlyList<HedgedPolishResult>? discarded = null)
+    private void Account(DictationRecord record, TranscriptionPipeline pipeline, SegmentedPolishResult? polished,
+                         IReadOnlyList<SegmentedPolishResult> discarded)
     {
         var prices = PriceStore.Shared;
         var (transcription, unpriced) = CostEstimator.Transcriptions(
@@ -834,11 +854,17 @@ public sealed class SessionController
         transcription += backupCost;
         unpriced += backupUnpriced;
         var cleanup = 0.0;
-        foreach (var answer in (discarded ?? []).Append(polished))
+        void Add(RequestUsage? usage, ProviderId provider, string model)
         {
-            if (answer?.Result.Usage is not { } usage) continue;
-            var cost = CostEstimator.Chat(usage, prices.Price(answer.Provider, answer.Model), answer.Provider == ProviderId.OpenRouter);
+            if (usage is null) return;
+            var cost = CostEstimator.Chat(usage, prices.Price(provider, model), provider == ProviderId.OpenRouter);
             if (cost is { } c) cleanup += c; else unpriced++;
+        }
+        var outcomes = polished is null ? discarded : discarded.Append(polished);
+        foreach (var answer in outcomes.SelectMany(o => o.Answers))
+        {
+            Add(answer.Result.Usage, answer.Provider, answer.Model);
+            foreach (var request in answer.Cancelled ?? []) Add(request.Usage, request.Provider, request.Model);
         }
         if (transcription + cleanup > 0) record.Cost = (record.Cost ?? 0) + transcription + cleanup;
         Note($"cost: transcription ${transcription:0.######}, clean-up ${cleanup:0.######}, unpriced requests {unpriced}");

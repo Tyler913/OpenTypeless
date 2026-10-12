@@ -36,6 +36,11 @@ public enum APIError: Error, LocalizedError, Equatable {
         }
     }
 
+    public var isTimeout: Bool {
+        if case .timeout = self { return true }
+        return false
+    }
+
     public static func from(_ error: Error) -> APIError {
         if let api = error as? APIError { return api }
         if error is CancellationError { return .cancelled }
@@ -51,10 +56,14 @@ public enum APIError: Error, LocalizedError, Equatable {
 public struct RetryPolicy: Sendable {
     public var maxAttempts: Int
     public var baseDelay: Double
+    /// False where a second wait as long as the first would cost more than it could win back: the clean-up, whose
+    /// transcript can go in as spoken instead.
+    public var retriesTimeouts: Bool
 
-    public init(maxAttempts: Int = 4, baseDelay: Double = 1.0) {
+    public init(maxAttempts: Int = 4, baseDelay: Double = 1.0, retriesTimeouts: Bool = true) {
         self.maxAttempts = maxAttempts
         self.baseDelay = baseDelay
+        self.retriesTimeouts = retriesTimeouts
     }
 
     /// 1s, 2s, 4s … with ±20% jitter so parallel chunks don't retry in lockstep.
@@ -73,7 +82,8 @@ public struct RetryPolicy: Sendable {
                 return try await operation(attempt)
             } catch {
                 let apiError = APIError.from(error)
-                guard apiError.isRetryable, attempt < maxAttempts, !Task.isCancelled else { throw apiError }
+                guard apiError.isRetryable, retriesTimeouts || !apiError.isTimeout, attempt < maxAttempts,
+                      !Task.isCancelled else { throw apiError }
                 onRetry?(attempt, apiError)
                 try await Task.sleep(nanoseconds: UInt64(delay(afterAttempt: attempt) * 1_000_000_000))
                 attempt += 1

@@ -190,6 +190,19 @@ public class SseParserTests
         Assert.Equal([new SseEvent.Finished("length")], p.Parse("""data: {"choices":[{"delta":{},"finish_reason":"length"}]}"""));
         Assert.Equal([new SseEvent.Done()], p.Parse("data: [DONE]"));
         Assert.IsType<SseEvent.Error>(p.Parse("""data: {"error":{"message":"boom"}}""").First());
+        // An integer code is the status to classify the error by; a string code isn't one.
+        Assert.Equal([new SseEvent.Error("boom", 402)], p.Parse("""data: {"error":{"code":402,"message":"boom"}}"""));
+        Assert.Equal([new SseEvent.Error("boom")], p.Parse("""data: {"error":{"code":"server_error","message":"boom"}}"""));
+    }
+
+    [Fact]
+    public void Truncation()
+    {
+        Assert.True(ApiClient.IsTruncated("length", receivedDone: true));
+        Assert.True(ApiClient.IsTruncated("content_filter", receivedDone: true));
+        Assert.True(ApiClient.IsTruncated(null, receivedDone: false));
+        Assert.False(ApiClient.IsTruncated(null, receivedDone: true));
+        Assert.False(ApiClient.IsTruncated("stop", receivedDone: false));
     }
 }
 
@@ -232,6 +245,36 @@ public class RetryTests
             throw ApiException.Http(401, "");
         }));
         Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task TimeoutsCanBeLeftUnretried()
+    {
+        var policy = new RetryPolicy(MaxAttempts: 3, BaseDelay: 0.01, RetriesTimeouts: false);
+        var calls = 0;
+        await Assert.ThrowsAsync<ApiException>(() => policy.Run<int>((_, _) =>
+        {
+            calls += 1;
+            throw ApiException.TimedOut(10);
+        }));
+        Assert.Equal(1, calls);
+        calls = 0;
+        var value = await policy.Run<int>((_, _) =>
+        {
+            calls += 1;
+            if (calls < 2) throw ApiException.Http(503, "");
+            return Task.FromResult(7);
+        });
+        Assert.Equal(7, value);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public void PolishTimeoutScalesWithLength()
+    {
+        Assert.Equal(20.2, ApiClient.PolishTimeout("好的收到"), 3);
+        Assert.Equal(50, ApiClient.PolishTimeout(new string('字', 600)), 3);
+        Assert.Equal(120.0, ApiClient.PolishTimeout(new string('字', 5000)));
     }
 
     [Fact]

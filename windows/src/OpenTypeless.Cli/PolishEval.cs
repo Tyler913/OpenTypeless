@@ -211,7 +211,11 @@ public static class PolishEval
                 foreach (var s in c.MustContain ?? []) if (!attempt.Output.Contains(s)) failures.Add($"missing “{s}”");
                 foreach (var s in c.MustNotContain ?? []) if (attempt.Output.Contains(s)) failures.Add($"still has “{s}”");
                 foreach (var g in c.AnyOf ?? []) if (!g.Any(attempt.Output.Contains)) failures.Add($"none of [{string.Join(", ", g)}]");
-                if (Prompts.LooksLikeAnAnswer(c.Input, attempt.Output)) failures.Add("looks like an answer");
+                // The app's own checks: it would insert the transcript as spoken instead of this output.
+                if (attempt.Output.Length > 0 && Prompts.Fallback(c.Input, attempt.Output, truncated: false) is { } fallback)
+                {
+                    failures.Add($"the app would reject it: {fallback.ToString().ToLowerInvariant()}");
+                }
                 if (attempt.Truncated) failures.Add("truncated");
                 if (attempt.Error != null) failures.Add("request error; see private attempt");
                 var ok = attempt.Error == null && attempt.Output.Length > 0;

@@ -133,4 +133,54 @@ public enum Prompts {
         let outputCount = output.count
         return outputCount > Int(Double(inputCount) * 1.6) + 120
     }
+
+    /// Clean-up only removes what the speaker didn't mean to keep, and over a long transcript that is never most of it.
+    /// Keeping under 55% of the words of one of 150 or more (see WordCount) means the model summarised it: real
+    /// dictations of a minute or more came back with as little as a fifth of their words, rewritten into lists. Shorter
+    /// ones are exempt, since a sentence that is mostly fillers and a self-correction can rightly lose more than half
+    /// ("嗯我们周三，不对不对，是周四…": 0.6; the prompt's own meta-talk example: 0.43).
+    public static func droppedTooMuch(input: String, output: String) -> Bool {
+        let words = WordCount.count(input)
+        guard words >= 150 else { return false }
+        return Double(WordCount.count(output)) < Double(words) * 0.55
+    }
+
+    /// An answer, a translation or a refusal has little in common with the transcript, while a clean-up that only
+    /// deleted words, however many, is the transcript with gaps. So an output is rejected only when it is both far from
+    /// the transcript (similarity under 0.3, see PolishMetrics) and not explained by deletions: over 30% of the shorter
+    /// text changed beyond the difference in length. On the evaluation sets, the heaviest legitimate clean-ups (a
+    /// withdrawn list item, a run of fillers) go down to similarity 0.3 or below but change under 15% beyond deletions;
+    /// answers, refusals and translations are at 0–0.24 with 40–100% changed. Under 10 letters there's too little to judge.
+    public static func strayedFromTranscript(input: String, output: String) -> Bool {
+        let x = Array(PolishMetrics.normalized(input)), y = Array(PolishMetrics.normalized(output))
+        guard x.count >= 10 else { return false }
+        guard !y.isEmpty else { return true }
+        let distance = PolishMetrics.distance(x, y)
+        let similarity = 1 - Double(distance) / Double(max(x.count, y.count))
+        let changed = Double(distance - abs(x.count - y.count)) / Double(min(x.count, y.count))
+        return similarity < 0.3 && changed > 0.3
+    }
+
+    /// Why `output` can't be inserted as the clean-up of `input` (which then goes in as spoken), or nil when it can.
+    public static func fallback(input: String, output: String, truncated: Bool) -> PolishFallback? {
+        if truncated { return .truncated }
+        if looksLikeAnAnswer(input: input, output: output) { return .answered }
+        if droppedTooMuch(input: input, output: output) { return .summarised }
+        if strayedFromTranscript(input: input, output: output) { return .unrelated }
+        return nil
+    }
+}
+
+/// Why a transcript, or one part of a long one, was inserted as spoken instead of cleaned up.
+public enum PolishFallback: String, Sendable, Equatable {
+    /// No answer came back: an error, or a timeout.
+    case failed
+    /// The answer was cut off.
+    case truncated
+    /// Much longer than the transcript: the model answered the dictated prompt.
+    case answered
+    /// Much shorter than a long transcript: the model summarised it.
+    case summarised
+    /// Little in common with the transcript: a translation, an answer or a refusal.
+    case unrelated
 }

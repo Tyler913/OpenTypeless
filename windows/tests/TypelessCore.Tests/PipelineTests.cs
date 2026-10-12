@@ -340,13 +340,97 @@ public class PipelineTests
     }
 
     [Fact]
-    public async Task PolishIdleTimeoutIsRetryable()
+    public async Task PolishIdleTimeoutIsATimeout()
     {
-        // A stream that goes silent must end with a retryable error, not hang until the 240 s guard.
+        // A stream that goes silent must end with a timeout, not hang until the total cap.
         var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), new HttpClient(new StallingHandler()));
         var error = await Assert.ThrowsAsync<ApiException>(() => client.Polish("x", new PolishOptions("m"), idleTimeout: 0.2, totalTimeout: 5));
-        Assert.Equal(ApiErrorKind.Network, error.Kind);
-        Assert.True(error.IsRetryable);
+        Assert.Equal(ApiException.TimedOut(0.2), error);
+    }
+
+    [Fact]
+    public async Task KeepAliveCommentsDontPostponeTheFirstTokenDeadline()
+    {
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), new HttpClient(new KeepAliveHandler()));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var error = await Assert.ThrowsAsync<ApiException>(() => client.Polish("x", new PolishOptions("m"), firstTokenTimeout: 0.3));
+        Assert.Equal(ApiException.TimedOut(0.3), error);
+        Assert.True(clock.Elapsed.TotalSeconds < 3);
+    }
+
+    [Fact]
+    public async Task CutOffAnswersAreTruncated()
+    {
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
+        async Task<PolishResult> Polish(string sse)
+        {
+            MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8(sse));
+            return await client.Polish("x", new PolishOptions("m"));
+        }
+        const string content = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n";
+        Assert.True((await Polish(content + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"content_filter\"}]}\n\ndata: [DONE]\n\n")).Truncated);
+        // The connection broke off: neither a finish reason nor [DONE].
+        Assert.True((await Polish(content)).Truncated);
+        Assert.False((await Polish(content + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")).Truncated);
+        Assert.False((await Polish(content + "data: [DONE]\n\n")).Truncated);
+    }
+
+    [Fact]
+    public async Task StreamErrorKeepsItsStatus()
+    {
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
+        MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8("data: {\"error\":{\"code\":402,\"message\":\"Insufficient credits\"}}\n\n"));
+        var error = await Assert.ThrowsAsync<ApiException>(() => client.Polish("x", new PolishOptions("m")));
+        Assert.Equal(ApiException.Http(402, "Insufficient credits"), error);
+        MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8("data: {\"error\":{\"message\":\"boom\"}}\n\n"));
+        error = await Assert.ThrowsAsync<ApiException>(() => client.Polish("x", new PolishOptions("m")));
+        Assert.Equal(ApiException.Http(502, "boom"), error);
+    }
+
+    [Fact]
+    public async Task TranscriptionErrorBodyKeepsItsStatus()
+    {
+        var calls = 0;
+        MockOpenRouter.Handler = (_, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            return (200, MockOpenRouter.Utf8("""{"error":{"code":401,"message":"No auth credentials found"}}"""));
+        };
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
+        var error = await Assert.ThrowsAsync<ApiException>(() =>
+            client.TranscribeWithRetry([1, 2, 3], new TranscriptionOptions("m"), new RetryPolicy(MaxAttempts: 3, BaseDelay: 0.01)));
+        Assert.Equal(401, error.Status);
+        // A 401 isn't retried, even inside a 200.
+        Assert.Equal(1, calls);
+    }
+
+    /// <summary>Sends nothing but OpenRouter's keep-alive comments, every 50 ms: a model that never starts answering.</summary>
+    private sealed class KeepAliveHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new KeepAliveStream()) });
+
+        private sealed class KeepAliveStream : Stream
+        {
+            private static readonly byte[] Comment = Encoding.UTF8.GetBytes(": OPENROUTER PROCESSING\n\n");
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => throw new NotSupportedException();
+            public override long Position { get => 0; set => throw new NotSupportedException(); }
+            public override void Flush() { }
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                await Task.Delay(50, cancellationToken);
+                Comment.CopyTo(buffer);
+                return Comment.Length;
+            }
+        }
     }
 
     private sealed class StallingHandler : HttpMessageHandler

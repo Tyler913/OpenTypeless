@@ -773,6 +773,15 @@
     "fr": "Inséré sans nettoyage",
     "de": "Ohne Bereinigung eingefügt"
   },
+  "Partly inserted without clean-up": {
+    "ja": "一部を整形せずに挿入しました",
+    "ko": "일부를 다듬기 없이 삽입함",
+    "es": "Insertado en parte sin limpieza",
+    "pt": "Inserido em parte sem limpeza",
+    "ru": "Частично вставлено без очистки",
+    "fr": "Inséré en partie sans nettoyage",
+    "de": "Teilweise ohne Bereinigung eingefügt"
+  },
   "Clean-up failed — inserted raw text": {
     "ja": "整形に失敗したため、元のテキストを挿入しました",
     "ko": "다듬기 실패 — 원본 텍스트를 삽입함",

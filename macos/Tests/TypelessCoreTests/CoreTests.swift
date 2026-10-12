@@ -145,6 +145,17 @@ struct SSEParserTests {
                        [.finished(reason: "length")])
         XCTAssertEqual(p.parse(line: "data: [DONE]"), [.done])
         if case .error = p.parse(line: #"data: {"error":{"message":"boom"}}"#).first {} else { XCTFail() }
+        // An integer code is the status to classify the error by; a string code isn't one.
+        XCTAssertEqual(p.parse(line: #"data: {"error":{"code":402,"message":"boom"}}"#), [.error("boom", status: 402)])
+        XCTAssertEqual(p.parse(line: #"data: {"error":{"code":"server_error","message":"boom"}}"#), [.error("boom")])
+    }
+
+    @Test func testTruncation() {
+        XCTAssertTrue(APIClient.isTruncated(finishReason: "length", receivedDone: true))
+        XCTAssertTrue(APIClient.isTruncated(finishReason: "content_filter", receivedDone: true))
+        XCTAssertTrue(APIClient.isTruncated(finishReason: nil, receivedDone: false))
+        XCTAssertFalse(APIClient.isTruncated(finishReason: nil, receivedDone: true))
+        XCTAssertFalse(APIClient.isTruncated(finishReason: "stop", receivedDone: false))
     }
 }
 
@@ -178,6 +189,30 @@ struct RetryTests {
             XCTFail()
         } catch {}
         XCTAssertEqual(calls, 1)
+    }
+
+    @Test func testTimeoutsCanBeLeftUnretried() async {
+        let policy = RetryPolicy(maxAttempts: 3, baseDelay: 0.01, retriesTimeouts: false)
+        var calls = 0
+        do {
+            _ = try await policy.run { _ -> Int in calls += 1; throw APIError.timeout(seconds: 10) }
+            XCTFail()
+        } catch {}
+        XCTAssertEqual(calls, 1)
+        calls = 0
+        let value = try? await policy.run { _ -> Int in
+            calls += 1
+            if calls < 2 { throw APIError.http(status: 503, message: "") }
+            return 7
+        }
+        XCTAssertEqual(value, 7)
+        XCTAssertEqual(calls, 2)
+    }
+
+    @Test func testPolishTimeoutScalesWithLength() {
+        XCTAssertTrue(abs(APIClient.polishTimeout(for: "好的收到") - 20.2) < 0.001)
+        XCTAssertTrue(abs(APIClient.polishTimeout(for: String(repeating: "字", count: 600)) - 50) < 0.001)
+        XCTAssertEqual(APIClient.polishTimeout(for: String(repeating: "字", count: 5000)), 120)
     }
 
     @Test func testTimeout() async {

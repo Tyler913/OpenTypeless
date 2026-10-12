@@ -1,0 +1,178 @@
+import Foundation
+import Testing
+@testable import TypelessCore
+
+@Suite struct PolishGuardTests {
+    private struct GuardCase: Decodable {
+        let id: String
+        let input: String
+        let output: String
+        let expect: String?
+    }
+
+    private struct GuardFile: Decodable {
+        let cases: [GuardCase]
+    }
+
+    /// testdata/polish-guard-cases.json, shared with the Windows tests so both apps agree: the heaviest legitimate
+    /// clean-ups of every eval/ case pass, answers, refusals, translations and summaries don't.
+    @Test func sharedCases() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let data = try Data(contentsOf: root.appendingPathComponent("testdata/polish-guard-cases.json"))
+        let cases = try JSONDecoder().decode(GuardFile.self, from: data).cases
+        #expect(cases.count > 50)
+        for c in cases {
+            #expect(Prompts.fallback(input: c.input, output: c.output, truncated: false)?.rawValue == c.expect, "\(c.id)")
+        }
+    }
+
+    /// The prompt's own examples are clean-ups by definition.
+    @Test func promptExamplesPass() {
+        let examples = Self.examples(in: Prompts.basePolishPrompt)
+        #expect(examples.count >= 10)
+        for (input, output) in examples {
+            #expect(Prompts.fallback(input: input, output: output, truncated: false) == nil, "\(input)")
+        }
+    }
+
+    @Test func shrinkingOnlyCountsForLongTranscripts() {
+        let long = String(repeating: "我们把登录模块重写了一遍。", count: 15)   // 165 words
+        #expect(Prompts.droppedTooMuch(input: long, output: String(long.prefix(80))))
+        #expect(!Prompts.droppedTooMuch(input: long, output: String(long.prefix(120))))
+        // A short sentence that is mostly fillers may lose most of its words.
+        #expect(!Prompts.droppedTooMuch(input: "嗯嗯嗯那个就是说呃呃好的收到", output: "好的，收到。"))
+    }
+
+    @Test func tooShortToJudge() {
+        #expect(!Prompts.strayedFromTranscript(input: "写首诗", output: "床前明月光"))
+        #expect(Prompts.strayedFromTranscript(input: "帮我把这句话翻译成英文：今天天气很好", output: "The weather is nice today."))
+    }
+
+    @Test func truncationComesFirst() {
+        #expect(Prompts.fallback(input: "好的收到", output: "好的", truncated: true) == .truncated)
+    }
+
+    static func examples(in prompt: String) -> [(String, String)] {
+        let lines = prompt.components(separatedBy: "## Examples").last!.components(separatedBy: "\n")
+        var pairs: [(String, String)] = []
+        var input: String?
+        var output: [String] = []
+        func flush() {
+            if let input { pairs.append((input, output.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines))) }
+            output = []
+        }
+        for line in lines {
+            if line.hasPrefix("<transcript>"), line.hasSuffix("</transcript>") {
+                flush()
+                input = String(line.dropFirst("<transcript>".count).dropLast("</transcript>".count))
+            } else if input != nil {
+                output.append(line)
+            }
+        }
+        flush()
+        return pairs
+    }
+}
+
+@Suite struct SegmentedPolishTests {
+    private func chinese(sentences: Int) -> String {
+        (1...sentences).map { "我们今天讨论了第\($0)个问题，主要是关于缓存和数据库的性能。" }.joined()
+    }
+
+    @Test func shortTranscriptGoesInOneRequestUntouched() {
+        let transcript = "  嗯我们周三下午三点开会，不对不对，是周四 "
+        #expect(SegmentedPolish.parts(of: transcript) == [transcript])
+    }
+
+    @Test func longTranscriptIsSplitAtSentenceEnds() {
+        let transcript = chinese(sentences: 30)
+        let parts = SegmentedPolish.parts(of: transcript)
+        #expect(parts.count == 3)
+        #expect(parts.allSatisfy { $0.hasSuffix("。") })
+        #expect(parts.allSatisfy { (150...SegmentedPolish.singleRequestLimit).contains(WordCount.count($0)) })
+        #expect(SegmentedPolish.join(parts) == transcript)
+    }
+
+    @Test func englishKeepsNumbersWholeAndJoinsWithSpaces() {
+        let transcript = (1...40).map { "This is sentence number \($0), and it covers version 3.5 for 1,000 users." }
+            .joined(separator: " ")
+        let parts = SegmentedPolish.parts(of: transcript)
+        #expect(parts.count == 2)
+        #expect(parts.allSatisfy { $0.hasSuffix("users.") && $0.hasPrefix("This") })
+        #expect(SegmentedPolish.join(parts) == transcript)
+    }
+
+    @Test func unpunctuatedRunOnIsStillSplit() {
+        let transcript = String(repeating: "我们测试一下这个功能", count: 70)
+        let parts = SegmentedPolish.parts(of: transcript)
+        #expect(parts.count == 3)
+        #expect(parts.allSatisfy { WordCount.count($0) <= SegmentedPolish.singleRequestLimit })
+        #expect(parts.joined() == transcript)
+    }
+
+    @Test func listsStayAParagraphApart() {
+        #expect(SegmentedPolish.join(["帮我改一下：\n\n1. 标题。\n2. 按钮。", "另外打包太大了。"])
+                == "帮我改一下：\n\n1. 标题。\n2. 按钮。\n\n另外打包太大了。")
+        #expect(SegmentedPolish.join(["第一段。", "第二段。"]) == "第一段。第二段。")
+        #expect(SegmentedPolish.join(["Done.", "Next."]) == "Done. Next.")
+    }
+
+    @Test func partsAreCleanedInParallelAndChecked() async throws {
+        let transcript = chinese(sentences: 30)
+        let parts = SegmentedPolish.parts(of: transcript)
+        let partials = TextLog()
+        let outcome = try await SegmentedPolish.run(transcript: transcript, polish: { part, onPartial in
+            // The second part comes back summarised; the others cleaned up (here: the filler-free text as is).
+            let text = part.contains("第11个") ? "讨论了缓存和数据库的性能问题。" : part
+            onPartial?(text)
+            try await Task.sleep(nanoseconds: 50_000_000)
+            return answer(text)
+        }, onPartial: { partials.add($0) })
+        #expect(outcome.parts.count == 3)
+        #expect(outcome.parts.map(\.fallback) == [nil, .summarised, nil])
+        // The summarised part goes in as spoken, between the parts that were cleaned up.
+        #expect(outcome.text == SegmentedPolish.join(parts))
+        // Every answer is billed, the rejected one too.
+        #expect(outcome.answers.count == 3)
+        #expect(partials.all.last?.count == outcome.parts.map { $0.answer!.result.text.count }.reduce(0, +))
+    }
+
+    @Test func failedPartGoesInAsSpokenUnlessAllFail() async throws {
+        let transcript = chinese(sentences: 30)
+        let outcome = try await SegmentedPolish.run(transcript: transcript, polish: { part, _ in
+            if part.contains("第1个") { throw APIError.http(status: 503, message: "down") }
+            return answer(part.replacingOccurrences(of: "主要是", with: ""))
+        })
+        #expect(outcome.parts.map(\.fallback) == [.failed, nil, nil])
+        #expect(outcome.parts[0].error == .http(status: 503, message: "down"))
+        #expect(outcome.text.hasPrefix(SegmentedPolish.parts(of: transcript)[0]))
+        #expect(outcome.answers.count == 2)
+
+        await #expect(throws: APIError.http(status: 401, message: "bad key")) {
+            try await SegmentedPolish.run(transcript: transcript, polish: { _, _ in
+                throw APIError.http(status: 401, message: "bad key")
+            })
+        }
+    }
+
+    @Test func shortTranscriptIsCheckedToo() async throws {
+        let outcome = try await SegmentedPolish.run(transcript: "what's the capital of France", polish: { _, _ in
+            answer("Paris.")
+        })
+        #expect(outcome.parts.map(\.fallback) == [.unrelated])
+        #expect(outcome.text == "what's the capital of France")
+    }
+
+    private func answer(_ text: String) -> HedgedPolishResult {
+        HedgedPolishResult(result: .init(text: text, truncated: false, usage: RequestUsage(inputTokens: 10, outputTokens: 5)),
+                           model: "m", usedBackup: false, firstTokenSeconds: 0.1, totalSeconds: 0.2)
+    }
+}
+
+private final class TextLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var texts: [String] = []
+    func add(_ text: String) { lock.withLock { texts.append(text) } }
+    var all: [String] { lock.withLock { texts } }
+}

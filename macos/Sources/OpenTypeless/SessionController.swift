@@ -57,7 +57,7 @@ final class SessionController: ObservableObject {
     /// A clean-up started before the key was released, on the transcript a speculative tail gave.
     private var speculativePolish: SpeculativePolish?
     /// Clean-ups started ahead of time that finished but were then dropped because the speaker went on: they were billed too.
-    private var discardedPolishes: [HedgedPolishResult] = []
+    private var discardedPolishes: [SegmentedPolishResult] = []
     private var modelInfo: [String: APIClient.ModelInfo] = [:]
     /// False when retrying from the history window, or once the screen locked: the result goes to the clipboard instead.
     private var deliverByPaste = true
@@ -205,6 +205,7 @@ final class SessionController: ObservableObject {
         record.status = .cancelled
         history.update(record)
         note(String(format: "cancelled after %.1fs — kept in History", record.duration))
+        let discarded = takeDiscardedPolishes()
         reset()
         hud.show(.error(L("已取消，录音在历史记录中保留 24 小时", "Cancelled — kept in History for 24 hours")), autoHideAfter: 2.5)
 
@@ -223,13 +224,13 @@ final class SessionController: ObservableObject {
             guard let self else { return }
             if self.keptInBackground.remove(record.id) == nil {
                 // Retried from History meanwhile: that run owns the record now. Only what this one spent is counted.
-                self.account(&record, pipeline: pipeline, polished: nil)
+                self.account(&record, pipeline: pipeline, polished: nil, discarded: discarded)
                 return
             }
             guard self.history.records.contains(where: { $0.id == record.id }) else { return }
             record.rawText = raw
             record.chunkTexts = pipeline.completedTranscripts()
-            self.account(&record, pipeline: pipeline, polished: nil)
+            self.account(&record, pipeline: pipeline, polished: nil, discarded: discarded)
             self.history.update(record)
         }
     }
@@ -488,7 +489,7 @@ final class SessionController: ObservableObject {
             record.error = nil
             guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 record.status = .done
-                account(&record, pipeline: pipeline, polished: nil)
+                account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes())
                 history.update(record)
                 finish(showing: .error(L("没有识别到语音", "No speech detected")), hideAfter: 2)
                 return
@@ -499,7 +500,7 @@ final class SessionController: ObservableObject {
             record.rawText = failure.partialText
             record.status = .failed
             record.error = failure.localizedDescription
-            account(&record, pipeline: pipeline, polished: nil)
+            account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes())
             history.update(record)
             lastError = failure.localizedDescription
             finish(showing: .error(L("转写失败，可在菜单栏重试", "Failed — retry from the menu bar")), hideAfter: 4)
@@ -507,7 +508,7 @@ final class SessionController: ObservableObject {
             if APIError.from(error) == .cancelled { return }
             record.status = .failed
             record.error = error.localizedDescription
-            account(&record, pipeline: pipeline, polished: nil)
+            account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes())
             history.update(record)
             lastError = error.localizedDescription
             finish(showing: .error(error.localizedDescription), hideAfter: 5)
@@ -517,12 +518,12 @@ final class SessionController: ObservableObject {
     private func polishAndDeliver(record: inout DictationRecord, pipeline: TranscriptionPipeline, generation: Int) async {
         var text = record.rawText
         var notice: String?
-        var polished: HedgedPolishResult?
+        var polished: SegmentedPolishResult?
 
         if settings.polishEnabled {
             // When the speaker paused before letting go and said nothing more, the clean-up of this very transcript
             // started while they were still holding the key: take it over (often it's already done).
-            let polishing: Task<HedgedPolishResult, Error>
+            let polishing: Task<SegmentedPolishResult, Error>
             var ahead = 0.0
             // One that already failed (while recording) gets a fresh attempt instead.
             if let speculative = speculativePolish, speculative.raw == record.rawText, !speculative.outcome.failed {
@@ -547,7 +548,6 @@ final class SessionController: ObservableObject {
                     polishing.cancel()
                 }
                 polished = outcome
-                let result = outcome.result
                 // The wait after the key was released: a clean-up started ahead of time had a head start.
                 let firstToken = max(0, outcome.firstTokenSeconds - ahead)
                 let total = max(0, outcome.totalSeconds - ahead)
@@ -555,17 +555,21 @@ final class SessionController: ObservableObject {
                 record.timing?.polish = total
                 record.timing?.polishModel = outcome.model
                 record.timing?.usedBackup = outcome.usedBackup
-                note(String(format: "polish: %@%@, first token %.2fs, total %.2fs", outcome.model,
-                            outcome.usedBackup ? " (backup)" : "", firstToken, total))
-                if result.truncated {
+                let fallbacks = outcome.fallbacks
+                note(String(format: "polish: %@%@, %d part(s), first token %.2fs, total %.2fs", outcome.model,
+                            outcome.usedBackup ? " (backup)" : "", outcome.parts.count, firstToken, total)
+                     + (fallbacks.isEmpty ? "" : "; inserted as spoken: "
+                        + fallbacks.map { $0.fallback?.rawValue ?? "" }.joined(separator: ", ")))
+                if fallbacks.count == outcome.parts.count {
+                    // Cut off, an answer, a summary or a translation rather than the speaker's text, part after part.
                     notice = L("未整理，已插入原文", "Inserted without clean-up")
-                    record.status = .polishFailed
-                } else if Prompts.looksLikeAnAnswer(input: record.rawText, output: result.text) {
-                    notice = L("未整理，已插入原文", "Inserted without clean-up")
+                    record.error = fallbacks.lazy.compactMap(\.error).first?.localizedDescription
                     record.status = .polishFailed
                 } else {
-                    text = result.text
-                    record.polishedText = result.text
+                    // A part whose clean-up was unusable goes in as spoken, between the parts that were cleaned up.
+                    if !fallbacks.isEmpty { notice = L("部分未整理，已插入原文", "Partly inserted without clean-up") }
+                    text = outcome.text
+                    record.polishedText = outcome.text
                     record.status = .done
                 }
             } catch {
@@ -580,8 +584,7 @@ final class SessionController: ObservableObject {
         if record.status == .polishFailed { record.polishedText = nil }
 
         // Taken now: once the text is in, the next dictation may already be collecting its own.
-        let discarded = discardedPolishes
-        discardedPolishes = []
+        let discarded = takeDiscardedPolishes()
         if isCurrent(generation) {
             hud.model.bar.reach(.delivered)
             await deliver(text, notice: notice, generation: generation)
@@ -611,7 +614,7 @@ final class SessionController: ObservableObject {
     private struct SpeculativePolish {
         let raw: String
         let startedAt: TimeInterval
-        let task: Task<HedgedPolishResult, Error>
+        let task: Task<SegmentedPolishResult, Error>
         let outcome: PolishOutcome
         let partials: PartialRelay
     }
@@ -630,7 +633,7 @@ final class SessionController: ObservableObject {
 
     /// The answer of a clean-up started ahead of time, once it's in (a `Task`'s value can't be read without waiting).
     @MainActor private final class PolishOutcome {
-        var result: HedgedPolishResult?
+        var result: SegmentedPolishResult?
         var failed = false
     }
 
@@ -641,9 +644,12 @@ final class SessionController: ObservableObject {
         if let raw, raw == speculativePolish?.raw { return }
         dropSpeculativePolish()
         guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        // Only a transcript short enough for one request: a long one would go out as several at every pause, and its
+        // parts are cleaned up in parallel once the key is released anyway.
+        guard !SegmentedPolish.needsParts(raw) else { return }
         let outcome = PolishOutcome()
         let partials = PartialRelay()
-        let task = Task { [weak self] () async throws -> HedgedPolishResult in
+        let task = Task { [weak self] () async throws -> SegmentedPolishResult in
             guard let self else { throw APIError.cancelled }
             do {
                 let result = try await self.polish(raw, onPartial: { partials.send($0) })
@@ -663,6 +669,14 @@ final class SessionController: ObservableObject {
         guard let speculative = speculativePolish else { return }
         speculativePolish = nil
         if let result = speculative.outcome.result { discardedPolishes.append(result) } else { speculative.task.cancel() }
+    }
+
+    /// The clean-ups done ahead of time that this dictation won't use, for its costs: the one still held is dropped
+    /// first, so it isn't left for `reset` to drop after the costs were written (and then lost).
+    private func takeDiscardedPolishes() -> [SegmentedPolishResult] {
+        dropSpeculativePolish()
+        defer { discardedPolishes = [] }
+        return discardedPolishes
     }
 
     /// Moves the bar as the clean-up streams in: its first token, then its length against the transcript's.
@@ -726,15 +740,13 @@ final class SessionController: ObservableObject {
 
     private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
 
-    private func polish(_ raw: String, onPartial: (@Sendable (String) -> Void)? = nil) async throws -> HedgedPolishResult {
+    private func polish(_ raw: String, onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
         let primary = route(endpoint, model: settings.polishModel)
         let backup = settings.polishBackupEndpoint.map { route($0, model: settings.polishBackupModel) }
-        return try await RetryPolicy(maxAttempts: 2).run { _ in
-            try await HedgedPolish.run(transcript: raw, primary: primary, backup: backup, onPartial: onPartial)
-        }
+        return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup, onPartial: onPartial)
     }
 
     private func route(_ endpoint: ProviderEndpoint, model: String) -> PolishRoute {
@@ -749,11 +761,11 @@ final class SessionController: ObservableObject {
         ))
     }
 
-    /// Prices what this run's requests used (the speech-to-text of every chunk sent, and the clean-up answer that was
-    /// kept) and adds it, with the dictation's words once it's finished, to the Home page totals.
-    /// `discarded`: clean-ups done ahead of time for a transcript the speaker then went on from.
-    private func account(_ record: inout DictationRecord, pipeline: TranscriptionPipeline, polished: HedgedPolishResult?,
-                         discarded: [HedgedPolishResult] = []) {
+    /// Prices what this run's requests used (the speech-to-text of every chunk sent, and every clean-up answer, used or
+    /// not, with the hedge's cancelled requests) and adds it, with the dictation's words once it's finished, to the Home
+    /// page totals. `discarded`: clean-ups done ahead of time for a transcript the speaker then went on from.
+    private func account(_ record: inout DictationRecord, pipeline: TranscriptionPipeline, polished: SegmentedPolishResult?,
+                         discarded: [SegmentedPolishResult]) {
         let prices = PriceStore.shared
         let transcription = CostEstimator.transcriptions(pipeline.requestUsages(),
                                                          price: prices.price(settings.sttProvider, settings.sttModel),
@@ -765,14 +777,17 @@ final class SessionController: ObservableObject {
         let transcriptionCost = transcription.cost + backup.cost
         var unpriced = transcription.unpriced + backup.unpriced
         var cleanup = 0.0
-        for answer in discarded + [polished].compactMap({ $0 }) {
-            guard let usage = answer.result.usage else { continue }
-            if let cost = CostEstimator.chat(usage, price: prices.price(answer.provider, answer.model),
-                                             preferReported: answer.provider == .openrouter) {
+        func add(_ usage: RequestUsage?, provider: ProviderID, model: String) {
+            guard let usage else { return }
+            if let cost = CostEstimator.chat(usage, price: prices.price(provider, model), preferReported: provider == .openrouter) {
                 cleanup += cost
             } else {
                 unpriced += 1
             }
+        }
+        for answer in (discarded + [polished].compactMap { $0 }).flatMap(\.answers) {
+            add(answer.result.usage, provider: answer.provider, model: answer.model)
+            for request in answer.cancelled { add(request.usage, provider: request.provider, model: request.model) }
         }
         if transcriptionCost + cleanup > 0 { record.cost = (record.cost ?? 0) + transcriptionCost + cleanup }
         note(String(format: "cost: transcription $%.6f, clean-up $%.6f, unpriced requests %d", transcriptionCost, cleanup, unpriced))

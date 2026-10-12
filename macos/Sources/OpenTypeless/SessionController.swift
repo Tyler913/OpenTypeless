@@ -415,14 +415,14 @@ final class SessionController: ObservableObject {
         let backup = settings.sttBackupEndpoint.map {
             (client: APIClient(endpoint: $0),
              options: APIClient.TranscriptionOptions(model: settings.sttBackupModel.trimmingCharacters(in: .whitespaces), language: language,
-                                                     vocabulary: settings.vocabularyList))
+                                                     vocabulary: settings.dictationVocabulary))
         }
         let key = ModelPrice.key(settings.sttProvider, settings.sttModel)
         let latency = latencies[key] ?? TranscriptionLatency()
         latencies[key] = latency
         return TranscriptionPipeline(
             client: APIClient(endpoint: endpoint),
-            options: .init(model: settings.sttModel, language: language, vocabulary: settings.vocabularyList),
+            options: .init(model: settings.sttModel, language: language, vocabulary: settings.dictationVocabulary),
             preset: preset,
             backup: backup,
             latency: latency,
@@ -636,6 +636,11 @@ final class SessionController: ObservableObject {
             record.status = .done
         }
         if record.status == .polishFailed { record.polishedText = nil }
+        // Snippets go in here, in code, never through the clean-up: a model would paraphrase or translate a long expansion,
+        // and its guards would take one for an answer. History keeps what was said (word counts go by it) and what went in.
+        let expanded = SnippetExpander.expand(text, with: settings.snippets)
+        record.insertedText = expanded == text ? nil : expanded
+        text = expanded
 
         // Taken now: once the text is in, the next dictation may already be collecting its own.
         let discarded = takeDiscardedPolishes()
@@ -818,7 +823,7 @@ final class SessionController: ObservableObject {
         let model = model.trimmingCharacters(in: .whitespaces)
         return PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
-            vocabulary: settings.vocabularyList,
+            vocabulary: settings.dictationVocabulary,
             misheard: settings.misheardHints,
             extraInstructions: settings.extraInstructions,
             modelInfo: endpoint.id == .openrouter ? modelInfo[model] : nil,
@@ -876,6 +881,8 @@ final class SessionController: ObservableObject {
         var record = saved
         record.status = .processing
         record.error = nil
+        // Expanded again from this run's text, with the snippets as they are now.
+        record.insertedText = nil
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again.
         let preset = saved.chunkLayout == Chunker.layout ? saved.chunkTexts : [:]
         // Saved with the new layout, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).

@@ -31,7 +31,7 @@ enum CLI {
         let pipeline = TranscriptionPipeline(
             client: client,
             options: .init(model: settings.sttModel, language: settings.sttLanguage.isEmpty ? nil : settings.sttLanguage,
-                           vocabulary: settings.vocabularyList),
+                           vocabulary: settings.dictationVocabulary),
             observer: { index, state in
                 let t = String(format: "%5.1fs", Date().timeIntervalSince(start))
                 switch state {
@@ -102,7 +102,7 @@ enum CLI {
             }
             func route(_ endpoint: ProviderEndpoint, _ model: String) -> PolishRoute {
                 PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
-                    model: model, vocabulary: settings.vocabularyList, misheard: settings.misheardHints,
+                    model: model, vocabulary: settings.dictationVocabulary, misheard: settings.misheardHints,
                     extraInstructions: settings.extraInstructions,
                     modelInfo: endpoint.id == .openrouter ? models?.first { $0.id == model } : nil,
                     host: endpoint.id == .openrouter ? settings.openRouterHost(for: model) : nil))

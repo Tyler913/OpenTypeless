@@ -1144,7 +1144,157 @@ struct StylePage: View {
                     .padding(10)
                     .frame(height: 150)
             }
+            CardSection(title: L("快捷短语", "Snippets"),
+                        footer: L("说出触发词，插入时会换成你写好的内容，一字不改，句子中间说也行。触发词会作为词汇提示交给语音识别和整理，让它原样保留。最好选一个平时不会说的说法，免得误替换。",
+                                  "Say a trigger and the text you wrote goes in instead, word for word, even mid-sentence. Triggers go to speech-to-text and clean-up as vocabulary, so they come through intact. Pick a phrase you wouldn't otherwise say, so it isn't replaced by accident.")) {
+                SnippetList(settings: settings)
+            }
         }
+    }
+}
+
+/// The snippets, each opening into an editor in place, and a new one added at the end.
+private struct SnippetList: View {
+    @ObservedObject var settings: AppSettings
+    /// The snippet open in the editor; a new one isn't in the list until it's saved.
+    @State private var editing: Snippet?
+
+    var body: some View {
+        if settings.snippets.isEmpty && editing == nil {
+            CardRow(icon: "text.bubble.fill", iconColor: .teal, title: L("还没有快捷短语", "No snippets yet"),
+                    subtitle: L("例如：说「我的邮箱」，插入 name@example.com", "For example, say “my email” to insert name@example.com")) {
+                Button(L("添加快捷短语", "Add Snippet")) { editing = Snippet(trigger: "", expansion: "") }
+            }
+        } else {
+            ForEach(Array(settings.snippets.enumerated()), id: \.element.id) { index, snippet in
+                if index > 0 { CardDivider(inset: 14) }
+                if editing?.id == snippet.id {
+                    SnippetEditor(settings: settings, snippet: snippet) { editing = nil }
+                } else {
+                    SnippetRow(snippet: snippet, onEdit: { editing = snippet }, onDelete: {
+                        if editing?.id == snippet.id { editing = nil }
+                        settings.deleteSnippet(snippet)
+                    })
+                }
+            }
+            if let editing, !settings.snippets.contains(where: { $0.id == editing.id }) {
+                if !settings.snippets.isEmpty { CardDivider(inset: 14) }
+                SnippetEditor(settings: settings, snippet: editing) { self.editing = nil }
+            } else {
+                CardDivider(inset: 14)
+                Button { editing = Snippet(trigger: "", expansion: "") } label: {
+                    Label(L("添加快捷短语", "Add Snippet"), systemImage: "plus")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                }
+                .buttonStyle(HoverButtonStyle(cornerRadius: Theme.cardRadius))
+            }
+        }
+    }
+}
+
+private struct SnippetRow: View {
+    let snippet: Snippet
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: onEdit) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(snippet.trigger).font(.system(size: 13, weight: .medium))
+                    Text(snippet.expansion.split(whereSeparator: \.isNewline).joined(separator: " ↵ "))
+                        .font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button(action: onEdit) { Image(systemName: "pencil") }
+                .buttonStyle(.borderless).foregroundStyle(.secondary)
+                .help(L("编辑快捷短语", "Edit snippet"))
+                .accessibilityLabel(L("编辑快捷短语", "Edit snippet"))
+            Button(action: onDelete) { Image(systemName: "xmark.circle.fill") }
+                .buttonStyle(.borderless).foregroundStyle(.secondary)
+                .help(L("删除", "Delete"))
+                .accessibilityLabel(L("删除", "Delete"))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+}
+
+/// A snippet being written: its trigger, its expansion (several lines if need be), and why it can't be saved yet.
+private struct SnippetEditor: View {
+    @ObservedObject var settings: AppSettings
+    let original: Snippet
+    let onDone: () -> Void
+    @State private var trigger: String
+    @State private var expansion: String
+
+    init(settings: AppSettings, snippet: Snippet, onDone: @escaping () -> Void) {
+        self.settings = settings
+        original = snippet
+        self.onDone = onDone
+        _trigger = State(initialValue: snippet.trigger)
+        _expansion = State(initialValue: snippet.expansion)
+    }
+
+    /// Another snippet already has this trigger (compared the way dictations are searched for it).
+    private var isTaken: Bool {
+        let key = SnippetExpander.key(trigger)
+        return !key.isEmpty && settings.snippets.contains { $0.id != original.id && SnippetExpander.key($0.trigger) == key }
+    }
+
+    private var canSave: Bool {
+        !SnippetExpander.key(trigger).isEmpty && !expansion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isTaken
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField(L("触发词，比如：我的邮箱", "Trigger, e.g. my email"), text: $trigger)
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: trigger) {
+                    if trigger.count > SnippetExpander.maxTriggerLength { trigger = String(trigger.prefix(SnippetExpander.maxTriggerLength)) }
+                }
+            TextEditor(text: $expansion)
+                .font(.system(size: 13))
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .frame(height: 100)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.04)))
+                .overlay(alignment: .topLeading) {
+                    if expansion.isEmpty {
+                        Text(L("替换成的内容，可以多行", "What goes in instead (can be several lines)"))
+                            .font(.system(size: 13)).foregroundStyle(.tertiary)
+                            .padding(.horizontal, 11).padding(.vertical, 6)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .onChange(of: expansion) {
+                    if expansion.count > SnippetExpander.maxExpansionLength {
+                        expansion = String(expansion.prefix(SnippetExpander.maxExpansionLength))
+                    }
+                }
+            HStack(spacing: 8) {
+                if isTaken {
+                    Text(L("已经有这个触发词了", "That trigger is already in use"))
+                        .font(.system(size: 11.5)).foregroundStyle(.orange)
+                }
+                Spacer()
+                Button(L("取消", "Cancel"), action: onDone)
+                Button(L("保存", "Save")) {
+                    settings.saveSnippet(Snippet(id: original.id, trigger: trigger.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                 expansion: expansion.trimmingCharacters(in: .whitespacesAndNewlines)))
+                    onDone()
+                }
+                .disabled(!canSave)
+            }
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 }
 

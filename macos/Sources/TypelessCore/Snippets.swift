@@ -11,6 +11,16 @@ public struct Snippet: Codable, Equatable, Identifiable, Sendable {
         self.trigger = trigger
         self.expansion = expansion
     }
+
+    private enum CodingKeys: String, CodingKey { case id, trigger, expansion }
+
+    /// A missing field is tolerated, as on Windows, so one odd entry doesn't lose the whole list.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        trigger = try container.decodeIfPresent(String.self, forKey: .trigger) ?? ""
+        expansion = try container.decodeIfPresent(String.self, forKey: .expansion) ?? ""
+    }
 }
 
 /// Puts snippets' expansions in place of their triggers in a dictation's final text.

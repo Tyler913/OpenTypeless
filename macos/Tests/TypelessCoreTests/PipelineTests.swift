@@ -49,6 +49,29 @@ final class MockOpenRouter: URLProtocol {
     }
 }
 
+/// Sends nothing but OpenRouter's keep-alive comments, every 50 ms: a model that never starts answering.
+final class KeepAliveServer: URLProtocol {
+    private let lock = NSLock()
+    private var stopped = false
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() { lock.withLock { stopped = true } }
+
+    override func startLoading() {
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                                       headerFields: ["Content-Type": "text/event-stream"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        tick()
+    }
+
+    private func tick() {
+        guard !lock.withLock({ stopped }) else { return }
+        client?.urlProtocol(self, didLoad: Data(": OPENROUTER PROCESSING\n\n".utf8))
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) { [self] in tick() }
+    }
+}
+
 @Suite(.serialized) struct PipelineTests {
     private func speech(seconds: Double) -> [Int16] {
         let n = AudioFormat.sampleCount(forSeconds: seconds)
@@ -287,6 +310,61 @@ extension PipelineTests {
         let result = try await client.polish(transcript: "x", options: PolishOptions(model: "m"))
         #expect(result.text == "ok")
         #expect(bodies.count == 2)
+    }
+
+    @Test func cutOffAnswersAreTruncated() async throws {
+        let client = APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session())
+        func polish(_ sse: String) async throws -> APIClient.PolishResult {
+            MockOpenRouter.handler = { _, _ in (200, Data(sse.utf8)) }
+            return try await client.polish(transcript: "x", options: PolishOptions(model: "m"))
+        }
+        let content = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n"
+        let filtered = "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"content_filter\"}]}\n\ndata: [DONE]\n\n"
+        #expect(try await polish(content + filtered).truncated)
+        // The connection broke off: neither a finish reason nor [DONE].
+        #expect(try await polish(content).truncated)
+        #expect(try await polish(content + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n").truncated == false)
+        #expect(try await polish(content + "data: [DONE]\n\n").truncated == false)
+    }
+
+    @Test func streamErrorKeepsItsStatus() async {
+        let client = APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session())
+        MockOpenRouter.handler = { _, _ in
+            (200, Data("data: {\"error\":{\"code\":402,\"message\":\"Insufficient credits\"}}\n\n".utf8))
+        }
+        await #expect(throws: APIError.http(status: 402, message: "Insufficient credits")) {
+            try await client.polish(transcript: "x", options: PolishOptions(model: "m"))
+        }
+        MockOpenRouter.handler = { _, _ in (200, Data("data: {\"error\":{\"message\":\"boom\"}}\n\n".utf8)) }
+        await #expect(throws: APIError.http(status: 502, message: "boom")) {
+            try await client.polish(transcript: "x", options: PolishOptions(model: "m"))
+        }
+    }
+
+    @Test func transcriptionErrorBodyKeepsItsStatus() async {
+        var calls = 0
+        MockOpenRouter.handler = { _, _ in
+            MockOpenRouter.lock.withLock { calls += 1 }
+            return (200, Data(#"{"error":{"code":401,"message":"No auth credentials found"}}"#.utf8))
+        }
+        let client = APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session())
+        await #expect(throws: APIError.http(status: 401, message: "No auth credentials found")) {
+            try await client.transcribeWithRetry(samples: [1, 2, 3], options: .init(model: "m"),
+                                                 policy: RetryPolicy(maxAttempts: 3, baseDelay: 0.01))
+        }
+        // A 401 isn't retried, even inside a 200.
+        #expect(calls == 1)
+    }
+
+    @Test func keepAliveCommentsDontPostponeTheFirstTokenDeadline() async {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [KeepAliveServer.self]
+        let client = APIClient(endpoint: .openRouter(apiKey: "k"), session: URLSession(configuration: config))
+        let start = Date()
+        await #expect(throws: APIError.timeout(seconds: 0.3)) {
+            try await client.polish(transcript: "x", options: PolishOptions(model: "m"), firstTokenTimeout: 0.3)
+        }
+        #expect(Date().timeIntervalSince(start) < 3)
     }
 
     @Test func localization() {

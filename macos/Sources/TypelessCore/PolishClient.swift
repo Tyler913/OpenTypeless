@@ -51,7 +51,8 @@ public struct SSEParser {
         case content(String)
         case finished(reason: String?)
         case done
-        case error(String)
+        /// An error object in the stream, with the HTTP status its `code` gives, if any.
+        case error(String, status: Int? = nil)
         /// The token counts (and on OpenRouter the cost), sent in the last chunk.
         case usage(RequestUsage)
     }
@@ -67,7 +68,7 @@ public struct SSEParser {
         guard let data = payload.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
         if object["error"] != nil {
-            return [.error(APIClient.errorMessage(from: data))]
+            return [.error(APIClient.errorMessage(from: data), status: APIClient.errorStatus(from: data))]
         }
         var events: [Event] = []
         if let usage = RequestUsage.parse(object["usage"]) { events.append(.usage(usage)) }
@@ -109,17 +110,24 @@ extension APIClient {
         return routing
     }
 
+    /// The system prompt and the user message a clean-up of `transcript` sends.
+    static func polishMessages(transcript: String, options: PolishOptions) -> [String] {
+        [options.systemPromptOverride ?? Prompts.polishSystemPrompt(
+            vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions),
+         Prompts.polishUserMessage(transcript: transcript)]
+    }
+
     /// Builds the chat request body. Optional tuning parameters are only sent where they're known to
     /// be accepted: OpenRouter normalises them for every model, while e.g. OpenAI's reasoning models
     /// reject `temperature`.
     func polishBody(transcript: String, options: PolishOptions, includeOptional: Bool) -> [String: Any] {
+        let messages = Self.polishMessages(transcript: transcript, options: options)
         var body: [String: Any] = [
             "model": options.model,
             "stream": true,
             "messages": [
-                ["role": "system", "content": options.systemPromptOverride ?? Prompts.polishSystemPrompt(
-                    vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions)],
-                ["role": "user", "content": Prompts.polishUserMessage(transcript: transcript)],
+                ["role": "system", "content": messages[0]],
+                ["role": "user", "content": messages[1]],
             ],
         ]
         guard includeOptional else { return body }
@@ -138,19 +146,33 @@ extension APIClient {
         return body
     }
 
+    /// How long a clean-up may take in all: long enough for a slow provider to stream the whole answer out, and short
+    /// enough that a stuck one gives the dictation back (as spoken) within a minute or two rather than four.
+    public static func polishTimeout(for transcript: String) -> Double {
+        min(120, 20 + Double(transcript.count) * 0.05)
+    }
+
+    /// Clean-up models start answering within a second or two. OpenRouter sends keep-alive comments while a model is
+    /// queued or slow to start, which keep the idle timeout from ever firing, so the first word has a deadline of its own.
+    public static let polishFirstTokenTimeout: Double = 10
+
     /// Streams a clean-up completion. Liveness is judged by an *idle* timeout (no bytes for
     /// `idleTimeout` seconds) rather than a short total timeout, so long dictations that take a while
-    /// to stream out are never killed mid-way. `totalTimeout` is only a runaway guard.
+    /// to stream out are never killed mid-way. `totalTimeout` (by default `polishTimeout(for:)`) is only a runaway
+    /// guard; the first content must arrive within `firstTokenTimeout`. All three end in `APIError.timeout`.
     public func polish(
         transcript: String,
         options: PolishOptions,
         idleTimeout: Double = 25,
-        totalTimeout: Double = 240,
+        totalTimeout: Double? = nil,
+        firstTokenTimeout: Double = APIClient.polishFirstTokenTimeout,
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> PolishResult {
+        let limits = StreamLimits(idle: idleTimeout, total: totalTimeout ?? Self.polishTimeout(for: transcript),
+                                  firstToken: firstTokenTimeout)
         do {
             return try await streamPolish(transcript: transcript, options: options, includeOptional: true,
-                                          idleTimeout: idleTimeout, totalTimeout: totalTimeout, onPartial: onPartial)
+                                          limits: limits, onPartial: onPartial)
         } catch let APIError.http(status, message) where status == 400 || status == 422 {
             // A server rejecting an optional parameter: retry with the bare minimum request.
             let lower = message.lowercased()
@@ -158,56 +180,107 @@ extension APIClient {
                    "unsupported", "unrecognized", "unknown"]
                 .contains(where: lower.contains) else { throw APIError.http(status: status, message: message) }
             return try await streamPolish(transcript: transcript, options: options, includeOptional: false,
-                                          idleTimeout: idleTimeout, totalTimeout: totalTimeout, onPartial: onPartial)
+                                          limits: limits, onPartial: onPartial)
         }
+    }
+
+    private struct StreamLimits: Sendable {
+        let idle: Double
+        let total: Double
+        let firstToken: Double
     }
 
     private func streamPolish(
         transcript: String, options: PolishOptions, includeOptional: Bool,
-        idleTimeout: Double, totalTimeout: Double, onPartial: (@Sendable (String) -> Void)?
+        limits: StreamLimits, onPartial: (@Sendable (String) -> Void)?
     ) async throws -> PolishResult {
-        var request = try request(path: "chat/completions", idleTimeout: idleTimeout)
+        var request = try request(path: "chat/completions", idleTimeout: limits.idle)
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         let body = polishBody(transcript: transcript, options: options, includeOptional: includeOptional)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let messages = (body["messages"] as? [[String: String]] ?? []).compactMap { $0["content"] }
         let session = self.session
+        let answering = OnceFlag()
 
-        return try await withTimeout(totalTimeout) { [request] in
-            let (bytes, response) = try await session.bytes(for: request)
-            guard let http = response as? HTTPURLResponse else { throw APIError.badResponse("no HTTP response") }
-            guard (200..<300).contains(http.statusCode) else {
-                var data = Data()
-                for try await byte in bytes { data.append(byte); if data.count > 4096 { break } }
-                throw APIError.http(status: http.statusCode, message: APIClient.errorMessage(from: data))
-            }
-            let parser = SSEParser()
-            var text = ""
-            var finishReason: String?
-            var usage: RequestUsage?
-            loop: for try await line in bytes.lines {
-                for event in parser.parse(line: line) {
-                    switch event {
-                    case let .content(piece):
-                        text += piece
-                        onPartial?(text)
-                    case let .finished(reason):
-                        finishReason = reason
-                    case .done:
-                        break loop
-                    case let .usage(reported):
-                        usage = reported
-                    case let .error(message):
-                        throw APIError.http(status: 502, message: message)
+        return try await withTimeout(limits.total) { [request] in
+            try await withThrowingTaskGroup(of: PolishResult?.self) { group in
+                group.addTask {
+                    do {
+                        return try await Self.readPolishStream(session: session, request: request, messages: messages,
+                                                               answering: answering, onPartial: onPartial)
+                    } catch let error as URLError where error.code == .timedOut {
+                        // No byte for the idle timeout.
+                        throw APIError.timeout(seconds: limits.idle)
                     }
                 }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(limits.firstToken * 1_000_000_000))
+                    if answering.isSet { return nil }
+                    throw APIError.timeout(seconds: limits.firstToken)
+                }
+                defer { group.cancelAll() }
+                while let finished = try await group.next() {
+                    if let result = finished { return result }
+                }
+                throw APIError.cancelled
             }
-            let cleaned = Prompts.sanitizePolishOutput(text)
-            guard !cleaned.isEmpty else { throw APIError.badResponse(L("模型返回了空内容", "the model returned nothing")) }
-            if usage == nil || (usage?.inputTokens == nil && usage?.outputTokens == nil && usage?.cost == nil) {
-                usage = APIClient.estimatedUsage(messages: messages, output: text)
+        }
+    }
+
+    private static func readPolishStream(
+        session: URLSession, request: URLRequest, messages: [String], answering: OnceFlag,
+        onPartial: (@Sendable (String) -> Void)?
+    ) async throws -> PolishResult {
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.badResponse("no HTTP response") }
+        guard (200..<300).contains(http.statusCode) else {
+            var data = Data()
+            for try await byte in bytes { data.append(byte); if data.count > 4096 { break } }
+            throw APIError.http(status: http.statusCode, message: APIClient.errorMessage(from: data))
+        }
+        let parser = SSEParser()
+        var text = ""
+        var finishReason: String?
+        var receivedDone = false
+        var usage: RequestUsage?
+        loop: for try await line in bytes.lines {
+            for event in parser.parse(line: line) {
+                switch event {
+                case let .content(piece):
+                    text += piece
+                    answering.set()
+                    onPartial?(text)
+                case let .finished(reason):
+                    finishReason = reason
+                case .done:
+                    receivedDone = true
+                    break loop
+                case let .usage(reported):
+                    usage = reported
+                case let .error(message, status):
+                    // The error's own code (401, 402, 429…) decides whether asking again can help; without one it's
+                    // the upstream provider failing.
+                    throw APIError.http(status: status ?? 502, message: message)
+                }
             }
-            return PolishResult(text: cleaned, truncated: finishReason == "length", usage: usage)
+        }
+        let cleaned = Prompts.sanitizePolishOutput(text)
+        guard !cleaned.isEmpty else { throw APIError.badResponse(L("模型返回了空内容", "the model returned nothing")) }
+        if usage == nil || (usage?.inputTokens == nil && usage?.outputTokens == nil && usage?.cost == nil) {
+            usage = APIClient.estimatedUsage(messages: messages, output: text)
+        }
+        return PolishResult(text: cleaned, truncated: isTruncated(finishReason: finishReason, receivedDone: receivedDone),
+                            usage: usage)
+    }
+
+    /// An answer stopped by the output limit or a content filter is incomplete, and so is a stream that ended without
+    /// saying it had finished (neither a finish reason nor `[DONE]`): the connection broke off. Inserting it as the
+    /// clean-up would silently lose the rest of the dictation.
+    static func isTruncated(finishReason: String?, receivedDone: Bool) -> Bool {
+        switch finishReason {
+        case "length", "content_filter": return true
+        case nil: return !receivedDone
+        default: return false
         }
     }
 }
@@ -218,4 +291,13 @@ extension APIClient {
         let input = messages.reduce(0) { $0 + TokenEstimate.count($1) + 4 }
         return RequestUsage(inputTokens: input, outputTokens: TokenEstimate.count(output), estimated: true)
     }
+}
+
+/// Set once, by the stream when the answer starts; read by the first-token deadline.
+private final class OnceFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    func set() { lock.withLock { value = true } }
+    var isSet: Bool { lock.withLock { value } }
 }

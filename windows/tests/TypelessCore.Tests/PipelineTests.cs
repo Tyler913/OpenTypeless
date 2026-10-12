@@ -182,8 +182,13 @@ public class PipelineTests
         var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
         var pipeline = new TranscriptionPipeline(client, new TranscriptionOptions("m"), preset: new Dictionary<int, string> { [0] = "第一段" });
         pipeline.Append(audio);
-        Assert.Equal("第一段第二段", await pipeline.Finish());
-        Assert.Single(sent);
+        var text = await pipeline.Finish();
+        // How the recording is cut (at pauses), so every chunk but the first is sent once.
+        var chunker = new Chunker();
+        var chunks = chunker.Append(audio).Count + (chunker.Finish() != null ? 1 : 0);
+        Assert.True(chunks > 1);
+        Assert.Equal(chunks - 1, sent.Count);
+        Assert.Equal("第一段" + string.Concat(Enumerable.Repeat("第二段", chunks - 1)), text);
     }
 
     [Fact]

@@ -3373,5 +3373,239 @@
     "ru": "Запись тоже удалится, и распознать её заново будет нельзя.",
     "fr": "Son enregistrement est aussi supprimé : impossible de la retranscrire ensuite.",
     "de": "Die Aufnahme wird mitgelöscht und kann nicht neu transkribiert werden."
+  },
+  "Apps": {
+    "ja": "アプリ",
+    "ko": "앱",
+    "es": "Apps",
+    "pt": "Apps",
+    "ru": "Приложения",
+    "fr": "Apps",
+    "de": "Apps"
+  },
+  "Settings used when you dictate into a particular app": {
+    "ja": "特定のアプリで音声入力するときに使う設定",
+    "ko": "특정 앱에서 받아쓸 때 사용하는 설정",
+    "es": "Ajustes que se usan al dictar en una app concreta",
+    "pt": "Configurações usadas ao ditar em um app específico",
+    "ru": "Настройки для диктовки в конкретном приложении",
+    "fr": "Réglages utilisés quand vous dictez dans une app précise",
+    "de": "Einstellungen fürs Diktieren in einer bestimmten App"
+  },
+  "No app profiles yet": {
+    "ja": "アプリ別の設定はまだありません",
+    "ko": "아직 앱별 설정이 없습니다",
+    "es": "Aún no hay perfiles de apps",
+    "pt": "Ainda não há perfis de apps",
+    "ru": "Профилей приложений пока нет",
+    "fr": "Aucun profil d’app pour l’instant",
+    "de": "Noch keine App-Profile"
+  },
+  "Add an app to give it its own settings: send messages right away in Slack, say, or a more formal tone in your email app. Everywhere else your usual settings apply.": {
+    "ja": "アプリを追加すると、そのアプリ専用の設定を使えます。たとえば Slack では話し終えたらすぐ送信、メールアプリではよりていねいな口調に。それ以外のアプリではいつもの設定が使われます。",
+    "ko": "앱을 추가하면 그 앱만의 설정을 쓸 수 있습니다. 예를 들어 Slack에서는 말하자마자 바로 보내고, 메일 앱에서는 더 격식 있는 어조로. 다른 앱에서는 평소 설정이 그대로 적용됩니다.",
+    "es": "Añade una app para darle sus propios ajustes: enviar los mensajes al momento en Slack, por ejemplo, o un tono más formal en tu app de correo. En todas las demás se aplican tus ajustes habituales.",
+    "pt": "Adicione um app para dar a ele configurações próprias: enviar as mensagens na hora no Slack, por exemplo, ou um tom mais formal no seu app de e-mail. Em todos os outros valem suas configurações de sempre.",
+    "ru": "Добавьте приложение, чтобы задать для него свои настройки: например, сразу отправлять сообщения в Slack или писать более официально в почте. Во всех остальных приложениях действуют ваши обычные настройки.",
+    "fr": "Ajoutez une app pour lui donner ses propres réglages : envoyer les messages tout de suite dans Slack, par exemple, ou un ton plus formel dans votre app de messagerie. Partout ailleurs, vos réglages habituels s’appliquent.",
+    "de": "Füge eine App hinzu, um ihr eigene Einstellungen zu geben: in Slack Nachrichten sofort senden, zum Beispiel, oder in deiner Mail-App ein förmlicherer Ton. Überall sonst gelten deine üblichen Einstellungen."
+  },
+  "The app in front when you start recording decides which profile is used, even if you switch apps before you finish. Whatever a profile leaves on Default follows your usual settings.": {
+    "ja": "録音を始めたときに前面にあるアプリで、使う設定が決まります。話し終える前に別のアプリに切り替えても変わりません。「デフォルト」のままの項目は、いつもの設定に従います。",
+    "ko": "녹음을 시작할 때 맨 앞에 있는 앱이 어떤 프로필을 쓸지 정합니다. 말을 마치기 전에 다른 앱으로 바꿔도 달라지지 않습니다. 프로필에서 ‘기본값’으로 둔 항목은 평소 설정을 따릅니다.",
+    "es": "La app que está delante al empezar a grabar decide qué perfil se usa, aunque cambies de app antes de terminar. Lo que un perfil deja en Predeterminado sigue tus ajustes habituales.",
+    "pt": "O app em primeiro plano quando você começa a gravar decide qual perfil é usado, mesmo que você troque de app antes de terminar. O que um perfil deixa em Padrão segue suas configurações de sempre.",
+    "ru": "Профиль выбирается по приложению, которое было на переднем плане, когда вы начали запись, даже если вы переключитесь до конца диктовки. Всё, что в профиле оставлено «По умолчанию», следует вашим обычным настройкам.",
+    "fr": "L’app au premier plan quand vous commencez l’enregistrement détermine le profil utilisé, même si vous changez d’app avant d’avoir fini. Ce qu’un profil laisse sur Par défaut suit vos réglages habituels.",
+    "de": "Die App im Vordergrund beim Start der Aufnahme bestimmt, welches Profil gilt, auch wenn du vor dem Ende die App wechselst. Was ein Profil auf Standard lässt, folgt deinen üblichen Einstellungen."
+  },
+  "Running apps": {
+    "ja": "実行中のアプリ",
+    "ko": "실행 중인 앱",
+    "es": "Apps abiertas",
+    "pt": "Apps abertos",
+    "ru": "Запущенные приложения",
+    "fr": "Apps ouvertes",
+    "de": "Laufende Apps"
+  },
+  "No other running apps": {
+    "ja": "ほかに実行中のアプリはありません",
+    "ko": "실행 중인 다른 앱이 없습니다",
+    "es": "No hay otras apps abiertas",
+    "pt": "Nenhum outro app aberto",
+    "ru": "Других запущенных приложений нет",
+    "fr": "Aucune autre app ouverte",
+    "de": "Keine weiteren laufenden Apps"
+  },
+  "Choose from Applications…": {
+    "ja": "「アプリケーション」から選択…",
+    "ko": "응용 프로그램에서 선택…",
+    "es": "Elegir en Aplicaciones…",
+    "pt": "Escolher em Aplicativos…",
+    "ru": "Выбрать в «Программах»…",
+    "fr": "Choisir dans Applications…",
+    "de": "Aus „Programme“ wählen …"
+  },
+  "Add app": {
+    "ja": "アプリを追加",
+    "ko": "앱 추가",
+    "es": "Añadir app",
+    "pt": "Adicionar app",
+    "ru": "Добавить приложение",
+    "fr": "Ajouter une app",
+    "de": "App hinzufügen"
+  },
+  "Add": {
+    "ja": "追加",
+    "ko": "추가",
+    "es": "Añadir",
+    "pt": "Adicionar",
+    "ru": "Добавить",
+    "fr": "Ajouter",
+    "de": "Hinzufügen"
+  },
+  "Default ({0})": {
+    "ja": "デフォルト（{0}）",
+    "ko": "기본값({0})",
+    "es": "Predeterminado ({0})",
+    "pt": "Padrão ({0})",
+    "ru": "По умолчанию ({0})",
+    "fr": "Par défaut ({0})",
+    "de": "Standard ({0})"
+  },
+  "Default (on)": {
+    "ja": "デフォルト（オン）",
+    "ko": "기본값(켬)",
+    "es": "Predeterminado (activado)",
+    "pt": "Padrão (ligado)",
+    "ru": "По умолчанию (вкл.)",
+    "fr": "Par défaut (activé)",
+    "de": "Standard (an)"
+  },
+  "Default (off)": {
+    "ja": "デフォルト（オフ）",
+    "ko": "기본값(끔)",
+    "es": "Predeterminado (desactivado)",
+    "pt": "Padrão (desligado)",
+    "ru": "По умолчанию (выкл.)",
+    "fr": "Par défaut (désactivé)",
+    "de": "Standard (aus)"
+  },
+  "On": {
+    "ja": "オン",
+    "ko": "켬",
+    "es": "Activado",
+    "pt": "Ligado",
+    "ru": "Вкл.",
+    "fr": "Activé",
+    "de": "An"
+  },
+  "Off": {
+    "ja": "オフ",
+    "ko": "끔",
+    "es": "Desactivado",
+    "pt": "Desligado",
+    "ru": "Выкл.",
+    "fr": "Désactivé",
+    "de": "Aus"
+  },
+  "Clean-up preferences for this app": {
+    "ja": "このアプリでの整形の好み",
+    "ko": "이 앱의 다듬기 선호 설정",
+    "es": "Preferencias de limpieza para esta app",
+    "pt": "Preferências de limpeza para este app",
+    "ru": "Предпочтения очистки для этого приложения",
+    "fr": "Préférences de nettoyage pour cette app",
+    "de": "Vorlieben für die Bereinigung in dieser App"
+  },
+  "Added after your clean-up preferences under Vocabulary & Style, in this app only. e.g. “Use a more formal tone”, “Never use bullet lists”.": {
+    "ja": "「語彙とスタイル」の整形の好みのあとに加わり、このアプリでだけ使われます。例：「よりていねいな口調にする」「箇条書きは使わない」。",
+    "ko": "‘어휘 및 스타일’의 다듬기 선호 설정 뒤에 덧붙여지며, 이 앱에서만 적용됩니다. 예: “더 격식 있는 어조로”, “글머리 기호 목록 쓰지 않기”.",
+    "es": "Se añaden tras tus preferencias de limpieza de Vocabulario y estilo, solo en esta app. p. ej., «Usa un tono más formal», «Nunca uses listas con viñetas».",
+    "pt": "Adicionadas depois das suas preferências de limpeza em Vocabulário e estilo, só neste app. ex.: “Use um tom mais formal”, “Nunca use listas com marcadores”.",
+    "ru": "Добавляются после ваших предпочтений очистки из раздела «Словарь и стиль», только в этом приложении. Например: «Пиши более официально», «Никогда не используй маркированные списки».",
+    "fr": "Ajoutées après vos préférences de nettoyage de Vocabulaire et style, dans cette app uniquement. p. ex. « Ton plus formel », « Jamais de listes à puces ».",
+    "de": "Werden nach deinen Vorlieben für die Bereinigung unter „Vokabular & Stil“ angefügt, nur in dieser App. z. B. „Förmlicheren Ton verwenden“, „Keine Aufzählungen verwenden“."
+  },
+  "Remove": {
+    "ja": "削除",
+    "ko": "제거",
+    "es": "Quitar",
+    "pt": "Remover",
+    "ru": "Убрать",
+    "fr": "Retirer",
+    "de": "Entfernen"
+  },
+  "Clean-up on": {
+    "ja": "整形：オン",
+    "ko": "다듬기: 켬",
+    "es": "Limpieza activada",
+    "pt": "Limpeza ligada",
+    "ru": "Очистка вкл.",
+    "fr": "Nettoyage activé",
+    "de": "Bereinigung an"
+  },
+  "Clean-up off": {
+    "ja": "整形：オフ",
+    "ko": "다듬기: 끔",
+    "es": "Limpieza desactivada",
+    "pt": "Limpeza desligada",
+    "ru": "Очистка выкл.",
+    "fr": "Nettoyage désactivé",
+    "de": "Bereinigung aus"
+  },
+  "Return on": {
+    "ja": "Return：オン",
+    "ko": "Return: 켬",
+    "es": "Retorno activado",
+    "pt": "Return ligado",
+    "ru": "Return вкл.",
+    "fr": "Retour activé",
+    "de": "Return an"
+  },
+  "Return off": {
+    "ja": "Return：オフ",
+    "ko": "Return: 끔",
+    "es": "Retorno desactivado",
+    "pt": "Return desligado",
+    "ru": "Return выкл.",
+    "fr": "Retour désactivé",
+    "de": "Return aus"
+  },
+  "Enter on": {
+    "ja": "Enter：オン",
+    "ko": "Enter: 켬",
+    "es": "Intro activado",
+    "pt": "Enter ligado",
+    "ru": "Enter вкл.",
+    "fr": "Entrée activée",
+    "de": "Eingabe an"
+  },
+  "Enter off": {
+    "ja": "Enter：オフ",
+    "ko": "Enter: 끔",
+    "es": "Intro desactivado",
+    "pt": "Enter desligado",
+    "ru": "Enter выкл.",
+    "fr": "Entrée désactivée",
+    "de": "Eingabe aus"
+  },
+  "Own clean-up preferences": {
+    "ja": "独自の整形の好み",
+    "ko": "자체 다듬기 선호 설정",
+    "es": "Preferencias de limpieza propias",
+    "pt": "Preferências de limpeza próprias",
+    "ru": "Свои предпочтения очистки",
+    "fr": "Préférences de nettoyage propres",
+    "de": "Eigene Vorlieben für die Bereinigung"
+  },
+  "Uses your usual settings": {
+    "ja": "いつもの設定を使用",
+    "ko": "평소 설정 사용",
+    "es": "Usa tus ajustes habituales",
+    "pt": "Usa suas configurações de sempre",
+    "ru": "Обычные настройки",
+    "fr": "Utilise vos réglages habituels",
+    "de": "Nutzt deine üblichen Einstellungen"
   }
 }

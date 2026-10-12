@@ -3,11 +3,23 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.UI.Dispatching;
+using TypelessCore;
 
 namespace OpenTypeless.Services;
 
 /// <summary><c>Cancelled</c>: stopped with Esc after <see cref="TypelessCore.CancelPolicy.KeepAfterSeconds"/>, transcribed but not inserted, kept for a day.</summary>
 public enum DictationStatus { Recording, Processing, Done, PolishFailed, Failed, Cancelled }
+
+public static class DictationStatusExtensions
+{
+    public static HistoryPruning.Kind PruningKind(this DictationStatus status) => status switch
+    {
+        DictationStatus.Recording or DictationStatus.Processing => HistoryPruning.Kind.InProgress,
+        DictationStatus.Done or DictationStatus.PolishFailed => HistoryPruning.Kind.Finished,
+        DictationStatus.Failed => HistoryPruning.Kind.Failed,
+        _ => HistoryPruning.Kind.Cancelled,
+    };
+}
 
 /// <summary>One dictation. Stored as <c>Sessions\&lt;id&gt;\session.json</c> next to its <c>audio.wav</c>, same schema as macOS.</summary>
 public sealed class DictationRecord
@@ -121,10 +133,10 @@ public sealed class DictationTiming
 }
 
 /// <summary>
-/// Every dictation is saved (audio + transcripts) so nothing is ever lost to a failure. Finished
-/// dictations older than the retention setting lose their recording; their text stays in History
-/// among the newest <see cref="MinimumTextRecords"/>, and older ones are removed entirely. Failed dictations
-/// keep everything until retried or deleted, so they can always be re-sent.
+/// Every dictation is saved (audio + transcripts) so nothing is ever lost to a failure. What expires, by the
+/// retention setting and a cap on the recordings' total size, is decided by <see cref="HistoryPruning"/>: finished
+/// dictations lose their recording first and their text later; failed ones keep theirs for at least a month, so they
+/// can be re-sent.
 /// UI-thread only, like the macOS <c>@MainActor</c> store.
 /// </summary>
 public sealed class HistoryStore
@@ -136,8 +148,12 @@ public sealed class HistoryStore
     private readonly List<DictationRecord> _records = new();
     public IReadOnlyList<DictationRecord> Records => _records;
 
-    private const int MinimumTextRecords = 200;
     private readonly DispatcherQueueTimer? _retentionTimer;
+    /// <summary>
+    /// Recording sizes by record ID (0 = none), measured once a dictation is over, since its recording doesn't change
+    /// after that: the size cap then doesn't look at every file on disk after each dictation.
+    /// </summary>
+    private readonly Dictionary<string, long> _audioSizes = new();
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -184,6 +200,7 @@ public sealed class HistoryStore
     {
         _records.RemoveAll(r => r.Id == record.Id);
         try { Directory.Delete(record.Folder, recursive: true); } catch { /* already gone */ }
+        _audioSizes.Remove(record.Id);
         Changed?.Invoke();
     }
 
@@ -226,55 +243,58 @@ public sealed class HistoryStore
         ApplyRetention();
     }
 
-    /// <summary>Deletes what the retention setting says has expired.</summary>
+    /// <summary>
+    /// Deletes what has expired by the retention setting, and the oldest recordings while they take more than
+    /// <see cref="HistoryPruning.AudioBudget"/> (see <see cref="HistoryPruning"/>).
+    /// </summary>
     public void ApplyRetention()
     {
-        var maxAge = AppSettings.Shared.HistoryRetention.MaxAge();
-        var now = DateTimeOffset.Now;
+        var entries = _records.Select(r => new HistoryPruning.Entry(r.Status.PruningKind(), r.Date, AudioBytes(r))).ToList();
+        var actions = HistoryPruning.Plan(entries, AppSettings.Shared.HistoryRetention.MaxAge(), DateTimeOffset.Now);
         var kept = new List<DictationRecord>();
         var changed = false;
         for (var index = 0; index < _records.Count; index++)
         {
             var record = _records[index];
-            if (record.Status == DictationStatus.Cancelled)
+            switch (actions[index])
             {
-                // A cancelled dictation is only a safety net: it goes a day after it was made, whatever the setting.
-                if (TypelessCore.CancelPolicy.IsExpired(record.Date, now))
-                {
-                    try { Directory.Delete(record.Folder, recursive: true); } catch { }
-                    changed = true;
-                }
-                else
-                {
-                    kept.Add(record);
-                }
-                continue;
-            }
-            var finished = record.Status is DictationStatus.Done or DictationStatus.PolishFailed;
-            var expired = maxAge is { } age && now - record.Date >= age;
-            if (!finished || !expired)
-            {
-                kept.Add(record);
-                continue;
-            }
-            if (index >= MinimumTextRecords)
-            {
-                try { Directory.Delete(record.Folder, recursive: true); } catch { }
-                changed = true;
-            }
-            else
-            {
-                if (record.HasAudio)
-                {
+                case HistoryPruning.Action.RemoveAudio:
                     try { File.Delete(record.AudioPath); } catch { }
+                    _audioSizes[record.Id] = 0;
+                    kept.Add(record);
                     changed = true;
-                }
-                kept.Add(record);
+                    break;
+                case HistoryPruning.Action.Remove:
+                    try { Directory.Delete(record.Folder, recursive: true); } catch { }
+                    _audioSizes.Remove(record.Id);
+                    changed = true;
+                    break;
+                default:
+                    kept.Add(record);
+                    break;
             }
         }
         _records.Clear();
         _records.AddRange(kept);
         if (changed) Changed?.Invoke();
+    }
+
+    private long AudioBytes(DictationRecord record)
+    {
+        if (_audioSizes.TryGetValue(record.Id, out var known)) return known;
+        long size;
+        try
+        {
+            var file = new FileInfo(record.AudioPath);
+            size = file.Exists ? file.Length : 0;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            size = 0;
+        }
+        // One still being recorded is measured again next time.
+        if (record.Status.PruningKind() != HistoryPruning.Kind.InProgress) _audioSizes[record.Id] = size;
+        return size;
     }
 
     /// <summary>Bytes used by every saved dictation (recordings and transcripts). Safe to call off the UI thread.</summary>

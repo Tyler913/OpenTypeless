@@ -110,7 +110,7 @@ Optional (beta). While recording, the words recognised so far appear above the c
 
 A session found in `recording`/`processing` state at launch is marked failed-but-retryable.
 
-Retention is a user setting: don't keep recordings, 1 day, 7 days, 1 month (default), 1 year, or forever. Recordings are about 1.9 MB per minute of 16 kHz WAV; transcripts are a few KB. When a finished dictation expires, its `audio.wav` is deleted, and the whole folder goes too once it is also outside the newest 200 dictations. Failed dictations are never expired, so they can always be retried. Expiry runs at launch, after every dictation, when the setting changes, and hourly.
+Retention is a user setting: don't keep recordings, 1 day, 7 days, 1 month (default), 1 year, or forever. Recordings are about 1.9 MB per minute of 16 kHz WAV; transcripts are a few KB. When a finished dictation expires, its `audio.wav` is deleted, and the whole folder goes too once it is also outside the newest 200 dictations. Failed dictations expire the same way, but only once they are older than both the setting and 30 days, so they can be retried for at least a month. On top of the setting, all recordings together are held under 1 GB (about nine hours; someone dictating all day records about 30 MB a day): past that, the oldest finished or cancelled dictations lose their `audio.wav` (the text stays), never the newest 10, a failed one, or one still recording or processing. The decision is `HistoryPruning` in the core, shared and tested on both platforms. Expiry runs at launch, after every dictation, when the setting changes, and hourly.
 
 ## Home page and usage accounting
 

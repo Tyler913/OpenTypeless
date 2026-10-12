@@ -222,6 +222,8 @@ public struct UsageLedger: Equatable, Sendable {
     public static let version = 1
 
     public private(set) var days: [String: DayUsage] = [:]
+    /// Standing in for a file that couldn't be read this session, so never saved over it.
+    var isUnreadable = false
 
     public init() {}
 
@@ -336,19 +338,32 @@ public struct UsageLedger: Equatable, Sendable {
 
     /// An unreadable file gives an empty ledger rather than blocking the app.
     public init(jsonData: Data) {
-        let stored = try? JSONDecoder().decode(Stored.self, from: jsonData)
-        days = (stored?.days ?? [:]).filter { CalendarDay(key: $0.key) != nil }
+        self = UsageLedger(storedData: jsonData) ?? UsageLedger()
     }
 
-    /// Nil when there's no file yet (first run of a version that keeps it).
+    /// Nil when the data isn't a saved ledger.
+    init?(storedData: Data) {
+        guard let stored = try? JSONDecoder().decode(Stored.self, from: storedData) else { return nil }
+        days = stored.days.filter { CalendarDay(key: $0.key) != nil }
+    }
+
+    /// Nil when there's no file yet (first run of a version that keeps it). A file that can't be parsed is moved aside
+    /// (see SafeFile) before an empty ledger takes its place, so the next save doesn't overwrite the lifetime totals.
     public static func load(from url: URL) -> UsageLedger? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        guard let data = try? Data(contentsOf: url) else { return UsageLedger() }
-        return UsageLedger(jsonData: data)
+        // One that can't be read at all isn't damaged: it stays, and the empty ledger standing in for it isn't saved.
+        guard let data = try? Data(contentsOf: url) else {
+            var ledger = UsageLedger()
+            ledger.isUnreadable = true
+            return ledger
+        }
+        if let ledger = UsageLedger(storedData: data) { return ledger }
+        SafeFile.moveAside(url)
+        return UsageLedger()
     }
 
     public func save(to url: URL) {
-        guard let data = jsonData() else { return }
+        guard !isUnreadable, let data = jsonData() else { return }
         try? data.write(to: url, options: .atomic)
     }
 }

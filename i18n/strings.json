@@ -1484,6 +1484,24 @@
     "fr": "Obtenir une clé API",
     "de": "API-Schlüssel holen"
   },
+  "Using the key in the OPENROUTER_API_KEY environment variable; the key saved here is used when it isn't set": {
+    "ja": "環境変数 OPENROUTER_API_KEY のキーを使用中です。この変数が設定されていないときは、ここに保存したキーを使います",
+    "ko": "환경 변수 OPENROUTER_API_KEY의 키를 사용 중입니다. 이 변수가 없을 때는 여기에 저장한 키를 사용합니다",
+    "es": "Se usa la clave de la variable de entorno OPENROUTER_API_KEY; la clave guardada aquí se usa cuando no está definida",
+    "pt": "Usando a chave da variável de ambiente OPENROUTER_API_KEY; a chave salva aqui é usada quando ela não está definida",
+    "ru": "Используется ключ из переменной окружения OPENROUTER_API_KEY; ключ, сохранённый здесь, используется, когда она не задана",
+    "fr": "La clé de la variable d’environnement OPENROUTER_API_KEY est utilisée ; la clé enregistrée ici sert quand elle n’est pas définie",
+    "de": "Der Schlüssel aus der Umgebungsvariable OPENROUTER_API_KEY wird verwendet; der hier gespeicherte gilt, wenn sie nicht gesetzt ist"
+  },
+  "Couldn't save to Windows Credential Manager; you'll need to enter this key again after the app quits": {
+    "ja": "Windows 資格情報マネージャーに保存できませんでした。アプリを終了すると、このキーをもう一度入力する必要があります",
+    "ko": "Windows 자격 증명 관리자에 저장하지 못했습니다. 앱을 종료하면 이 키를 다시 입력해야 합니다",
+    "es": "No se pudo guardar en el Administrador de credenciales de Windows; tendrás que volver a introducir esta clave cuando cierres la app",
+    "pt": "Não foi possível salvar no Gerenciador de Credenciais do Windows; você precisará digitar esta chave de novo depois de fechar o app",
+    "ru": "Не удалось сохранить в диспетчере учётных данных Windows; после выхода из приложения этот ключ придётся ввести снова",
+    "fr": "Impossible d’enregistrer dans le Gestionnaire d’identification Windows ; il faudra saisir de nouveau cette clé après avoir quitté l’app",
+    "de": "Speichern in der Windows-Anmeldeinformationsverwaltung nicht möglich; nach dem Beenden der App musst du diesen Schlüssel erneut eingeben"
+  },
   "Any OpenAI-compatible server: /audio/transcriptions and /chat/completions": {
     "ja": "OpenAI 互換の任意のサーバー：/audio/transcriptions と /chat/completions",
     "ko": "OpenAI 호환 서버: /audio/transcriptions 및 /chat/completions",

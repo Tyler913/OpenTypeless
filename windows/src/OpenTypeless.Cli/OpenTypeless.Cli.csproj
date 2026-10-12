@@ -17,6 +17,7 @@
   <ItemGroup>
     <Compile Include="..\OpenTypeless\Native\Win32.cs" Link="Shared\Win32.cs" />
     <Compile Include="..\OpenTypeless\Input\Hotkey.cs" Link="Shared\Hotkey.cs" />
+    <Compile Include="..\OpenTypeless\Services\AppLog.cs" Link="Shared\AppLog.cs" />
     <Compile Include="..\OpenTypeless\Services\AppPaths.cs" Link="Shared\AppPaths.cs" />
     <Compile Include="..\OpenTypeless\Services\AppSettings.cs" Link="Shared\AppSettings.cs" />
     <Compile Include="..\OpenTypeless\Services\Credentials.cs" Link="Shared\Credentials.cs" />

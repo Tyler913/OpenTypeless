@@ -7,8 +7,7 @@ import TypelessCore
 
 struct GeneralPage: View {
     @ObservedObject var settings: AppSettings
-    @State private var micGranted = Permissions.microphoneGranted
-    @State private var axGranted = Permissions.accessibilityGranted
+    @ObservedObject private var permissions = PermissionsMonitor.shared
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var launchNeedsApproval = LaunchAtLogin.needsApproval
     @State private var launchError: String?
@@ -22,15 +21,15 @@ struct GeneralPage: View {
             CardSection(title: L("权限", "Permissions")) {
                 CardRow(icon: "mic.fill", iconColor: .red, title: L("麦克风", "Microphone"),
                         subtitle: L("用来录下你的语音", "To record your voice")) {
-                    PermissionControl(granted: micGranted) {
-                        Permissions.requestMicrophone { _ in micGranted = Permissions.microphoneGranted }
+                    PermissionControl(granted: permissions.microphoneGranted) {
+                        Permissions.requestMicrophone { _ in permissions.refresh() }
                         if AVAuthorizationDenied.isDenied { Permissions.openMicrophoneSettings() }
                     }
                 }
                 CardDivider(inset: 50)
                 CardRow(icon: "accessibility", iconColor: .blue, title: L("辅助功能", "Accessibility"),
                         subtitle: L("用来监听快捷键，并把文字粘贴到光标处", "To listen for the shortcut and paste text at the cursor")) {
-                    PermissionControl(granted: axGranted) {
+                    PermissionControl(granted: permissions.accessibilityGranted) {
                         Permissions.promptAccessibility()
                         Permissions.openAccessibilitySettings()
                     }
@@ -41,7 +40,7 @@ struct GeneralPage: View {
                 CardRow(icon: "mic.circle.fill", iconColor: .orange, title: L("输入设备", "Input device"),
                         subtitle: L("有的电脑默认用的是虚拟麦克风，可以在这里选真正的麦克风",
                                     "Some Macs default to a virtual device; pick your real microphone here")) {
-                    Picker("", selection: $settings.microphoneUID) {
+                    Picker(L("输入设备", "Input device"), selection: $settings.microphoneUID) {
                         Text(L("跟随系统", "System default") + (defaultMicrophone.map { L("（\($0.name)）", " (\($0.name))") } ?? "")).tag("")
                         ForEach(microphones) { Text($0.label).tag($0.uid) }
                         if !settings.microphoneUID.isEmpty, !microphones.contains(where: { $0.uid == settings.microphoneUID }) {
@@ -67,9 +66,8 @@ struct GeneralPage: View {
                 CardDivider(inset: 50)
                 CardRow(icon: "bolt.fill", iconColor: .yellow, title: L("预热麦克风", "Keep microphone ready"),
                         subtitle: L("按下快捷键立刻开始录音，并带上按键前的一小段，第一个字不会被吞掉（AirPods 这类耳机尤其明显）。麦克风会一直开着，蓝牙耳机会切到通话模式，音乐音质会下降。",
-                                    "Recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped (noticeable with AirPods). The microphone stays on, and Bluetooth headphones switch to call mode, which lowers music quality.")) {
-                    Toggle("", isOn: $settings.keepMicrophoneWarm).toggleStyle(.switch).labelsHidden()
-                }
+                                    "Recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped (noticeable with AirPods). The microphone stays on, and Bluetooth headphones switch to call mode, which lowers music quality."),
+                        isOn: $settings.keepMicrophoneWarm)
             }
             .onChange(of: settings.microphoneUID) {
                 if tester.isRunning { tester.start(deviceUID: selectedMicrophoneUID) }
@@ -77,7 +75,7 @@ struct GeneralPage: View {
 
             CardSection(title: L("外观", "Appearance")) {
                 CardRow(icon: "globe", iconColor: .teal, title: L("界面语言", "Language")) {
-                    Picker("", selection: $settings.appLanguage) {
+                    Picker(L("界面语言", "Language"), selection: $settings.appLanguage) {
                         Text(L("跟随系统", "System")).tag(AppLanguage.system)
                         ForEach(AppLanguage.supported) { language in
                             Text(language.nativeName).tag(language)
@@ -90,60 +88,51 @@ struct GeneralPage: View {
 
             CardSection(title: L("启动", "Startup"), footer: launchFooter) {
                 CardRow(icon: "power", iconColor: .green, title: L("登录时自动启动", "Open at login"),
-                        subtitle: L("开机后在菜单栏待命", "Waits in the menu bar after you log in")) {
-                    Toggle("", isOn: Binding(
-                        get: { launchAtLogin },
-                        set: { newValue in
-                            do {
-                                try LaunchAtLogin.set(newValue)
-                                launchError = nil
-                            } catch {
-                                launchError = error.localizedDescription
+                        subtitle: L("开机后在菜单栏待命", "Waits in the menu bar after you log in"),
+                        isOn: Binding(
+                            get: { launchAtLogin },
+                            set: { newValue in
+                                do {
+                                    try LaunchAtLogin.set(newValue)
+                                    launchError = nil
+                                } catch {
+                                    launchError = error.localizedDescription
+                                }
+                                refreshLaunchState()
                             }
-                            refreshLaunchState()
-                        }
-                    ))
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-                }
+                        ))
                 CardDivider(inset: 50)
                 CardRow(icon: "house.fill", iconColor: .blue, title: L("自动启动时打开主页", "Show Home when opened at login"),
                         subtitle: L("关闭时开机后只在菜单栏待命；手动打开应用总会显示主页",
-                                    "Off: it waits in the menu bar after you log in. Opening the app yourself always shows Home")) {
-                    Toggle("", isOn: $settings.showHomeAtLogin).toggleStyle(.switch).labelsHidden()
-                }
+                                    "Off: it waits in the menu bar after you log in. Opening the app yourself always shows Home"),
+                        isOn: $settings.showHomeAtLogin)
             }
 
             UpdatesSection(settings: settings)
 
             CardSection(title: L("听写", "Dictation")) {
                 CardRow(icon: "doc.on.clipboard.fill", iconColor: .brown, title: L("恢复剪贴板", "Restore clipboard"),
-                        subtitle: L("插入文字后，把剪贴板恢复成原来的内容", "Put your previous clipboard back after inserting")) {
-                    Toggle("", isOn: $settings.restoreClipboard).toggleStyle(.switch).labelsHidden()
-                }
+                        subtitle: L("插入文字后，把剪贴板恢复成原来的内容", "Put your previous clipboard back after inserting"),
+                        isOn: $settings.restoreClipboard)
                 CardDivider(inset: 50)
                 CardRow(icon: "return", iconColor: .green, title: L("插入后自动回车", "Press Return after inserting"),
                         subtitle: L("文字粘贴进去后自动按一次回车，在聊天框或给 AI 写提示词时直接发送。文字只复制到剪贴板时不会按。",
-                                    "Presses Return once the text is pasted, so a chat message or AI prompt is sent right away. Not pressed when the text only goes to the clipboard.")) {
-                    Toggle("", isOn: $settings.pressEnterAfterInsert).toggleStyle(.switch).labelsHidden()
-                }
+                                    "Presses Return once the text is pasted, so a chat message or AI prompt is sent right away. Not pressed when the text only goes to the clipboard."),
+                        isOn: $settings.pressEnterAfterInsert)
                 CardDivider(inset: 50)
                 CardRow(icon: "speaker.wave.2.fill", iconColor: .pink, title: L("提示音", "Sounds"),
-                        subtitle: L("开始和结束录音时播放轻提示音", "Soft chime when recording starts and stops")) {
-                    Toggle("", isOn: $settings.playSounds).toggleStyle(.switch).labelsHidden()
-                }
+                        subtitle: L("开始和结束录音时播放轻提示音", "Soft chime when recording starts and stops"),
+                        isOn: $settings.playSounds)
                 CardDivider(inset: 50)
                 CardRow(icon: "speaker.slash.fill", iconColor: .indigo, title: L("录音时静音", "Mute audio while recording"),
                         subtitle: L("录音期间把扬声器静音，音乐和视频不会打扰你说话，结束后自动恢复。",
-                                    "Mutes your speakers while you're recording, so music or a video doesn't get in the way, and turns them back on when you stop.")) {
-                    Toggle("", isOn: $settings.muteWhileRecording).toggleStyle(.switch).labelsHidden()
-                }
+                                    "Mutes your speakers while you're recording, so music or a video doesn't get in the way, and turns them back on when you stop."),
+                        isOn: $settings.muteWhileRecording)
                 CardDivider(inset: 50)
                 CardRow(icon: "text.bubble.fill", iconColor: .teal, title: L("实时预览（测试版）", "Live preview (beta)"),
                         subtitle: L("说话时在录音条上方显示识别到的文字，由这台 Mac 本地识别。只是预览：插入的文字仍然来自语音转文字服务商。第一次使用会下载对应语言的语音模型。",
-                                    "Shows what you're saying above the capsule as you talk, recognised on this Mac. Only a preview: the inserted text still comes from your speech-to-text provider. The first time, macOS downloads a speech model for your language.")) {
-                    Toggle("", isOn: $settings.livePreview).toggleStyle(.switch).labelsHidden()
-                }
+                                    "Shows what you're saying above the capsule as you talk, recognised on this Mac. Only a preview: the inserted text still comes from your speech-to-text provider. The first time, macOS downloads a speech model for your language."),
+                        isOn: $settings.livePreview)
                 CardDivider(inset: 50)
                 CardRow(icon: "timer", iconColor: .orange, title: L("单次最长录音", "Maximum recording"),
                         subtitle: L("到时间会自动结束并处理", "Stops and processes automatically at the limit")) {
@@ -165,8 +154,6 @@ struct GeneralPage: View {
             }
         }
         .onReceive(timer) { _ in
-            micGranted = Permissions.microphoneGranted
-            axGranted = Permissions.accessibilityGranted
             refreshLaunchState()
             let connected = Microphones.all()
             if connected != microphones { microphones = connected }
@@ -234,9 +221,8 @@ private struct UpdatesSection: View {
             }
             CardDivider(inset: 50)
             CardRow(icon: "clock.arrow.circlepath", iconColor: .gray, title: L("自动检查更新", "Check automatically"),
-                    subtitle: L("每天一次，在后台下载，由你决定何时安装", "Once a day. Downloads in the background; installs when you choose")) {
-                Toggle("", isOn: $settings.autoCheckUpdates).toggleStyle(.switch).labelsHidden()
-            }
+                    subtitle: L("每天一次，在后台下载，由你决定何时安装", "Once a day. Downloads in the background; installs when you choose"),
+                    isOn: $settings.autoCheckUpdates)
         }
     }
 
@@ -306,6 +292,7 @@ final class HotkeyRecorder: ObservableObject {
     var onRecorded: ((Hotkey) -> Void)?
 
     private var monitor: Any?
+    private var observers: [NSObjectProtocol] = []
     private var pendingModifier: Int64?
     private var sawKeyDown = false
 
@@ -318,11 +305,24 @@ final class HotkeyRecorder: ObservableObject {
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
             self?.handle(event) ?? event
         }
+        // The dictation shortcut is off while recording, so recording mustn't outlive the settings window (whose page
+        // also stops it on disappearing), nor go on while another app is in front, where no key would ever reach it.
+        let center = NotificationCenter.default
+        observers = [center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.stop()
+        }]
+        if let window = NSApp.keyWindow {
+            observers.append(center.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+                self?.stop()
+            })
+        }
     }
 
     func stop() {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers = []
         isRecording = false
         HotkeyMonitor.shared.isSuspended = false
     }
@@ -601,7 +601,7 @@ private struct ProviderCard: View {
             if expanded {
                 CardDivider(inset: 0)
                 VStack(alignment: .leading, spacing: 12) {
-                    FieldRow(label: "API Key") {
+                    FieldRow(label: L("API Key", "API Key")) {
                         SecureField(id.keyPlaceholder, text: Binding(
                             get: { settings.apiKey(for: id) },
                             set: { settings.setAPIKey($0, for: id) }
@@ -611,7 +611,7 @@ private struct ProviderCard: View {
                             if let text = NSPasteboard.general.string(forType: .string) { settings.setAPIKey(text, for: id) }
                         }
                     }
-                    FieldRow(label: "Base URL") {
+                    FieldRow(label: L("接口地址", "Base URL")) {
                         TextField(id == .custom ? "http://localhost:8000/v1" : id.defaultBaseURL, text: Binding(
                             get: { settings.baseURL(for: id) },
                             set: { settings.setBaseURL($0, for: id) }
@@ -689,7 +689,8 @@ private struct FieldRow<Content: View>: View {
             Text(label)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 70, alignment: .leading)
+                .lineLimit(1)
+                .frame(width: 92, alignment: .leading)
             content
         }
     }
@@ -730,7 +731,7 @@ struct ModelsPage: View {
                 CardDivider(inset: 50)
                 CardRow(icon: "character.bubble.fill", iconColor: .teal, title: L("说话语言", "Spoken language"),
                         subtitle: L("固定语言可以提高准确率；中英混说请选自动", "Fixing it can help accuracy; use Auto for mixed speech")) {
-                    Picker("", selection: $settings.sttLanguage) {
+                    Picker(L("说话语言", "Spoken language"), selection: $settings.sttLanguage) {
                         Text(L("自动检测", "Auto-detect")).tag("")
                         ForEach(AppLanguage.supported) { language in
                             Text(language == .zh ? "中文" : language.nativeName).tag(language.rawValue)
@@ -742,9 +743,8 @@ struct ModelsPage: View {
                 CardDivider(inset: 50)
                 CardRow(icon: "arrow.triangle.branch", iconColor: .orange, title: L("备用语音转文字", "Backup speech-to-text"),
                         subtitle: L("某一段比平时慢很多（按音频长度和最近的速度估算）或者失败时，同时请求备用服务商，用先返回的那个",
-                                    "If a segment takes much longer than usual (judged by its length and recent speed) or fails, the backup is asked too and the first answer wins")) {
-                    Toggle("", isOn: $settings.sttBackupEnabled).toggleStyle(.switch).labelsHidden()
-                }
+                                    "If a segment takes much longer than usual (judged by its length and recent speed) or fails, the backup is asked too and the first answer wins"),
+                        isOn: $settings.sttBackupEnabled)
                 if settings.sttBackupEnabled {
                     CardDivider(inset: 50)
                     CardRow(icon: "building.2", iconColor: .indigo, title: L("备用服务商", "Backup provider")) {
@@ -768,9 +768,8 @@ struct ModelsPage: View {
 
             CardSection(title: L("文字整理", "Clean-up")) {
                 CardRow(icon: "wand.and.stars", iconColor: .purple, title: L("用 AI 整理文字", "Clean up with AI"),
-                        subtitle: L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists")) {
-                    Toggle("", isOn: $settings.polishEnabled).toggleStyle(.switch).labelsHidden()
-                }
+                        subtitle: L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists"),
+                        isOn: $settings.polishEnabled)
                 if settings.polishEnabled {
                     CardDivider(inset: 50)
                     CardRow(icon: "building.2.fill", iconColor: .indigo, title: L("服务商", "Provider")) {
@@ -791,9 +790,8 @@ struct ModelsPage: View {
                     CardDivider(inset: 50)
                     CardRow(icon: "arrow.triangle.branch", iconColor: .orange, title: L("备用模型", "Backup model"),
                             subtitle: L("首选模型 \(hedgeDelayLabel) 内还没开始输出、或请求失败时，同时请求备用模型，用先出字的那个",
-                                        "If the main model hasn't started answering within \(hedgeDelayLabel), or fails, the backup is asked too and the first to answer wins")) {
-                        Toggle("", isOn: $settings.polishBackupEnabled).toggleStyle(.switch).labelsHidden()
-                    }
+                                        "If the main model hasn't started answering within \(hedgeDelayLabel), or fails, the backup is asked too and the first to answer wins"),
+                            isOn: $settings.polishBackupEnabled)
                     if settings.polishBackupEnabled {
                         CardDivider(inset: 50)
                         CardRow(icon: "building.2", iconColor: .indigo, title: L("备用服务商", "Backup provider")) {
@@ -1121,9 +1119,8 @@ struct StylePage: View {
             CardSection(title: L("自动学习", "Learning"),
                         footer: L("粘贴后如果你改了某个识别错的词（比如把 TypeList 改成 Typeless），离开输入框或发送后会自动把它加进词汇表。能读取的输入框直接比较前后内容；读不到的（微信、Firefox、Electron 应用等）会跟随你粘贴后的按键，但用中文、日文、韩文输入法打的字跟随不了。只学发音相近的改动，不学改写、改数字和普通词替换。一切都在本机完成。",
                                   "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Where the field can be read, its text is compared; where it can't (WeChat, Firefox, Electron apps…), the keys you press after the paste are followed, though not text typed with a Chinese, Japanese or Korean input method. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. All of it stays on this Mac.")) {
-                CardRow(icon: "character.book.closed.fill", iconColor: .orange, title: L("从我的修改中学习", "Learn from my corrections")) {
-                    Toggle("", isOn: $settings.learnFromEdits).toggleStyle(.switch).labelsHidden()
-                }
+                CardRow(icon: "character.book.closed.fill", iconColor: .orange, title: L("从我的修改中学习", "Learn from my corrections"),
+                        isOn: $settings.learnFromEdits)
                 if !settings.learnedTerms.isEmpty {
                     ForEach(settings.learnedTerms.reversed()) { learned in
                         CardDivider(inset: 14)
@@ -1154,7 +1151,7 @@ private struct LearnedTermRow: View {
             Text(L("听成了 ", "heard as ") + learned.heardAs.map { "“\($0)”" }.joined(separator: L("、", ", ")))
                 .font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
             Spacer(minLength: 8)
-            Text(learned.date.formatted(date: .abbreviated, time: .omitted)).font(.system(size: 11)).foregroundStyle(.tertiary)
+            Text(learned.date.appFormatted(date: .abbreviated)).font(.system(size: 11)).foregroundStyle(.tertiary)
             Button(action: onForget) { Image(systemName: "xmark.circle.fill") }
                 .buttonStyle(.borderless).foregroundStyle(.secondary)
                 .help(L("从词汇表删除，以后不再自动学习", "Remove from the vocabulary and never learn it again"))

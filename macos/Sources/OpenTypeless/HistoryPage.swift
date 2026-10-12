@@ -123,7 +123,7 @@ struct HistoryPage: View {
         if calendar.isDateInToday(day) { return L("今天", "Today") }
         if calendar.isDateInYesterday(day) { return L("昨天", "Yesterday") }
         let sameYear = calendar.isDate(day, equalTo: Date(), toGranularity: .year)
-        let locale = AppLanguage.resolved.locale
+        let locale = Locale.app
         return sameYear
             ? day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().locale(locale))
             : day.formatted(.dateTime.year().month(.abbreviated).day().locale(locale))
@@ -175,7 +175,7 @@ private struct HistoryRow: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(record.date.formatted(date: .omitted, time: .shortened))
+                    Text(record.date.appFormatted(time: .shortened))
                         .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(.secondary)
                     if record.status != .done {
@@ -224,13 +224,14 @@ private struct HistoryDetail: View {
     let history: HistoryStore
     @State private var showRaw = false
     @State private var copied = false
+    @State private var confirmingDelete = false
 
     var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(record.date.formatted(date: .abbreviated, time: .shortened))
+                        Text(record.date.appFormatted(date: .abbreviated, time: .shortened))
                             .font(.system(size: 14, weight: .semibold))
                         Text(details)
                             .font(.system(size: 11.5))
@@ -320,8 +321,22 @@ private struct HistoryDetail: View {
                         .help(L("在访达中显示录音", "Show recording in Finder"))
                     }
                     Spacer()
-                    Button(role: .destructive) { history.delete(record) } label: { Image(systemName: "trash") }
+                    Button(role: .destructive) {
+                        // Text alone goes straight away; a recording can't be got back, so that asks first.
+                        if record.hasAudio { confirmingDelete = true } else { history.delete(record) }
+                    } label: { Image(systemName: "trash") }
                         .help(L("删除", "Delete"))
+                        .accessibilityLabel(L("删除", "Delete"))
+                        .confirmationDialog(L("删除这条听写？", "Delete this dictation?"), isPresented: $confirmingDelete) {
+                            Button(L("删除", "Delete"), role: .destructive) { history.delete(record) }
+                            Button(L("取消", "Cancel"), role: .cancel) {}
+                        } message: {
+                            Text(record.status == .failed
+                                 ? L("这次听写还没转写成功，删除后录音也会删掉，无法再重试。",
+                                     "It was never transcribed. Its recording is deleted too, so it can't be retried.")
+                                 : L("录音也会一起删除，之后无法重新转写。",
+                                     "Its recording is deleted too, so it can't be re-transcribed."))
+                        }
                 }
                 .controlSize(.small)
                 .padding(.horizontal, 16)

@@ -3301,5 +3301,50 @@
     "ru": "доступность {0}%",
     "fr": "{0} % de disponibilité",
     "de": "{0} % verfügbar"
+  },
+  "API Key": {
+    "ja": "API キー",
+    "ko": "API 키",
+    "es": "Clave de API",
+    "pt": "Chave de API",
+    "ru": "API-ключ",
+    "fr": "Clé API",
+    "de": "API-Schlüssel"
+  },
+  "Base URL": {
+    "ja": "ベース URL",
+    "ko": "기본 URL",
+    "es": "URL base",
+    "pt": "URL base",
+    "ru": "Базовый URL",
+    "fr": "URL de base",
+    "de": "Basis-URL"
+  },
+  "Delete this dictation?": {
+    "ja": "この音声入力を削除しますか？",
+    "ko": "이 받아쓰기를 삭제할까요?",
+    "es": "¿Eliminar este dictado?",
+    "pt": "Excluir este ditado?",
+    "ru": "Удалить эту диктовку?",
+    "fr": "Supprimer cette dictée ?",
+    "de": "Dieses Diktat löschen?"
+  },
+  "It was never transcribed. Its recording is deleted too, so it can't be retried.": {
+    "ja": "まだ文字起こしされていません。録音も削除されるため、再試行できなくなります。",
+    "ko": "아직 변환되지 않았습니다. 녹음도 함께 삭제되어 다시 시도할 수 없습니다.",
+    "es": "Nunca se transcribió. Su grabación también se elimina, así que no se podrá reintentar.",
+    "pt": "Ele nunca foi transcrito. A gravação também é excluída, então não será possível tentar de novo.",
+    "ru": "Она так и не была распознана. Запись тоже удалится, и повторить попытку будет нельзя.",
+    "fr": "Elle n’a jamais été transcrite. Son enregistrement est aussi supprimé : impossible de réessayer ensuite.",
+    "de": "Es wurde nie transkribiert. Die Aufnahme wird mitgelöscht, ein neuer Versuch ist dann nicht mehr möglich."
+  },
+  "Its recording is deleted too, so it can't be re-transcribed.": {
+    "ja": "録音も削除されるため、もう一度文字起こしすることはできなくなります。",
+    "ko": "녹음도 함께 삭제되어 다시 변환할 수 없습니다.",
+    "es": "Su grabación también se elimina, así que no se podrá volver a transcribir.",
+    "pt": "A gravação também é excluída, então não será possível transcrever de novo.",
+    "ru": "Запись тоже удалится, и распознать её заново будет нельзя.",
+    "fr": "Son enregistrement est aussi supprimé : impossible de la retranscrire ensuite.",
+    "de": "Die Aufnahme wird mitgelöscht und kann nicht neu transkribiert werden."
   }
 }

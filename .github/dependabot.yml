@@ -1,0 +1,11 @@
+# A weekly pull request when an action the workflows use has a new release, all of them in one: the third-party
+# ones pinned to a commit get the new commit and version comment, the others the new major version.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

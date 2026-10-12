@@ -359,7 +359,7 @@ macOS 测试和 Linux .NET 测试会上传核心库覆盖率报告；该比例�
 
 检查草稿后手动发布，它就会成为最新版本。已安装的副本会在一天内发现它：应用内更新器会查找最新的、已发布的、非预发布版本中带有对应平台 zip 的那个（`OpenTypeless-<version>-macOS-arm64.zip`、`-macOS-x64.zip`、`-windows-x64.zip`、`-windows-arm64.zip`）。把某个发布标记为预发布，就不会推送给用户。发布后还会自动更新 [Homebrew tap 和 WinGet](packaging/README.md)。
 
-**macOS 发布签名（一次性）。** macOS 把辅助功能和麦克风权限绑定在应用的签名上，所以发布版本应该一直用同一个证书签名；否则每次更新后用户都要重新授予这两项权限。运行 `macos/scripts/create-release-cert.sh`，把它生成的 `.p12` 保存在私密的地方，并添加它打印出的两个仓库密钥（`MACOS_SIGNING_CERTIFICATE`、`MACOS_SIGNING_CERTIFICATE_PASSWORD`）。之后发布构建就会用它签名；没有这些密钥时会使用临时签名，并在运行中给出警告。
+**macOS 发布签名（一次性）。** 每个发布版本都必须用同一个证书签名：用发布证书签名的副本只会安装用同一证书签名的应用内更新，所以临时签名或用其他证书签名的版本永远到不了已安装的副本（macOS 也把辅助功能和麦克风权限绑定在签名上）。运行 `macos/scripts/create-release-cert.sh`，把它生成的 `.p12` 保存在私密的地方，并添加它打印出的两个仓库密钥（`MACOS_SIGNING_CERTIFICATE`、`MACOS_SIGNING_CERTIFICATE_PASSWORD`）。之后发布构建就会用它签名。没有这些密钥，或应用不是用 [`macos.yml`](.github/workflows/macos.yml) 里 `RELEASE_CERTIFICATE_LEAF` 那个哈希对应的证书签名时，标签构建会失败；拉取请求和手动构建使用临时签名。
 
 ## 致谢
 

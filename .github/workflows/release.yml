@@ -12,7 +12,8 @@
 #
 # The Mac apps are signed with the release certificate. The release is a draft, so nothing is public until you review
 # and publish it; it's marked as the latest release then. Bump the version first (macos/scripts/build-app.sh,
-# windows/Directory.Build.props); the release fails if any file is missing or doesn't match the tag.
+# windows/Directory.Build.props): the shared checks fail at once if the two differ or don't match the tag, and the
+# release fails if any file is missing or doesn't match the tag.
 name: Release
 
 on:
@@ -32,7 +33,9 @@ jobs:
   macos:
     name: macOS
     uses: ./.github/workflows/macos.yml
-    secrets: inherit # the release signing certificate
+    secrets: # the release signing certificate, and no other secret
+      MACOS_SIGNING_CERTIFICATE: ${{ secrets.MACOS_SIGNING_CERTIFICATE }}
+      MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
 
   windows:
     name: Windows
@@ -62,7 +65,8 @@ jobs:
           done
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - uses: softprops/action-gh-release@v3
+      # Third-party, with write access to the releases: pinned to the commit of that version (Dependabot updates both).
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           name: OpenTypeless V${{ steps.version.outputs.version }}
           draft: true

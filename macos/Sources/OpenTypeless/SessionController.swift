@@ -403,6 +403,8 @@ final class SessionController: ObservableObject {
             record.timing = DictationRecord.Timing(transcription: ProcessInfo.processInfo.systemUptime - started)
             let backupChunks = pipeline.backupChunkCount()
             if backupChunks > 0 { record.timing?.transcriptionBackupChunks = backupChunks }
+            record.timing?.speculativeTail = pipeline.tailWasSpeculative
+            record.timing?.lastChunkRoute = pipeline.lastChunkUsedBackup.map { $0 ? "backup" : "primary" }
             if pipeline.tailWasSpeculative {
                 note(String(format: "last segment transcribed ahead of time: text %.2fs after release",
                             ProcessInfo.processInfo.systemUptime - started))
@@ -439,6 +441,7 @@ final class SessionController: ObservableObject {
     }
 
     private func polishAndDeliver(record: inout DictationRecord, pipeline: TranscriptionPipeline) async {
+        let begun = ProcessInfo.processInfo.systemUptime
         var text = record.rawText
         var notice: String?
         var polished: HedgedPolishResult?
@@ -455,6 +458,8 @@ final class SessionController: ObservableObject {
                 // What it streams from now on moves this dictation's bar.
                 speculative.partials.target = onPolishPartial(expected: record.rawText)
                 ahead = ProcessInfo.processInfo.systemUptime - speculative.startedAt
+                let transcription = record.timing?.transcription ?? 0
+                record.timing?.polishHeadStart = max(0, ahead - transcription)
                 note(String(format: "clean-up started %.2fs ago, while recording", ahead))
             } else {
                 dropSpeculativePolish()
@@ -505,7 +510,9 @@ final class SessionController: ObservableObject {
 
         if !Task.isCancelled {
             hud.model.bar.reach(.delivered)
-            await deliver(text, notice: notice)
+            let transcription = record.timing?.transcription ?? 0
+            record.timing?.delivered = transcription + ProcessInfo.processInfo.systemUptime - begun
+            record.timing?.delivery = await deliver(text, notice: notice)
         }
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
         account(&record, pipeline: pipeline, polished: polished, discarded: discardedPolishes)
@@ -585,14 +592,16 @@ final class SessionController: ObservableObject {
 
     /// Pastes at the cursor unless focus is clearly not a text input. Whether the paste actually
     /// landed is detected from the target app reading the clipboard: if it did, the user's previous
-    /// clipboard is restored; if not, the text stays on the clipboard and the HUD says so.
-    private func deliver(_ text: String, notice: String?) async {
+    /// clipboard is restored; if not, the text stays on the clipboard and the HUD says so. Returns how it went, for
+    /// History (see `DictationRecord.Timing.delivery`).
+    @discardableResult
+    private func deliver(_ text: String, notice: String?) async -> String {
         let target = deliverByPaste ? FocusProbe.focusedTarget() : .notEditable
         if target == .notEditable {
             note("deliver → clipboard (focus not editable) in \(frontmostID)")
             TextInserter.copyToClipboard(text)
             finish(showing: notice.map { .error($0) } ?? .copied, hideAfter: 1.6)
-            return
+            return "copied"
         }
         let outcome = await TextInserter.insert(text, restoreClipboard: settings.restoreClipboard)
         note("deliver → \(outcome) (focus \(target)) in \(frontmostID)")
@@ -608,11 +617,14 @@ final class SessionController: ObservableObject {
                 hud.finishWorking()
             }
             if settings.learnFromEdits, !sent { editWatcher.watch(inserted: text) }
+            return "pasted"
         case .notPasted:
             finish(showing: .copied, hideAfter: 1.6)
+            return "failed"
         case .noPermission:
             finish(showing: .error(L("没有辅助功能权限，文字已复制到剪贴板",
                                      "No Accessibility permission — text copied to the clipboard")), hideAfter: 3)
+            return "failed"
         }
     }
 
@@ -686,12 +698,15 @@ final class SessionController: ObservableObject {
         var record = saved
         record.status = .processing
         record.error = nil
+        // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again.
+        let preset = saved.chunkLayout == Chunker.layout ? saved.chunkTexts : [:]
+        record.chunkLayout = Chunker.layout
         history.update(record)
         self.record = record
         state = .processing
         hud.showWorking(polishes: settings.polishEnabled)
 
-        let pipeline = makePipeline(endpoint: endpoint, preset: saved.chunkTexts)
+        let pipeline = makePipeline(endpoint: endpoint, preset: preset)
         self.pipeline = pipeline
         processingTask = Task { [weak self] in
             // Let the menu close and focus return to the previous app before pasting.

@@ -104,7 +104,9 @@ final class MockOpenRouter: URLProtocol {
     @Test func permanentFailureKeepsPartialText() async throws {
         let audio = speech(seconds: 40)
         let reference = Chunker()
-        let firstChunkSize = reference.append(audio).first!.samples.count
+        let cut = reference.append(audio)
+        let firstChunkSize = cut.first!.samples.count
+        let chunkCount = cut.count + (reference.finish() == nil ? 0 : 1)
         MockOpenRouter.handler = { _, body in
             let json = try! JSONSerialization.jsonObject(with: body) as! [String: Any]
             let data = (json["input_audio"] as! [String: String])["data"]!
@@ -122,7 +124,7 @@ final class MockOpenRouter: URLProtocol {
             Issue.record("expected failure")
         } catch let failure as PipelineFailure {
             #expect(failure.partialText == "第一段")
-            #expect(failure.failedChunks == [1])
+            #expect(chunkCount >= 2 && failure.failedChunks == Array(1..<chunkCount))
             #expect(pipeline.completedTranscripts() == [0: "第一段"])
         }
     }

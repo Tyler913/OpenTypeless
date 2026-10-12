@@ -21,6 +21,11 @@ public sealed class DictationRecord
     [JsonPropertyName("error")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Error { get; set; }
     /// <summary>Per-chunk transcripts, so a retry only re-sends the chunks that failed.</summary>
     [JsonPropertyName("chunkTexts")] public Dictionary<int, string> ChunkTexts { get; set; } = new();
+    /// <summary>
+    /// How the recording was cut into those chunks (<see cref="TypelessCore.Chunker.Layout"/>; null before it was saved): a
+    /// retry that cuts it differently can't reuse them by index.
+    /// </summary>
+    [JsonPropertyName("chunkLayout")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? ChunkLayout { get; set; }
     [JsonPropertyName("timing")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public DictationTiming? Timing { get; set; }
     /// <summary>What processing it cost so far in USD, retries included (null when nothing could be priced).</summary>
     [JsonPropertyName("cost")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Cost { get; set; }
@@ -89,6 +94,19 @@ public sealed class DictationTiming
     [JsonPropertyName("polish")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Polish { get; set; }
     [JsonPropertyName("polishModel")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? PolishModel { get; set; }
     [JsonPropertyName("usedBackup")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? UsedBackup { get; set; }
+    /// <summary>The last segment's transcript came from a speculative tail, sent while the speaker paused before letting go.</summary>
+    [JsonPropertyName("speculativeTail")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? SpeculativeTail { get; set; }
+    /// <summary>The speech-to-text route that answered the last segment transcribed: "primary" or "backup".</summary>
+    [JsonPropertyName("lastChunkRoute")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? LastChunkRoute { get; set; }
+    /// <summary>How long the clean-up taken over at release had been running by then (started while the speaker paused).</summary>
+    [JsonPropertyName("polishHeadStart")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? PolishHeadStart { get; set; }
+    /// <summary>Release → the text ready and handed over for delivery (focus is checked, then it's pasted or copied at once).</summary>
+    [JsonPropertyName("delivered")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Delivered { get; set; }
+    /// <summary>
+    /// "pasted"; "copied" (focus wasn't a text field); "failed" (the paste didn't land, or wasn't allowed; the text is on
+    /// the clipboard).
+    /// </summary>
+    [JsonPropertyName("delivery")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Delivery { get; set; }
 
     public DictationTiming Copy() => (DictationTiming)MemberwiseClone();
 
@@ -162,7 +180,7 @@ public sealed class HistoryStore
     {
         var now = DateTimeOffset.Now;
         var id = now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N")[..4].ToUpperInvariant();
-        var record = new DictationRecord { Id = id, Date = now };
+        var record = new DictationRecord { Id = id, Date = now, ChunkLayout = TypelessCore.Chunker.Layout };
         Directory.CreateDirectory(record.Folder);
         _records.Insert(0, record);
         Save(record);

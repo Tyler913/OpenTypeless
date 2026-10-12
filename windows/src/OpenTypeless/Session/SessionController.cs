@@ -440,6 +440,8 @@ public sealed class SessionController
             progress.Reach(new ProcessingProgress.Milestone.Transcribed());
             record.Timing = new DictationTiming { Transcription = started.Elapsed.TotalSeconds };
             if (pipeline.BackupChunkCount() is var backupChunks and > 0) record.Timing.TranscriptionBackupChunks = backupChunks;
+            record.Timing.SpeculativeTail = pipeline.TailWasSpeculative;
+            record.Timing.LastChunkRoute = pipeline.LastChunkUsedBackup is { } backup ? backup ? "backup" : "primary" : null;
             if (pipeline.TailWasSpeculative) Note($"last segment transcribed ahead of time: text {started.Elapsed.TotalSeconds:0.00}s after release");
             record.ChunkTexts = pipeline.CompletedTranscripts();
             record.RawText = raw;
@@ -492,6 +494,7 @@ public sealed class SessionController
 
     private async Task PolishAndDeliver(DictationRecord record, TranscriptionPipeline pipeline, CancellationToken token)
     {
+        var begun = Stopwatch.StartNew();
         var text = record.RawText;
         string? notice = null;
         HedgedPolishResult? polished = null;
@@ -512,6 +515,7 @@ public sealed class SessionController
                 // What it streams from now on moves this dictation's bar.
                 speculative.Partials.Target = OnPolishPartial(record.RawText);
                 ahead = speculative.Started.Elapsed.TotalSeconds;
+                if (record.Timing is { } timing) timing.PolishHeadStart = Math.Max(0, ahead - (timing.Transcription ?? 0));
                 adopted = token.Register(speculative.Cancel.Cancel);
                 Note($"clean-up started {ahead:0.00}s ago, while recording");
             }
@@ -571,7 +575,9 @@ public sealed class SessionController
         if (!token.IsCancellationRequested)
         {
             Hud.Model.Progress.Reach(new ProcessingProgress.Milestone.Delivered());
-            await Deliver(text, notice);
+            if (record.Timing is { } timing) timing.Delivered = (timing.Transcription ?? 0) + begun.Elapsed.TotalSeconds;
+            var delivery = await Deliver(text, notice);
+            if (record.Timing != null) record.Timing.Delivery = delivery;
         }
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
         Account(record, pipeline, polished, _discardedPolishes.ToList());
@@ -636,9 +642,10 @@ public sealed class SessionController
     /// <summary>
     /// Pastes at the cursor unless focus is clearly not a text input. Whether the paste actually landed is
     /// detected from the target app reading the clipboard: if it did, the user's previous clipboard is restored;
-    /// if not, the text stays on the clipboard and the HUD says so.
+    /// if not, the text stays on the clipboard and the HUD says so. Returns how it went, for History (see
+    /// <see cref="DictationTiming.Delivery"/>).
     /// </summary>
-    private async Task Deliver(string text, string? notice)
+    private async Task<string> Deliver(string text, string? notice)
     {
         if (_deliverByPaste) await TextInserter.LeaveMenuMode();
         var target = _deliverByPaste ? await FocusProbe.FocusedTarget() : FocusProbe.Target.NotEditable;
@@ -647,7 +654,7 @@ public sealed class SessionController
             Note("deliver → clipboard (focus not editable)");
             TextInserter.CopyToClipboard(text);
             Finish(notice is { } n ? new HudPhase.Error(n) : new HudPhase.Copied(), 1.6);
-            return;
+            return "copied";
         }
         var outcome = await TextInserter.Insert(text, _settings.RestoreClipboard);
         Note($"deliver → {outcome} (focus {target})");
@@ -667,10 +674,10 @@ public sealed class SessionController
                     Hud.FinishWorking();
                 }
                 if (_settings.LearnFromEdits && !sent) _editWatcher.Watch(text);
-                break;
+                return "pasted";
             default:
                 Finish(new HudPhase.Copied(), 1.6);
-                break;
+                return "failed";
         }
     }
 
@@ -749,12 +756,15 @@ public sealed class SessionController
         var record = saved.Copy();
         record.Status = DictationStatus.Processing;
         record.Error = null;
+        // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again.
+        var preset = saved.ChunkLayout == Chunker.Layout ? saved.ChunkTexts : new Dictionary<int, string>();
+        record.ChunkLayout = Chunker.Layout;
         _history.Update(record);
         _record = record;
         State = SessionState.Processing;
         Hud.ShowWorking(_settings.PolishEnabled);
 
-        var pipeline = MakePipeline(endpoint, saved.ChunkTexts);
+        var pipeline = MakePipeline(endpoint, preset);
         _pipeline = pipeline;
         var processing = new CancellationTokenSource();
         _processing = processing;

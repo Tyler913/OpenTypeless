@@ -44,7 +44,7 @@ OpenTypeless est construit autour de ce problème.
 
 | | Ce qui se passe |
 |---|---|
-| **Découpe aux pauses** | Pendant que vous parlez, l’audio est découpé en segments de 18 à 28 s, au niveau de la fenêtre de 0,4 s la plus silencieuse de chaque portion : aucun mot n’est coupé en deux et aucune requête n’approche la limite de 60 s du fournisseur. |
+| **Découpe aux pauses** | Pendant que vous parlez, l’audio est découpé à votre pause suivante dès que 8 s se sont accumulées (sans pause, au niveau de la fenêtre de 0,4 s la plus silencieuse avant 28 s) : aucun mot n’est coupé en deux, il reste peu à envoyer quand vous relâchez la touche et aucune requête n’approche la limite de 60 s du fournisseur. |
 | **Transcrit pendant que vous parlez** | Chaque segment est transcrit en arrière-plan dès qu’il est découpé. Après une dictée de deux minutes, il ne reste que les dernières secondes à traiter quand vous relâchez la touche. |
 | **Réessaie segment par segment** | Coupures réseau, 429 et erreurs 5xx sont réessayés avec un délai croissant. Clés invalides et problèmes de facturation échouent immédiatement. Un segment en échec n’affecte jamais les autres, et les segments en échec ont droit à une tournée complète de plus à la fin. |
 | **Modèle de secours en cas de démarrage lent** | Si le modèle de nettoyage n’a pas commencé à répondre en 0,55 s, ou échoue, un modèle de secours d’un autre éditeur est aussi sollicité et le premier à répondre l’emporte. Un fournisseur lent coûte moins d’une seconde de plus, pas toute l’attente. |

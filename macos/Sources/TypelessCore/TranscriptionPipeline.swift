@@ -17,6 +17,45 @@ actor AsyncSemaphore {
     }
 }
 
+/// Opens once, for good, and lets tasks wait for that (here: for the recording to end). A waiting task that is
+/// cancelled stops waiting at once, so a task group waiting on it can finish.
+final class AsyncLatch: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isOpen = false
+    private var nextID = 0
+    private var waiters: [Int: CheckedContinuation<Void, Never>] = [:]
+
+    func open() {
+        let waiting = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            isOpen = true
+            defer { waiters = [:] }
+            return Array(waiters.values)
+        }
+        waiting.forEach { $0.resume() }
+    }
+
+    /// Returns once `open` has been called (at once if it already was), or the task is cancelled.
+    func wait() async {
+        let id = lock.withLock { () -> Int in
+            nextID += 1
+            return nextID
+        }
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                let now = lock.withLock { () -> Bool in
+                    // Cancelled before getting here: the handler below found nothing to resume.
+                    if isOpen || Task.isCancelled { return true }
+                    waiters[id] = continuation
+                    return false
+                }
+                if now { continuation.resume() }
+            }
+        } onCancel: {
+            lock.withLock { waiters.removeValue(forKey: id) }?.resume()
+        }
+    }
+}
+
 public enum ChunkState: Sendable, Equatable {
     case queued
     case transcribing(attempt: Int)
@@ -74,25 +113,45 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     private var usages: [RequestUsage] = []
     private var backupUsages: [RequestUsage] = []
     private var finished = false
+    /// Opened by `finish`: the recording has ended, so every chunk still out is holding up the text.
+    private let recordingEnded = AsyncLatch()
     /// Every chunk has been handed out: `finish` has scheduled the tail.
     private var flushed = false
     private var cancelled = false
+    /// The last chunk, once `finish` has cut it.
+    private var tailIndex: Int?
+    /// Which route answered each chunk that was transcribed (true: the backup).
+    private var answeredByBackup: [Int: Bool] = [:]
 
     /// How long the speaker has to be quiet before the audio so far is transcribed ahead of time.
     public static let pauseSeconds = 0.3
+    /// The end of a recording this close to the release isn't taken for speech: letting go of the key clicks, and
+    /// people breathe out. Otherwise a click after the pause voided the speculative tail (it applied in 4 of 571 timed
+    /// dictations), and after a chunk cut at a pause a tail of silence and a click was sent on its own.
+    public static let releaseSeconds = 0.15
+    /// A chunk sent once the recording has ended is what the user waits for: when it holds at most this much audio, the
+    /// backup route is asked at once alongside the main one, rather than once the main one is late (the backup won in
+    /// 13% of 789 timed dictations, and then the text still took 1.79 s at the median, mostly the wait before asking it).
+    /// A longer chunk keeps the delay, so two uploads of it don't share a slow uplink; so does a chunk sent while the
+    /// user is still talking, which nothing waits on yet.
+    public static let raceSeconds = 10.0
     private let pauses = PauseTracker()
     /// The audio not yet cut into a chunk, being transcribed ahead of time since the speaker paused.
     private var speculation: Speculation?
-    /// The last transcript passed to `onSpeculation`.
+    /// The last transcript passed to `onSpeculation`, and how many changes were worked out so far.
     private var announced: String?
+    private var announcements = 0
+    /// Calls `onSpeculation` one at a time, and how many changes it was told of (the newest one's number).
+    private let announceLock = NSLock()
+    private var announcedUpTo = 0
     private var tailSpeculative = false
 
     private final class Speculation: @unchecked Sendable {
         /// The pending audio when the pause was noticed; it ends where the speculation's audio ends.
         let chunk: AudioChunk
-        var task: Task<(ChunkState, Bool), Never>?
+        var task: Task<Outcome, Never>?
         /// Set (under the pipeline's lock) once the request is answered.
-        var outcome: (state: ChunkState, permanent: Bool)?
+        var outcome: Outcome?
         var end: Int { chunk.startSample + chunk.samples.count }
 
         init(chunk: AudioChunk) { self.chunk = chunk }
@@ -102,12 +161,19 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     /// ended.
     public var tailWasSpeculative: Bool { lock.withLock { tailSpeculative } }
 
+    /// Whether the backup route answered the last chunk that was transcribed (nil when none was): the request the text
+    /// waited on at the end.
+    public var lastChunkUsedBackup: Bool? {
+        lock.withLock { answeredByBackup.max { $0.key < $1.key }?.value }
+    }
+
     /// `preset` lets a retry reuse transcripts that already succeeded (keyed by chunk index).
     /// `trimSilence` sends each chunk without the silence before and after its speech (see `AudioChunk.trimmed`).
     /// `speculate` transcribes the pending audio ahead of time whenever the speaker pauses (see above).
     /// `onSpeculation` is called, on a background thread, with the whole transcript the recording would give if it ended
     /// now, once a speculative tail and every chunk before it are transcribed; with nil when that stops being true
-    /// because the speaker went on. Lets the caller start cleaning the text up before the key is released.
+    /// because the speaker went on. Lets the caller start cleaning the text up before the key is released. It is called
+    /// one call at a time and never with a stale transcript after a newer one, so it mustn't call back into the pipeline.
     public init(
         client: APIClient,
         options: APIClient.TranscriptionOptions,
@@ -161,17 +227,19 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         let (tail, adopted) = lock.withLock { () -> (AudioChunk?, Bool) in
             finished = true
             let tail = chunker.finish()
+            tailIndex = tail?.index
             guard let speculation else { return (tail, false) }
             self.speculation = nil
-            // Only silence since the pause: the speculative answer is the tail's.
+            // Only silence since the pause (the key's click aside): the speculative answer is the tail's.
             if let tail, tail.index == speculation.chunk.index, tail.startSample == speculation.chunk.startSample,
-               !pauses.speechAfter(speculation.end, includePartial: true) {
+               !pauses.speechAfter(speculation.end, before: releaseStart) {
                 adopt(tail, speculation)
                 return (tail, true)
             }
             speculation.task?.cancel()
             return (tail, false)
         }
+        recordingEnded.open()
         if let tail {
             if adopted { observer?(tail.index, .queued) } else { schedule(tail) }
         }
@@ -255,7 +323,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     private func restart(_ index: Int) {
         lock.lock()
         guard let chunk = chunks[index] else { lock.unlock(); return }
-        if AudioLevel.isSilent(chunk.samples) || chunk.duration < 0.3 {
+        if AudioLevel.isSilent(chunk.samples) || chunk.duration < 0.3 || isOnlyThePauseBeforeRelease(chunk) {
             results[index] = .skippedSilence
             lock.unlock()
             observer?(index, .skippedSilence)
@@ -265,31 +333,45 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         let task = Task { [weak self] in
             guard let self else { return }
             await self.semaphore.wait()
-            let (state, permanent) = await self.run(chunk)
+            let outcome = await self.run(chunk)
             await self.semaphore.signal()
-            self.record(index, state, permanent: permanent)
+            self.record(index, outcome)
         }
         tasks[index] = task
         lock.unlock()
         observer?(index, .queued)
     }
 
-    private func record(_ index: Int, _ state: ChunkState, permanent: Bool) {
+    private func record(_ index: Int, _ outcome: Outcome) {
         lock.withLock {
-            results[index] = state
-            if permanent { permanentFailures.insert(index) } else { permanentFailures.remove(index) }
+            results[index] = outcome.state
+            if outcome.permanent { permanentFailures.insert(index) } else { permanentFailures.remove(index) }
+            if case .done = outcome.state { answeredByBackup[index] = outcome.backup } else { answeredByBackup[index] = nil }
         }
-        observer?(index, state)
+        observer?(index, outcome.state)
         announce()
+    }
+
+    /// Where the audio stops counting as speech: `releaseSeconds` before the end of what has been appended. Under the lock.
+    private var releaseStart: Int {
+        pauses.sampleCount - AudioFormat.sampleCount(forSeconds: Self.releaseSeconds)
+    }
+
+    /// The last chunk of a recording that was cut at a pause, holding nothing but the rest of that pause and the key's
+    /// click: nothing to send (models make text up from noise). Called under the lock.
+    private func isOnlyThePauseBeforeRelease(_ chunk: AudioChunk) -> Bool {
+        chunk.index > 0 && chunk.index == tailIndex
+            && !VoiceActivity.containsSpeech(chunk.samples, ignoringLast: AudioFormat.sampleCount(forSeconds: Self.releaseSeconds))
     }
 
     // MARK: - Speculative tail
 
     /// After new audio: drops the speculation if the speaker has spoken since it started, and starts one when they have
-    /// been quiet for `pauseSeconds` after speaking. Called under the lock.
+    /// been quiet for `pauseSeconds` after speaking. Called under the lock. Sound in the last `releaseSeconds` doesn't
+    /// drop it yet: it may be the key's click, which `finish` leaves out too.
     private func updateSpeculation() {
         if let current = speculation {
-            guard pauses.speechAfter(current.end) else { return }
+            guard pauses.speechAfter(current.end, before: releaseStart) else { return }
             dropSpeculation()
         }
         guard let lastSpeech = pauses.lastSpeechEnd(),
@@ -299,7 +381,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
 
         let speculation = Speculation(chunk: chunk)
         speculation.task = Task { [weak self] in
-            guard let self else { return (.failed(APIError.cancelled.localizedDescription), true) }
+            guard let self else { return (.failed(APIError.cancelled.localizedDescription), true, false) }
             await self.semaphore.wait()
             let outcome = await self.run(chunk, report: false)
             await self.semaphore.signal()
@@ -325,26 +407,34 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         results[tail.index] = .queued
         tasks[tail.index] = Task { [weak self] in
             let request = speculation.task
-            let (state, permanent) = await withTaskCancellationHandler {
-                await request?.value ?? (.failed(APIError.cancelled.localizedDescription), true)
+            let outcome = await withTaskCancellationHandler {
+                await request?.value ?? (.failed(APIError.cancelled.localizedDescription), true, false)
             } onCancel: {
                 request?.cancel()
             }
-            self?.record(tail.index, state, permanent: permanent)
+            self?.record(tail.index, outcome)
         }
     }
 
     /// Tells `onSpeculation` when the transcript the recording would give if it ended now changes.
     private func announce() {
         guard let onSpeculation else { return }
-        let change = lock.withLock { () -> String?? in
-            guard !finished, !cancelled else { return .none }
+        let change = lock.withLock { () -> (number: Int, text: String?)? in
+            guard !finished, !cancelled else { return nil }
             let text = speculativeTranscript()
-            guard text != announced else { return .none }
+            guard text != announced else { return nil }
             announced = text
-            return .some(text)
+            announcements += 1
+            return (announcements, text)
         }
-        if case let .some(text) = change { onSpeculation(text) }
+        guard let change else { return }
+        // Changes are numbered in order under the lock, but two threads can get from there to here the other way round:
+        // a change a newer one overtook is stale, and passing it on would leave the caller cleaning up the wrong text.
+        announceLock.withLock {
+            guard change.number > announcedUpTo else { return }
+            announcedUpTo = change.number
+            onSpeculation(change.text)
+        }
     }
 
     /// The whole transcript with the speculation as the tail, once it and every chunk before it are done. Under the lock.
@@ -364,9 +454,12 @@ public final class TranscriptionPipeline: @unchecked Sendable {
 
     // MARK: - Requests
 
+    /// A chunk's request: its state, whether a failure is permanent, and whether the backup route answered.
+    private typealias Outcome = (state: ChunkState, permanent: Bool, backup: Bool)
+
     /// `report` is false for a speculative tail: nothing is waiting on it yet, so the observer isn't told.
-    private func run(_ chunk: AudioChunk, report: Bool = true) async -> (ChunkState, permanent: Bool) {
-        if Task.isCancelled { return (.failed(APIError.cancelled.localizedDescription), true) }
+    private func run(_ chunk: AudioChunk, report: Bool = true) async -> Outcome {
+        if Task.isCancelled { return (.failed(APIError.cancelled.localizedDescription), true, false) }
         if report { observer?(chunk.index, .transcribing(attempt: 1)) }
         let chunk = trimSilence ? chunk.trimmed() : chunk
         do {
@@ -374,10 +467,10 @@ public final class TranscriptionPipeline: @unchecked Sendable {
             if let usage = result.usage {
                 lock.withLock { if usedBackup { backupUsages.append(usage) } else { usages.append(usage) } }
             }
-            return (.done(result.text), false)
+            return (.done(result.text), false, usedBackup)
         } catch {
             let apiError = APIError.from(error)
-            return (.failed(apiError.localizedDescription), !apiError.isRetryable)
+            return (.failed(apiError.localizedDescription), !apiError.isRetryable, false)
         }
     }
 
@@ -401,8 +494,8 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     }
 
     /// One chunk, on the primary route; with a backup route, the backup is asked too once the primary has failed,
-    /// or is late (see `TranscriptionLatency`) and the recording has ended, and whichever answers first is used; the
-    /// other is cancelled.
+    /// or is late (see `TranscriptionLatency`, and `raceSeconds` for a chunk sent after the recording ended) and the
+    /// recording has ended, and whichever answers first is used; the other is cancelled.
     private func transcribe(_ chunk: AudioChunk, report: Bool) async throws -> (APIClient.TranscriptionResult, usedBackup: Bool) {
         let start = ProcessInfo.processInfo.systemUptime
         guard let backup else {
@@ -410,19 +503,17 @@ public final class TranscriptionPipeline: @unchecked Sendable {
             latency.record(latency: ProcessInfo.processInfo.systemUptime - start, audioSeconds: chunk.duration)
             return (result, false)
         }
-        let delay = latency.hedgeDelay(forAudioSeconds: chunk.duration)
+        let delay = hedgeDelay(for: chunk)
         return try await withThrowingTaskGroup(of: Attempt.self) { group in
             group.addTask {
                 do { return .primary(.success(try await self.attempt(self.client, self.options, chunk, report: report))) }
                 catch { return .primary(.failure(error)) }
             }
             group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                if delay > 0 { try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
                 // While the user is still talking nothing waits on this chunk yet, so the backup isn't worth paying
                 // for; once the recording ends, a chunk that is late by then is asked of the backup at once.
-                while !Task.isCancelled, !self.isFinished {
-                    try? await Task.sleep(nanoseconds: 50_000_000)
-                }
+                await self.recordingEnded.wait()
                 return .late
             }
             var backupStarted = false
@@ -464,6 +555,13 @@ public final class TranscriptionPipeline: @unchecked Sendable {
             }
             throw primaryError ?? APIError.cancelled
         }
+    }
+
+    /// How long the primary route has for a chunk before the backup is asked too: nothing for a short chunk sent once
+    /// the recording has ended (see `raceSeconds`), else until it's late.
+    private func hedgeDelay(for chunk: AudioChunk) -> Double {
+        if isFinished, chunk.duration <= Self.raceSeconds { return 0 }
+        return latency.hedgeDelay(forAudioSeconds: chunk.duration)
     }
 
     /// How many chunks the backup route transcribed.

@@ -113,7 +113,10 @@ public class PipelineTests
     public async Task PermanentFailureKeepsPartialText()
     {
         var audio = Speech(40);
-        var firstChunkSize = new Chunker().Append(audio).First().Samples.Length;
+        var reference = new Chunker();
+        var cut = reference.Append(audio);
+        var firstChunkSize = cut.First().Samples.Length;
+        var chunkCount = cut.Count + (reference.Finish() == null ? 0 : 1);
         MockOpenRouter.Handler = (_, body) =>
         {
             var (_, samples) = Audio(body);
@@ -126,7 +129,8 @@ public class PipelineTests
         pipeline.Append(audio);
         var failure = await Assert.ThrowsAsync<PipelineFailure>(() => pipeline.Finish());
         Assert.Equal("第一段", failure.PartialText);
-        Assert.Equal([1], failure.FailedChunks);
+        Assert.True(chunkCount >= 2);
+        Assert.Equal(Enumerable.Range(1, chunkCount - 1), failure.FailedChunks);
         Assert.Equal(new Dictionary<int, string> { [0] = "第一段" }, pipeline.CompletedTranscripts());
     }
 

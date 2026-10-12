@@ -44,7 +44,7 @@ OpenTypeless ist um genau dieses Problem herum gebaut.
 
 | | Was passiert |
 |---|---|
-| **Schnitt an Pausen** | Während du sprichst, wird das Audio in Abschnitte von 18–28 s geschnitten, jeweils im leisesten 0,4-s-Fenster. So wird kein Wort zerteilt, und keine Anfrage kommt in die Nähe des 60-s-Limits des Anbieters. |
+| **Schnitt an Pausen** | Während du sprichst, wird das Audio an deiner nächsten Pause geschnitten, sobald 8 s zusammengekommen sind (ohne Pause im leisesten 0,4-s-Fenster vor 28 s). So wird kein Wort zerteilt, beim Loslassen bleibt wenig zu senden, und keine Anfrage kommt in die Nähe des 60-s-Limits des Anbieters. |
 | **Transkription schon beim Sprechen** | Jeder Abschnitt wird im Hintergrund transkribiert, sobald er geschnitten ist. Nach einem zweiminütigen Diktat sind beim Loslassen der Taste nur noch die letzten Sekunden übrig. |
 | **Wiederholung pro Abschnitt** | Netzabbrüche, 429 und 5xx-Fehler werden mit wachsender Wartezeit wiederholt. Ungültige Schlüssel und Abrechnungsfehler schlagen sofort fehl. Ein fehlgeschlagener Abschnitt beeinflusst nie die anderen, und fehlgeschlagene Abschnitte bekommen am Ende noch eine komplette Runde. |
 | **Backup-Modell bei langsamem Start** | Hat das Bereinigungsmodell nach 0,55 s noch nicht zu antworten begonnen oder schlägt es fehl, wird zusätzlich ein Backup-Modell eines anderen Herstellers gefragt, und die erste Antwort gewinnt. Ein langsamer Anbieter kostet so weniger als eine Sekunde extra, nicht die ganze Wartezeit. |

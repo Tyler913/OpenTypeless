@@ -606,6 +606,49 @@ public sealed class AppSettings : INotifyPropertyChanged
                   .Where(t => t.Length > 0)
                   .ToList();
 
+    /// <summary>
+    /// What speech-to-text and the clean-up are given as vocabulary: the snippets' triggers ahead of the vocabulary, so a
+    /// trigger comes through as written for its snippet to be found.
+    /// </summary>
+    public List<string> DictationVocabulary => SnippetExpander.Vocabulary(Snippets, VocabularyList);
+
+    // MARK: Snippets
+
+    /// <summary>Spoken shortcuts: a trigger said in a dictation is replaced by its expansion (see SnippetExpander). None at first.</summary>
+    public List<Snippet> Snippets
+    {
+        get
+        {
+            lock (_lock)
+            {
+                try
+                {
+                    // An entry edited by hand into null, or without its text, is left out rather than failing every dictation.
+                    return (_store["snippets"]?.Deserialize<List<Snippet?>>() ?? [])
+                        .OfType<Snippet>()
+                        .Where(s => s.Trigger != null && s.Expansion != null)
+                        .ToList();
+                }
+                catch (JsonException)
+                {
+                    return [];
+                }
+            }
+        }
+        private set => SetNode("snippets", JsonSerializer.SerializeToNode(value));
+    }
+
+    /// <summary>Adds the snippet, or replaces the one with its ID.</summary>
+    public void SaveSnippet(Snippet snippet)
+    {
+        var snippets = Snippets;
+        var index = snippets.FindIndex(s => s.Id == snippet.Id);
+        if (index >= 0) snippets[index] = snippet; else snippets.Add(snippet);
+        Snippets = snippets;
+    }
+
+    public void DeleteSnippet(Snippet snippet) => Snippets = Snippets.Where(s => s.Id != snippet.Id).ToList();
+
     // MARK: Storage
 
     private string GetString(string key, string fallback)

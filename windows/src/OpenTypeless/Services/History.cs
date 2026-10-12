@@ -30,6 +30,8 @@ public sealed class DictationRecord
     [JsonPropertyName("status")][JsonConverter(typeof(StatusConverter))] public DictationStatus Status { get; set; } = DictationStatus.Recording;
     [JsonPropertyName("rawText")] public string RawText { get; set; } = "";
     [JsonPropertyName("polishedText")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? PolishedText { get; set; }
+    /// <summary>What went in when snippets changed the final text (see SnippetExpander); null when the final text went in as it was.</summary>
+    [JsonPropertyName("insertedText")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? InsertedText { get; set; }
     [JsonPropertyName("error")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Error { get; set; }
     /// <summary>Per-chunk transcripts, so a retry only re-sends the chunks that failed.</summary>
     [JsonPropertyName("chunkTexts")] public Dictionary<int, string> ChunkTexts { get; set; } = new();
@@ -44,8 +46,10 @@ public sealed class DictationRecord
     /// <summary>Its words are in the usage totals (so re-transcribing it doesn't count them twice).</summary>
     [JsonPropertyName("counted")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Counted { get; set; }
 
-    /// <summary>What was (or would be) inserted.</summary>
+    /// <summary>What the speaker said: cleaned up, or as transcribed. Word counts go by it, not by what snippets put in.</summary>
     [JsonIgnore] public string FinalText => PolishedText ?? RawText;
+    /// <summary>What was (or would be) inserted: the final text with its snippets expanded.</summary>
+    [JsonIgnore] public string OutputText => InsertedText ?? FinalText;
 
     [JsonIgnore] public string Folder => Path.Combine(AppPaths.Sessions, Id);
     [JsonIgnore] public string AudioPath => Path.Combine(Folder, "audio.wav");

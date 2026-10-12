@@ -440,11 +440,11 @@ public sealed class SessionController
     {
         var language = _settings.SttLanguage.Length == 0 ? null : _settings.SttLanguage;
         var backup = _settings.SttBackupEndpoint is { } backupEndpoint
-            ? new TranscriptionRoute(new ApiClient(backupEndpoint), new TranscriptionOptions(_settings.SttBackupModel.Trim(), language, _settings.VocabularyList))
+            ? new TranscriptionRoute(new ApiClient(backupEndpoint), new TranscriptionOptions(_settings.SttBackupModel.Trim(), language, _settings.DictationVocabulary))
             : null;
         var key = ModelPrice.Key(_settings.SttProvider, _settings.SttModel);
         if (!_latencies.TryGetValue(key, out var latency)) _latencies[key] = latency = new TranscriptionLatency();
-        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, language, _settings.VocabularyList), preset: preset,
+        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, language, _settings.DictationVocabulary), preset: preset,
                                          backup: backup, latency: latency, onSpeculation: onSpeculation);
     }
 
@@ -702,6 +702,11 @@ public sealed class SessionController
             record.Status = DictationStatus.Done;
         }
         if (record.Status == DictationStatus.PolishFailed) record.PolishedText = null;
+        // Snippets go in here, in code, never through the clean-up: a model would paraphrase or translate a long expansion,
+        // and its guards would take one for an answer. History keeps what was said (word counts go by it) and what went in.
+        var expanded = SnippetExpander.Expand(text, _settings.Snippets);
+        record.InsertedText = expanded == text ? null : expanded;
+        text = expanded;
 
         // Taken now: once the text is in, the next dictation may already be collecting its own.
         var discarded = TakeDiscardedPolishes();
@@ -877,7 +882,7 @@ public sealed class SessionController
         model = model.Trim();
         return new PolishRoute(new ApiClient(endpoint), new PolishOptions(
             model,
-            _settings.VocabularyList,
+            _settings.DictationVocabulary,
             _settings.ExtraInstructions,
             endpoint.Id == ProviderId.OpenRouter ? _modelInfo.GetValueOrDefault(model) : null,
             Misheard: _settings.MisheardHints,
@@ -944,6 +949,8 @@ public sealed class SessionController
         var record = saved.Copy();
         record.Status = DictationStatus.Processing;
         record.Error = null;
+        // Expanded again from this run's text, with the snippets as they are now.
+        record.InsertedText = null;
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again.
         var preset = saved.ChunkLayout == Chunker.Layout ? saved.ChunkTexts : new Dictionary<int, string>();
         // Saved with the new layout, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).

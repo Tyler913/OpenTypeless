@@ -6,6 +6,19 @@ namespace TypelessCore.Tests;
 [Collection("MockServer")]
 public class VocabularyHintsTests
 {
+
+    [Fact]
+    public void TokenCapIncludesSeparatorsAndStopsAtTheFirstOverflow()
+    {
+        var exact = new string('a', 400);
+        Assert.Equal(exact, VocabularyHints.Prompt([exact]));
+        Assert.Equal("", VocabularyHints.Prompt([exact + "a", "small"]));
+        var mixed = new string('中', 98) + "abcd";
+        Assert.Equal(mixed + ", xy", VocabularyHints.Prompt([mixed, "xy", "z"])); // 98 + ceil(8/4) = 100
+        Assert.Equal(mixed, VocabularyHints.Prompt([mixed, "xyz", "x"])); // separator makes it 101, don't skip ahead
+        Assert.Equal("", VocabularyHints.Prompt([new string('中', 101), "x"]));
+    }
+
     private static readonly string[] Vocabulary = ["OpenTypeless", " Kwazara ", "", "opentypeless", "卓维克"];
 
     private static async Task<JsonObject> Body(string model, IReadOnlyList<string>? vocabulary)

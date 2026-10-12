@@ -36,6 +36,82 @@ public class MockServerCollection { }
 [Collection("MockServer")]
 public class PipelineTests
 {
+
+    [Fact]
+    public async Task OnlyContentDisarmsTheFirstTokenDeadline()
+    {
+        const string metadata = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning\":\"thinking\"}}],\"usage\":{\"prompt_tokens\":12}}\n\n";
+        using var metadataHttp = new HttpClient(new FirstTokenHandler(metadata));
+        var metadataClient = new ApiClient(ProviderEndpoint.OpenRouter("k"), metadataHttp);
+        var error = await Assert.ThrowsAsync<ApiException>(() => metadataClient.Polish("hello", new PolishOptions("m"),
+            idleTimeout: 10, totalTimeout: 10, firstTokenTimeout: 1));
+        Assert.Equal(ApiException.TimedOut(1), error);
+
+        const string content = "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n";
+        using var contentHttp = new HttpClient(new FirstTokenHandler(content));
+        var contentClient = new ApiClient(ProviderEndpoint.OpenRouter("k"), contentHttp);
+        var partials = new List<string>();
+        var result = await contentClient.Polish("hello", new PolishOptions("m"), idleTimeout: 10, totalTimeout: 10,
+                                               firstTokenTimeout: 1, onPartial: partials.Add);
+        Assert.Equal("hello", result.Text);
+        Assert.False(result.Truncated);
+        Assert.Equal(["hello"], partials);
+    }
+
+    // Both streams hold [DONE] back well past the first-token deadline and inside the other limits.
+    // No elapsed-time assertions; the timeout kind and completed content prove which timer applied.
+    private sealed class FirstTokenHandler(string prelude) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new FirstTokenStream(prelude)) });
+
+        private sealed class FirstTokenStream(string prelude) : Stream
+        {
+            private int _read;
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => throw new NotSupportedException();
+            public override long Position { get => 0; set => throw new NotSupportedException(); }
+            public override void Flush() { }
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                var read = _read++;
+                if (read > 1) return 0;
+                if (read == 1) await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                var bytes = Encoding.UTF8.GetBytes(read == 0 ? prelude : "data: [DONE]\n\n");
+                bytes.CopyTo(buffer);
+                return bytes.Length;
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UsageDoesNotCompleteAStreamAndDoneStopsParsing()
+    {
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
+        const string content = "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n";
+        const string usage = "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3}}\n\n";
+        foreach (var ending in new[] { "", "data: {\"choices\":[{\"finish_reason\":\"content_filter\"}]}\n\n" })
+        {
+            MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8(content + ending + usage));
+            var result = await client.Polish("original", new PolishOptions("m"));
+            Assert.Equal("partial", result.Text);
+            Assert.True(result.Truncated);
+            Assert.Equal(12, result.Usage!.InputTokens);
+            Assert.Equal(3, result.Usage.OutputTokens);
+            Assert.Equal(PolishFallback.Truncated, Prompts.Fallback("original", result.Text, result.Truncated));
+        }
+        MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8(content + usage + "data: [DONE]\n\ndata: {\"error\":{\"message\":\"too late\"}}\n\n"));
+        var complete = await client.Polish("original", new PolishOptions("m"));
+        Assert.Equal("partial", complete.Text);
+        Assert.False(complete.Truncated);
+    }
+
     private static short[] Speech(double seconds)
     {
         var n = AudioFormat.SampleCount(seconds);

@@ -6,6 +6,47 @@ namespace TypelessCore.Tests;
 
 public class PolishGuardTests
 {
+
+    [Fact]
+    public void DroppedWordThresholdStartsAt150AndKeepsAtLeast55Percent()
+    {
+        Assert.False(Prompts.DroppedTooMuch(new string('我', 149), "我"));
+        Assert.True(Prompts.DroppedTooMuch(new string('我', 150), new string('我', 82)));
+        Assert.False(Prompts.DroppedTooMuch(new string('我', 150), new string('我', 83)));
+    }
+
+    [Fact]
+    public void Exactly55PercentIsNotASummary() =>
+        Assert.False(Prompts.DroppedTooMuch(new string('我', 200), new string('我', 110)));
+
+    [Fact]
+    public void StrayingRequiresSubstitutionsNotJustDeletions()
+    {
+        Assert.False(Prompts.StrayedFromTranscript("abcdefghi", ""));
+        Assert.True(Prompts.StrayedFromTranscript("abcdefghij", " \n!?"));
+        Assert.False(Prompts.StrayedFromTranscript("ABCDEFGHIJ", "a b c d e f g h i j!"));
+        var input = new string('a', 40);
+        Assert.False(Prompts.StrayedFromTranscript(input, "aaa"));
+        Assert.False(Prompts.StrayedFromTranscript(input, "aaaaaaabbb")); // exactly 30% changed
+        Assert.True(Prompts.StrayedFromTranscript(input, "aaaaaabbbb"));
+    }
+
+    [Fact]
+    public void FallbackPrecedenceWhenGuardsOverlap()
+    {
+        var input = new string('我', 150);
+        var summary = new string('你', 20);
+        Assert.True(Prompts.DroppedTooMuch(input, summary));
+        Assert.True(Prompts.StrayedFromTranscript(input, summary));
+        Assert.Equal(PolishFallback.Summarised, Prompts.Fallback(input, summary, truncated: false));
+        Assert.Equal(PolishFallback.Truncated, Prompts.Fallback(input, summary, truncated: true));
+        var answer = new string('你', 500);
+        Assert.True(Prompts.LooksLikeAnAnswer(input, answer));
+        Assert.True(Prompts.StrayedFromTranscript(input, answer));
+        Assert.Equal(PolishFallback.Answered, Prompts.Fallback(input, answer, truncated: false));
+        Assert.Equal(PolishFallback.Truncated, Prompts.Fallback(input, answer, truncated: true));
+    }
+
     /// <summary>
     /// testdata/polish-guard-cases.json, shared with the macOS tests so both apps agree: the heaviest legitimate
     /// clean-ups of every eval/ case pass, answers, refusals, translations and summaries don't.
@@ -87,6 +128,37 @@ public class PolishGuardTests
 
 public class SegmentedPolishTests
 {
+
+    [Fact]
+    public void SplitBoundaryAndEmptyInput()
+    {
+        Assert.Equal([""], SegmentedPolish.Parts(""));
+        var single = "  " + new string('我', 400) + "\n";
+        Assert.False(SegmentedPolish.NeedsParts(single));
+        Assert.Equal([single], SegmentedPolish.Parts(single));
+        var longText = new string('我', 401);
+        var parts = SegmentedPolish.Parts(" \n" + longText + "\n ");
+        Assert.Equal([201, 200], parts.Select(WordCount.Count));
+        Assert.Equal(longText, string.Concat(parts));
+    }
+
+    [Fact]
+    public void SplitKeepsClosingPunctuationAndNumericClauses()
+    {
+        const string sentences = "“第一句！”  （第二句？）\n第三句。";
+        Assert.Equal(["“第一句！”  ", "（第二句？）\n", "第三句。"], SegmentedPolish.Split(sentences, SegmentedPolish.IsSentenceEnd));
+        const string clauses = "At 10:30, use 1,000 items: version 3.5, please";
+        Assert.Equal(["At 10:30, ", "use 1,000 items: ", "version 3.5, ", "please"], SegmentedPolish.Split(clauses, SegmentedPolish.IsClauseEnd));
+    }
+
+    [Fact]
+    public void BlankPartsDoNotLoseParagraphBoundaries()
+    {
+        Assert.Equal("Intro.\n\none\ntwo\n\nNext. Last.", SegmentedPolish.Join(["  ", "Intro.", "", "one\ntwo", " \n ", "Next.", "Last."]));
+        Assert.Equal("", SegmentedPolish.Join(["", " \n"]));
+        Assert.Equal("오늘은 좋아요.", SegmentedPolish.Join(["오늘은", "좋아요."]));
+    }
+
     private static string Chinese(int sentences) =>
         string.Concat(Enumerable.Range(1, sentences).Select(i => $"我们今天讨论了第{i}个问题，主要是关于缓存和数据库的性能。"));
 

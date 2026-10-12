@@ -70,3 +70,28 @@ import Testing
         #expect(plan(budget: 500) == newest + [.removeAudio, .removeAudio, .removeAudio])
     }
 }
+
+extension HistoryPruningTests {
+
+    @Test func defaultGigabyteBudgetIsInclusiveAndUsesWideTotals() {
+        var entries = (0..<10).map { _ in entry(.finished, daysAgo: 0, bytes: 90_000_000) }
+        entries.append(entry(.finished, daysAgo: 1, bytes: 100_000_000))
+        #expect(HistoryPruning.plan(entries, maxAge: nil, now: now).allSatisfy { $0 == .keep })
+        entries[10].audioBytes += 1
+        #expect(HistoryPruning.plan(entries, maxAge: nil, now: now) == Array(repeating: .keep, count: 10) + [.removeAudio])
+        entries.append(entry(.finished, daysAgo: 2, bytes: 3_000_000_000))
+        #expect(HistoryPruning.plan(entries, maxAge: nil, now: now) == Array(repeating: .keep, count: 10) + [.removeAudio, .removeAudio])
+    }
+
+    @Test func failedExpiryBoundaryAndMissingAudioStillRespectTextFloor() {
+        var entries = (0..<201).map { _ in entry(.failed, daysAgo: 30, bytes: 0) }
+        #expect(HistoryPruning.plan(entries, maxAge: 0, now: now) == Array(repeating: .keep, count: 200) + [.remove])
+        entries[199].audioBytes = 1
+        entries[200].date = now.addingTimeInterval(-month + 1)
+        let actions = HistoryPruning.plan(entries, maxAge: 0, now: now)
+        #expect(actions[199] == .removeAudio && actions[200] == .keep)
+        entries[200] = entry(.inProgress, daysAgo: 365, bytes: 2_000_000_000)
+        #expect(HistoryPruning.plan(entries, maxAge: 0, now: now)[200] == .keep)
+        #expect(HistoryPruning.plan([], maxAge: 0, now: now).isEmpty)
+    }
+}

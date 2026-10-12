@@ -12,6 +12,35 @@ namespace TypelessCore.Tests;
 [Collection("MockServer")]
 public class LatencyTests
 {
+
+    [Fact]
+    public async Task RecordingEndWakesPendingWaitersAndCancellationOnlyReleasesItsWaiter()
+    {
+        var pipeline = new TranscriptionPipeline(Client(), new TranscriptionOptions("m"));
+        // Windows uses TaskCompletionSource/WaitAsync in place of Swift's AsyncLatch. Exercise its production
+        // wait path with zero hedge delay: invoking this async method runs synchronously up to registration.
+        var late = typeof(TranscriptionPipeline).GetMethod("Late", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        Task Wait(CancellationToken token) => (Task)late.Invoke(pipeline, [0.0, token])!;
+        using var cancellation = new CancellationTokenSource();
+        var cancelled = Wait(cancellation.Token);
+        var waiting = Wait(CancellationToken.None);
+        var alsoWaiting = Wait(CancellationToken.None);
+        try
+        {
+            Assert.False(cancelled.IsCompleted);
+            Assert.False(waiting.IsCompleted);
+            Assert.False(alsoWaiting.IsCompleted);
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.False(waiting.IsCompleted);
+            Assert.False(alsoWaiting.IsCompleted);
+            Assert.Equal("", await pipeline.Finish());
+            await Task.WhenAll(waiting, alsoWaiting).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(Wait(CancellationToken.None).IsCompletedSuccessfully);
+        }
+        finally { await pipeline.Finish(); }
+    }
+
     /// <summary>testdata/voice-activity-cases.json, shared with the macOS tests so both apps agree.</summary>
     private static JsonObject Cases([CallerFilePath] string source = "") =>
         JsonNode.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(source)!, "..", "..", "..", "testdata", "voice-activity-cases.json")))!.AsObject();

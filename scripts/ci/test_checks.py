@@ -134,7 +134,7 @@ class SnapshotProcessChecks(unittest.TestCase):
                 out = Path(directory) / "snapshots"
                 with patch.object(sys, "argv", ["run_snapshots.py", str(executable), str(out)]), \
                      patch.object(run_snapshots, "check", return_value=[]), \
-                     patch.object(run_snapshots.subprocess, "run", side_effect=[outcome] * 4), \
+                     patch.object(run_snapshots.subprocess, "run", side_effect=[outcome] * len(run_snapshots.LANGUAGES) * len(run_snapshots.THEMES)), \
                      patch("sys.stdout", new_callable=io.StringIO), \
                      patch.dict("os.environ", {"GITHUB_STEP_SUMMARY": ""}), self.assertRaises(SystemExit) as error:
                     run_snapshots.main()

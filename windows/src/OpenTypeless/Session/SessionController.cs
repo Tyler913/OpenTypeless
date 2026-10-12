@@ -567,6 +567,9 @@ public sealed class SessionController
             if (pipeline.TailWasSpeculative) Note($"last segment transcribed ahead of time: text {started.Elapsed.TotalSeconds:0.00}s after release");
             record.ChunkTexts = pipeline.CompletedTranscripts();
             record.RawText = raw;
+            // A new transcript supersedes a clean-up from an earlier run (a retry): History mustn't show that one if this
+            // run inserts the raw text (clean-up off or failed). A retry that fails before this keeps the old result.
+            record.PolishedText = null;
             record.Error = null;
             if (raw.Trim().Length == 0)
             {

@@ -533,6 +533,9 @@ final class SessionController: ObservableObject {
             }
             record.chunkTexts = pipeline.completedTranscripts()
             record.rawText = raw
+            // A new transcript supersedes a clean-up from an earlier run (a retry): History mustn't show that one if this
+            // run inserts the raw text (clean-up off or failed). A retry that fails before this keeps the old result.
+            record.polishedText = nil
             record.error = nil
             guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 record.status = .done

@@ -36,8 +36,17 @@ final class SessionController: ObservableObject {
     private var writer: WAVFileWriter?
     private var record: DictationRecord?
     private var counter = SampleCounter()
-    private var pressedAt: Date?
+    /// When the hotkey went down, by the key event's own time (`ProcessInfo.systemUptime` clock, see `HotkeyPress`).
+    private var pressedAt: TimeInterval?
     private var handsFree = false
+    /// Which dictation is current: bumped whenever one ends or is cancelled, so work still out for an earlier one (its
+    /// paste, its Return, its reset) can tell it's no longer wanted and leaves the next dictation alone.
+    private var generation = 0
+    /// The app in front when the recording stopped, where the text is meant to go (nil for a retry).
+    private var pasteTarget: pid_t?
+    /// Cancelled recordings still being transcribed in the background (see `keepCancelledRecording`). A retry from
+    /// History takes the record over, and the background result is then dropped rather than written over the retry's.
+    private var keptInBackground: Set<String> = []
     private var processingTask: Task<Void, Never>?
     private var maxDurationTimer: Timer?
     /// Keeps the connections warm while recording (see `warmConnections`).
@@ -50,11 +59,8 @@ final class SessionController: ObservableObject {
     /// Clean-ups started ahead of time that finished but were then dropped because the speaker went on: they were billed too.
     private var discardedPolishes: [HedgedPolishResult] = []
     private var modelInfo: [String: APIClient.ModelInfo] = [:]
-    /// False when retrying from the history window: the result goes to the clipboard instead.
+    /// False when retrying from the history window, or once the screen locked: the result goes to the clipboard instead.
     private var deliverByPaste = true
-
-    /// A press shorter than this toggles hands-free mode instead of push-to-talk.
-    private let tapThreshold: TimeInterval = 0.35
 
     init() {
         editWatcher.onCorrections = { [weak self] corrections, quiet in
@@ -80,6 +86,14 @@ final class SessionController: ObservableObject {
         // plugged in again (the engine only follows the default on its own).
         Microphones.observeDeviceList { [weak self] in
             MainActor.assumeIsolated { self?.updateWarmMicrophone() }
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil,
+                                                          queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.systemLocked("going to sleep") }
+        }
+        DistributedNotificationCenter.default().addObserver(forName: .init("com.apple.screenIsLocked"), object: nil,
+                                                            queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.systemLocked("screen locked") }
         }
     }
 
@@ -118,7 +132,8 @@ final class SessionController: ObservableObject {
     private let log = Logger(subsystem: "local.opentypeless.app", category: "session")
     private func note(_ text: String) { log.debug("\(text, privacy: .public)") }
 
-    func hotkeyPressed() {
+    /// `time`: when the key went down (the event's own time, see `HotkeyPress`).
+    func hotkeyPressed(at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         switch state {
         case .idle: note("start recording")
         case .recording where handsFree: note("stop (hands-free)")
@@ -127,7 +142,7 @@ final class SessionController: ObservableObject {
         }
         switch state {
         case .idle:
-            startRecording()
+            startRecording(pressedAt: time)
         case .recording where handsFree:
             finishRecording()
         default:
@@ -135,11 +150,12 @@ final class SessionController: ObservableObject {
         }
     }
 
-    func hotkeyReleased() {
+    func hotkeyReleased(at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         guard state == .recording, !handsFree, let pressedAt else { return }
-        let held = Date().timeIntervalSince(pressedAt)
-        note(held < tapThreshold ? String(format: "tap (%.2fs) → hands-free", held) : String(format: "released after %.2fs → stop", held))
-        if held < tapThreshold {
+        let held = time - pressedAt
+        let tap = HotkeyPress.isTap(pressedAt: pressedAt, releasedAt: time)
+        note(tap ? String(format: "tap (%.2fs) → hands-free", held) : String(format: "released after %.2fs → stop", held))
+        if tap {
             handsFree = true
         } else {
             finishRecording()
@@ -147,11 +163,27 @@ final class SessionController: ObservableObject {
     }
 
     /// Fn+F-key and similar combos shouldn't start a dictation.
-    func otherKeyPressed() {
+    func otherKeyPressed(at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         guard state == .recording, !handsFree, let pressedAt,
-              Date().timeIntervalSince(pressedAt) < 1.0 else { return }
+              HotkeyPress.isCombo(pressedAt: pressedAt, otherKeyAt: time) else { return }
         note("cancelled — another key was pressed with the shortcut (treated as a key combo)")
         cancel(silently: true)
+    }
+
+    /// The Mac is going to sleep or the screen was locked. A hands-free recording mustn't keep the microphone open on
+    /// the lock screen, nor its text land in whatever has focus afterwards: a recording stops as with Esc (a long one is
+    /// kept in History), and one being processed goes to the clipboard instead of being pasted.
+    func systemLocked(_ reason: String) {
+        switch state {
+        case .idle:
+            return
+        case .recording:
+            note("\(reason) while recording — cancelled as with Esc")
+            escapePressed()
+        case .processing:
+            note("\(reason) while processing — the text goes to the clipboard")
+            deliverByPaste = false
+        }
     }
 
     func escapePressed() {
@@ -177,6 +209,7 @@ final class SessionController: ObservableObject {
         hud.show(.error(L("已取消，录音在历史记录中保留 24 小时", "Cancelled — kept in History for 24 hours")), autoHideAfter: 2.5)
 
         let kept = record
+        keptInBackground.insert(kept.id)
         Task { [weak self] in
             var record = kept
             var raw: String
@@ -187,7 +220,13 @@ final class SessionController: ObservableObject {
             } catch {
                 raw = TranscriptJoiner.join(pipeline.completedTranscripts().sorted { $0.key < $1.key }.map(\.value))
             }
-            guard let self, self.history.records.contains(where: { $0.id == record.id }) else { return }
+            guard let self else { return }
+            if self.keptInBackground.remove(record.id) == nil {
+                // Retried from History meanwhile: that run owns the record now. Only what this one spent is counted.
+                self.account(&record, pipeline: pipeline, polished: nil)
+                return
+            }
+            guard self.history.records.contains(where: { $0.id == record.id }) else { return }
             record.rawText = raw
             record.chunkTexts = pipeline.completedTranscripts()
             self.account(&record, pipeline: pipeline, polished: nil)
@@ -197,7 +236,9 @@ final class SessionController: ObservableObject {
 
     // MARK: - Recording
 
-    private func startRecording() {
+    /// `pressedAt` is the key event's own time: opening a cold microphone (a Bluetooth one can take a second or more)
+    /// mustn't count against how long the key was held.
+    private func startRecording(pressedAt: TimeInterval) {
         // First of all, so the connections are ready by the time the first request goes out.
         warmConnections()
         guard let sttEndpoint = settings.sttEndpoint, settings.isConfigured(settings.sttProvider) else {
@@ -292,7 +333,7 @@ final class SessionController: ObservableObject {
         self.pipeline = pipeline
         self.counter = counter
         deliverByPaste = true
-        pressedAt = Date()
+        self.pressedAt = pressedAt
         handsFree = false
         state = .recording
         lastError = nil
@@ -392,12 +433,15 @@ final class SessionController: ObservableObject {
         history.update(record)
         self.record = record
         state = .processing
+        // Where the text should go: if another app is in front by the time it's ready, it goes to the clipboard.
+        pasteTarget = NSWorkspace.shared.frontmostApplication?.processIdentifier
         hud.showWorking(polishes: settings.polishEnabled)
 
         // No waiting when the speaker paused before letting go and that pause is already being transcribed as the last
         // chunk: the moment's (quiet) audio changes nothing then, and the text may be ready at once.
         let waitsForTail = !pipeline.endsInCoveredPause
         let released = record
+        let generation = self.generation
         processingTask = Task { [weak self] in
             if waitsForTail { try? await Task.sleep(nanoseconds: SessionController.releaseTail) }
             // Cancelled meanwhile: `cancel` stopped the capture itself.
@@ -408,13 +452,13 @@ final class SessionController: ObservableObject {
             var record = released
             record.duration = self.counter.seconds
             self.record = record
-            await self.process(record: record, pipeline: pipeline)
+            await self.process(record: record, pipeline: pipeline, generation: generation)
         }
     }
 
     // MARK: - Processing
 
-    private func process(record initial: DictationRecord, pipeline: TranscriptionPipeline) async {
+    private func process(record initial: DictationRecord, pipeline: TranscriptionPipeline, generation: Int) async {
         var record = initial
         let started = ProcessInfo.processInfo.systemUptime
         // Moves the bar as the speech-to-text chunks still out come back.
@@ -449,7 +493,7 @@ final class SessionController: ObservableObject {
                 finish(showing: .error(L("没有识别到语音", "No speech detected")), hideAfter: 2)
                 return
             }
-            await polishAndDeliver(record: &record, pipeline: pipeline)
+            await polishAndDeliver(record: &record, pipeline: pipeline, generation: generation)
         } catch let failure as PipelineFailure {
             record.chunkTexts = pipeline.completedTranscripts()
             record.rawText = failure.partialText
@@ -470,7 +514,7 @@ final class SessionController: ObservableObject {
         }
     }
 
-    private func polishAndDeliver(record: inout DictationRecord, pipeline: TranscriptionPipeline) async {
+    private func polishAndDeliver(record: inout DictationRecord, pipeline: TranscriptionPipeline, generation: Int) async {
         var text = record.rawText
         var notice: String?
         var polished: HedgedPolishResult?
@@ -535,14 +579,30 @@ final class SessionController: ObservableObject {
         }
         if record.status == .polishFailed { record.polishedText = nil }
 
-        if !Task.isCancelled {
-            hud.model.bar.reach(.delivered)
-            await deliver(text, notice: notice)
-        }
-        // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
-        account(&record, pipeline: pipeline, polished: polished, discarded: discardedPolishes)
+        // Taken now: once the text is in, the next dictation may already be collecting its own.
+        let discarded = discardedPolishes
         discardedPolishes = []
+        if isCurrent(generation) {
+            hud.model.bar.reach(.delivered)
+            await deliver(text, notice: notice, generation: generation)
+        }
+        // Esc came before the text was in place (or while it went in): `cancel` has kept the record as cancelled, and
+        // so it stays, now with its clean-up.
+        if Task.isCancelled { record.status = .cancelled }
+        // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
+        account(&record, pipeline: pipeline, polished: polished, discarded: discarded)
         history.update(record)
+    }
+
+    /// Whether the dictation `generation` is still the one under way, not cancelled or followed by another.
+    private func isCurrent(_ generation: Int) -> Bool {
+        generation == self.generation && !Task.isCancelled
+    }
+
+    /// Whether the app in front is no longer the one the recording was made for.
+    private var focusMoved: Bool {
+        guard let pasteTarget else { return false }
+        return NSWorkspace.shared.frontmostApplication?.processIdentifier != pasteTarget
     }
 
     // MARK: - Clean-up ahead of time
@@ -615,24 +675,36 @@ final class SessionController: ObservableObject {
         }
     }
 
-    /// Pastes at the cursor unless focus is clearly not a text input. Whether the paste actually
-    /// landed is detected from the target app reading the clipboard: if it did, the user's previous
-    /// clipboard is restored; if not, the text stays on the clipboard and the HUD says so.
-    private func deliver(_ text: String, notice: String?) async {
+    /// Pastes at the cursor unless focus is clearly not a text input, or has moved to another app since the recording
+    /// stopped. Whether the paste actually landed is detected from the target app reading the clipboard: if it did, the
+    /// user's previous clipboard is restored; if not, the text stays on the clipboard and the HUD says so.
+    ///
+    /// Esc (or the screen locking) can come at any point while the text goes in: the paste and the Return are only sent
+    /// while the dictation is still current, and a cancelled one leaves the session and the HUD to what replaced it.
+    private func deliver(_ text: String, notice: String?, generation: Int) async {
         let target = deliverByPaste ? FocusProbe.focusedTarget() : .notEditable
-        if target == .notEditable {
-            note("deliver → clipboard (focus not editable) in \(frontmostID)")
+        if target == .notEditable || deliverByPaste && focusMoved {
+            note("deliver → clipboard (\(target == .notEditable ? "focus not editable" : "another app in front")) in \(frontmostID)")
             TextInserter.copyToClipboard(text)
             finish(showing: notice.map { .error($0) } ?? .copied, hideAfter: 1.6)
             return
         }
-        let outcome = await TextInserter.insert(text, restoreClipboard: settings.restoreClipboard)
+        let outcome = await TextInserter.insert(text, restoreClipboard: settings.restoreClipboard) {
+            self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved
+        }
+        guard isCurrent(generation) else {
+            note("deliver → \(outcome), but the dictation was cancelled meanwhile")
+            return
+        }
         note("deliver → \(outcome) (focus \(target)) in \(frontmostID)")
         switch outcome {
         case .pasted:
             // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
-            let sent = settings.pressEnterAfterInsert
-            if sent { await TextInserter.pressReturn() }
+            var sent = false
+            if settings.pressEnterAfterInsert {
+                sent = await TextInserter.pressReturn { self.isCurrent(generation) }
+                guard isCurrent(generation) else { return }
+            }
             if let notice {
                 finish(showing: .error(notice), hideAfter: 3)
             } else {
@@ -642,6 +714,10 @@ final class SessionController: ObservableObject {
             if settings.learnFromEdits, !sent { editWatcher.watch(inserted: text) }
         case .notPasted:
             finish(showing: .copied, hideAfter: 1.6)
+        case .skipped:
+            // The screen locked or another app came to the front just as ⌘V was due.
+            TextInserter.copyToClipboard(text)
+            finish(showing: notice.map { .error($0) } ?? .copied, hideAfter: 1.6)
         case .noPermission:
             finish(showing: .error(L("没有辅助功能权限，文字已复制到剪贴板",
                                      "No Accessibility permission — text copied to the clipboard")), hideAfter: 3)
@@ -715,6 +791,8 @@ final class SessionController: ObservableObject {
             return
         }
         deliverByPaste = paste
+        // A cancelled recording still being transcribed in the background is this run's now.
+        keptInBackground.remove(saved.id)
         var record = saved
         record.status = .processing
         record.error = nil
@@ -725,11 +803,12 @@ final class SessionController: ObservableObject {
 
         let pipeline = makePipeline(endpoint: endpoint, preset: saved.chunkTexts)
         self.pipeline = pipeline
+        let generation = self.generation
         processingTask = Task { [weak self] in
             // Let the menu close and focus return to the previous app before pasting.
             try? await Task.sleep(nanoseconds: 300_000_000)
             pipeline.append(samples)
-            await self?.process(record: record, pipeline: pipeline)
+            await self?.process(record: record, pipeline: pipeline, generation: generation)
         }
     }
 
@@ -786,11 +865,13 @@ final class SessionController: ObservableObject {
 
     private func reset() {
         dropSpeculativePolish()
+        generation += 1
         state = .idle
         preRollSeconds = 0
         pipeline = nil
         record = nil
         pressedAt = nil
+        pasteTarget = nil
         handsFree = false
         processingTask = nil
     }

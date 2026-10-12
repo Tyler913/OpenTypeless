@@ -41,7 +41,25 @@ struct Hotkey: Codable, Equatable {
         115: "↖", 119: "↘", 116: "⇞", 121: "⇟",
     ]
 
+    /// keyCode → the device-dependent flags (NX_DEVICELCMDKEYMASK…) of its own key and of the same modifier's other key.
+    static let sideFlags: [Int64: (own: UInt64, other: UInt64)] = [
+        55: (0x08, 0x10), 54: (0x10, 0x08), // left / right ⌘
+        58: (0x20, 0x40), 61: (0x40, 0x20), // left / right ⌥
+        59: (0x01, 0x2000), 62: (0x2000, 0x01), // left / right ⌃
+        56: (0x02, 0x04), 60: (0x04, 0x02), // left / right ⇧
+    ]
+
     var modifierFlag: CGEventFlags { Hotkey.modifierKeys[keyCode] ?? [] }
+
+    /// Whether a modifier-only hotkey's own key is down in `flags`. The shared ⌘ flag stays on while the other ⌘ is
+    /// held, so with Right ⌘ as the hotkey and Left ⌘ down, letting go of Right ⌘ would go unseen: the side's own bit
+    /// tells. Keys posted by software sometimes carry only the shared flag; then that is all there is to go by.
+    func isHeld(in flags: CGEventFlags) -> Bool {
+        guard flags.contains(modifierFlag) else { return false }
+        guard let side = Hotkey.sideFlags[keyCode] else { return true } // Fn has no sides
+        let raw = flags.rawValue
+        return raw & side.own != 0 || raw & (side.own | side.other) == 0
+    }
 
     /// Pieces shown as separate key caps, e.g. ["⌥", "Space"] or ["Fn"].
     var keyCaps: [String] {
@@ -92,15 +110,22 @@ struct Hotkey: Codable, Equatable {
 /// Uses a default (active) tap because that only needs Accessibility permission, which the app needs
 /// anyway for pasting; a listen-only tap would also require Input Monitoring. Everything is passed
 /// through untouched except the keystrokes of a key-combination hotkey, which are swallowed so that
-/// e.g. ⌥Space doesn't also type a character into the focused app.
+/// e.g. ⌥Space doesn't also type a character into the focused app, and Esc while a dictation is under way.
+///
+/// The press, release and other-key callbacks get the key event's own time (`ProcessInfo.systemUptime` clock),
+/// see `HotkeyPress`.
 final class HotkeyMonitor {
     static let shared = HotkeyMonitor()
 
-    var onPress: (() -> Void)?
-    var onRelease: (() -> Void)?
+    var onPress: ((TimeInterval) -> Void)?
+    var onRelease: ((TimeInterval) -> Void)?
     /// Another key went down while a modifier-only hotkey was held (e.g. Fn+F1 for brightness).
-    var onOtherKey: (() -> Void)?
+    var onOtherKey: ((TimeInterval) -> Void)?
     var onEscape: (() -> Void)?
+
+    /// Set while a dictation is recording or processing: Esc then cancels it and is kept from the focused app, where
+    /// it would also interrupt a command-line AI tool or close a dialog. Main thread only, like the tap.
+    var swallowsEscape = false
 
     var hotkey: Hotkey = .fn {
         didSet { isDown = false }
@@ -116,6 +141,9 @@ final class HotkeyMonitor {
     private var source: CFRunLoopSource?
     private var retryTimer: Timer?
     private var isDown = false
+    /// An Esc key-down was swallowed: its auto-repeats and its key-up are swallowed too, even once the dictation has
+    /// ended, so the focused app never sees half a key press.
+    private var escapeSwallowed = false
 
     /// Starts the tap, retrying every 2 s until Accessibility permission is granted.
     func start() {
@@ -160,6 +188,7 @@ final class HotkeyMonitor {
             // The system disables slow taps; turn it straight back on.
             HotkeyLog.debug("⚠️ event tap was disabled by macOS (\(type == .tapDisabledByTimeout ? "timeout" : "user input")) — re-enabled")
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            resyncAfterOutage()
             return false
         }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
@@ -173,11 +202,11 @@ final class HotkeyMonitor {
         switch type {
         case .flagsChanged:
             guard hotkey.isModifierOnly, keyCode == hotkey.keyCode else { return false }
-            let down = event.flags.contains(hotkey.modifierFlag)
+            let down = hotkey.isHeld(in: event.flags)
             if down != isDown {
                 isDown = down
                 HotkeyLog.debug("\(hotkey.displayName) \(down ? "down" : "up") · \(HotkeyLog.describe(event))")
-                fire(down ? onPress : onRelease)
+                fire(down ? onPress : onRelease, at: Self.time(of: event))
             } else {
                 HotkeyLog.debug("\(hotkey.displayName) \(down ? "down" : "up") repeated, ignored · \(HotkeyLog.describe(event))")
             }
@@ -191,20 +220,23 @@ final class HotkeyMonitor {
                     if !isDown, event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
                         isDown = true
                         HotkeyLog.debug("\(hotkey.displayName) down · \(HotkeyLog.describe(event))")
-                        fire(onPress)
+                        fire(onPress, at: Self.time(of: event))
                     }
                     return true
                 }
             }
             if keyCode == 53 { // Escape
+                if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return escapeSwallowed }
                 fire(onEscape)
+                escapeSwallowed = swallowsEscape
+                return escapeSwallowed
             } else if isDown, hotkey.isModifierOnly {
                 // A real combo (Fn+F1, right ⌘+Tab…) carries the hotkey's modifier flag on the key event.
                 // Keys injected by other apps at the same moment — e.g. Logi Options+ sending its own
                 // shortcut for the mouse button that MasterKey turns into Fn — don't, and must not cancel.
                 if event.flags.contains(hotkey.modifierFlag) {
                     HotkeyLog.debug("combo key (code \(keyCode)) with \(hotkey.displayName) · \(HotkeyLog.describe(event))")
-                    fire(onOtherKey)
+                    fire(onOtherKey, at: Self.time(of: event))
                 } else {
                     HotkeyLog.debug("ignored key (code \(keyCode)) without \(hotkey.displayName) flag · \(HotkeyLog.describe(event))")
                 }
@@ -215,7 +247,11 @@ final class HotkeyMonitor {
             if !hotkey.isModifierOnly, keyCode == hotkey.keyCode, isDown {
                 isDown = false
                 HotkeyLog.debug("\(hotkey.displayName) up")
-                fire(onRelease)
+                fire(onRelease, at: Self.time(of: event))
+                return true
+            }
+            if keyCode == 53, escapeSwallowed {
+                escapeSwallowed = false
                 return true
             }
             return false
@@ -225,8 +261,30 @@ final class HotkeyMonitor {
         }
     }
 
+    /// While the tap was off its events were lost, the hotkey's release among them: a hotkey still marked down that no
+    /// longer is gets its release now, or the recording would go on as if the key were held.
+    private func resyncAfterOutage() {
+        guard isDown, !isSuspended else { return }
+        let held = hotkey.isModifierOnly
+            ? hotkey.isHeld(in: CGEventSource.flagsState(.hidSystemState))
+            : CGEventSource.keyState(.hidSystemState, key: CGKeyCode(hotkey.keyCode))
+        guard !held else { return }
+        isDown = false
+        HotkeyLog.debug("\(hotkey.displayName) was released while the tap was off — released now")
+        fire(onRelease, at: ProcessInfo.processInfo.systemUptime)
+    }
+
+    /// When the key event happened, on the `ProcessInfo.systemUptime` clock (NSEvent converts the event's stamp).
+    private static func time(of event: CGEvent) -> TimeInterval {
+        HotkeyPress.eventTime(NSEvent(cgEvent: event)?.timestamp ?? 0, now: ProcessInfo.processInfo.systemUptime)
+    }
+
     private func fire(_ callback: (() -> Void)?) {
         DispatchQueue.main.async { callback?() }
+    }
+
+    private func fire(_ callback: ((TimeInterval) -> Void)?, at time: TimeInterval) {
+        DispatchQueue.main.async { callback?(time) }
     }
 }
 

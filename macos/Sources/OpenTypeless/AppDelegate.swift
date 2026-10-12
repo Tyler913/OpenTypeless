@@ -29,9 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setUpStatusItem()
 
         hotkey.hotkey = settings.hotkey
-        hotkey.onPress = { [weak self] in self?.controller.hotkeyPressed() }
-        hotkey.onRelease = { [weak self] in self?.controller.hotkeyReleased() }
-        hotkey.onOtherKey = { [weak self] in self?.controller.otherKeyPressed() }
+        hotkey.onPress = { [weak self] time in self?.controller.hotkeyPressed(at: time) }
+        hotkey.onRelease = { [weak self] time in self?.controller.hotkeyReleased(at: time) }
+        hotkey.onOtherKey = { [weak self] time in self?.controller.otherKeyPressed(at: time) }
         hotkey.onEscape = { [weak self] in self?.controller.escapePressed() }
         hotkey.start()
 
@@ -48,6 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.$state
             .receive(on: RunLoop.main)
             .sink { [weak self] state in
+                // Esc cancels a dictation under way, and then shouldn't reach the focused app too.
+                self?.hotkey.swallowsEscape = state != .idle
                 self?.updateStatusIcon(state)
                 guard state == .idle else { return }
                 self?.updater.sessionBecameIdle()

@@ -3373,5 +3373,104 @@
     "ru": "Запись тоже удалится, и распознать её заново будет нельзя.",
     "fr": "Son enregistrement est aussi supprimé : impossible de la retranscrire ensuite.",
     "de": "Die Aufnahme wird mitgelöscht und kann nicht neu transkribiert werden."
+  },
+  "Snippets": {
+    "ja": "スニペット",
+    "ko": "스니펫",
+    "es": "Fragmentos",
+    "pt": "Atalhos de texto",
+    "ru": "Фрагменты",
+    "fr": "Extraits",
+    "de": "Textbausteine"
+  },
+  "Say a trigger and the text you wrote goes in instead, word for word, even mid-sentence. Triggers go to speech-to-text and clean-up as vocabulary, so they come through intact. Pick a phrase you wouldn't otherwise say, so it isn't replaced by accident.": {
+    "ja": "トリガーを話すと、書いておいたテキストが一字一句そのまま代わりに入ります。文の途中でも使えます。トリガーは語彙として音声認識と整形に渡されるので、そのまま残ります。誤って置き換わらないよう、普段は言わない言い回しを選んでください。",
+    "ko": "트리거를 말하면 미리 써 둔 텍스트가 한 글자도 바뀌지 않고 대신 들어갑니다. 문장 중간에서도 됩니다. 트리거는 어휘로 음성 인식과 정리에 전달되어 그대로 유지됩니다. 실수로 바뀌지 않도록 평소에 잘 하지 않는 말을 고르세요.",
+    "es": "Di un activador y en su lugar entra el texto que escribiste, palabra por palabra, incluso a mitad de frase. Los activadores se pasan como vocabulario a la transcripción y a la limpieza, para que lleguen intactos. Elige una frase que no dirías de otro modo, para que no se reemplace por accidente.",
+    "pt": "Diga um gatilho e o texto que você escreveu entra no lugar, palavra por palavra, mesmo no meio de uma frase. Os gatilhos vão como vocabulário para a transcrição e para a limpeza, para chegarem intactos. Escolha uma frase que você não diria normalmente, para que não seja substituída por engano.",
+    "ru": "Произнесите триггер — и вместо него вставится написанный вами текст, слово в слово, даже посреди фразы. Триггеры передаются распознаванию и обработке как словарь, чтобы дойти без изменений. Выберите фразу, которую вы обычно не говорите, чтобы её не заменило случайно.",
+    "fr": "Dites un déclencheur et le texte que vous avez écrit est inséré à sa place, mot pour mot, même en milieu de phrase. Les déclencheurs sont transmis comme vocabulaire à la transcription et au nettoyage, pour arriver intacts. Choisissez une expression que vous ne diriez pas autrement, pour éviter un remplacement par accident.",
+    "de": "Sag einen Auslöser, und an seiner Stelle wird der Text eingefügt, den du geschrieben hast, Wort für Wort, auch mitten im Satz. Auslöser gehen als Vokabular an die Spracherkennung und die Bereinigung, damit sie unverändert ankommen. Wähle eine Formulierung, die du sonst nicht sagst, damit nichts versehentlich ersetzt wird."
+  },
+  "No snippets yet": {
+    "ja": "スニペットはまだありません",
+    "ko": "아직 스니펫이 없습니다",
+    "es": "Aún no hay fragmentos",
+    "pt": "Nenhum atalho de texto ainda",
+    "ru": "Фрагментов пока нет",
+    "fr": "Aucun extrait pour l’instant",
+    "de": "Noch keine Textbausteine"
+  },
+  "For example, say “my email” to insert name@example.com": {
+    "ja": "例：「私のメール」と言うと name@example.com を入力",
+    "ko": "예: “내 이메일”이라고 말하면 name@example.com 입력",
+    "es": "Por ejemplo, di «mi correo» para insertar name@example.com",
+    "pt": "Por exemplo, diga “meu e-mail” para inserir name@example.com",
+    "ru": "Например, скажите «мой email», чтобы вставить name@example.com",
+    "fr": "Par exemple, dites « mon e-mail » pour insérer name@example.com",
+    "de": "Sag zum Beispiel „meine E-Mail“, um name@example.com einzufügen"
+  },
+  "Add Snippet": {
+    "ja": "スニペットを追加",
+    "ko": "스니펫 추가",
+    "es": "Añadir fragmento",
+    "pt": "Adicionar atalho",
+    "ru": "Добавить фрагмент",
+    "fr": "Ajouter un extrait",
+    "de": "Textbaustein hinzufügen"
+  },
+  "Edit snippet": {
+    "ja": "スニペットを編集",
+    "ko": "스니펫 편집",
+    "es": "Editar fragmento",
+    "pt": "Editar atalho",
+    "ru": "Изменить фрагмент",
+    "fr": "Modifier l’extrait",
+    "de": "Textbaustein bearbeiten"
+  },
+  "Trigger, e.g. my email": {
+    "ja": "トリガー（例：私のメール）",
+    "ko": "트리거(예: 내 이메일)",
+    "es": "Activador, p. ej. mi correo",
+    "pt": "Gatilho, ex.: meu e-mail",
+    "ru": "Триггер, например: мой email",
+    "fr": "Déclencheur, p. ex. mon e-mail",
+    "de": "Auslöser, z. B. meine E-Mail"
+  },
+  "What goes in instead (can be several lines)": {
+    "ja": "代わりに入るテキスト（複数行可）",
+    "ko": "대신 들어갈 텍스트(여러 줄 가능)",
+    "es": "Lo que entra en su lugar (puede tener varias líneas)",
+    "pt": "O que entra no lugar (pode ter várias linhas)",
+    "ru": "Что вставить вместо него (можно в несколько строк)",
+    "fr": "Ce qui est inséré à la place (plusieurs lignes possibles)",
+    "de": "Was stattdessen eingefügt wird (auch mehrzeilig)"
+  },
+  "That trigger is already in use": {
+    "ja": "このトリガーはすでに使われています",
+    "ko": "이미 사용 중인 트리거입니다",
+    "es": "Ese activador ya está en uso",
+    "pt": "Esse gatilho já está em uso",
+    "ru": "Такой триггер уже есть",
+    "fr": "Ce déclencheur est déjà utilisé",
+    "de": "Dieser Auslöser wird schon verwendet"
+  },
+  "Save": {
+    "ja": "保存",
+    "ko": "저장",
+    "es": "Guardar",
+    "pt": "Salvar",
+    "ru": "Сохранить",
+    "fr": "Enregistrer",
+    "de": "Speichern"
+  },
+  "Before snippets": {
+    "ja": "スニペット置き換え前",
+    "ko": "스니펫 적용 전",
+    "es": "Antes de los fragmentos",
+    "pt": "Antes dos atalhos",
+    "ru": "До замены фрагментов",
+    "fr": "Avant les extraits",
+    "de": "Vor den Textbausteinen"
   }
 }

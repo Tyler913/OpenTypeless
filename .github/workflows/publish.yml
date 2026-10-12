@@ -1,7 +1,9 @@
-# Publishing a release (not a pre-release) hands it to the package managers:
+# Publishing a release, or turning a pre-release into a release, hands it to the package managers (a pre-release
+# doesn't; GitHub's `released` activity covers both, where `published` misses the switch from a pre-release):
 #
 #   Homebrew   writes Casks/opentypeless.rb in the Tyler913/homebrew-tap repository, so
-#              `brew install --cask tyler913/tap/opentypeless` installs it and `brew upgrade` sees the new version
+#              `brew install --cask tyler913/tap/opentypeless` installs it and `brew upgrade` sees the new version.
+#              It never moves the cask back to an older version, unless that one is the latest release
 #   WinGet     opens a pull request in microsoft/winget-pkgs with the new version's manifests (TylerHong.OpenTypeless);
 #              it's live for `winget install TylerHong.OpenTypeless` once Microsoft's checks pass and it's merged. It
 #              submits nothing while the package's first pull request is still being reviewed, or when this version's
@@ -10,20 +12,30 @@
 # The cask and manifests are filled in from packaging/ with the checksums GitHub published for the release's zips
 # (packaging/render.py). Each part needs its token as a repository secret, HOMEBREW_TAP_TOKEN and WINGET_TOKEN, and
 # is skipped with a notice until it's set (see packaging/README.md). Actions → Publish to package managers → Run
-# workflow does it again for a release, e.g. after adding a token.
+# workflow does it again for a release, e.g. after adding a token, for both or just one of them. Runs never overlap:
+# a later one waits for the one in progress.
 name: Publish to package managers
 
 on:
   release:
-    types: [published]
+    types: [released]
   workflow_dispatch:
     inputs:
       tag:
         description: The release's tag, e.g. 1.3.7
         required: true
+      targets:
+        description: Where to publish it
+        type: choice
+        options: [both, homebrew, winget]
+        default: both
 
 permissions:
   contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
 
 env:
   TAG: ${{ github.event.release.tag_name || inputs.tag }}
@@ -36,15 +48,16 @@ jobs:
   homebrew:
     needs: quality
     name: Homebrew tap
-    if: ${{ !github.event.release.prerelease }}
+    if: ${{ !github.event.release.prerelease && !github.event.release.draft && inputs.targets != 'winget' }}
     runs-on: ubuntu-latest
-    env:
-      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
+      # Only whether it's set: the token itself goes to the tap's checkout, which pushes with it.
       - name: Check for the tap token
         id: token
+        env:
+          HAS_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
         run: |
-          if [[ -z "$TAP_TOKEN" ]]; then
+          if [[ "$HAS_TOKEN" != true ]]; then
             echo "::notice::HOMEBREW_TAP_TOKEN isn't set, so the Homebrew tap wasn't updated (see packaging/README.md)"
             echo "set=false" >> "$GITHUB_OUTPUT"
           else
@@ -67,10 +80,23 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: tap
 
+      # Not back to an older version, e.g. when this is run by hand for an old tag, unless that's the latest release.
       - name: Commit it to the tap
         if: steps.token.outputs.set == 'true'
         working-directory: tap
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          version="${TAG#[vV]}"
+          current=""
+          if [[ -f Casks/opentypeless.rb ]]; then
+            current="$(sed -n 's/^ *version "\(.*\)"$/\1/p' Casks/opentypeless.rb | head -1)"
+          fi
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          if [[ -n "$current" && "$TAG" != "$latest" && "$(printf '%s\n' "$current" "$version" | sort -V | head -1)" != "$current" ]]; then
+            echo "::notice::The tap already has opentypeless $current, newer than $version (and the latest release is $latest), so the cask was left alone"
+            exit 0
+          fi
           mkdir -p Casks
           cp ../dist/homebrew/opentypeless.rb Casks/opentypeless.rb
           git add Casks/opentypeless.rb
@@ -86,7 +112,7 @@ jobs:
   winget:
     needs: quality
     name: WinGet
-    if: ${{ !github.event.release.prerelease }}
+    if: ${{ !github.event.release.prerelease && !github.event.release.draft && inputs.targets != 'homebrew' }}
     runs-on: windows-latest
     env:
       OWNER: ${{ github.repository_owner }} # whose WINGET_TOKEN it is: the fork and the pull requests are theirs
@@ -143,7 +169,7 @@ jobs:
 
       # wingetcreate opens the pull request from the token owner's fork of winget-pkgs (making the fork if there's none
       # yet), which has to be up to date first. Doing that here rather than leaving it to wingetcreate says what's wrong
-      # when it fails: it also brings over winget-pkgs' own workflow changes, which takes a token with the workflow scope.
+      # when it fails: it also brings over winget-pkgs' own workflow changes, which needs the token's workflow scope.
       - name: Bring the winget-pkgs fork up to date
         if: steps.pending.outputs.submit == 'true'
         shell: bash

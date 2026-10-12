@@ -61,9 +61,24 @@ final class MockTranscriber: URLProtocol {
 
     @Test func promptStopsAtAWholeTerm() {
         let prompt = VocabularyHints.prompt((0..<200).map { "term\($0)" })
-        #expect(prompt.count <= VocabularyHints.maxPromptCharacters)
-        #expect(prompt.hasSuffix(prompt.split(separator: ",").last.map(String.init) ?? ""))
-        #expect(!prompt.hasSuffix(","))
+        #expect(TokenEstimate.count(prompt) <= VocabularyHints.maxPromptTokens)
+        #expect(prompt.count > 350) // most of what the old 600-character cap let through, well inside Whisper's window
+        #expect(prompt.hasPrefix("term0, term1, "))
+        #expect(prompt.components(separatedBy: ", ").allSatisfy { $0.hasPrefix("term") && Int($0.dropFirst(4)) != nil })
+    }
+
+    @Test func aChinesePromptFitsWhispersWindow() {
+        // 100 four-character terms: 600 characters were let through by a character cap, far over Whisper's 224 tokens,
+        // which would then have dropped the first terms, the ones the user put first.
+        let characters = Array("卓维克斯特尔数据云端智能语音模型")
+        let terms = (0..<100).map { String([characters[$0 % 16], characters[$0 / 16 % 16]]) + "科技" }
+        let prompt = VocabularyHints.prompt(terms)
+        #expect(prompt.hasPrefix("卓卓科技, 维卓科技, "))
+        #expect(TokenEstimate.count(prompt) <= VocabularyHints.maxPromptTokens)
+        // Even at two tokens per Chinese character and per separator, as Whisper's tokenizer often needs, it fits.
+        let parts = prompt.components(separatedBy: ", ")
+        #expect(parts.allSatisfy { $0.count == 4 } && parts.count > 10)
+        #expect(parts.count * 4 * 2 + (parts.count - 1) * 2 <= 224)
     }
 
     @Test func microsoftGetsAPhraseList() throws {

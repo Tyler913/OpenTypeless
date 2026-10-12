@@ -44,7 +44,7 @@ OpenTypeless is built around that problem.
 
 | | What happens |
 |---|---|
-| **Chunk at pauses** | While you talk, audio is cut into 18–28 s segments at the quietest 0.4 s window in each span, so words are never cut in half and no request comes close to the upstream 60 s limit. |
+| **Chunk at pauses** | While you talk, audio is cut at your next pause once 8 s have built up (without a pause, at the quietest 0.4 s window before 28 s), so words are never cut in half, little is left to send when you let go, and no request comes close to the upstream 60 s limit. |
 | **Transcribe while you talk** | Each segment is transcribed in the background as soon as it is cut. After a two-minute dictation, only the last few seconds are left to process when you release the key. |
 | **Retry per segment** | Network drops, 429s and 5xx errors are retried with backoff. Bad keys and billing errors fail fast. One failed segment never affects the others, and failed segments get one more full round at the end. |
 | **Backup model for slow starts** | If the clean-up model hasn't started answering within 0.55 s, or fails, a backup model from another vendor is asked too and whichever answers first wins. A slow upstream provider costs under a second more, not the whole wait. |

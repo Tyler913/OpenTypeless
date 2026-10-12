@@ -39,11 +39,24 @@ public sealed partial class ApiClient
 
     internal Uri Url(string path) => new(Endpoint.BaseUrl.AbsoluteUri.TrimEnd('/') + "/" + path);
 
+    /// <summary>
+    /// Every request to a provider: HTTP/2 where the server speaks it, as URLSession does on macOS, so a chunk's hedged
+    /// pair, a cancelled request and its retry, and the speech-to-text and clean-up requests to one host share a single
+    /// multiplexed connection instead of each opening its own (an HttpRequestMessage defaults to HTTP/1.1). A plain
+    /// http:// server, such as one running locally, gets HTTP/1.1.
+    /// </summary>
+    internal static HttpRequestMessage NewRequest(HttpMethod method, Uri url) => new(method, url)
+    {
+        Version = HttpVersion.Version20,
+        VersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
+    };
+
     internal HttpRequestMessage Request(string path, HttpContent? content = null)
     {
         var key = Endpoint.ApiKey.Trim();
         if (key.Length == 0 && Endpoint.Id.RequiresKey()) throw ApiException.MissingApiKey(Endpoint.Id.DisplayName());
-        var request = new HttpRequestMessage(HttpMethod.Post, Url(path)) { Content = content };
+        var request = NewRequest(HttpMethod.Post, Url(path));
+        request.Content = content;
         if (key.Length > 0) request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + key);
         if (IsOpenRouter)
         {
@@ -313,7 +326,7 @@ public sealed partial class ApiClient
         // A variant suffix (":nitro", ":free") isn't part of the path.
         var id = model.Trim().Split(':')[0];
         if (!IsOpenRouter || !id.Contains('/')) return [];
-        using var request = new HttpRequestMessage(HttpMethod.Get, Url("models/" + id + "/endpoints"));
+        using var request = NewRequest(HttpMethod.Get, Url("models/" + id + "/endpoints"));
         var (status, data) = await Send(request, 20, cancellationToken).ConfigureAwait(false);
         // An ID OpenRouter doesn't know: nothing to choose from.
         if ((int)status == 404) return [];
@@ -352,7 +365,7 @@ public sealed partial class ApiClient
     {
         var url = Url("models");
         if (outputModality != null && IsOpenRouter) url = new Uri(url + "?output_modalities=" + Uri.EscapeDataString(outputModality));
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var request = NewRequest(HttpMethod.Get, url);
         var key = Endpoint.ApiKey.Trim();
         if (key.Length > 0) request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + key);
         var (status, data) = await Send(request, 20, cancellationToken).ConfigureAwait(false);
@@ -387,7 +400,7 @@ public sealed partial class ApiClient
     {
         if (IsOpenRouter)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, Url("key"));
+            using var request = NewRequest(HttpMethod.Get, Url("key"));
             request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + Endpoint.ApiKey.Trim());
             var (status, data) = await Send(request, 15, cancellationToken).ConfigureAwait(false);
             if (!IsSuccess(status)) throw ApiException.Http((int)status, ErrorMessage(data));

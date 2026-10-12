@@ -19,7 +19,7 @@ failure handling. Only the system-integration layer and the look differ.
 | Swift | C# | Behaviour kept |
 |---|---|---|
 | `WAV.swift` | `Wav.cs` | 16 kHz mono PCM16, 44-byte header, chunk-walking decoder, streaming `WavFileWriter` that patches sizes on `Finalize`. |
-| `Chunker.swift` | `Chunker.cs` | Cut at the centre of the quietest 0.4 s window between 18 and 28 s, 20 ms hop; `AudioLevel.Rms` / `IsSilent` (30 ms frames, 0.004). |
+| `Chunker.swift` | `Chunker.cs` | Cut at the first 0.3 s pause once 8 s are pending, else at the centre of the quietest 0.4 s window between 18 and 28 s, 20 ms hop; `AudioLevel.Rms` / `IsSilent` (30 ms frames, 0.004). |
 | `TranscriptJoiner.swift` | `TranscriptJoiner.cs` | No space around CJK, none before punctuation. |
 | `Retry.swift` | `ApiError.cs`, `RetryPolicy.cs` | Same error kinds and messages, retryable = network/timeout/badResponse/408/409/425/429/5xx; 1 s·2ⁿ ±20 % jitter; `WithTimeout`. |
 | `Providers.swift` | `Providers.cs` | Same 6 providers, URLs, default models, key placeholders, STT format. |

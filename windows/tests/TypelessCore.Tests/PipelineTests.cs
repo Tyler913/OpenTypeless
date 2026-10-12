@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -112,7 +113,10 @@ public class PipelineTests
     public async Task PermanentFailureKeepsPartialText()
     {
         var audio = Speech(40);
-        var firstChunkSize = new Chunker().Append(audio).First().Samples.Length;
+        var reference = new Chunker();
+        var cut = reference.Append(audio);
+        var firstChunkSize = cut.First().Samples.Length;
+        var chunkCount = cut.Count + (reference.Finish() == null ? 0 : 1);
         MockOpenRouter.Handler = (_, body) =>
         {
             var (_, samples) = Audio(body);
@@ -125,7 +129,8 @@ public class PipelineTests
         pipeline.Append(audio);
         var failure = await Assert.ThrowsAsync<PipelineFailure>(() => pipeline.Finish());
         Assert.Equal("第一段", failure.PartialText);
-        Assert.Equal([1], failure.FailedChunks);
+        Assert.True(chunkCount >= 2);
+        Assert.Equal(Enumerable.Range(1, chunkCount - 1), failure.FailedChunks);
         Assert.Equal(new Dictionary<int, string> { [0] = "第一段" }, pipeline.CompletedTranscripts());
     }
 
@@ -482,5 +487,102 @@ public class PipelineTests
         {
             TypelessCore.Localization.Preference = original;
         }
+    }
+}
+
+/// <summary>
+/// Requests ask for HTTP/2, as URLSession does on macOS, so hedged and retried requests share one connection; a plain
+/// http:// server still gets HTTP/1.1.
+/// </summary>
+[Collection("MockServer")]
+public class HttpVersionTests
+{
+    [Fact]
+    public async Task EveryProviderRequestAsksForHttp2()
+    {
+        var versions = new List<(string Path, Version Version, HttpVersionPolicy Policy)>();
+        MockOpenRouter.Delay = null;
+        MockOpenRouter.Handler = (request, _) =>
+        {
+            lock (MockOpenRouter.Lock) versions.Add((request.RequestUri!.AbsolutePath, request.Version, request.VersionPolicy));
+            return (200, MockOpenRouter.Utf8("""{"text":"ok","data":[{"id":"m","pricing":{"prompt":"0.000001","completion":"0.000002"}}]}"""));
+        };
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
+        await client.Transcribe([0], new TranscriptionOptions("m"), 10);
+        await client.ListModels();
+        await client.ListHosts("a/b");
+        await client.VerifyCredentials();
+        await client.Preconnect();
+        await PriceCatalog.Fetch(http: MockOpenRouter.Client());
+        Assert.Equal(7, versions.Count);
+        Assert.All(versions, v =>
+        {
+            Assert.Equal(HttpVersion.Version20, v.Version);
+            Assert.Equal(HttpVersionPolicy.RequestVersionOrLower, v.Policy);
+        });
+    }
+
+    [Fact]
+    public async Task APlainHttpServerIsAskedOverHttp11()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        try
+        {
+            await AnswerOnce(listener);
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    private static async Task AnswerOnce(TcpListener listener)
+    {
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var served = Task.Run(async () =>
+        {
+            using var connection = await listener.AcceptTcpClientAsync();
+            var stream = connection.GetStream();
+            var received = new List<byte>();
+            var buffer = new byte[65536];
+            int headerEnd;
+            while ((headerEnd = IndexOf(received, "\r\n\r\n"u8.ToArray())) < 0)
+            {
+                var n = await stream.ReadAsync(buffer);
+                if (n == 0) throw new IOException("closed before the headers ended");
+                received.AddRange(buffer.AsSpan(0, n).ToArray());
+            }
+            var headers = Encoding.ASCII.GetString(received.ToArray(), 0, headerEnd);
+            var length = headers.Split("\r\n").Select(line => line.Split(':', 2))
+                .Where(parts => parts.Length == 2 && parts[0].Trim().Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+                .Select(parts => int.Parse(parts[1].Trim())).FirstOrDefault();
+            // The whole body before answering, so the client isn't cut off mid-upload.
+            while (received.Count < headerEnd + 4 + length)
+            {
+                var n = await stream.ReadAsync(buffer);
+                if (n == 0) break;
+                received.AddRange(buffer.AsSpan(0, n).ToArray());
+            }
+            const string body = """{"text":"local"}""";
+            var response = $"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{body}";
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(response));
+            return headers.Split("\r\n")[0];
+        });
+        // The app's own HTTP stack, against a local server without TLS (e.g. a self-hosted Whisper).
+        var client = new ApiClient(new ProviderEndpoint(ProviderId.Custom, new Uri($"http://127.0.0.1:{port}/v1"), ""));
+        Assert.Equal("local", await client.Transcribe(Wav.Encode([1, 2, 3]), new TranscriptionOptions("w"), 10));
+        Assert.Equal("POST /v1/audio/transcriptions HTTP/1.1", await served.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    private static int IndexOf(List<byte> data, byte[] pattern)
+    {
+        for (var i = 0; i + pattern.Length <= data.Count; i++)
+        {
+            var match = true;
+            for (var j = 0; j < pattern.Length && match; j++) match = data[i + j] == pattern[j];
+            if (match) return i;
+        }
+        return -1;
     }
 }

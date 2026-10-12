@@ -26,6 +26,9 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var error: String?
     /// Per-chunk transcripts, so a retry only re-sends the chunks that failed.
     var chunkTexts: [Int: String] = [:]
+    /// How the recording was cut into those chunks (`Chunker.layout`; nil before it was saved): a retry that cuts it
+    /// differently can't reuse them by index.
+    var chunkLayout: Int?
     var timing: Timing?
     /// What processing it cost so far in USD, retries included (nil when nothing could be priced).
     var cost: Double?
@@ -42,6 +45,17 @@ struct DictationRecord: Codable, Identifiable, Equatable {
         var polish: Double?
         var polishModel: String?
         var usedBackup: Bool?
+        /// The last segment's transcript came from a speculative tail, sent while the speaker paused before letting go.
+        var speculativeTail: Bool?
+        /// The speech-to-text route that answered the last segment transcribed: "primary" or "backup".
+        var lastChunkRoute: String?
+        /// How long the clean-up taken over at release had been running by then (started while the speaker paused).
+        var polishHeadStart: Double?
+        /// Release → the text ready and handed over for delivery (focus is checked, then it's pasted or copied at once).
+        var delivered: Double?
+        /// "pasted"; "copied" (focus wasn't a text field); "failed" (the paste didn't land, or wasn't allowed; the text
+        /// is on the clipboard).
+        var delivery: String?
 
         /// "转写 0.8 秒 · 整理 1.2 秒（首字 0.4 秒，备用 deepseek/…）"
         var summary: String? {
@@ -131,7 +145,8 @@ final class HistoryStore: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         let id = formatter.string(from: Date()) + "-" + UUID().uuidString.prefix(4)
-        let record = DictationRecord(id: String(id), date: Date())
+        var record = DictationRecord(id: String(id), date: Date())
+        record.chunkLayout = Chunker.layout
         try? FileManager.default.createDirectory(at: record.folder, withIntermediateDirectories: true)
         records.insert(record, at: 0)
         save(record)

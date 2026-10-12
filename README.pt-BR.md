@@ -44,7 +44,7 @@ O OpenTypeless foi construído em torno desse problema.
 
 | | O que acontece |
 |---|---|
-| **Corta nas pausas** | Enquanto você fala, o áudio é cortado em trechos de 18–28 s na janela de 0,4 s mais silenciosa de cada intervalo, então nenhuma palavra é cortada ao meio e nenhuma solicitação chega perto do limite de 60 s do provedor. |
+| **Corta nas pausas** | Enquanto você fala, o áudio é cortado na sua próxima pausa assim que se acumulam 8 s (sem pausa, na janela de 0,4 s mais silenciosa antes de 28 s), então nenhuma palavra é cortada ao meio, sobra pouco para enviar ao soltar a tecla e nenhuma solicitação chega perto do limite de 60 s do provedor. |
 | **Transcreve enquanto você fala** | Cada trecho é transcrito em segundo plano assim que é cortado. Depois de um ditado de dois minutos, só os últimos segundos ficam para processar quando você solta a tecla. |
 | **Tenta de novo por trecho** | Quedas de rede, 429 e erros 5xx são repetidos com espera progressiva. Chaves inválidas e problemas de cobrança falham na hora. Um trecho com falha nunca afeta os outros, e os trechos com falha ganham mais uma rodada completa no final. |
 | **Modelo reserva para inícios lentos** | Se o modelo de limpeza não começar a responder em 0,55 s, ou falhar, um modelo reserva de outro fornecedor também é consultado e vence quem responder primeiro. Um provedor lento custa menos de um segundo a mais, não a espera inteira. |

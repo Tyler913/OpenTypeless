@@ -20,8 +20,12 @@ public enum VocabularyHints {
 
     /// At most this many terms are sent, the first ones in the list.
     static let maxTerms = 100
-    /// Whisper reads only the last 224 tokens of a prompt, so a prompt is kept well under that.
-    static let maxPromptCharacters = 600
+    /// Whisper reads only the last 224 tokens of a prompt, dropping the first terms of a longer one, so a prompt is kept
+    /// under half of that by `TokenEstimate`. Counting characters instead let 600 Chinese characters through, far over
+    /// the limit. The estimate counts one token per Chinese character and per four other characters, where Whisper's
+    /// tokenizer often needs two for a Chinese character (and for a comma and space): the margin covers that. In English
+    /// it is about 400 characters.
+    static let maxPromptTokens = 100
 
     /// How this model takes hints, or nil when it doesn't (as far as was measured).
     public static func style(provider: ProviderID, model: String) -> Style? {
@@ -56,7 +60,7 @@ public enum VocabularyHints {
         var prompt = ""
         for term in terms {
             let next = prompt.isEmpty ? term : prompt + ", " + term
-            if next.count > maxPromptCharacters { break }
+            if TokenEstimate.count(next) > maxPromptTokens { break }
             prompt = next
         }
         return prompt

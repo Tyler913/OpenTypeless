@@ -16,7 +16,15 @@ public sealed record HedgedPolishResult(
     double FirstTokenSeconds,
     double TotalSeconds,
     /// <summary>The provider that answered, to price the answer.</summary>
-    ProviderId Provider = ProviderId.OpenRouter);
+    ProviderId Provider = ProviderId.OpenRouter,
+    /// <summary>The other route's request, when it was sent and then cancelled because this one answered first.</summary>
+    IReadOnlyList<CancelledPolish>? Cancelled = null);
+
+/// <summary>
+/// A request the hedge sent and then cancelled because the other route answered first. Providers bill the prompt they
+/// had already read and any text they had sent, so its usage is estimated (marked so) and counted with the answer's.
+/// </summary>
+public sealed record CancelledPolish(string Model, ProviderId Provider, RequestUsage Usage);
 
 /// <summary>
 /// Hedged clean-up: the primary route starts alone; if it hasn't produced its first token after
@@ -42,6 +50,8 @@ public static class HedgedPolish
         var clock = Stopwatch.StartNew();
         var events = Channel.CreateUnbounded<Event>();
         var firstToken = new int[routes.Length];
+        // Each route's text so far, to estimate what a cancelled one used.
+        var streamed = new string?[routes.Length];
         // The route that streamed first, plus one (0 until one has).
         var leader = 0;
         var cancels = new CancellationTokenSource?[routes.Length];
@@ -60,6 +70,7 @@ public static class HedgedPolish
                 {
                     var result = await route.Client.Polish(transcript, route.Options, onPartial: text =>
                     {
+                        Volatile.Write(ref streamed[index], text);
                         if (Interlocked.Exchange(ref firstToken[index], 1) == 0) events.Writer.TryWrite(new Event.FirstToken(index));
                         // Only the stream that answered first is passed on.
                         Interlocked.CompareExchange(ref leader, index + 1, 0);
@@ -85,6 +96,8 @@ public static class HedgedPolish
             int? winner = null;
             double? firstTokenAt = null;
             var failures = new Dictionary<int, Exception>();
+            // Answers that came in after the other route had already won.
+            var late = new Dictionary<int, PolishResult>();
             await foreach (var e in events.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
                 switch (e)
@@ -103,11 +116,24 @@ public static class HedgedPolish
                         }
                         break;
                     case Event.Finished(var index, { } result, _):
-                        if (winner != null && winner != index) break;
+                        if (winner != null && winner != index)
+                        {
+                            late[index] = result;
+                            break;
+                        }
                         var now = clock.Elapsed.TotalSeconds;
+                        // Every other request that was sent and didn't fail was cancelled when this one won.
+                        var cancelled = new List<CancelledPolish>();
+                        for (var other = 0; other < routes.Length; other++)
+                        {
+                            if (other == index || cancels[other] == null || failures.ContainsKey(other)) continue;
+                            var usage = late.GetValueOrDefault(other)?.Usage
+                                ?? ApiClient.EstimatedPolishUsage(transcript, routes[other].Options, Volatile.Read(ref streamed[other]) ?? "");
+                            cancelled.Add(new CancelledPolish(routes[other].Options.Model, routes[other].Client.Endpoint.Id, usage));
+                        }
                         return new HedgedPolishResult(result, routes[index].Options.Model, UsedBackup: index != 0,
                                                       FirstTokenSeconds: firstTokenAt ?? now, TotalSeconds: now,
-                                                      Provider: routes[index].Client.Endpoint.Id);
+                                                      Provider: routes[index].Client.Endpoint.Id, Cancelled: cancelled);
                     case Event.Finished(var index, null, { } error):
                         // The chosen stream broke mid-way: its partial text is useless, so give up this round.
                         if (winner == index) ExceptionDispatchInfo.Throw(error);

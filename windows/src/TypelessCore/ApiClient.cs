@@ -86,6 +86,26 @@ public sealed partial class ApiClient
         return Utf8Prefix(data, 300) ?? "unknown error";
     }
 
+    /// <summary>
+    /// The HTTP status an error body carries in <c>error.code</c> (OpenRouter puts 401, 402, 429… there, also inside a 200
+    /// response or a stream), so the error is classified like that status and e.g. a 402 isn't retried. Null for string
+    /// codes and anything else.
+    /// </summary>
+    internal static int? ErrorStatus(ReadOnlySpan<byte> data)
+    {
+        try
+        {
+            if (JsonNode.Parse(data.ToArray()) is JsonObject obj && obj["error"] is JsonObject error
+                && error["code"] is JsonValue code && code.GetValueKind() == JsonValueKind.Number
+                && code.TryGetValue<int>(out var status) && status is >= 400 and <= 599)
+            {
+                return status;
+            }
+        }
+        catch (JsonException) { }
+        return null;
+    }
+
     internal static string? Utf8Prefix(ReadOnlySpan<byte> data, int maxBytes)
     {
         var slice = data.Length > maxBytes ? data[..maxBytes] : data;
@@ -184,7 +204,7 @@ public sealed partial class ApiClient
         if (obj.ContainsKey("error"))
         {
             // Some upstream failures arrive as 200 + error body.
-            throw ApiException.Http(502, ErrorMessage(data));
+            throw ApiException.Http(ErrorStatus(data) ?? 502, ErrorMessage(data));
         }
         if (obj["text"] is JsonValue value && value.TryGetValue<string>(out var transcript))
         {

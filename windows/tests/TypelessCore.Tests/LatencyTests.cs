@@ -227,6 +227,22 @@ public class LatencyTests
     }
 
     [Fact]
+    public async Task KnowsWhenTheAudioEndsInACoveredPause()
+    {
+        AnswerWithSampleCounts();
+        var pipeline = new TranscriptionPipeline(Client(), new TranscriptionOptions("m"));
+        Feed(pipeline, Tone(2));
+        // Still talking: whatever the microphone has yet to hand over matters.
+        Assert.False(pipeline.EndsInCoveredPause);
+        Feed(pipeline, Silence(0.5));
+        Assert.True(pipeline.EndsInCoveredPause);
+        Feed(pipeline, Tone(0.5));
+        Assert.False(pipeline.EndsInCoveredPause);
+        // Waits for every request, so none reaches the next test's mock.
+        await pipeline.Finish();
+    }
+
+    [Fact]
     public async Task NoSpeculationWithoutSpeech()
     {
         var sent = AnswerWithSampleCounts();

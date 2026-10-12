@@ -65,11 +65,15 @@ public static class Wav
         while (offset + 8 <= data.Length)
         {
             var id = data.Slice(offset, 4);
-            var size = (int)Math.Min(BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset + 4, 4)), int.MaxValue);
+            var declared = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(offset + 4, 4));
+            var size = (int)Math.Min(declared, int.MaxValue);
             var body = offset + 8;
             if (id.SequenceEqual("data"u8))
             {
-                var end = (int)Math.Min((long)body + size, data.Length);
+                // A recording that was never finalized (the app quit or crashed mid-way) still says 0 here, streaming
+                // writers put 0xFFFFFFFF, and a cut-off file says more than it has: then the audio is the rest of the file.
+                var unknown = declared == 0 || declared == uint.MaxValue || (long)body + declared > data.Length;
+                var end = unknown ? data.Length : body + size;
                 var count = (end - body) / 2;
                 var samples = new short[count];
                 data.Slice(body, count * 2).CopyTo(MemoryMarshal.AsBytes(samples.AsSpan()));
@@ -112,25 +116,45 @@ public sealed class WavFileWriter : IDisposable
     private readonly object _lock = new();
     private int _dataBytes;
     private bool _closed;
+    private Exception? _failure;
 
     public string Path { get; }
+
+    /// <summary>
+    /// The first write that failed (the disk filled up, the drive went away). Nothing more is written after it: the
+    /// dictation goes on from the audio in memory, and the file keeps what reached it.
+    /// </summary>
+    public Exception? Failure
+    {
+        get { lock (_lock) return _failure; }
+    }
 
     public WavFileWriter(string path)
     {
         Path = path;
-        _stream = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.Read);
+        // Unbuffered (a buffer size of 1 turns it off), like the macOS FileHandle: each block is in the file as soon as
+        // it's appended, so a recording the app never got to close (it quit or crashed) still has all its audio.
+        _stream = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.Read, bufferSize: 1);
         _stream.Write(Wav.Header(0));
         _stream.Flush();
     }
 
+    /// <summary>Runs on the capture thread, where an exception would end the app: a failed write is only noted.</summary>
     public void Append(ReadOnlySpan<short> samples)
     {
         if (samples.IsEmpty) return;
         lock (_lock)
         {
-            if (_closed) return;
-            _stream.Write(MemoryMarshal.AsBytes(samples));
-            _dataBytes += samples.Length * 2;
+            if (_closed || _failure != null) return;
+            try
+            {
+                _stream.Write(MemoryMarshal.AsBytes(samples));
+                _dataBytes += samples.Length * 2;
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                _failure = error;
+            }
         }
     }
 
@@ -141,14 +165,22 @@ public sealed class WavFileWriter : IDisposable
         {
             if (_closed) return;
             Span<byte> buffer = stackalloc byte[4];
-            _stream.Seek(4, SeekOrigin.Begin);
-            BinaryPrimitives.WriteUInt32LittleEndian(buffer, (uint)(36 + _dataBytes));
-            _stream.Write(buffer);
-            _stream.Seek(40, SeekOrigin.Begin);
-            BinaryPrimitives.WriteUInt32LittleEndian(buffer, (uint)_dataBytes);
-            _stream.Write(buffer);
-            _stream.Seek(0, SeekOrigin.End);
-            _stream.Flush(flushToDisk: true);
+            try
+            {
+                _stream.Seek(4, SeekOrigin.Begin);
+                BinaryPrimitives.WriteUInt32LittleEndian(buffer, (uint)(36 + _dataBytes));
+                _stream.Write(buffer);
+                _stream.Seek(40, SeekOrigin.Begin);
+                BinaryPrimitives.WriteUInt32LittleEndian(buffer, (uint)_dataBytes);
+                _stream.Write(buffer);
+                _stream.Seek(0, SeekOrigin.End);
+                _stream.Flush(flushToDisk: true);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                // The header keeps saying 0 bytes, which Wav.DecodeSamples reads as "to the end of the file".
+                _failure ??= error;
+            }
         }
     }
 
@@ -162,7 +194,7 @@ public sealed class WavFileWriter : IDisposable
         lock (_lock)
         {
             _closed = true;
-            _stream.Dispose();
+            try { _stream.Dispose(); } catch (IOException) { }
         }
     }
 

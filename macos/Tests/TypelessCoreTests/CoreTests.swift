@@ -24,6 +24,36 @@ struct WAVTests {
         XCTAssertEqual(WAV.decodeSamples(data), [1, 2, 3, 4, 5])
         XCTAssertEqual(data.readLE32(at: 4), UInt32(36 + 10))
     }
+
+    @Test func testUnfinalizedFileStillDecodes() throws {
+        // The app quit or crashed mid-recording: the header still says 0 bytes, but the samples are all there.
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = try WAVFileWriter(url: url)
+        defer { writer.close() }
+        writer.append([1, 2, 3])
+        writer.append([-4, 5])
+        let data = try Data(contentsOf: url)
+        XCTAssertEqual(data.readLE32(at: 40), 0)
+        XCTAssertEqual(WAV.decodeSamples(data), [1, 2, 3, -4, 5])
+        #expect(writer.failure == nil)
+    }
+
+    @Test func testUnknownOrOversizedDataSizeReadsToTheEnd() {
+        let samples: [Int16] = [7, -8, 9]
+        func patched(size: UInt32, extra: [UInt8] = []) -> Data {
+            var wav = WAV.encode(samples: samples)
+            wav.replaceSubrange(40..<44, with: Data(le: size))
+            wav.append(contentsOf: extra)
+            return wav
+        }
+        XCTAssertEqual(WAV.decodeSamples(patched(size: 0xFFFF_FFFF)), samples)
+        XCTAssertEqual(WAV.decodeSamples(patched(size: 1000)), samples)
+        // Whole samples only: half a sample at the end of a cut-off file is dropped.
+        XCTAssertEqual(WAV.decodeSamples(patched(size: 0, extra: [0x01])), samples)
+        // A size that fits is still trusted (whatever follows the chunk isn't audio).
+        XCTAssertEqual(WAV.decodeSamples(patched(size: 4, extra: [0x01, 0x02])), [7, -8])
+    }
 }
 
 struct ChunkerTests {
@@ -91,6 +121,17 @@ struct JoinerTests {
         XCTAssertEqual(TranscriptJoiner.join(["用 SwiftUI", "写界面"]), "用 SwiftUI写界面")
         XCTAssertEqual(TranscriptJoiner.join(["done.", " Next"]), "done. Next")
         XCTAssertEqual(TranscriptJoiner.join(["", "  a ", ""]), "a")
+    }
+
+    @Test func testKoreanChunksGetASpace() {
+        // Korean puts spaces between words, so chunks don't run together like Chinese or Japanese ones do.
+        XCTAssertEqual(TranscriptJoiner.join(["안녕하세요", "반갑습니다"]), "안녕하세요 반갑습니다")
+        XCTAssertEqual(TranscriptJoiner.join(["오늘은", "OpenTypeless"]), "오늘은 OpenTypeless")
+        XCTAssertEqual(TranscriptJoiner.join(["今日は", "いい天気"]), "今日はいい天気")
+        XCTAssertEqual(TranscriptJoiner.join(["안녕하세요", "。"]), "안녕하세요。")
+        // Counting still treats Hangul as CJK.
+        #expect(TranscriptJoiner.isCJK("한"))
+        #expect(!TranscriptJoiner.joinsWithoutSpace("한"))
     }
 }
 

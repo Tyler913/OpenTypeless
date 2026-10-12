@@ -102,6 +102,12 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     /// ended.
     public var tailWasSpeculative: Bool { lock.withLock { tailSpeculative } }
 
+    /// The audio so far ends in a pause a speculative tail is already transcribing: if the recording ended now, that
+    /// answer would be the last chunk's. A moment more of (quiet) audio after the key is released changes nothing then.
+    public var endsInCoveredPause: Bool {
+        lock.withLock { speculation.map { !pauses.speechAfter($0.end, includePartial: true) } ?? false }
+    }
+
     /// `preset` lets a retry reuse transcripts that already succeeded (keyed by chunk index).
     /// `trimSilence` sends each chunk without the silence before and after its speech (see `AudioChunk.trimmed`).
     /// `speculate` transcribes the pending audio ahead of time whenever the speaker pauses (see above).

@@ -223,6 +223,21 @@ extension PipelineTests {
         #expect(pipeline.tailWasSpeculative)
     }
 
+    @Test func knowsWhenTheAudioEndsInACoveredPause() async throws {
+        _ = answerWithSampleCounts()
+        defer { MockOpenRouter.delay = nil }
+        let pipeline = TranscriptionPipeline(client: client(), options: .init(model: "m"))
+        LatencyAudio.feed(pipeline, LatencyAudio.tone(2))
+        // Still talking: whatever the microphone has yet to hand over matters.
+        #expect(!pipeline.endsInCoveredPause)
+        LatencyAudio.feed(pipeline, LatencyAudio.silence(0.5))
+        #expect(pipeline.endsInCoveredPause)
+        LatencyAudio.feed(pipeline, LatencyAudio.tone(0.5))
+        #expect(!pipeline.endsInCoveredPause)
+        // Waits for every request, so none reaches the next test's mock.
+        _ = try await pipeline.finish()
+    }
+
     @Test func noSpeculationWithoutSpeech() async throws {
         let sent = answerWithSampleCounts()
         defer { MockOpenRouter.delay = nil }

@@ -58,10 +58,14 @@ public enum WAV {
         var offset = 12
         while offset + 8 <= data.count {
             let id = data.subdata(in: offset..<(offset + 4))
-            let size = Int(data.readLE32(at: offset + 4))
+            let declared = data.readLE32(at: offset + 4)
+            let size = Int(declared)
             let body = offset + 8
             if id == Data("data".utf8) {
-                let end = min(body + size, data.count)
+                // A recording that was never finalized (the app quit or crashed mid-way) still says 0 here, streaming
+                // writers put 0xFFFFFFFF, and a cut-off file says more than it has: then the audio is the rest of the file.
+                let unknown = declared == 0 || declared == UInt32.max || body + size > data.count
+                let end = unknown ? data.count : body + size
                 let count = (end - body) / 2
                 var samples = [Int16](repeating: 0, count: count)
                 _ = samples.withUnsafeMutableBytes { dest in
@@ -80,29 +84,42 @@ public final class WAVFileWriter {
     private let handle: FileHandle
     private var dataBytes = 0
     public let url: URL
+    /// The first write that failed (the disk filled up, the drive went away). Nothing more is written after it: the
+    /// dictation goes on from the audio in memory, and the file keeps what reached it.
+    public private(set) var failure: Error?
 
     public init(url: URL) throws {
         self.url = url
         FileManager.default.createFile(atPath: url.path, contents: WAV.header(dataByteCount: 0))
         handle = try FileHandle(forWritingTo: url)
-        handle.seekToEndOfFile()
+        try handle.seekToEnd()
     }
 
     public func append(_ samples: [Int16]) {
-        guard !samples.isEmpty else { return }
+        guard !samples.isEmpty, failure == nil else { return }
         let bytes = samples.withUnsafeBytes { Data($0) }
-        handle.write(bytes)
-        dataBytes += bytes.count
+        // The throwing calls: the old `write(_:)` raises an Objective-C exception on a full disk, which kills the app.
+        do {
+            try handle.write(contentsOf: bytes)
+            dataBytes += bytes.count
+        } catch {
+            failure = error
+        }
     }
 
     /// Patches the RIFF/data sizes so the file is valid. Safe to call more than once.
     public func finalize() {
-        handle.seek(toFileOffset: 4)
-        handle.write(Data(le: UInt32(36 + dataBytes)))
-        handle.seek(toFileOffset: 40)
-        handle.write(Data(le: UInt32(dataBytes)))
-        handle.seekToEndOfFile()
-        try? handle.synchronize()
+        do {
+            try handle.seek(toOffset: 4)
+            try handle.write(contentsOf: Data(le: UInt32(36 + dataBytes)))
+            try handle.seek(toOffset: 40)
+            try handle.write(contentsOf: Data(le: UInt32(dataBytes)))
+            try handle.seekToEnd()
+            try handle.synchronize()
+        } catch {
+            // The header keeps saying 0 bytes, which `WAV.decodeSamples` reads as "to the end of the file".
+            if failure == nil { failure = error }
+        }
     }
 
     public func close() {

@@ -1,0 +1,63 @@
+{
+  "_comment": "Snippet expansion cases shared by the macOS and Windows tests (SnippetExpander.expand), so both apps put the same text in. A case without its own snippets uses the shared list below.",
+  "snippets": [
+    { "trigger": "my email", "expansion": "tyler@example.com" },
+    { "trigger": "我的邮箱", "expansion": "tyler@example.com" },
+    { "trigger": "my address", "expansion": "上海市浦东新区世纪大道 100 号" },
+    { "trigger": "my address in English", "expansion": "100 Century Ave, Pudong, Shanghai" },
+    { "trigger": "email signature", "expansion": "Tyler Hong · OpenTypeless" },
+    { "trigger": "回复模板", "expansion": "收到，我稍后回复你。" },
+    { "trigger": "canned reply", "expansion": "Thanks for reaching out! I'll get back to you soon." },
+    { "trigger": "PR template", "expansion": "## Summary\n\n## Test plan\n- [ ] Tests pass" },
+    { "trigger": "sign off", "expansion": "Best,\nTyler" },
+    { "trigger": "我的 GitHub", "expansion": "github.com/tyler" },
+    { "trigger": "내 이메일", "expansion": "kim@example.com" }
+  ],
+  "cases": [
+    { "id": "chinese-inside-a-sentence", "text": "发到我的邮箱吧。", "expected": "发到 tyler@example.com 吧。" },
+    { "id": "chinese-trigger-alone", "text": "我的邮箱。", "expected": "tyler@example.com" },
+    { "id": "latin-mid-sentence", "text": "Send it to my email, please.", "expected": "Send it to tyler@example.com, please." },
+    { "id": "case-insensitive", "text": "Here it is: My Email.", "expected": "Here it is: tyler@example.com." },
+    { "id": "latin-trigger-alone-capitalised", "text": "My email.", "expected": "tyler@example.com" },
+    { "id": "full-width-forms", "text": "发到ｍｙ　ｅｍａｉｌ。", "expected": "发到 tyler@example.com。" },
+    { "id": "spaces-added-by-clean-up", "text": "看看我的 GitHub 主页", "expected": "看看 github.com/tyler 主页" },
+    { "id": "mixed-trigger-without-spaces", "text": "看看我的GitHub主页", "expected": "看看 github.com/tyler 主页" },
+    { "id": "latin-trigger-between-chinese", "text": "发到my email吧", "expected": "发到 tyler@example.com 吧" },
+    { "id": "no-match-inside-longer-latin-words", "text": "Check my emails, my emailing list and the dummy email.", "expected": "Check my emails, my emailing list and the dummy email." },
+    { "id": "longest-trigger-first", "text": "Ship it to my address in English please", "expected": "Ship it to 100 Century Ave, Pudong, Shanghai please" },
+    { "id": "shorter-trigger-on-its-own", "text": "Ship it to my address, thanks.", "expected": "Ship it to 上海市浦东新区世纪大道 100 号, thanks." },
+    { "id": "overlapping-triggers-longest-wins", "text": "Add my email signature.", "expected": "Add my Tyler Hong · OpenTypeless." },
+    { "id": "no-doubled-full-stop", "text": "好的，回复模板。", "expected": "好的，收到，我稍后回复你。" },
+    { "id": "no-comma-after-a-full-stop", "text": "回复模板，然后加一句谢谢", "expected": "收到，我稍后回复你。然后加一句谢谢" },
+    { "id": "no-doubled-full-stop-english", "text": "Sure. Canned reply.", "expected": "Sure. Thanks for reaching out! I'll get back to you soon." },
+    { "id": "multiline-alone", "text": "PR template.", "expected": "## Summary\n\n## Test plan\n- [ ] Tests pass" },
+    { "id": "multiline-after-a-lead-in", "text": "Here's the PR template.", "expected": "Here's the ## Summary\n\n## Test plan\n- [ ] Tests pass" },
+    { "id": "multiline-signature", "text": "Thanks for the help. Sign off.", "expected": "Thanks for the help. Best,\nTyler" },
+    { "id": "spaces-and-case-inside-a-trigger", "text": "Use the pr   Template", "expected": "Use the ## Summary\n\n## Test plan\n- [ ] Tests pass" },
+    { "id": "korean-particle-stays-attached", "text": "내 이메일로 보내 주세요", "expected": "kim@example.com로 보내 주세요" },
+    { "id": "two-triggers", "text": "我的邮箱和my address", "expected": "tyler@example.com 和上海市浦东新区世纪大道 100 号" },
+    { "id": "adjacent-triggers", "text": "我的邮箱我的邮箱", "expected": "tyler@example.com tyler@example.com" },
+    { "id": "no-trigger-leaves-text-alone", "text": "Hello  world，你好\n第二行", "expected": "Hello  world，你好\n第二行" },
+    {
+      "id": "expansion-not-searched-again",
+      "snippets": [
+        { "trigger": "签名", "expansion": "my email is below" },
+        { "trigger": "my email", "expansion": "tyler@example.com" }
+      ],
+      "text": "这是签名",
+      "expected": "这是 my email is below"
+    },
+    {
+      "id": "trigger-typed-with-punctuation",
+      "snippets": [{ "trigger": " My Email. ", "expansion": "tyler@example.com" }],
+      "text": "send to my email please",
+      "expected": "send to tyler@example.com please"
+    },
+    {
+      "id": "blank-expansion-ignored",
+      "snippets": [{ "trigger": "my email", "expansion": " \n " }],
+      "text": "my email",
+      "expected": "my email"
+    }
+  ]
+}

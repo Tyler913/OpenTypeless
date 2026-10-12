@@ -347,7 +347,7 @@ GitHub Actions ([`.github/workflows/`](.github/workflows/)) builds only the app 
 | `eval/**`, `scripts/ci/**` | Both builds, plus the shared validation checks. |
 | Only `docs/`, `README*.md` | No platform build; shared checks still run. |
 
-Every CI run checks translations, workflow syntax, evaluation fixture structure and packaging templates (**Shared checks**). A macOS prompt change also runs the Windows tests that check prompt parity. Release and package-manager publishing run the same shared checks.
+Every CI run checks translations, that both apps carry the same version (and, for a release tag, the tag's), workflow syntax, evaluation fixture structure and packaging templates (**Shared checks**). A macOS prompt change also runs the Windows tests that check prompt parity. Release and package-manager publishing run the same shared checks.
 
 Both architectures of both apps must render all settings pages, onboarding steps, the popover and five HUD states in English/Chinese and light/dark themes. Missing, blank or corrupt images, crashes and timeouts fail CI; screenshots and failure logs are retained as artifacts. These are rendering smoke tests, not interaction tests or visual baseline comparisons.
 

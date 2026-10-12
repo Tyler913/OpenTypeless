@@ -44,6 +44,8 @@ final class SessionController: ObservableObject {
     private var generation = 0
     /// The app in front when the recording stopped, where the text is meant to go (nil for a retry).
     private var pasteTarget: pid_t?
+    /// Between the screen locking (or sleep) and unlocking: no warm microphone meanwhile.
+    private var isLocked = false
     /// Cancelled recordings still being transcribed in the background (see `keepCancelledRecording`). A retry from
     /// History takes the record over, and the background result is then dropped rather than written over the retry's.
     private var keptInBackground: Set<String> = []
@@ -95,6 +97,15 @@ final class SessionController: ObservableObject {
                                                             queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.systemLocked("screen locked") }
         }
+        DistributedNotificationCenter.default().addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil,
+                                                            queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.systemUnlocked() }
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
+                                                          queue: .main) { [weak self] _ in
+            // Waking to the login screen is unlocked later, by the notification above.
+            MainActor.assumeIsolated { if !SessionController.screenIsLocked { self?.systemUnlocked() } }
+        }
     }
 
     private var chosenDeviceUID: String? { settings.microphoneUID.isEmpty ? nil : settings.microphoneUID }
@@ -108,7 +119,7 @@ final class SessionController: ObservableObject {
     /// when settings change, when a device is connected or disconnected, and after each dictation.
     func updateWarmMicrophone() {
         guard state == .idle else { return }
-        if settings.keepMicrophoneWarm, Permissions.microphoneGranted {
+        if settings.keepMicrophoneWarm, Permissions.microphoneGranted, !isLocked {
             // Running on the right input, or on the default because the chosen one is still disconnected.
             if recorder.isRecording, openDeviceUID == chosenDeviceUID,
                recorder.isOnChosenDevice || chosenDeviceUID.flatMap(Microphones.deviceID(uid:)) == nil { return }
@@ -124,6 +135,8 @@ final class SessionController: ObservableObject {
         } else if recorder.isRecording {
             recorder.stop()
             openDeviceUID = nil
+            // Nor is what it heard last kept for the next dictation (from before the screen locked, say).
+            sink.end()
         }
     }
 
@@ -174,6 +187,9 @@ final class SessionController: ObservableObject {
     /// the lock screen, nor its text land in whatever has focus afterwards: a recording stops as with Esc (a long one is
     /// kept in History), and one being processed goes to the clipboard instead of being pasted.
     func systemLocked(_ reason: String) {
+        // A warm microphone doesn't stay on behind the lock screen either; see `systemUnlocked`.
+        isLocked = true
+        defer { updateWarmMicrophone() }
         switch state {
         case .idle:
             return
@@ -184,6 +200,18 @@ final class SessionController: ObservableObject {
             note("\(reason) while processing — the text goes to the clipboard")
             deliverByPaste = false
         }
+    }
+
+    /// The screen was unlocked (or the Mac woke without locking it): a warm microphone can come back on.
+    func systemUnlocked() {
+        guard isLocked else { return }
+        isLocked = false
+        updateWarmMicrophone()
+    }
+
+    /// Whether the login screen is up, from the window server's session.
+    static var screenIsLocked: Bool {
+        (CGSessionCopyCurrentDictionary() as? [String: Any])?["CGSSessionScreenIsLocked"] as? Bool ?? false
     }
 
     func escapePressed() {
@@ -242,6 +270,8 @@ final class SessionController: ObservableObject {
     private func startRecording(pressedAt: TimeInterval) {
         // First of all, so the connections are ready by the time the first request goes out.
         warmConnections()
+        // Someone is dictating, so the screen is unlocked, whatever notification was missed (a wake without a lock).
+        isLocked = false
         guard let sttEndpoint = settings.sttEndpoint, settings.isConfigured(settings.sttProvider) else {
             note("not started — speech-to-text provider not configured")
             hud.show(.error(L("请先在设置里配置语音转文字服务商（\(settings.sttProvider.displayName)）",
@@ -476,6 +506,8 @@ final class SessionController: ObservableObject {
         do {
             let raw = try await pipeline.finish()
             watch.cancel()
+            // Cancelled (and maybe a new dictation started) while the text came back: `cancel` has dealt with this one.
+            guard isCurrent(generation) else { return }
             bar.reach(.transcribed)
             record.timing = DictationRecord.Timing(transcription: ProcessInfo.processInfo.systemUptime - started)
             let backupChunks = pipeline.backupChunkCount()
@@ -496,6 +528,7 @@ final class SessionController: ObservableObject {
             }
             await polishAndDeliver(record: &record, pipeline: pipeline, generation: generation)
         } catch let failure as PipelineFailure {
+            guard isCurrent(generation) else { return }
             record.chunkTexts = pipeline.completedTranscripts()
             record.rawText = failure.partialText
             record.status = .failed
@@ -505,7 +538,7 @@ final class SessionController: ObservableObject {
             lastError = failure.localizedDescription
             finish(showing: .error(L("转写失败，可在菜单栏重试", "Failed — retry from the menu bar")), hideAfter: 4)
         } catch {
-            if APIError.from(error) == .cancelled { return }
+            if APIError.from(error) == .cancelled || !isCurrent(generation) { return }
             record.status = .failed
             record.error = error.localizedDescription
             account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes())
@@ -716,7 +749,10 @@ final class SessionController: ObservableObject {
             // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
             var sent = false
             if settings.pressEnterAfterInsert {
-                sent = await TextInserter.pressReturn { self.isCurrent(generation) }
+                // Not into another app that came to the front after the paste, nor once the screen locked.
+                sent = await TextInserter.pressReturn {
+                    self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved
+                }
                 guard isCurrent(generation) else { return }
             }
             if let notice {

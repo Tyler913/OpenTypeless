@@ -425,6 +425,7 @@ public static partial class Win32
 
     public const uint WM_WTSSESSION_CHANGE = 0x02B1;
     public const int WTS_SESSION_LOCK = 0x7;
+    public const int WTS_SESSION_UNLOCK = 0x8;
     public const uint NOTIFY_FOR_THIS_SESSION = 0;
     public const uint WM_POWERBROADCAST = 0x0218;
     public const int PBT_APMSUSPEND = 0x4;

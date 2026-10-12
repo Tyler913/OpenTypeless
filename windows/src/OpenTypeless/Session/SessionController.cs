@@ -69,6 +69,8 @@ public sealed class SessionController
     private int _generation;
     /// <summary>The foreground window when the recording stopped, where the text is meant to go (0 for a retry).</summary>
     private nint _pasteTarget;
+    /// <summary>Between the session locking (or sleep) and unlocking: no warm microphone meanwhile.</summary>
+    private bool _isLocked;
     /// <summary>
     /// Cancelled recordings still being transcribed in the background (see <see cref="KeepCancelledRecording"/>). A retry
     /// from History takes the record over, and the background result is then dropped rather than written over the retry's.
@@ -132,7 +134,7 @@ public sealed class SessionController
     public void UpdateWarmMicrophone()
     {
         if (State != SessionState.Idle) return;
-        if (_settings.KeepMicrophoneWarm && Permissions.MicrophoneGranted)
+        if (_settings.KeepMicrophoneWarm && Permissions.MicrophoneGranted && !_isLocked)
         {
             if (_recorder.IsRecording && _openDeviceId == ChosenDeviceId) return;
             _recorder.Stop();
@@ -152,6 +154,8 @@ public sealed class SessionController
         {
             _recorder.Stop();
             _openDeviceId = null;
+            // Nor is what it heard last kept for the next dictation (from before the session locked, say).
+            _sink.End();
         }
     }
 
@@ -207,6 +211,8 @@ public sealed class SessionController
     /// </summary>
     public void SystemLocked(string reason)
     {
+        // A warm microphone doesn't stay on behind the lock screen either; see SystemUnlocked.
+        _isLocked = true;
         switch (State)
         {
             case SessionState.Recording:
@@ -218,6 +224,15 @@ public sealed class SessionController
                 _deliverByPaste = false;
                 break;
         }
+        UpdateWarmMicrophone();
+    }
+
+    /// <summary>The session was unlocked: a warm microphone can come back on.</summary>
+    public void SystemUnlocked()
+    {
+        if (!_isLocked) return;
+        _isLocked = false;
+        UpdateWarmMicrophone();
     }
 
     public void EscapePressed()
@@ -285,6 +300,8 @@ public sealed class SessionController
     {
         // First of all, so the connections are ready by the time the first request goes out.
         WarmConnections();
+        // Someone is dictating, so the session is unlocked, whatever notification was missed (a resume without a lock).
+        _isLocked = false;
         if (_settings.SttEndpoint is not { } sttEndpoint || !_settings.IsConfigured(_settings.SttProvider))
         {
             Note("not started — speech-to-text provider not configured");
@@ -464,10 +481,14 @@ public sealed class SessionController
     private void FinishRecording()
     {
         if (State != SessionState.Recording || _record is not { } record || _pipeline is not { } pipeline) return;
+        // A cold recorder hands over everything it still holds as it stops, so it stops before the length is judged;
+        // a warm one goes on for a moment instead (below), which a recording this short doesn't need.
+        var warm = _settings.KeepMicrophoneWarm && _recorder.IsRecording;
+        if (!warm) StopCapture();
         record.Duration = _counter.Seconds;
         if (record.Duration - _preRollSeconds < 0.4)
         {
-            StopCapture();
+            if (warm) StopCapture();
             PlaySound(Sounds.Kind.Stop);
             Note($"discarded — only {record.Duration:0.00}s of audio");
             // Accidental tap.
@@ -488,7 +509,7 @@ public sealed class SessionController
 
         // No waiting when the speaker paused before letting go and that pause is already being transcribed as the last
         // chunk: the moment's (quiet) audio changes nothing then, and the text may be ready at once.
-        var waitsForTail = _settings.KeepMicrophoneWarm && _recorder.IsRecording && !pipeline.EndsInCoveredPause;
+        var waitsForTail = warm && !pipeline.EndsInCoveredPause;
         var processing = new CancellationTokenSource();
         _processing = processing;
         var generation = _generation;
@@ -502,7 +523,7 @@ public sealed class SessionController
                 try { await Task.Delay(ReleaseTail, processing.Token); } catch (OperationCanceledException) { return; }
             }
             // Then the stop sound, which the microphone would have picked up (and muting would have cut off).
-            StopCapture();
+            if (warm) StopCapture();
             PlaySound(Sounds.Kind.Stop);
             record.Duration = _counter.Seconds;
             await Process(record, pipeline, generation, processing.Token);
@@ -522,6 +543,8 @@ public sealed class SessionController
         {
             var raw = await pipeline.Finish();
             watch.Cancel();
+            // Cancelled (and maybe a new dictation started) while the text came back: Cancel has dealt with this one.
+            if (!IsCurrent(generation, token)) return;
             progress.Reach(new ProcessingProgress.Milestone.Transcribed());
             record.Timing = new DictationTiming { Transcription = started.Elapsed.TotalSeconds };
             if (pipeline.BackupChunkCount() is var backupChunks and > 0) record.Timing.TranscriptionBackupChunks = backupChunks;
@@ -541,6 +564,7 @@ public sealed class SessionController
         }
         catch (PipelineFailure failure)
         {
+            if (!IsCurrent(generation, token)) return;
             record.ChunkTexts = pipeline.CompletedTranscripts();
             record.RawText = failure.PartialText;
             record.Status = DictationStatus.Failed;
@@ -552,7 +576,7 @@ public sealed class SessionController
         }
         catch (Exception error)
         {
-            if (ApiException.From(error).IsCancelled) return;
+            if (ApiException.From(error).IsCancelled || !IsCurrent(generation, token)) return;
             record.Status = DictationStatus.Failed;
             record.Error = error.Message;
             Account(record, pipeline, null, TakeDiscardedPolishes());
@@ -787,7 +811,8 @@ public sealed class SessionController
                 var sent = false;
                 if (_settings.PressEnterAfterInsert)
                 {
-                    sent = await TextInserter.PressEnter(() => IsCurrent(generation, token));
+                    // Not into another window that came to the front after the paste, nor once the screen locked.
+                    sent = await TextInserter.PressEnter(() => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved);
                     if (!IsCurrent(generation, token)) return;
                 }
                 if (notice is { } message)
@@ -956,7 +981,10 @@ public sealed class SessionController
     {
         if (!IsCapturing || _record is not { } record)
         {
-            if (State != SessionState.Idle) Cancel(silently: true);
+            // Being processed: its record is left as it is, so the next launch shows it interrupted and retryable (as on
+            // macOS), rather than cancelled and kept only a day.
+            _processing?.Cancel();
+            _pipeline?.Cancel();
             return;
         }
         _processing?.Cancel();

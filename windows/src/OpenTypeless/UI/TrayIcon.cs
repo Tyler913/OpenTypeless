@@ -18,6 +18,8 @@ public sealed class TrayIcon : IDisposable
     public event Action<Win32.RECT>? Clicked;
     /// <summary>The screen was locked or the PC is going to sleep (which of them, for the log).</summary>
     public event Action<string>? Locked;
+    /// <summary>This session was unlocked again.</summary>
+    public event Action? Unlocked;
 
     public nint Hwnd { get; }
 
@@ -136,6 +138,7 @@ public sealed class TrayIcon : IDisposable
             return 0;
         }
         if (msg == Win32.WM_WTSSESSION_CHANGE && (int)wParam == Win32.WTS_SESSION_LOCK) Locked?.Invoke("screen locked");
+        if (msg == Win32.WM_WTSSESSION_CHANGE && (int)wParam == Win32.WTS_SESSION_UNLOCK) Unlocked?.Invoke();
         if (msg == Win32.WM_POWERBROADCAST && (int)wParam == Win32.PBT_APMSUSPEND) Locked?.Invoke("going to sleep");
         if (Input.TextInserter.HandleClipboardMessage(hwnd, msg, wParam)) return 0;
         if (msg is WM_SETTINGCHANGE or WM_DPICHANGED or WM_DISPLAYCHANGE)

@@ -70,6 +70,7 @@ public partial class App : Application
         _popover = new PopoverWindow(_controller, page => ShowSettings(page), Quit);
         _tray.Clicked += rect => _popover.Toggle(rect);
         _tray.Locked += _controller.SystemLocked;
+        _tray.Unlocked += _controller.SystemUnlocked;
 
         _hotkey.Hotkey = _settings.Hotkey;
         _hotkey.OnPress = _controller.HotkeyPressed;

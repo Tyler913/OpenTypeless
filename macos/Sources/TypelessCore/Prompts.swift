@@ -142,7 +142,8 @@ public enum Prompts {
     public static func droppedTooMuch(input: String, output: String) -> Bool {
         let words = WordCount.count(input)
         guard words >= 150 else { return false }
-        return Double(WordCount.count(output)) < Double(words) * 0.55
+        // In whole numbers: 200 × 0.55 is 110.00000000000001 in floating point, which would reject exactly 55%.
+        return WordCount.count(output) * 100 < words * 55
     }
 
     /// An answer, a translation or a refusal has little in common with the transcript, while a clean-up that only

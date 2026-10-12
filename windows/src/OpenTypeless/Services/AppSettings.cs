@@ -82,6 +82,8 @@ public sealed class AppSettings : INotifyPropertyChanged
         }
         var aside = SafeFile.MoveAside(path);
         AppLog.Debug("settings", aside != null ? $"damaged settings moved to {aside}" : "damaged settings couldn't be moved aside");
+        // Not moved aside: it's the only copy, so it isn't saved over either.
+        writable = aside != null;
         return new JsonObject();
     }
 

@@ -160,7 +160,8 @@ public static class Prompts
     {
         var words = WordCount.Count(input);
         if (words < 150) return false;
-        return WordCount.Count(output) < words * 0.55;
+        // In whole numbers: 200 × 0.55 is 110.00000000000001 in floating point, which would reject exactly 55%.
+        return WordCount.Count(output) * 100 < words * 55;
     }
 
     /// <summary>

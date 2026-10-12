@@ -358,8 +358,10 @@ public struct UsageLedger: Equatable, Sendable {
             return ledger
         }
         if let ledger = UsageLedger(storedData: data) { return ledger }
-        SafeFile.moveAside(url)
-        return UsageLedger()
+        var ledger = UsageLedger()
+        // Not moved aside (the folder is read-only, say): then it's the only copy, and isn't saved over either.
+        if SafeFile.moveAside(url) == nil { ledger.isUnreadable = true }
+        return ledger
     }
 
     public func save(to url: URL) {

@@ -358,6 +358,8 @@ enum Credentials {
             return
         }
         let url = file
+        // There but unreadable: replacing it would lose the keys this run couldn't read.
+        if FileManager.default.fileExists(atPath: url.path), (try? Data(contentsOf: url)) == nil { return }
         // Created owner-only (0600) from the start, then swapped in whole.
         let temporary = url.deletingLastPathComponent().appendingPathComponent(".credentials-\(UUID().uuidString)")
         guard FileManager.default.createFile(atPath: temporary.path, contents: data,

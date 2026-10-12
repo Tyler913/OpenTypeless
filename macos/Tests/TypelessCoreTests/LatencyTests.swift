@@ -273,7 +273,8 @@ extension PipelineTests {
         pipeline.append(LatencyAudio.tone(0.3))
         _ = try await pipeline.finish()
         #expect(!pipeline.tailWasSpeculative)
-        #expect(sent.all.last == AudioFormat.sampleCount(forSeconds: 3.9))
+        // The whole tail went out after all (the speculative request may reach the server after it, so not "last").
+        #expect(sent.all.contains(AudioFormat.sampleCount(forSeconds: 3.9)))
     }
 
     @Test func nothingIsLeftToSendAfterAPauseThatWasCutAt() async throws {

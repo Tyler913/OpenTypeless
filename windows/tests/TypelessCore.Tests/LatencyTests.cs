@@ -296,7 +296,8 @@ public class LatencyTests
             pipeline.Append(Tone(0.3));
             await pipeline.Finish();
             Assert.False(pipeline.TailWasSpeculative);
-            lock (MockOpenRouter.Lock) Assert.Equal(AudioFormat.SampleCount(3.9), sent[^1]);
+            // The whole tail went out after all (the speculative request may reach the server after it, so not "last").
+            lock (MockOpenRouter.Lock) Assert.Contains(AudioFormat.SampleCount(3.9), sent);
         }
         finally
         {

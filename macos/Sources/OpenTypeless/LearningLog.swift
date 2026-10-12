@@ -21,8 +21,9 @@ enum LearningLog {
         queue.async {
             let url = url
             if let handle = try? FileHandle(forWritingTo: url) {
-                handle.seekToEndOfFile()
-                handle.write(line)
+                // The throwing calls: the old ones raise an Objective-C exception on a full disk, which kills the app.
+                _ = try? handle.seekToEnd()
+                try? handle.write(contentsOf: line)
                 try? handle.close()
             } else {
                 try? line.write(to: url)

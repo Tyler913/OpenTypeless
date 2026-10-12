@@ -1,0 +1,56 @@
+{
+  "matching": [
+    { "apps": ["com.tinyspeck.slackmacgap", "com.apple.Safari"], "app": "com.apple.Safari", "expected": 1 },
+    { "apps": ["com.tinyspeck.slackmacgap", "com.apple.Safari"], "app": "com.apple.safari", "expected": 1 },
+    { "apps": ["com.tinyspeck.slackmacgap"], "app": "com.tinyspeck.slackmacgap.helper", "expected": null },
+    { "apps": ["com.tinyspeck.slackmacgap"], "app": "com.tinyspeck", "expected": null },
+    { "apps": ["slack.exe", "chrome.exe"], "app": "Chrome.EXE", "expected": 1 },
+    { "apps": ["slack.exe"], "app": "slack", "expected": 0 },
+    { "apps": ["Slack"], "app": "slack.exe", "expected": 0 },
+    { "apps": [" slack.exe "], "app": "slack.exe", "expected": 0 },
+    { "apps": ["slack.exe"], "app": "slack.exe.bak", "expected": null },
+    { "apps": ["notepad.exe", "Notepad.exe"], "app": "NOTEPAD.EXE", "expected": 0 },
+    { "apps": ["", "code.exe"], "app": "", "expected": null },
+    { "apps": [".exe"], "app": "", "expected": null },
+    { "apps": ["code.exe"], "app": null, "expected": null },
+    { "apps": [], "app": "code.exe", "expected": null }
+  ],
+  "resolution": [
+    {
+      "name": "no profile: the global settings as they are",
+      "global": { "polishEnabled": true, "pressEnter": false, "language": "", "extraInstructions": "Keep my casual tone" },
+      "profile": null,
+      "expected": { "polishEnabled": true, "pressEnter": false, "language": "", "extraInstructions": "Keep my casual tone", "profileID": null, "profileName": null }
+    },
+    {
+      "name": "a profile that sets nothing still names itself",
+      "global": { "polishEnabled": true, "pressEnter": false, "language": "zh", "extraInstructions": "" },
+      "profile": { "id": "P1", "app": "com.apple.mail", "name": "Mail" },
+      "expected": { "polishEnabled": true, "pressEnter": false, "language": "zh", "extraInstructions": "", "profileID": "P1", "profileName": "Mail" }
+    },
+    {
+      "name": "every override",
+      "global": { "polishEnabled": true, "pressEnter": false, "language": "", "extraInstructions": "" },
+      "profile": { "id": "P2", "app": "slack.exe", "name": "Slack", "polish": false, "pressEnter": true, "language": "en", "instructions": "Short messages" },
+      "expected": { "polishEnabled": false, "pressEnter": true, "language": "en", "extraInstructions": "Short messages", "profileID": "P2", "profileName": "Slack" }
+    },
+    {
+      "name": "the app's preferences come after the global ones",
+      "global": { "polishEnabled": false, "pressEnter": true, "language": "en", "extraInstructions": "  Never use bullet lists\n" },
+      "profile": { "id": "P3", "app": "com.microsoft.Outlook", "name": "Outlook", "polish": true, "pressEnter": false, "instructions": "\nUse a formal tone  " },
+      "expected": { "polishEnabled": true, "pressEnter": false, "language": "en", "extraInstructions": "Never use bullet lists\nUse a formal tone", "profileID": "P3", "profileName": "Outlook" }
+    },
+    {
+      "name": "auto-detect overrides a fixed global language",
+      "global": { "polishEnabled": true, "pressEnter": false, "language": "zh", "extraInstructions": "Keep technical terms lowercase" },
+      "profile": { "id": "P4", "app": "code.exe", "name": "Visual Studio Code", "language": "", "instructions": "   " },
+      "expected": { "polishEnabled": true, "pressEnter": false, "language": "", "extraInstructions": "Keep technical terms lowercase", "profileID": "P4", "profileName": "Visual Studio Code" }
+    },
+    {
+      "name": "fields of the wrong type or unknown fields count as unset; a missing name is the app",
+      "global": { "polishEnabled": true, "pressEnter": true, "language": "ja", "extraInstructions": "" },
+      "profile": { "id": "P5", "app": "wechat.exe", "polish": "no", "pressEnter": null, "language": 7, "website": "example.com" },
+      "expected": { "polishEnabled": true, "pressEnter": true, "language": "ja", "extraInstructions": "", "profileID": "P5", "profileName": "wechat.exe" }
+    }
+  ]
+}

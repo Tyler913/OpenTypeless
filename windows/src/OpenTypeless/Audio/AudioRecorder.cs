@@ -16,7 +16,8 @@ public sealed record MicrophoneInfo(string Id, string Name, bool IsVirtual)
 ///
 /// Capture runs on its own thread. If the default input changes mid-recording (a headset connects) or the device
 /// disappears, the stream is reopened on the new default device so a long dictation keeps going, like the
-/// macOS engine rebuild on a route change.
+/// macOS engine rebuild on a route change. When no device can be opened even after a few tries, capture ends and
+/// <see cref="OnFailure"/> says so.
 /// </summary>
 public sealed class AudioRecorder
 {
@@ -24,18 +25,34 @@ public sealed class AudioRecorder
     public Action<short[]>? OnSamples;
     /// <summary>Called on the capture thread with the RMS (0…1) of each delivered block.</summary>
     public Action<float>? OnLevel;
-    /// <summary>Called on the capture thread when capture fails irrecoverably.</summary>
+    /// <summary>
+    /// Called on the capture thread when capture fails irrecoverably. <see cref="IsRecording"/> is false by then, so the
+    /// next <see cref="Start"/> opens the microphone afresh.
+    /// </summary>
     public Action<Exception>? OnFailure;
 
-    public bool IsRecording { get; private set; }
+    private volatile bool _isRecording;
+    public bool IsRecording => _isRecording;
 
     /// <summary>The input to use, by endpoint ID; null (or a device that isn't active) means the default input.</summary>
     public string? DeviceId { get; set; }
 
     private Thread? _thread;
-    private volatile bool _stopRequested;
-    private volatile bool _reopenRequested;
-    private AutoResetEvent? _wake;
+    private volatile CaptureContext? _capture;
+
+    /// <summary>
+    /// One start's stop and reopen flags and wake event, handed to its capture thread. Each start gets its own, so a
+    /// thread left behind by a start that timed out can't be revived by the next one (two threads would capture).
+    /// </summary>
+    private sealed class CaptureContext
+    {
+        public readonly AutoResetEvent Wake = new(false);
+        public volatile bool StopRequested;
+        public volatile bool ReopenRequested;
+    }
+
+    /// <summary>Tries after the first failed reopen: right after an unplug the next device is often not ready yet.</summary>
+    private const int ReopenRetries = 3;
 
     public sealed class RecorderException(string message) : Exception(message);
 
@@ -43,51 +60,61 @@ public sealed class AudioRecorder
     public void Start()
     {
         if (IsRecording) return;
-        _stopRequested = false;
-        _reopenRequested = false;
-        _wake = new AutoResetEvent(false);
+        // A capture that ended on its own (see CaptureLoop) still has its thread and event to clean up.
+        Stop();
+        var capture = new CaptureContext();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        _thread = new Thread(() => CaptureLoop(started)) { IsBackground = true, Name = "OpenTypeless capture", Priority = ThreadPriority.AboveNormal };
-        _thread.SetApartmentState(ApartmentState.MTA);
-        _thread.Start();
+        var thread = new Thread(() => CaptureLoop(capture, started)) { IsBackground = true, Name = "OpenTypeless capture", Priority = ThreadPriority.AboveNormal };
+        thread.SetApartmentState(ApartmentState.MTA);
+        _capture = capture;
+        _thread = thread;
+        thread.Start();
         try
         {
             if (!started.Task.Wait(TimeSpan.FromSeconds(5))) throw new RecorderException(L("打开麦克风超时", "Timed out opening the microphone"));
         }
         catch (AggregateException e) when (e.InnerException != null)
         {
-            _thread.Join(1000);
+            Stop();
             throw e.InnerException;
         }
         catch
         {
-            _stopRequested = true;
-            _wake?.Set();
+            // Timed out: the thread is left to finish on its own, with its own context, once the device answers. Seeing
+            // the start given up, it stops without delivering anything.
+            started.TrySetCanceled();
+            capture.StopRequested = true;
+            capture.Wake.Set();
+            _thread = null;
+            _capture = null;
             throw;
         }
-        IsRecording = true;
+        _isRecording = true;
     }
 
-    /// <summary>Stops capturing. Everything captured so far has been delivered through <see cref="OnSamples"/> on return.</summary>
+    /// <summary>
+    /// Stops capturing. Everything captured so far has been delivered through <see cref="OnSamples"/> on return. Also
+    /// cleans up after a capture that ended on its own.
+    /// </summary>
     public void Stop()
     {
-        if (!IsRecording) return;
-        IsRecording = false;
-        _stopRequested = true;
-        _wake?.Set();
-        _thread?.Join(TimeSpan.FromSeconds(2));
+        _isRecording = false;
+        if (_thread is not { } thread || _capture is not { } capture) return;
+        capture.StopRequested = true;
+        capture.Wake.Set();
+        // A thread that doesn't finish in time may still use its event: it isn't disposed under it.
+        if (thread.Join(TimeSpan.FromSeconds(2))) capture.Wake.Dispose();
         _thread = null;
-        _wake?.Dispose();
-        _wake = null;
+        _capture = null;
     }
 
-    private void CaptureLoop(TaskCompletionSource started)
+    private void CaptureLoop(CaptureContext capture, TaskCompletionSource started)
     {
         // Developer aid: OPENTYPELESS_TEST_AUDIO=<16 kHz mono WAV> replaces the microphone with that file, streamed
         // in real time, so the whole app can be tested end to end on machines without a usable microphone.
         if (Environment.GetEnvironmentVariable("OPENTYPELESS_TEST_AUDIO") is { Length: > 0 } testAudio)
         {
-            PlayTestAudio(testAudio, started);
+            PlayTestAudio(testAudio, capture, started);
             return;
         }
         var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
@@ -97,12 +124,12 @@ public sealed class AudioRecorder
         try
         {
             var first = true;
-            while (!_stopRequested)
+            while (!capture.StopRequested)
             {
                 Stream? stream;
                 try
                 {
-                    stream = Stream.Open(enumerator, _wake!, DeviceId);
+                    stream = first ? Stream.Open(enumerator, capture.Wake, DeviceId) : Reopen(enumerator, capture);
                 }
                 catch (Exception error)
                 {
@@ -111,24 +138,34 @@ public sealed class AudioRecorder
                         started.TrySetException(error);
                         return;
                     }
+                    if (capture.StopRequested) break;
+                    // No device to go on with. Not recording any more, said before the failure is reported: a warm
+                    // microphone left "recording" here would make every later dictation record nothing.
+                    if (ReferenceEquals(_capture, capture)) _isRecording = false;
                     Flush(pending);
                     OnFailure?.Invoke(error);
                     return;
                 }
-                if (first) started.TrySetResult();
+                if (stream == null) break; // stopped while waiting to retry
+                if (first && !started.TrySetResult())
+                {
+                    // Start gave up waiting (it timed out) and may have started another capture since.
+                    stream.Dispose();
+                    return;
+                }
                 first = false;
-                _reopenRequested = false;
+                capture.ReopenRequested = false;
 
                 try
                 {
-                    while (!_stopRequested && !_reopenRequested)
+                    while (!capture.StopRequested && !capture.ReopenRequested)
                     {
-                        _wake!.WaitOne(100);
+                        capture.Wake.WaitOne(100);
                         stream.Drain(pending);
                         // ~40 ms blocks: small enough for a lively level meter, like the macOS tap size.
                         if (pending.Count >= 640) Flush(pending);
                     }
-                    if (_stopRequested) stream.Drain(pending);
+                    if (capture.StopRequested) stream.Drain(pending);
                 }
                 catch (COMException)
                 {
@@ -148,7 +185,28 @@ public sealed class AudioRecorder
         }
     }
 
-    private void PlayTestAudio(string path, TaskCompletionSource started)
+    /// <summary>
+    /// Opens the stream again after the device went away or the default changed. A failure is retried a few times, a
+    /// moment apart, before it counts. Null when capture was stopped meanwhile.
+    /// </summary>
+    private Stream? Reopen(IMMDeviceEnumerator enumerator, CaptureContext capture)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return Stream.Open(enumerator, capture.Wake, DeviceId);
+            }
+            catch (Exception) when (attempt < ReopenRetries)
+            {
+                // Woken early by Stop, or by the chosen device coming back.
+                capture.Wake.WaitOne(200);
+                if (capture.StopRequested) return null;
+            }
+        }
+    }
+
+    private void PlayTestAudio(string path, CaptureContext capture, TaskCompletionSource started)
     {
         short[] samples;
         try
@@ -160,14 +218,14 @@ public sealed class AudioRecorder
             started.TrySetException(error);
             return;
         }
-        started.TrySetResult();
+        if (!started.TrySetResult()) return;
         const int block = 640; // 40 ms
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var sent = 0;
         var pending = new List<short>(block);
-        while (!_stopRequested)
+        while (!capture.StopRequested)
         {
-            _wake!.WaitOne(10);
+            capture.Wake.WaitOne(10);
             var due = (int)(clock.Elapsed.TotalSeconds * AudioFormat.SampleRate);
             while (sent + block <= due)
             {
@@ -311,9 +369,9 @@ public sealed class AudioRecorder
 
         private void Reopen()
         {
-            if (!owner.IsRecording) return;
-            owner._reopenRequested = true;
-            try { owner._wake?.Set(); } catch (ObjectDisposedException) { }
+            if (!owner.IsRecording || owner._capture is not { } capture) return;
+            capture.ReopenRequested = true;
+            try { capture.Wake.Set(); } catch (ObjectDisposedException) { }
         }
 
         public void OnDeviceAdded(string deviceId) { }

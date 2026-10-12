@@ -91,7 +91,11 @@ public sealed class SessionController
             }
         };
         _recorder.OnFailure = error => _dispatcher.TryEnqueue(() =>
-            Abort(L("录音中断：", "Recording interrupted: ") + error.Message));
+        {
+            // The recorder has stopped: a warm microphone is opened again once idle (or by the next dictation).
+            _openDeviceId = null;
+            Abort(L("录音中断：", "Recording interrupted: ") + error.Message);
+        });
         // Set once: while the microphone is kept warm the recorder runs between dictations too.
         _recorder.OnSamples = _sink.Deliver;
         var hudModel = Hud.Model;
@@ -102,6 +106,12 @@ public sealed class SessionController
     }
 
     private string? ChosenDeviceId => _settings.MicrophoneId.Length == 0 ? null : _settings.MicrophoneId;
+
+    /// <summary>
+    /// The running dictation is still capturing: recording, or in the moment after the key is released while the last
+    /// of the audio comes in (see <see cref="FinishRecording"/>).
+    /// </summary>
+    private bool IsCapturing => _writer != null;
 
     /// <summary>
     /// With "Keep microphone ready" on, keeps the recorder running between dictations (on the chosen input), so a
@@ -260,6 +270,8 @@ public sealed class SessionController
         }
         catch (Exception error)
         {
+            // Otherwise the record stays "recording" and turns into a failed entry with no audio at the next launch.
+            _history.Delete(record);
             Hud.Show(new HudPhase.Error(L("无法创建录音文件：", "Can't create the recording file: ") + error.Message), 4);
             return;
         }
@@ -392,18 +404,26 @@ public sealed class SessionController
         _preview = null;
         Hud.Model.Preview = "";
         _writer?.Close();
+        // The dictation went on from the audio in memory; only a retry from History would miss what didn't reach the file.
+        if (_writer?.Failure is { } failure) Note("recording file incomplete: " + failure.Message);
         _writer = null;
     }
+
+    /// <summary>
+    /// How long a warm microphone goes on delivering after the key is released. The capture thread hands its audio over
+    /// in blocks: the one with the last syllable would otherwise land in the pre-roll and be thrown away. (A cold
+    /// recorder delivers everything it has as it stops.)
+    /// </summary>
+    private static readonly TimeSpan ReleaseTail = TimeSpan.FromMilliseconds(100);
 
     private void FinishRecording()
     {
         if (State != SessionState.Recording || _record is not { } record || _pipeline is not { } pipeline) return;
-        StopCapture();
-        PlaySound(Sounds.Kind.Stop);
-
         record.Duration = _counter.Seconds;
         if (record.Duration - _preRollSeconds < 0.4)
         {
+            StopCapture();
+            PlaySound(Sounds.Kind.Stop);
             Note($"discarded — only {record.Duration:0.00}s of audio");
             // Accidental tap.
             pipeline.Cancel();
@@ -419,9 +439,26 @@ public sealed class SessionController
         State = SessionState.Processing;
         Hud.ShowWorking(_settings.PolishEnabled);
 
+        // No waiting when the speaker paused before letting go and that pause is already being transcribed as the last
+        // chunk: the moment's (quiet) audio changes nothing then, and the text may be ready at once.
+        var waitsForTail = _settings.KeepMicrophoneWarm && _recorder.IsRecording && !pipeline.EndsInCoveredPause;
         var processing = new CancellationTokenSource();
         _processing = processing;
-        _ = Process(record, pipeline, processing.Token);
+        _ = Run();
+
+        async Task Run()
+        {
+            if (waitsForTail)
+            {
+                // Cancelled meanwhile: Cancel stopped the capture itself.
+                try { await Task.Delay(ReleaseTail, processing.Token); } catch (OperationCanceledException) { return; }
+            }
+            // Then the stop sound, which the microphone would have picked up (and muting would have cut off).
+            StopCapture();
+            PlaySound(Sounds.Kind.Stop);
+            record.Duration = _counter.Seconds;
+            await Process(record, pipeline, processing.Token);
+        }
     }
 
     // MARK: - Processing
@@ -774,9 +811,10 @@ public sealed class SessionController
         var wasRecording = State == SessionState.Recording;
         _processing?.Cancel();
         _pipeline?.Cancel();
+        // Also right after the key was released, while the last of the audio is still coming in: no waiting for it.
+        if (IsCapturing) StopCapture();
         if (wasRecording)
         {
-            StopCapture();
             if (_record != null) _history.Delete(_record);
         }
         else if (_record is { } record)
@@ -796,6 +834,31 @@ public sealed class SessionController
         Reset();
         if (silently) Hud.Show(new HudPhase.Hidden());
         else Hud.Show(new HudPhase.Error(L("已取消", "Cancelled")), 1);
+    }
+
+    /// <summary>
+    /// Quitting mid-recording keeps the dictation instead of deleting it: capture stops, the recording file is closed (so
+    /// it's complete) and the record stays in History, where the next launch shows it as interrupted with its audio saved,
+    /// ready to retry. Runs as the app exits, so it only does what's quick. A dictation already being processed is
+    /// cancelled as before (what was transcribed is kept for a day).
+    /// </summary>
+    public void StopForQuit()
+    {
+        if (!IsCapturing || _record is not { } record)
+        {
+            if (State != SessionState.Idle) Cancel(silently: true);
+            return;
+        }
+        _processing?.Cancel();
+        _pipeline?.Cancel();
+        StopCapture();
+        record.Duration = _counter.Seconds;
+        // A retry reuses the segments already transcribed.
+        if (_pipeline is { } pipeline) record.ChunkTexts = pipeline.CompletedTranscripts();
+        // An accidental tap isn't worth an entry.
+        if (record.Duration - _preRollSeconds < 0.4) _history.Delete(record);
+        else _history.Update(record);
+        Hud.Show(new HudPhase.Hidden());
     }
 
     private void Abort(string message)

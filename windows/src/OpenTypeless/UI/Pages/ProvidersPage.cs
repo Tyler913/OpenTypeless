@@ -183,16 +183,16 @@ internal sealed class ProviderCard : UserControl
                 key.Password = (await content.GetTextAsync()).Trim();
             }
         };
-        _details.Children.Add(FieldRow("API Key", key, paste));
+        _details.Children.Add(FieldRow(L("API Key", "API Key"), key, paste));
         if (_id == ProviderId.OpenRouter && AppSettings.OpenRouterKeyFromEnvironment != null)
         {
             var note = Ui.Text(L("正在使用环境变量 OPENROUTER_API_KEY 中的 Key；没有设置这个变量时才用这里保存的 Key",
                                  "Using the key in the OPENROUTER_API_KEY environment variable; the key saved here is used when it isn't set"),
                                12, foreground: Ui.Secondary, wrap: true);
-            note.Margin = new Thickness(80, 0, 0, 0);
+            note.Margin = new Thickness(104, 0, 0, 0);
             _details.Children.Add(note);
         }
-        _keyError.Margin = new Thickness(80, 0, 0, 0);
+        _keyError.Margin = new Thickness(104, 0, 0, 0);
         _keyError.Visibility = Visibility.Collapsed;
         _details.Children.Add(_keyError);
 
@@ -211,7 +211,7 @@ internal sealed class ProviderCard : UserControl
             _settings.SetBaseUrl(_id.DefaultBaseUrl(), _id);
             url.Text = _settings.BaseUrl(_id);
         };
-        _details.Children.Add(FieldRow("Base URL", url, _reset));
+        _details.Children.Add(FieldRow(L("接口地址", "Base URL"), url, _reset));
 
         // Link / hint, test result, test button
         var bottom = new Grid
@@ -264,13 +264,14 @@ internal sealed class ProviderCard : UserControl
             ColumnSpacing = 8,
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = new GridLength(72) },
+                new ColumnDefinition { Width = new GridLength(96) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 new ColumnDefinition { Width = GridLength.Auto },
             },
         };
         var text = Ui.Text(label, 12, FontWeights.Medium, Ui.Secondary);
         text.VerticalAlignment = VerticalAlignment.Center;
+        text.TextTrimming = TextTrimming.CharacterEllipsis;
         grid.Children.Add(text);
         Grid.SetColumn(field, 1);
         grid.Children.Add(field);

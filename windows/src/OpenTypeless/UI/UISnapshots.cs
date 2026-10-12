@@ -70,7 +70,9 @@ public static class UISnapshots
                 ("hud-working", new HudPhase.Working()),
                 ("hud-copied", new HudPhase.Copied()),
                 ("hud-learned", new HudPhase.Learned("Typeless、罗技")),
-                ("hud-error", new HudPhase.Error(L("转写失败，可在托盘菜单重试", "Failed — retry from the tray menu"))),
+                // A long, real error, to check that it wraps instead of losing its end.
+                ("hud-error", new HudPhase.Error(L("需要麦克风权限：设置 → 隐私和安全性 → 麦克风",
+                                                   "Microphone access needed: Settings → Privacy & security → Microphone"))),
             ];
             foreach (var (name, phase) in phases)
             {

@@ -8,6 +8,7 @@ struct MenuPopoverView: View {
     @ObservedObject var settings = AppSettings.shared
     @ObservedObject var history = HistoryStore.shared
     @ObservedObject var updater = Updater.shared
+    @ObservedObject var permissions = PermissionsMonitor.shared
     let openSettings: (SettingsPage?) -> Void
     let close: () -> Void
     @State private var copiedID: String?
@@ -142,10 +143,10 @@ struct MenuPopoverView: View {
             issues.append(Issue(text: L("还没有配置 \(settings.sttProvider.displayName) 的 API Key",
                                         "No API key for \(settings.sttProvider.displayName)"), page: .providers))
         }
-        if !Permissions.accessibilityGranted {
+        if !permissions.accessibilityGranted {
             issues.append(Issue(text: L("需要辅助功能权限", "Accessibility permission needed"), page: .general))
         }
-        if !Permissions.microphoneGranted {
+        if !permissions.microphoneGranted {
             issues.append(Issue(text: L("需要麦克风权限", "Microphone permission needed"), page: .general))
         }
         return issues

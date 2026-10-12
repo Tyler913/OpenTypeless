@@ -1,6 +1,9 @@
 # Builds the macOS app natively for Apple silicon and for Intel, each on its own runner: runs the tests (and, once,
-# the performance budgets), then packages the app as a disk image and a zip, checks them and renders the UI from the
-# packaged app (download both from the run's Artifacts).
+# the performance budgets, except for a release tag), then packages the app as a disk image and a zip, checks them and
+# renders the UI from the packaged app (download both from the run's Artifacts).
+#
+# The long steps have their own time limits, at least twice their longest recent runs, so a hung step fails in minutes
+# instead of holding the runner until the job's limit (a build once hung for 35 minutes on the Intel runner).
 #
 #   ci.yml calls it          when a push or pull request changes macos/
 #   release.yml calls it     for a tag like `1.0.2`
@@ -48,6 +51,7 @@ jobs:
 
       # The same scripts used locally.
       - name: Test with coverage
+        timeout-minutes: 10 # 1.5-2.5 minutes on Apple silicon, 2.5-5 on Intel
         run: |
           mkdir -p "$RUNNER_TEMP/tests-macos"
           set -o pipefail
@@ -64,9 +68,12 @@ jobs:
 
       # Time budgets for the work that runs while you dictate and on the main thread, in a release build like the
       # app's (Tests/TypelessCoreTests/PerformanceTests.swift). The timings are on the run's summary page.
-      # Once is enough, on the Apple silicon runner (the Intel one is slower hardware, not slower code).
+      # Once is enough, on the Apple silicon runner (the Intel one is slower hardware, not slower code). Not for a
+      # release tag: the pull request that changed the code already met them, and a timing flake mustn't block a
+      # release.
       - name: Performance
-        if: matrix.arch == 'arm64'
+        if: matrix.arch == 'arm64' && !startsWith(github.ref, 'refs/tags/')
+        timeout-minutes: 5 # 1-1.5 minutes
         run: scripts/perf.sh
 
       # Releases are signed with a stable self-signed certificate (see scripts/create-release-cert.sh): an installed
@@ -101,6 +108,7 @@ jobs:
           echo "OPENTYPELESS_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 
       - name: Build and package
+        timeout-minutes: 10 # 1-1.5 minutes on Apple silicon, 1.5-3 on Intel
         run: scripts/build-app.sh --package
 
       # What a user gets: the disk image holds a valid, signed app for this processor and a link to Applications, the

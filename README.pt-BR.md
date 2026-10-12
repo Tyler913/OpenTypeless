@@ -74,6 +74,7 @@ O prompt é ajustado com conjuntos de desenvolvimento e de teste reservados (vej
 
 - **Atalho global.** Segure **Fn** (macOS) ou **Alt direito** (Windows) por padrão, ou grave qualquer modificador sozinho (⌘ direito, ⌥ direito, Ctrl direito…) ou uma combinação (⌥ Espaço, Alt + Espaço, F5…).
 - **Segurar para falar ou mãos livres.** Segure para falar; toque uma vez para continuar gravando com as mãos livres e toque de novo para terminar. **Esc** cancela. Depois de 10 segundos falando, um ditado cancelado não se perde: é transcrito (sem ser inserido) e fica no Histórico por 24 horas.
+- **Colar o último ditado** (opcional): defina um atalho em **Configurações → Atalho**, ou clique no botão do painel da barra de menus ou da bandeja, para inserir de novo o seu último ditado. Se ele falhou, é transcrito novamente antes.
 - **Escolha seu microfone** em **Configurações → Geral**, com um medidor de nível ao vivo para conferir que ele ouve você. Dispositivos virtuais (apps de reunião e streaming) aparecem marcados, e se o escolhido for desconectado o padrão do sistema é usado.
 - **Manter o microfone pronto** (opcional): a gravação começa no instante em que você pressiona a tecla e inclui o momento anterior, então a primeira palavra não é cortada. O microfone fica ligado e fones Bluetooth passam para o modo de chamada.
 - **Prévia ao vivo (beta)**: veja as palavras acima da cápsula de gravação enquanto fala, reconhecidas no dispositivo (SpeechAnalyzer no macOS; reconhecimento de fala do Windows). O texto inserido continua vindo do seu provedor.

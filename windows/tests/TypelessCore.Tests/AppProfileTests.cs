@@ -73,10 +73,74 @@ public class AppProfileTests
         Assert.Equal(new AppProfile { Id = "X", App = "com.apple.Safari", Name = "com.apple.Safari" }, profiles[0]);
         Assert.True(profiles[0].IsEmpty);
         Assert.True(profiles[1].PressEnter == true && profiles[1].Name == "Slack" && !profiles[1].IsEmpty);
-        // One saved without an ID gets one, so it can still be found again by a retry.
-        Assert.False(string.IsNullOrEmpty(AppProfile.FromJson(JsonNode.Parse("""{"app":"code.exe"}"""))!.Id));
         Assert.Empty(AppProfile.ListFromJson(JsonNode.Parse("""{"app":"code.exe"}""")));
         Assert.Empty(AppProfile.ListFromJson(null));
+    }
+
+    [Fact]
+    public void ListsFollowSharedCases()
+    {
+        foreach (var node in Cases()["lists"]!.AsArray())
+        {
+            var name = (string)node!["name"]!;
+            // Through text, as the settings file stores it.
+            var profiles = AppProfile.WithUniqueIds(AppProfile.ListFromJson(JsonNode.Parse(node["saved"]!.ToJsonString())));
+            Assert.True(profiles.Select(p => p.App).SequenceEqual(node["apps"]!.AsArray().Select(a => (string)a!)), name);
+            var kept = node["keptIDs"]!.AsArray();
+            for (var i = 0; i < profiles.Count; i++)
+            {
+                if ((string?)kept[i] is { } id) Assert.True(profiles[i].Id == id, name);
+                else Assert.False(string.IsNullOrEmpty(profiles[i].Id), name);
+            }
+            Assert.True(profiles.Select(p => p.Id).Distinct().Count() == profiles.Count, $"{name}: IDs aren't unique");
+        }
+    }
+
+    [Fact]
+    public void RepairedIdsStayPutOnceSaved()
+    {
+        var saved = JsonNode.Parse("""[{"app":"slack.exe","name":"Slack"},{"id":"A","app":"code.exe"},{"id":"A","app":"notes.exe"}]""");
+        // Reading what was saved never makes up an ID by itself, however often it's read; the repair happens once, on load.
+        Assert.Equal("", AppProfile.ListFromJson(saved)[0].Id);
+        Assert.Equal("", AppProfile.ListFromJson(saved)[0].Id);
+        var loaded = AppProfile.WithUniqueIds(AppProfile.ListFromJson(saved));
+        // Saved, then read again (as every access to the settings does): the same IDs, and nothing left to repair.
+        var stored = JsonNode.Parse(AppProfile.ListToJson(loaded).ToJsonString());
+        Assert.Equal(loaded, AppProfile.ListFromJson(stored));
+        Assert.Equal(loaded, AppProfile.ListFromJson(stored));
+        Assert.Equal(loaded, AppProfile.WithUniqueIds(AppProfile.ListFromJson(stored)));
+        // So an edit and a Remove by ID find the profile they were made for.
+        var edited = AppProfile.ListFromJson(stored);
+        var slack = edited.FindIndex(p => p.Id == loaded[0].Id);
+        edited[slack] = edited[slack] with { PressEnter = true };
+        Assert.Equal(new[] { "slack.exe" }, edited.Where(p => p.PressEnter == true).Select(p => p.App));
+        Assert.Equal(new[] { "slack.exe", "code.exe" }, edited.Where(p => p.Id != loaded[2].Id).Select(p => p.App));
+    }
+
+    [Fact]
+    public void DeliveryFollowsSharedCases()
+    {
+        var global = new DictationSettings(true, false, "", "");
+        foreach (var node in Cases()["delivery"]!.AsArray())
+        {
+            var profiles = node!["profiles"]!.AsArray()
+                .Select(p => new AppProfile { Id = (string)p![0]!, App = (string)p[1]!, Name = (string)p[1]! }).ToList();
+            var settings = global.Applying(AppProfile.Matching((string?)node["started"], profiles));
+            Assert.True(settings.Suit((string?)node["delivered"], profiles) == (bool)node["expected"]!, (string)node["name"]!);
+        }
+    }
+
+    [Fact]
+    public void TranscriptReuseFollowsSharedCases()
+    {
+        foreach (var node in Cases()["reuse"]!.AsArray())
+        {
+            var settings = new DictationSettings(true, false, (string)node!["language"]!, "");
+            var layout = (bool)node["sameLayout"]! ? Chunker.Layout : Chunker.Layout + 1;
+            Assert.True(settings.ReusesTranscripts(layout, (string?)node["saved"]) == (bool)node["expected"]!, (string)node["name"]!);
+        }
+        // A record saved before chunk layouts were kept is never reused.
+        Assert.False(new DictationSettings(true, false, "", "").ReusesTranscripts(null, ""));
     }
 
     [Fact]

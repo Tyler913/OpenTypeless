@@ -64,7 +64,8 @@ public sealed record AppProfile
 
     /// <summary>
     /// Lenient, so a profile saved by another version still loads: a field that's missing or of the wrong type counts as
-    /// unset rather than losing every profile. Null only when it isn't an object at all.
+    /// unset rather than losing every profile. Null only when it isn't an object at all. A missing ID is left empty for
+    /// <see cref="WithUniqueIds"/> to fill in once.
     /// </summary>
     public static AppProfile? FromJson(JsonNode? node)
     {
@@ -72,7 +73,7 @@ public sealed record AppProfile
         var app = Text(json["app"]) ?? "";
         return new AppProfile
         {
-            Id = Text(json["id"]) ?? Guid.NewGuid().ToString().ToUpperInvariant(),
+            Id = Text(json["id"]) ?? "",
             App = app,
             Name = Text(json["name"]) ?? app,
             Instructions = Text(json["instructions"]) ?? "",
@@ -95,6 +96,25 @@ public sealed record AppProfile
         node is JsonArray array ? array.Select(FromJson).OfType<AppProfile>().ToList() : [];
 
     public static JsonArray ListToJson(IEnumerable<AppProfile> profiles) => new(profiles.Select(p => (JsonNode)p.ToJson()).ToArray());
+
+    /// <summary>
+    /// The profiles with an ID each can be found by again (by an edit, Remove, or a retry from History): one saved without
+    /// an ID, or with another's, gets a new one. Done once when they're loaded, and saved, so the IDs stay put.
+    /// </summary>
+    public static List<AppProfile> WithUniqueIds(IEnumerable<AppProfile> profiles)
+    {
+        var seen = new HashSet<string>();
+        var result = new List<AppProfile>();
+        foreach (var profile in profiles)
+        {
+            var unique = profile.Id.Trim().Length == 0 || seen.Contains(profile.Id)
+                ? profile with { Id = Guid.NewGuid().ToString().ToUpperInvariant() }
+                : profile;
+            seen.Add(unique.Id);
+            result.Add(unique);
+        }
+        return result;
+    }
 }
 
 /// <summary>
@@ -121,6 +141,23 @@ public sealed record DictationSettings(bool PolishEnabled, bool PressEnter, stri
         ProfileId = profile.Id,
         ProfileName = profile.Name,
     };
+
+    /// <summary>
+    /// Whether these are the settings <paramref name="app"/> (the one in front when the key is released, or when the text
+    /// goes in) gets: it has the same profile as the app the dictation was started in, or, like that one, none. Otherwise
+    /// the text goes to the clipboard, and Enter isn't pressed: one app's profile never sends the text in another (a
+    /// terminal, say), and an app's own profile isn't skipped. Without profiles on either side, the text goes where it
+    /// always has.
+    /// </summary>
+    public bool Suit(string? app, IEnumerable<AppProfile> profiles) => AppProfile.Matching(app, profiles)?.Id == ProfileId;
+
+    /// <summary>
+    /// Whether transcripts saved with a recording can stand in for this run's: only when it's cut into the same chunks
+    /// (<see cref="Chunker.Layout"/>) and transcribed with the same language hint, which a profile or the global setting
+    /// may have changed since. A record from before the hint was saved (null) is taken to have auto-detected, the default,
+    /// so only a run that auto-detects reuses its transcripts; any other sends its chunks again.
+    /// </summary>
+    public bool ReusesTranscripts(int? layout, string? savedLanguage) => layout == Chunker.Layout && (savedLanguage ?? "") == Language;
 
     /// <summary>
     /// The global preferences, then the app's on a line of their own; the prompt shows both as the speaker's own

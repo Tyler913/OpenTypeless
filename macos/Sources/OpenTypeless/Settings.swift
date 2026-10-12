@@ -77,8 +77,11 @@ final class AppSettings: ObservableObject {
         modelPrices = UserDefaults.standard.data(forKey: "modelPrices")
             .flatMap { try? JSONDecoder().decode([String: ModelPrice].self, from: $0) } ?? [:]
         openRouterHosts = (UserDefaults.standard.dictionary(forKey: "openRouterHosts") as? [String: String]) ?? [:]
-        appProfiles = UserDefaults.standard.data(forKey: "appProfiles")
-            .flatMap { try? JSONDecoder().decode([AppProfile].self, from: $0) } ?? []
+        // An entry that isn't a profile is skipped, not the whole list; an ID that's missing or taken is repaired once and
+        // saved, so edits, Remove and retries keep finding their profile.
+        let savedProfiles = UserDefaults.standard.data(forKey: "appProfiles").flatMap(AppProfile.list(from:)) ?? []
+        appProfiles = AppProfile.withUniqueIDs(savedProfiles)
+        if appProfiles != savedProfiles { saveAppProfiles() }
     }
 
     // MARK: Hotkey

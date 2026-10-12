@@ -68,8 +68,59 @@ import Testing
         #expect(profiles[0] == AppProfile(id: "X", app: "com.apple.Safari", name: "com.apple.Safari"))
         #expect(profiles[0].isEmpty)
         #expect(profiles[1].pressEnter == true && profiles[1].name == "Slack" && !profiles[1].isEmpty)
-        // One saved without an ID gets one, so it can still be found again by a retry.
-        #expect(!(try decode(["app": "code.exe"])).id.isEmpty)
+    }
+
+    @Test func listsFollowSharedCases() throws {
+        for item in try Self.cases()["lists"] as! [[String: Any]] {
+            let name = item["name"] as! String
+            let saved = try JSONSerialization.data(withJSONObject: item["saved"]!)
+            let profiles = AppProfile.withUniqueIDs(AppProfile.list(from: saved) ?? [])
+            #expect(profiles.map(\.app) == item["apps"] as! [String], "\(name)")
+            let kept = item["keptIDs"] as! [Any]
+            for (profile, id) in zip(profiles, kept) {
+                if let id = id as? String { #expect(profile.id == id, "\(name)") } else { #expect(!profile.id.isEmpty, "\(name)") }
+            }
+            #expect(Set(profiles.map(\.id)).count == profiles.count, "\(name): IDs aren't unique")
+        }
+    }
+
+    @Test func repairedIDsStayPutOnceSaved() throws {
+        let saved = Data(#"[{"app":"slack.exe","name":"Slack"},{"id":"A","app":"code.exe"},{"id":"A","app":"notes.exe"}]"#.utf8)
+        // Reading what was saved never makes up an ID by itself; the repair happens once, on load.
+        #expect(AppProfile.list(from: saved)?.first?.id == "")
+        let loaded = AppProfile.withUniqueIDs(AppProfile.list(from: saved)!)
+        // Saved, then read again (as every launch does): the same IDs, and nothing left to repair.
+        let reread = AppProfile.list(from: try JSONEncoder().encode(loaded))!
+        #expect(reread == loaded)
+        #expect(AppProfile.withUniqueIDs(reread) == reread)
+        // So an edit and a Remove by ID find the profile they were made for.
+        var edited = reread
+        let slack = try #require(edited.firstIndex { $0.id == loaded[0].id })
+        edited[slack].pressEnter = true
+        #expect(edited.filter { $0.pressEnter == true }.map(\.app) == ["slack.exe"])
+        #expect(edited.filter { $0.id != loaded[2].id }.map(\.app) == ["slack.exe", "code.exe"])
+    }
+
+    @Test func deliveryFollowsSharedCases() throws {
+        let global = DictationSettings(polishEnabled: true, pressEnter: false, language: "", extraInstructions: "")
+        for item in try Self.cases()["delivery"] as! [[String: Any]] {
+            let profiles = (item["profiles"] as! [[String]]).map { AppProfile(id: $0[0], app: $0[1], name: $0[1]) }
+            let settings = global.applying(AppProfile.matching(item["started"] as? String, in: profiles))
+            #expect(settings.suit(item["delivered"] as? String, in: profiles) == item["expected"] as! Bool, "\(item["name"]!)")
+        }
+    }
+
+    @Test func transcriptReuseFollowsSharedCases() throws {
+        for item in try Self.cases()["reuse"] as! [[String: Any]] {
+            let settings = DictationSettings(polishEnabled: true, pressEnter: false, language: item["language"] as! String,
+                                             extraInstructions: "")
+            let layout = item["sameLayout"] as! Bool ? Chunker.layout : Chunker.layout + 1
+            #expect(settings.reusesTranscripts(layout: layout, language: item["saved"] as? String) == item["expected"] as! Bool,
+                    "\(item["name"]!)")
+        }
+        // A record saved before chunk layouts were kept is never reused.
+        #expect(!DictationSettings(polishEnabled: true, pressEnter: false, language: "", extraInstructions: "")
+            .reusesTranscripts(layout: nil, language: ""))
     }
 
     @Test func profileInstructionsReachThePromptAfterTheGlobalOnes() {

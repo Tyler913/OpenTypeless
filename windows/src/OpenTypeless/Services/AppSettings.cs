@@ -45,6 +45,18 @@ public sealed class AppSettings : INotifyPropertyChanged
             _store["hotkey"] = JsonSerializer.SerializeToNode(existed ? Hotkey.RightControl : Hotkey.Default);
             Save();
         }
+        // Profiles are read from the store on every access, so an ID that's missing or taken is repaired once, here, and
+        // saved: edits, Remove and retries then keep finding their profile.
+        if (_store["appProfiles"] is JsonArray savedProfiles)
+        {
+            var profiles = AppProfile.ListFromJson(savedProfiles);
+            var repaired = AppProfile.WithUniqueIds(profiles);
+            if (!repaired.SequenceEqual(profiles))
+            {
+                _store["appProfiles"] = AppProfile.ListToJson(repaired);
+                Save();
+            }
+        }
         // Loaded even when OPENROUTER_API_KEY is set: it only stands in for the OpenRouter key, and the app launched
         // with it still needs the others (and must not save over them when one is edited).
         _apiKeys = Credentials.Load();

@@ -34,6 +34,11 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var cost: Double?
     /// Its words are in the usage totals (so re-transcribing it doesn't count them twice).
     var counted: Bool?
+    /// The app profile it was made with (see AppProfile), so a retry uses that profile again while it exists; nil when
+    /// none applied.
+    var profileID: String?
+    /// That profile's name, for History.
+    var profileName: String?
 
     /// Where the wait after the key was released went, in seconds.
     struct Timing: Codable, Equatable {

@@ -483,6 +483,53 @@ public sealed class AppSettings : INotifyPropertyChanged
         Raise("OpenRouterHosts");
     }
 
+    // MARK: App profiles
+
+    /// <summary>Settings for particular apps, by executable name, applied to a dictation started in them (see AppProfile). None at first.</summary>
+    public List<AppProfile> AppProfiles
+    {
+        get
+        {
+            lock (_lock) return AppProfile.ListFromJson(_store["appProfiles"]);
+        }
+        private set => SetNode("appProfiles", AppProfile.ListToJson(value));
+    }
+
+    /// <summary>What a dictation runs with when no profile applies.</summary>
+    public DictationSettings GlobalDictationSettings => new(PolishEnabled, PressEnterAfterInsert, SttLanguage, ExtraInstructions);
+
+    /// <summary>What a dictation started in the app with this executable name ("slack.exe") runs with.</summary>
+    public DictationSettings DictationSettingsForApp(string? executable) =>
+        GlobalDictationSettings.Applying(AppProfile.Matching(executable, AppProfiles));
+
+    /// <summary>
+    /// What a retry of a dictation made with the profile <paramref name="id"/> runs with: that profile's settings while it
+    /// still exists, the global ones otherwise.
+    /// </summary>
+    public DictationSettings DictationSettingsForProfile(string? id) =>
+        GlobalDictationSettings.Applying(AppProfiles.FirstOrDefault(p => p.Id == id));
+
+    /// <summary>Adds a profile for an app, following the global settings until it's edited; an app that has one already keeps it.</summary>
+    public AppProfile AddAppProfile(string executable, string name)
+    {
+        var profiles = AppProfiles;
+        if (AppProfile.Matching(executable, profiles) is { } existing) return existing;
+        var profile = new AppProfile { App = executable, Name = name };
+        AppProfiles = [.. profiles, profile];
+        return profile;
+    }
+
+    public void UpdateAppProfile(AppProfile profile)
+    {
+        var profiles = AppProfiles;
+        var index = profiles.FindIndex(p => p.Id == profile.Id);
+        if (index < 0 || profiles[index] == profile) return;
+        profiles[index] = profile;
+        AppProfiles = profiles;
+    }
+
+    public void RemoveAppProfile(string id) => AppProfiles = AppProfiles.Where(p => p.Id != id).ToList();
+
     // MARK: Model prices
 
     /// <summary>The price the user entered for a model of a provider other than OpenRouter (whose prices are live).</summary>

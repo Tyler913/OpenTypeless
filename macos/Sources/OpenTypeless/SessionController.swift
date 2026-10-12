@@ -35,6 +35,9 @@ final class SessionController: ObservableObject {
     private var pipeline: TranscriptionPipeline?
     private var writer: WAVFileWriter?
     private var record: DictationRecord?
+    /// What the running dictation goes by: the global settings with the profile of the app it was started in, taken once
+    /// when it started (see DictationSettings).
+    private var dictationSettings: DictationSettings?
     private var counter = SampleCounter()
     /// When the hotkey went down, by the key event's own time (`ProcessInfo.systemUptime` clock, see `HotkeyPress`).
     private var pressedAt: TimeInterval?
@@ -280,8 +283,11 @@ final class SessionController: ObservableObject {
     /// `pressedAt` is the key event's own time: opening a cold microphone (a Bluetooth one can take a second or more)
     /// mustn't count against how long the key was held.
     private func startRecording(pressedAt: TimeInterval) {
+        // The app in front now decides this dictation's settings, once: the text is spoken for it, so switching to another
+        // app before the key is released doesn't change them (the paste still checks where focus went).
+        let dictation = settings.dictationSettings(forApp: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
         // First of all, so the connections are ready by the time the first request goes out.
-        warmConnections()
+        warmConnections(polishes: dictation.polishEnabled)
         // Someone is dictating, so the screen is unlocked, whatever notification was missed (a wake without a lock).
         isLocked = false
         guard let sttEndpoint = settings.sttEndpoint, settings.isConfigured(settings.sttProvider) else {
@@ -310,6 +316,8 @@ final class SessionController: ObservableObject {
 
         var record = history.create()
         record.status = .recording
+        record.profileID = dictation.profileID
+        record.profileName = dictation.profileName
         history.update(record)
 
         let writer: WAVFileWriter
@@ -324,7 +332,7 @@ final class SessionController: ObservableObject {
         }
 
         let recordID = record.id
-        let pipeline = makePipeline(endpoint: sttEndpoint, preset: [:], onSpeculation: { [weak self] raw in
+        let pipeline = makePipeline(endpoint: sttEndpoint, preset: [:], language: dictation.language, onSpeculation: { [weak self] raw in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self, self.record?.id == recordID else { return }
@@ -343,7 +351,7 @@ final class SessionController: ObservableObject {
                 let line = LivePreviewText.tail(text)
                 DispatchQueue.main.async { hudModel.preview = line }
             }
-            livePreview?.start(language: settings.sttLanguage)
+            livePreview?.start(language: dictation.language)
         }
         preview = livePreview
         hud.model.preview = ""
@@ -375,6 +383,8 @@ final class SessionController: ObservableObject {
         self.writer = writer
         self.pipeline = pipeline
         self.counter = counter
+        dictationSettings = dictation
+        if let name = dictation.profileName { note("app profile: \(name)") }
         deliverByPaste = true
         self.pressedAt = pressedAt
         handsFree = false
@@ -394,24 +404,26 @@ final class SessionController: ObservableObject {
         }
         // A long dictation keeps the clean-up's connection (idle while speech-to-text works) from timing out.
         warmTimer = Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.warmConnections() }
+            Task { @MainActor in self?.warmConnections(polishes: dictation.polishEnabled) }
         }
     }
 
     /// Opens the connections this dictation's requests will use (speech-to-text and clean-up, main and backup routes)
     /// ahead of them, so the first request after the key is released doesn't wait for DNS, TCP and TLS. Each host once.
-    private func warmConnections() {
+    /// `polishes`: whether this dictation is cleaned up (its app profile can say otherwise than the global setting).
+    private func warmConnections(polishes: Bool) {
         var endpoints: [ProviderEndpoint?] = [settings.sttEndpoint, settings.sttBackupEndpoint]
-        if settings.polishEnabled { endpoints += [settings.polishEndpoint, settings.polishBackupEndpoint] }
+        if polishes { endpoints += [settings.polishEndpoint, settings.polishBackupEndpoint] }
         preconnector.warm(endpoints.map { $0.map { APIClient(endpoint: $0) } })
     }
 
     /// How long each speech-to-text route takes, kept while the app runs, so the backup is asked when a chunk is late.
     private var latencies: [String: TranscriptionLatency] = [:]
 
-    private func makePipeline(endpoint: ProviderEndpoint, preset: [Int: String],
+    /// `language`: the dictation's spoken-language hint, "" to auto-detect.
+    private func makePipeline(endpoint: ProviderEndpoint, preset: [Int: String], language: String,
                               onSpeculation: (@Sendable (String?) -> Void)? = nil) -> TranscriptionPipeline {
-        let language = settings.sttLanguage.isEmpty ? nil : settings.sttLanguage
+        let language = language.isEmpty ? nil : language
         let backup = settings.sttBackupEndpoint.map {
             (client: APIClient(endpoint: $0),
              options: APIClient.TranscriptionOptions(model: settings.sttBackupModel.trimmingCharacters(in: .whitespaces), language: language,
@@ -459,7 +471,7 @@ final class SessionController: ObservableObject {
     private static let releaseTail: UInt64 = 100_000_000
 
     private func finishRecording() {
-        guard state == .recording, var record, let pipeline else { return }
+        guard state == .recording, var record, let pipeline, let dictation = dictationSettings else { return }
         record.duration = counter.seconds
         if record.duration - preRollSeconds < 0.4 {
             stopCapture()
@@ -479,7 +491,7 @@ final class SessionController: ObservableObject {
         state = .processing
         // Where the text should go: if another app is in front by the time it's ready, it goes to the clipboard.
         pasteTarget = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        hud.showWorking(polishes: settings.polishEnabled)
+        hud.showWorking(polishes: dictation.polishEnabled)
 
         // No waiting when the speaker paused before letting go and that pause is already being transcribed as the last
         // chunk: the moment's (quiet) audio changes nothing then, and the text may be ready at once.
@@ -496,13 +508,14 @@ final class SessionController: ObservableObject {
             var record = released
             record.duration = self.counter.seconds
             self.record = record
-            await self.process(record: record, pipeline: pipeline, generation: generation)
+            await self.process(record: record, pipeline: pipeline, generation: generation, dictation: dictation)
         }
     }
 
     // MARK: - Processing
 
-    private func process(record initial: DictationRecord, pipeline: TranscriptionPipeline, generation: Int) async {
+    private func process(record initial: DictationRecord, pipeline: TranscriptionPipeline, generation: Int,
+                         dictation: DictationSettings) async {
         var record = initial
         let started = ProcessInfo.processInfo.systemUptime
         // Moves the bar as the speech-to-text chunks still out come back.
@@ -544,7 +557,7 @@ final class SessionController: ObservableObject {
                 finish(showing: .error(L("没有识别到语音", "No speech detected")), hideAfter: 2)
                 return
             }
-            await polishAndDeliver(record: &record, pipeline: pipeline, generation: generation)
+            await polishAndDeliver(record: &record, pipeline: pipeline, generation: generation, dictation: dictation)
         } catch let failure as PipelineFailure {
             guard isCurrent(generation) else { return }
             record.chunkTexts = pipeline.completedTranscripts()
@@ -566,13 +579,14 @@ final class SessionController: ObservableObject {
         }
     }
 
-    private func polishAndDeliver(record: inout DictationRecord, pipeline: TranscriptionPipeline, generation: Int) async {
+    private func polishAndDeliver(record: inout DictationRecord, pipeline: TranscriptionPipeline, generation: Int,
+                                  dictation: DictationSettings) async {
         let begun = ProcessInfo.processInfo.systemUptime
         var text = record.rawText
         var notice: String?
         var polished: SegmentedPolishResult?
 
-        if settings.polishEnabled {
+        if dictation.polishEnabled {
             // When the speaker paused before letting go and said nothing more, the clean-up of this very transcript
             // started while they were still holding the key: take it over (often it's already done).
             let polishing: Task<SegmentedPolishResult, Error>
@@ -591,7 +605,7 @@ final class SessionController: ObservableObject {
                 dropSpeculativePolish()
                 let raw = record.rawText
                 let onPartial = onPolishPartial(expected: raw)
-                polishing = Task { try await self.polish(raw, onPartial: onPartial) }
+                polishing = Task { try await self.polish(raw, with: dictation, onPartial: onPartial) }
             }
             // Saved while the clean-up runs, so the transcript survives a crash.
             history.update(record)
@@ -643,7 +657,7 @@ final class SessionController: ObservableObject {
             hud.model.bar.reach(.delivered)
             let transcription = record.timing?.transcription ?? 0
             record.timing?.delivered = transcription + ProcessInfo.processInfo.systemUptime - begun
-            record.timing?.delivery = await deliver(text, notice: notice, generation: generation)
+            record.timing?.delivery = await deliver(text, notice: notice, generation: generation, pressEnter: dictation.pressEnter)
         }
         // Esc came before the text was in place (or while it went in): `cancel` has kept the record as cancelled, and
         // so it stays, now with its clean-up.
@@ -696,7 +710,7 @@ final class SessionController: ObservableObject {
     /// The pipeline has the whole transcript the recording would give if it ended now (the speaker paused), or no longer
     /// has one (they went on). Starts cleaning that transcript up, so the text can be ready when the key is released.
     private func speculationChanged(_ raw: String?) {
-        guard state == .recording, settings.polishEnabled else { return }
+        guard state == .recording, let dictation = dictationSettings, dictation.polishEnabled else { return }
         if let raw, raw == speculativePolish?.raw { return }
         dropSpeculativePolish()
         guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -708,7 +722,7 @@ final class SessionController: ObservableObject {
         let task = Task { [weak self] () async throws -> SegmentedPolishResult in
             guard let self else { throw APIError.cancelled }
             do {
-                let result = try await self.polish(raw, onPartial: { partials.send($0) })
+                let result = try await self.polish(raw, with: dictation, onPartial: { partials.send($0) })
                 outcome.result = result
                 return result
             } catch {
@@ -748,12 +762,13 @@ final class SessionController: ObservableObject {
     /// Pastes at the cursor unless focus is clearly not a text input, or has moved to another app since the recording
     /// stopped. Whether the paste actually landed is detected from the target app reading the clipboard: if it did, the
     /// user's previous clipboard is restored; if not, the text stays on the clipboard and the HUD says so. Returns how it
-    /// went, for History (see `DictationRecord.Timing.delivery`).
+    /// went, for History (see `DictationRecord.Timing.delivery`). `pressEnter`: Return follows the paste (the dictation's
+    /// setting, which its app profile can change).
     ///
     /// Esc (or the screen locking) can come at any point while the text goes in: the paste and the Return are only sent
     /// while the dictation is still current, and a cancelled one leaves the session and the HUD to what replaced it.
     @discardableResult
-    private func deliver(_ text: String, notice: String?, generation: Int) async -> String {
+    private func deliver(_ text: String, notice: String?, generation: Int, pressEnter: Bool) async -> String {
         let target = deliverByPaste ? FocusProbe.focusedTarget() : .notEditable
         if target == .notEditable || deliverByPaste && focusMoved {
             note("deliver → clipboard (\(target == .notEditable ? "focus not editable" : "another app in front")) in \(frontmostID)")
@@ -773,7 +788,7 @@ final class SessionController: ObservableObject {
         case .pasted:
             // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
             var sent = false
-            if settings.pressEnterAfterInsert {
+            if pressEnter {
                 // Not into another app that came to the front after the paste, nor once the screen locked.
                 sent = await TextInserter.pressReturn {
                     self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved
@@ -805,22 +820,27 @@ final class SessionController: ObservableObject {
 
     private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
 
-    private func polish(_ raw: String, onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
+    /// Cleans up `raw` with the dictation's preferences (the global ones and its app profile's), on the main model and
+    /// the backup alike.
+    private func polish(_ raw: String, with dictation: DictationSettings,
+                        onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
-        let primary = route(endpoint, model: settings.polishModel)
-        let backup = settings.polishBackupEndpoint.map { route($0, model: settings.polishBackupModel) }
+        let primary = route(endpoint, model: settings.polishModel, instructions: dictation.extraInstructions)
+        let backup = settings.polishBackupEndpoint.map {
+            route($0, model: settings.polishBackupModel, instructions: dictation.extraInstructions)
+        }
         return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup, onPartial: onPartial)
     }
 
-    private func route(_ endpoint: ProviderEndpoint, model: String) -> PolishRoute {
+    private func route(_ endpoint: ProviderEndpoint, model: String, instructions: String) -> PolishRoute {
         let model = model.trimmingCharacters(in: .whitespaces)
         return PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
             vocabulary: settings.vocabularyList,
             misheard: settings.misheardHints,
-            extraInstructions: settings.extraInstructions,
+            extraInstructions: instructions,
             modelInfo: endpoint.id == .openrouter ? modelInfo[model] : nil,
             host: endpoint.id == .openrouter ? settings.openRouterHost(for: model) : nil
         ))
@@ -873,9 +893,13 @@ final class SessionController: ObservableObject {
         deliverByPaste = paste
         // A cancelled recording still being transcribed in the background is this run's now.
         keptInBackground.remove(saved.id)
+        // The app profile it was made with, while that still exists; the global settings otherwise.
+        let dictation = settings.dictationSettings(profileID: saved.profileID)
         var record = saved
         record.status = .processing
         record.error = nil
+        record.profileID = dictation.profileID
+        record.profileName = dictation.profileName
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again.
         let preset = saved.chunkLayout == Chunker.layout ? saved.chunkTexts : [:]
         // Saved with the new layout, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).
@@ -883,17 +907,18 @@ final class SessionController: ObservableObject {
         record.chunkLayout = Chunker.layout
         history.update(record)
         self.record = record
+        dictationSettings = dictation
         state = .processing
-        hud.showWorking(polishes: settings.polishEnabled)
+        hud.showWorking(polishes: dictation.polishEnabled)
 
-        let pipeline = makePipeline(endpoint: endpoint, preset: preset)
+        let pipeline = makePipeline(endpoint: endpoint, preset: preset, language: dictation.language)
         self.pipeline = pipeline
         let generation = self.generation
         processingTask = Task { [weak self] in
             // Let the menu close and focus return to the previous app before pasting.
             try? await Task.sleep(nanoseconds: 300_000_000)
             pipeline.append(samples)
-            await self?.process(record: record, pipeline: pipeline, generation: generation)
+            await self?.process(record: record, pipeline: pipeline, generation: generation, dictation: dictation)
         }
     }
 
@@ -955,6 +980,7 @@ final class SessionController: ObservableObject {
         preRollSeconds = 0
         pipeline = nil
         record = nil
+        dictationSettings = nil
         pressedAt = nil
         pasteTarget = nil
         handsFree = false

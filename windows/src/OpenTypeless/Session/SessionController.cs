@@ -58,6 +58,11 @@ public sealed class SessionController
     private TranscriptionPipeline? _pipeline;
     private WavFileWriter? _writer;
     private DictationRecord? _record;
+    /// <summary>
+    /// What the running dictation goes by: the global settings with the profile of the app it was started in, taken once
+    /// when it started (see <see cref="DictationSettings"/>).
+    /// </summary>
+    private DictationSettings? _dictationSettings;
     private SampleCounter _counter = new();
     /// <summary>When the hotkey went down, by the key event's own time (seconds on the tick clock, see <see cref="HotkeyPress"/>).</summary>
     private double? _pressedAt;
@@ -299,8 +304,11 @@ public sealed class SessionController
     /// </param>
     private void StartRecording(double pressedAt)
     {
+        // The app in front now decides this dictation's settings, once: the text is spoken for it, so switching to another
+        // app before the key is released doesn't change them (the paste still checks where focus went).
+        var dictation = _settings.DictationSettingsForApp(FocusProbe.ForegroundExecutable());
         // First of all, so the connections are ready by the time the first request goes out.
-        WarmConnections();
+        WarmConnections(dictation.PolishEnabled);
         // Someone is dictating, so the session is unlocked, whatever notification was missed (a resume without a lock).
         _isLocked = false;
         if (_settings.SttEndpoint is not { } sttEndpoint || !_settings.IsConfigured(_settings.SttProvider))
@@ -324,6 +332,8 @@ public sealed class SessionController
 
         var record = _history.Create();
         record.Status = DictationStatus.Recording;
+        record.ProfileId = dictation.ProfileId;
+        record.ProfileName = dictation.ProfileName;
         _history.Update(record);
 
         WavFileWriter writer;
@@ -340,7 +350,7 @@ public sealed class SessionController
         }
 
         TranscriptionPipeline? pipeline = null;
-        pipeline = MakePipeline(sttEndpoint, new Dictionary<int, string>(), onSpeculation: raw => _dispatcher.TryEnqueue(() =>
+        pipeline = MakePipeline(sttEndpoint, new Dictionary<int, string>(), dictation.Language, onSpeculation: raw => _dispatcher.TryEnqueue(() =>
         {
             if (_pipeline == pipeline) SpeculationChanged(raw);
         }));
@@ -357,7 +367,7 @@ public sealed class SessionController
                 var line = LivePreviewText.Tail(text);
                 _dispatcher.TryEnqueue(() => { if (_preview != null) hudModel.Preview = line; });
             });
-            _preview.Start(_settings.SttLanguage);
+            _preview.Start(dictation.Language);
         }
         // Starts with the pre-roll when the microphone was already running.
         var preRoll = _sink.Begin(samples =>
@@ -391,6 +401,8 @@ public sealed class SessionController
         _writer = writer;
         _pipeline = pipeline;
         _counter = counter;
+        _dictationSettings = dictation;
+        if (dictation.ProfileName is { } profileName) Note($"app profile: {profileName}");
         _deliverByPaste = true;
         _pressedAt = pressedAt;
         _handsFree = false;
@@ -413,7 +425,7 @@ public sealed class SessionController
         _warmTimer = _dispatcher.CreateTimer();
         _warmTimer.Interval = TimeSpan.FromSeconds(25);
         _warmTimer.IsRepeating = true;
-        _warmTimer.Tick += (_, _) => WarmConnections();
+        _warmTimer.Tick += (_, _) => WarmConnections(dictation.PolishEnabled);
         _warmTimer.Start();
     }
 
@@ -421,10 +433,11 @@ public sealed class SessionController
     /// Opens the connections this dictation's requests will use (speech-to-text and clean-up, main and backup routes)
     /// ahead of them, so the first request after the key is released doesn't wait for DNS, TCP and TLS. Each host once.
     /// </summary>
-    private void WarmConnections()
+    /// <param name="polishes">Whether this dictation is cleaned up (its app profile can say otherwise than the global setting).</param>
+    private void WarmConnections(bool polishes)
     {
         var endpoints = new List<ProviderEndpoint?> { _settings.SttEndpoint, _settings.SttBackupEndpoint };
-        if (_settings.PolishEnabled)
+        if (polishes)
         {
             endpoints.Add(_settings.PolishEndpoint);
             endpoints.Add(_settings.PolishBackupEndpoint);
@@ -435,16 +448,17 @@ public sealed class SessionController
     /// <summary>How long each speech-to-text route takes, kept while the app runs, so the backup is asked when a chunk is late.</summary>
     private readonly Dictionary<string, TranscriptionLatency> _latencies = new();
 
-    private TranscriptionPipeline MakePipeline(ProviderEndpoint endpoint, IReadOnlyDictionary<int, string> preset,
+    /// <param name="language">The dictation's spoken-language hint, "" to auto-detect.</param>
+    private TranscriptionPipeline MakePipeline(ProviderEndpoint endpoint, IReadOnlyDictionary<int, string> preset, string language,
                                                Action<string?>? onSpeculation = null)
     {
-        var language = _settings.SttLanguage.Length == 0 ? null : _settings.SttLanguage;
+        var hint = language.Length == 0 ? null : language;
         var backup = _settings.SttBackupEndpoint is { } backupEndpoint
-            ? new TranscriptionRoute(new ApiClient(backupEndpoint), new TranscriptionOptions(_settings.SttBackupModel.Trim(), language, _settings.VocabularyList))
+            ? new TranscriptionRoute(new ApiClient(backupEndpoint), new TranscriptionOptions(_settings.SttBackupModel.Trim(), hint, _settings.VocabularyList))
             : null;
         var key = ModelPrice.Key(_settings.SttProvider, _settings.SttModel);
         if (!_latencies.TryGetValue(key, out var latency)) _latencies[key] = latency = new TranscriptionLatency();
-        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, language, _settings.VocabularyList), preset: preset,
+        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, hint, _settings.VocabularyList), preset: preset,
                                          backup: backup, latency: latency, onSpeculation: onSpeculation);
     }
 
@@ -494,7 +508,8 @@ public sealed class SessionController
 
     private void FinishRecording()
     {
-        if (State != SessionState.Recording || _record is not { } record || _pipeline is not { } pipeline) return;
+        if (State != SessionState.Recording || _record is not { } record || _pipeline is not { } pipeline
+            || _dictationSettings is not { } dictation) return;
         // A cold recorder hands over everything it still holds as it stops, so it stops before the length is judged;
         // a warm one goes on for a moment instead (below), which a recording this short doesn't need.
         var warm = _settings.KeepMicrophoneWarm && _recorder.IsRecording;
@@ -519,7 +534,7 @@ public sealed class SessionController
         State = SessionState.Processing;
         // Where the text should go: if another window is in front by the time it's ready, it goes to the clipboard.
         _pasteTarget = Win32.GetForegroundWindow();
-        Hud.ShowWorking(_settings.PolishEnabled);
+        Hud.ShowWorking(dictation.PolishEnabled);
 
         // No waiting when the speaker paused before letting go and that pause is already being transcribed as the last
         // chunk: the moment's (quiet) audio changes nothing then, and the text may be ready at once.
@@ -540,13 +555,14 @@ public sealed class SessionController
             if (warm) StopCapture();
             PlaySound(Sounds.Kind.Stop);
             record.Duration = _counter.Seconds;
-            await Process(record, pipeline, generation, processing.Token);
+            await Process(record, pipeline, generation, dictation, processing.Token);
         }
     }
 
     // MARK: - Processing
 
-    private async Task Process(DictationRecord record, TranscriptionPipeline pipeline, int generation, CancellationToken token)
+    private async Task Process(DictationRecord record, TranscriptionPipeline pipeline, int generation, DictationSettings dictation,
+                               CancellationToken token)
     {
         var started = Stopwatch.StartNew();
         // Moves the bar as the speech-to-text chunks still out come back.
@@ -579,7 +595,7 @@ public sealed class SessionController
                 Finish(new HudPhase.Error(L("没有识别到语音", "No speech detected")), 2);
                 return;
             }
-            await PolishAndDeliver(record, pipeline, generation, token);
+            await PolishAndDeliver(record, pipeline, generation, dictation, token);
         }
         catch (PipelineFailure failure)
         {
@@ -618,14 +634,15 @@ public sealed class SessionController
         }
     }
 
-    private async Task PolishAndDeliver(DictationRecord record, TranscriptionPipeline pipeline, int generation, CancellationToken token)
+    private async Task PolishAndDeliver(DictationRecord record, TranscriptionPipeline pipeline, int generation, DictationSettings dictation,
+                                        CancellationToken token)
     {
         var begun = Stopwatch.StartNew();
         var text = record.RawText;
         string? notice = null;
         SegmentedPolishResult? polished = null;
 
-        if (_settings.PolishEnabled)
+        if (dictation.PolishEnabled)
         {
             // When the speaker paused before letting go and said nothing more, the clean-up of this very transcript
             // started while they were still holding the key: take it over (often it's already done).
@@ -648,7 +665,7 @@ public sealed class SessionController
             else
             {
                 DropSpeculativePolish();
-                polishing = Polish(record.RawText, OnPolishPartial(record.RawText), token);
+                polishing = Polish(record.RawText, dictation, OnPolishPartial(record.RawText), token);
             }
             // Saved while the clean-up runs, so the transcript survives a crash.
             _history.Update(record);
@@ -709,7 +726,7 @@ public sealed class SessionController
         {
             Hud.Model.Progress.Reach(new ProcessingProgress.Milestone.Delivered());
             if (record.Timing is { } timing) timing.Delivered = (timing.Transcription ?? 0) + begun.Elapsed.TotalSeconds;
-            var delivery = await Deliver(text, notice, generation, token);
+            var delivery = await Deliver(text, notice, generation, dictation.PressEnter, token);
             if (record.Timing != null) record.Timing.Delivery = delivery;
         }
         // Esc came before the text was in place (or while it went in): Cancel has kept the record as cancelled, and so
@@ -748,7 +765,7 @@ public sealed class SessionController
     /// </summary>
     private void SpeculationChanged(string? raw)
     {
-        if (State != SessionState.Recording || !_settings.PolishEnabled) return;
+        if (State != SessionState.Recording || _dictationSettings is not { PolishEnabled: true } dictation) return;
         if (raw != null && raw == _speculativePolish?.Raw) return;
         DropSpeculativePolish();
         if (raw is null || raw.Trim().Length == 0) return;
@@ -757,7 +774,7 @@ public sealed class SessionController
         if (SegmentedPolish.NeedsParts(raw)) return;
         var cancel = new CancellationTokenSource();
         var partials = new PartialRelay();
-        var task = Polish(raw, partials.Send, cancel.Token);
+        var task = Polish(raw, dictation, partials.Send, cancel.Token);
         // A dropped clean-up's failure (usually its cancellation) is expected; observe it so it isn't reported.
         _ = task.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         _speculativePolish = new SpeculativePolish(raw, Stopwatch.StartNew(), task, cancel, partials);
@@ -804,7 +821,8 @@ public sealed class SessionController
     /// Esc (or the screen locking) can come at any point while the text goes in: the paste and the Enter are only sent
     /// while the dictation is still current, and a cancelled one leaves the session and the HUD to what replaced it.
     /// </summary>
-    private async Task<string> Deliver(string text, string? notice, int generation, CancellationToken token)
+    /// <param name="pressEnter">Enter follows the paste (the dictation's setting, which its app profile can change).</param>
+    private async Task<string> Deliver(string text, string? notice, int generation, bool pressEnter, CancellationToken token)
     {
         if (_deliverByPaste) await TextInserter.LeaveMenuMode();
         var target = _deliverByPaste ? await FocusProbe.FocusedTarget() : FocusProbe.Target.NotEditable;
@@ -833,7 +851,7 @@ public sealed class SessionController
             case TextInserter.Outcome.Pasted:
                 // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
                 var sent = false;
-                if (_settings.PressEnterAfterInsert)
+                if (pressEnter)
                 {
                     // Not into another window that came to the front after the paste, nor once the screen locked.
                     sent = await TextInserter.PressEnter(() => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved);
@@ -861,24 +879,30 @@ public sealed class SessionController
         }
     }
 
-    private async Task<SegmentedPolishResult> Polish(string raw, Action<string>? onPartial, CancellationToken token)
+    /// <summary>
+    /// Cleans up <paramref name="raw"/> with the dictation's preferences (the global ones and its app profile's), on the
+    /// main model and the backup alike.
+    /// </summary>
+    private async Task<SegmentedPolishResult> Polish(string raw, DictationSettings dictation, Action<string>? onPartial, CancellationToken token)
     {
         if (_settings.PolishEndpoint is not { } endpoint || !_settings.IsConfigured(_settings.PolishProvider))
         {
             throw ApiException.MissingApiKey(_settings.PolishProvider.DisplayName());
         }
-        var primary = Route(endpoint, _settings.PolishModel);
-        var backup = _settings.PolishBackupEndpoint is { } backupEndpoint ? Route(backupEndpoint, _settings.PolishBackupModel) : null;
+        var primary = Route(endpoint, _settings.PolishModel, dictation.ExtraInstructions);
+        var backup = _settings.PolishBackupEndpoint is { } backupEndpoint
+            ? Route(backupEndpoint, _settings.PolishBackupModel, dictation.ExtraInstructions)
+            : null;
         return await SegmentedPolish.Run(raw, primary, backup, onPartial, token);
     }
 
-    private PolishRoute Route(ProviderEndpoint endpoint, string model)
+    private PolishRoute Route(ProviderEndpoint endpoint, string model, string instructions)
     {
         model = model.Trim();
         return new PolishRoute(new ApiClient(endpoint), new PolishOptions(
             model,
             _settings.VocabularyList,
-            _settings.ExtraInstructions,
+            instructions,
             endpoint.Id == ProviderId.OpenRouter ? _modelInfo.GetValueOrDefault(model) : null,
             Misheard: _settings.MisheardHints,
             Host: endpoint.Id == ProviderId.OpenRouter ? _settings.OpenRouterHost(model) : null));
@@ -941,9 +965,13 @@ public sealed class SessionController
         _deliverByPaste = paste;
         // A cancelled recording still being transcribed in the background is this run's now.
         _keptInBackground.Remove(saved.Id);
+        // The app profile it was made with, while that still exists; the global settings otherwise.
+        var dictation = _settings.DictationSettingsForProfile(saved.ProfileId);
         var record = saved.Copy();
         record.Status = DictationStatus.Processing;
         record.Error = null;
+        record.ProfileId = dictation.ProfileId;
+        record.ProfileName = dictation.ProfileName;
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again.
         var preset = saved.ChunkLayout == Chunker.Layout ? saved.ChunkTexts : new Dictionary<int, string>();
         // Saved with the new layout, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).
@@ -951,10 +979,11 @@ public sealed class SessionController
         record.ChunkLayout = Chunker.Layout;
         _history.Update(record);
         _record = record;
+        _dictationSettings = dictation;
         State = SessionState.Processing;
-        Hud.ShowWorking(_settings.PolishEnabled);
+        Hud.ShowWorking(dictation.PolishEnabled);
 
-        var pipeline = MakePipeline(endpoint, preset);
+        var pipeline = MakePipeline(endpoint, preset, dictation.Language);
         _pipeline = pipeline;
         var processing = new CancellationTokenSource();
         _processing = processing;
@@ -966,7 +995,7 @@ public sealed class SessionController
             // Let the menu close and focus return to the previous app before pasting.
             try { await Task.Delay(300, processing.Token); } catch (OperationCanceledException) { return; }
             pipeline.Append(samples);
-            await Process(record, pipeline, generation, processing.Token);
+            await Process(record, pipeline, generation, dictation, processing.Token);
         }
     }
 
@@ -1050,6 +1079,7 @@ public sealed class SessionController
         _preRollSeconds = 0;
         _pipeline = null;
         _record = null;
+        _dictationSettings = null;
         _pressedAt = null;
         _pasteTarget = 0;
         _handsFree = false;

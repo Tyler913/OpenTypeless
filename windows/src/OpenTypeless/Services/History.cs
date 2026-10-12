@@ -43,6 +43,13 @@ public sealed class DictationRecord
     [JsonPropertyName("cost")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Cost { get; set; }
     /// <summary>Its words are in the usage totals (so re-transcribing it doesn't count them twice).</summary>
     [JsonPropertyName("counted")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Counted { get; set; }
+    /// <summary>
+    /// The app profile it was made with (see <see cref="TypelessCore.AppProfile"/>), so a retry uses that profile again while
+    /// it exists; null when none applied.
+    /// </summary>
+    [JsonPropertyName("profileID")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ProfileId { get; set; }
+    /// <summary>That profile's name, for History.</summary>
+    [JsonPropertyName("profileName")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ProfileName { get; set; }
 
     /// <summary>What was (or would be) inserted.</summary>
     [JsonIgnore] public string FinalText => PolishedText ?? RawText;

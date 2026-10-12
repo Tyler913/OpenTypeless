@@ -17,6 +17,9 @@ internal sealed class SampleCounter
     public double Seconds => AudioFormat.Seconds((int)Interlocked.Read(ref _count));
 }
 
+/// <summary>What a recording is for. Only plain dictation so far; a mode chord (see <see cref="ModeChords{TMode}"/>) switches it while recording.</summary>
+public enum RecordingMode { Dictation }
+
 /// <summary>Orchestrates one dictation: hotkey → record → chunked STT → polish → paste. UI-thread only.</summary>
 public sealed class SessionController
 {
@@ -62,6 +65,15 @@ public sealed class SessionController
     /// <summary>When the hotkey went down, by the key event's own time (seconds on the tick clock, see <see cref="HotkeyPress"/>).</summary>
     private double? _pressedAt;
     private bool _handsFree;
+    /// <summary>
+    /// Second keys that switch the recording's mode while the hotkey is held (see <see cref="ModeChords{TMode}"/>). None is
+    /// registered yet; whatever registers one also gives the hotkey hook its key, to keep it from the focused app.
+    /// </summary>
+    public ModeChords<RecordingMode> ModeChords { get; } = new();
+    /// <summary>What the running recording is for; plain dictation at every start.</summary>
+    public RecordingMode Mode { get; private set; } = RecordingMode.Dictation;
+    /// <summary>Set while "Paste last dictation" waits for its keys to be let go or pastes, so pressing it again meanwhile does nothing.</summary>
+    private bool _isPastingLast;
     /// <summary>
     /// Which dictation is current: bumped whenever one ends or is cancelled, so work still out for an earlier one (its
     /// paste, its Enter, its reset) can tell it's no longer wanted and leaves the next dictation alone.
@@ -195,13 +207,24 @@ public sealed class SessionController
         else FinishRecording();
     }
 
-    /// <summary>Right Ctrl + C and similar combos shouldn't start a dictation.</summary>
-    public void OtherKeyPressed(double at)
+    /// <summary>
+    /// Another key went down while the hotkey was held: a registered chord switches the recording's mode; otherwise
+    /// Right Ctrl + C and similar combos shouldn't start a dictation.
+    /// </summary>
+    public void OtherKeyPressed(int keyCode, double at)
     {
-        if (State != SessionState.Recording || _handsFree || _pressedAt is not { } pressedAt
-            || !HotkeyPress.IsCombo(pressedAt, at)) return;
-        Note("cancelled — another key was pressed with the shortcut (treated as a key combo)");
-        Cancel(silently: true);
+        if (State != SessionState.Recording || _pressedAt is not { } pressedAt) return;
+        switch (ModeChords.OtherKey(keyCode, pressedAt, at, _handsFree))
+        {
+            case OtherKeyOutcome<RecordingMode>.SwitchMode chord when chord.Mode != Mode:
+                Note($"mode → {chord.Mode} (chord key {keyCode})");
+                Mode = chord.Mode;
+                break;
+            case OtherKeyOutcome<RecordingMode>.Cancel:
+                Note("cancelled — another key was pressed with the shortcut (treated as a key combo)");
+                Cancel(silently: true);
+                break;
+        }
     }
 
     /// <summary>
@@ -394,6 +417,7 @@ public sealed class SessionController
         _deliverByPaste = true;
         _pressedAt = pressedAt;
         _handsFree = false;
+        Mode = RecordingMode.Dictation;
         State = SessionState.Recording;
         LastError = null;
         Hud.Model.ResetLevels();
@@ -920,6 +944,109 @@ public sealed class SessionController
         UsageStore.Shared.Record(record, transcription, cleanup, unpriced);
     }
 
+    // MARK: - Action shortcuts
+
+    /// <summary>
+    /// An action's shortcut was pressed (see <see cref="ShortcutAction"/>). Only between dictations: while one is under way
+    /// its keys do nothing (they're kept from the focused app all the same).
+    /// </summary>
+    /// <param name="shortcut">The keys that were pressed.</param>
+    public void Perform(ShortcutAction action, Hotkey? shortcut)
+    {
+        if (State != SessionState.Idle)
+        {
+            Note($"{action.RawValue()} ignored — a dictation is under way");
+            return;
+        }
+        switch (action)
+        {
+            case ShortcutAction.PasteLastDictation:
+                PasteLastDictation(shortcut);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Puts the newest finished dictation at the cursor again, the way a dictation's text goes in: pasted, with the
+    /// clipboard put back afterwards, or left on the clipboard when it can't be. When the newest one failed with its
+    /// recording saved, re-sends that instead and pastes the result (see <see cref="LastDictation"/>).
+    /// </summary>
+    /// <param name="shortcut">
+    /// The keys that asked for it, let go of before anything is pasted: Ctrl+V sent while they're held would be read
+    /// together with them, as another shortcut altogether. Null from the tray panel, which first has to give focus back
+    /// to the app the text goes to.
+    /// </param>
+    public void PasteLastDictation(Hotkey? shortcut)
+    {
+        if (State != SessionState.Idle || _isPastingLast) return;
+        _isPastingLast = true;
+        _ = Run();
+
+        async Task Run()
+        {
+            try
+            {
+                var released = true;
+                if (shortcut != null) released = await HotkeyMonitor.WaitForRelease(shortcut, TimeSpan.FromSeconds(3));
+                else await Task.Delay(300);
+                await PasteLast(released);
+            }
+            finally
+            {
+                _isPastingLast = false;
+            }
+        }
+    }
+
+    /// <param name="released">False when the shortcut's keys were still held after a while; the text then goes to the clipboard.</param>
+    private async Task PasteLast(bool released)
+    {
+        // A dictation started while the keys were still held: it comes first.
+        if (State != SessionState.Idle) return;
+        var records = _history.Records.ToList();
+        var entries = records.Select(r => new LastDictation.Entry(
+            r.Status.PruningKind(),
+            r.FinalText.Trim().Length > 0,
+            // Only a failed one is ever re-sent, so only its recording is looked for on disk.
+            r.Status == DictationStatus.Failed && r.HasAudio)).ToList();
+        switch (LastDictation.Choose(entries))
+        {
+            case LastDictation.Choice.Retry retry:
+                Note("paste last dictation → the newest one failed: retried");
+                Retry(records[retry.Index], paste: released);
+                return;
+            case LastDictation.Choice.Paste paste:
+                var text = records[paste.Index].FinalText;
+                if (released) await TextInserter.LeaveMenuMode();
+                // Focus on something that can't take text, the keys still held, or the screen locked: the clipboard instead.
+                if (!released || _isLocked || await FocusProbe.FocusedTarget() == FocusProbe.Target.NotEditable)
+                {
+                    Note("paste last dictation → clipboard");
+                    TextInserter.CopyToClipboard(text);
+                    Hud.Show(new HudPhase.Copied(), 1.6);
+                    return;
+                }
+                var outcome = await TextInserter.Insert(text, _settings.RestoreClipboard, () => State == SessionState.Idle && !_isLocked);
+                Note($"paste last dictation → {outcome}");
+                switch (outcome)
+                {
+                    case TextInserter.Outcome.NotPasted:
+                        Hud.Show(new HudPhase.Copied(), 1.6);
+                        break;
+                    case TextInserter.Outcome.Skipped:
+                        // The screen locked, or a dictation started, just as Ctrl+V was due.
+                        TextInserter.CopyToClipboard(text);
+                        if (State == SessionState.Idle) Hud.Show(new HudPhase.Copied(), 1.6);
+                        break;
+                }
+                return;
+            default:
+                Note("paste last dictation → nothing to paste");
+                Hud.Show(new HudPhase.Error(L("还没有可以粘贴的听写", "No dictation to paste yet")), 2);
+                return;
+        }
+    }
+
     // MARK: - Retry / cancel
 
     /// <summary>Re-runs a saved dictation. Chunks that already succeeded are reused; only failed ones are re-sent.</summary>
@@ -1053,6 +1180,7 @@ public sealed class SessionController
         _pressedAt = null;
         _pasteTarget = 0;
         _handsFree = false;
+        Mode = RecordingMode.Dictation;
         _processing = null;
     }
 

@@ -361,6 +361,7 @@ public sealed class PopoverWindow : Window
         var grid = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 2, 0, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -381,10 +382,28 @@ public sealed class PopoverWindow : Window
         Grid.SetColumn(history, 1);
         grid.Children.Add(history);
 
+        // Puts the newest dictation at the cursor of the window that had focus before the panel opened; its tooltip shows
+        // the shortcut, when there is one.
+        var action = ShortcutAction.PasteLastDictation;
+        var pasteLast = new Button
+        {
+            Content = Ui.Icon(Glyphs.Paste, 14),
+            IsEnabled = _controller.State == SessionController.SessionState.Idle && _history.Records.Count > 0,
+        };
+        Ui.Label(pasteLast, action.Title());
+        ToolTipService.SetToolTip(pasteLast, action.Title() + (_settings.Shortcut(action) is { } shortcut ? $" ({shortcut.DisplayName})" : ""));
+        pasteLast.Click += (_, _) =>
+        {
+            Dismiss();
+            _controller.PasteLastDictation(null);
+        };
+        Grid.SetColumn(pasteLast, 2);
+        grid.Children.Add(pasteLast);
+
         var quit = new Button { Content = Ui.Icon(Glyphs.Power, 14) };
         Ui.Label(quit, L("退出 OpenTypeless", "Quit OpenTypeless"));
         quit.Click += (_, _) => _quit();
-        Grid.SetColumn(quit, 3);
+        Grid.SetColumn(quit, 4);
         grid.Children.Add(quit);
         return grid;
     }

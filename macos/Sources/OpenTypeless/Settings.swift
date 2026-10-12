@@ -63,6 +63,9 @@ final class AppSettings: ObservableObject {
     @Published private(set) var modelPrices: [String: ModelPrice]
     /// The OpenRouter host the user picked for a clean-up model (endpoint tag, by model ID); none means automatic.
     @Published private(set) var openRouterHosts: [String: String]
+    /// The shortcuts the user gave to actions besides dictating (see `ShortcutAction`), by the action's name; none by
+    /// default. One saved by a newer version for an action this one doesn't know is kept as it is.
+    @Published private var actionShortcuts: [String: Hotkey]
 
     private init() {
         // Loaded even when OPENROUTER_API_KEY is set: it only stands in for the OpenRouter key, and the app launched
@@ -75,6 +78,8 @@ final class AppSettings: ObservableObject {
         modelPrices = UserDefaults.standard.data(forKey: "modelPrices")
             .flatMap { try? JSONDecoder().decode([String: ModelPrice].self, from: $0) } ?? [:]
         openRouterHosts = (UserDefaults.standard.dictionary(forKey: "openRouterHosts") as? [String: String]) ?? [:]
+        actionShortcuts = UserDefaults.standard.data(forKey: "shortcuts")
+            .flatMap { try? JSONDecoder().decode([String: Hotkey].self, from: $0) } ?? [:]
     }
 
     // MARK: Hotkey
@@ -91,6 +96,27 @@ final class AppSettings: ObservableObject {
             }
         }
         set { hotkeyData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
+
+    // MARK: Action shortcuts
+
+    func shortcut(for action: ShortcutAction) -> Hotkey? {
+        actionShortcuts[action.rawValue]
+    }
+
+    /// nil clears it.
+    func setShortcut(_ hotkey: Hotkey?, for action: ShortcutAction) {
+        actionShortcuts[action.rawValue] = hotkey
+        UserDefaults.standard.set(try? JSONEncoder().encode(actionShortcuts), forKey: "shortcuts")
+    }
+
+    /// The actions' shortcuts, as the hotkey monitor matches keys against them.
+    var shortcutMap: ShortcutMap {
+        var chords: [ShortcutAction: KeyChord] = [:]
+        for action in ShortcutAction.allCases {
+            if let hotkey = shortcut(for: action) { chords[action] = hotkey.chord }
+        }
+        return ShortcutMap(chords)
     }
 
     // MARK: Providers

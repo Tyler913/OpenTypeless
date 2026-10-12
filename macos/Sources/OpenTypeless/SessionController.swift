@@ -10,6 +10,11 @@ private final class SampleCounter: @unchecked Sendable {
     var seconds: Double { lock.withLock { AudioFormat.seconds(forSampleCount: count) } }
 }
 
+/// What a recording is for. Only plain dictation so far; a mode chord (see `ModeChords`) switches it while recording.
+enum RecordingMode: Equatable, Sendable {
+    case dictation
+}
+
 /// Orchestrates one dictation: hotkey → record → chunked STT → polish → paste.
 @MainActor
 final class SessionController: ObservableObject {
@@ -39,6 +44,13 @@ final class SessionController: ObservableObject {
     /// When the hotkey went down, by the key event's own time (`ProcessInfo.systemUptime` clock, see `HotkeyPress`).
     private var pressedAt: TimeInterval?
     private var handsFree = false
+    /// Second keys that switch the recording's mode while the hotkey is held (see `ModeChords`). None is registered yet;
+    /// whatever registers one also gives the hotkey monitor its key, to keep it from the focused app.
+    var modeChords = ModeChords<RecordingMode>()
+    /// What the running recording is for; plain dictation at every start.
+    private(set) var mode: RecordingMode = .dictation
+    /// Set while "Paste last dictation" waits for its keys to be let go or pastes, so pressing it again meanwhile does nothing.
+    private var isPastingLast = false
     /// Which dictation is current: bumped whenever one ends or is cancelled, so work still out for an earlier one (its
     /// paste, its Return, its reset) can tell it's no longer wanted and leaves the next dictation alone.
     private var generation = 0
@@ -175,12 +187,21 @@ final class SessionController: ObservableObject {
         }
     }
 
+    /// Another key went down while the hotkey was held: a registered chord switches the recording's mode; otherwise
     /// Fn+F-key and similar combos shouldn't start a dictation.
-    func otherKeyPressed(at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
-        guard state == .recording, !handsFree, let pressedAt,
-              HotkeyPress.isCombo(pressedAt: pressedAt, otherKeyAt: time) else { return }
-        note("cancelled — another key was pressed with the shortcut (treated as a key combo)")
-        cancel(silently: true)
+    func otherKeyPressed(_ keyCode: Int64, at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+        guard state == .recording, let pressedAt else { return }
+        switch modeChords.otherKey(keyCode, pressedAt: pressedAt, at: time, handsFree: handsFree) {
+        case let .switchMode(newMode):
+            guard newMode != mode else { return }
+            note("mode → \(newMode) (chord key \(keyCode))")
+            mode = newMode
+        case .cancel:
+            note("cancelled — another key was pressed with the shortcut (treated as a key combo)")
+            cancel(silently: true)
+        case .ignore:
+            break
+        }
     }
 
     /// The Mac is going to sleep or the screen was locked. A hands-free recording mustn't keep the microphone open on
@@ -378,6 +399,7 @@ final class SessionController: ObservableObject {
         deliverByPaste = true
         self.pressedAt = pressedAt
         handsFree = false
+        mode = .dictation
         state = .recording
         lastError = nil
         hud.model.resetLevels()
@@ -859,6 +881,90 @@ final class SessionController: ObservableObject {
         UsageStore.shared.record(&record, transcriptionCost: transcriptionCost, cleanupCost: cleanup, unpriced: unpriced)
     }
 
+    // MARK: - Action shortcuts
+
+    /// An action's shortcut was pressed (see `ShortcutAction`). Only between dictations: while one is under way its keys
+    /// do nothing (they're kept from the focused app all the same). `shortcut`: the keys that were pressed.
+    func perform(_ action: ShortcutAction, shortcut: Hotkey?) {
+        guard state == .idle else {
+            note("\(action.rawValue) ignored — a dictation is under way")
+            return
+        }
+        switch action {
+        case .pasteLastDictation: pasteLastDictation(releasing: shortcut)
+        }
+    }
+
+    /// Puts the newest finished dictation at the cursor again, the way a dictation's text goes in: pasted, with the
+    /// clipboard put back afterwards, or left on the clipboard when it can't be. When the newest one failed with its
+    /// recording saved, re-sends that instead and pastes the result (see `LastDictation`).
+    ///
+    /// `shortcut`: the keys that asked for it, let go of before anything is pasted, since a paste read together with
+    /// keys still held would be another shortcut altogether. nil from the menu bar, whose panel first has to give focus
+    /// back to the app the text goes to.
+    func pasteLastDictation(releasing shortcut: Hotkey?) {
+        guard state == .idle, !isPastingLast else { return }
+        isPastingLast = true
+        Task { [weak self] in
+            let released: Bool
+            if let shortcut {
+                released = await HotkeyMonitor.waitForRelease(of: shortcut)
+            } else {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                released = true
+            }
+            await self?.pasteLast(released: released)
+        }
+    }
+
+    /// `released`: false when the shortcut's keys were still held after a while; the text then goes to the clipboard.
+    private func pasteLast(released: Bool) async {
+        defer { isPastingLast = false }
+        // A dictation started while the keys were still held: it comes first.
+        guard state == .idle else { return }
+        let records = history.records
+        let entries = records.map {
+            LastDictation.Entry(kind: $0.status.pruningKind,
+                                hasText: !$0.finalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                                // Only a failed one is ever re-sent, so only its recording is looked for on disk.
+                                hasAudio: $0.status == .failed && $0.hasAudio)
+        }
+        switch LastDictation.choose(entries) {
+        case .nothing:
+            note("paste last dictation → nothing to paste")
+            hud.show(.error(L("还没有可以粘贴的听写", "No dictation to paste yet")), autoHideAfter: 2)
+        case let .retry(index):
+            note("paste last dictation → the newest one failed: retried")
+            retry(records[index], paste: released)
+        case let .paste(index):
+            let text = records[index].finalText
+            // Focus on something that can't take text, the keys still held, or the screen locked: the clipboard instead.
+            guard released, !isLocked, FocusProbe.focusedTarget() != .notEditable else {
+                note("paste last dictation → clipboard")
+                TextInserter.copyToClipboard(text)
+                hud.show(.copied, autoHideAfter: 1.6)
+                return
+            }
+            let outcome = await TextInserter.insert(text, restoreClipboard: settings.restoreClipboard) {
+                self.state == .idle && !self.isLocked
+            }
+            note("paste last dictation → \(outcome) in \(frontmostID)")
+            switch outcome {
+            case .pasted:
+                break
+            case .notPasted:
+                hud.show(.copied, autoHideAfter: 1.6)
+            case .skipped:
+                // The screen locked, or a dictation started, just as ⌘V was due.
+                TextInserter.copyToClipboard(text)
+                if state == .idle { hud.show(.copied, autoHideAfter: 1.6) }
+            case .noPermission:
+                hud.show(.error(L("没有辅助功能权限，文字已复制到剪贴板",
+                                  "No Accessibility permission — text copied to the clipboard")), autoHideAfter: 3)
+            }
+        }
+    }
+
     // MARK: - Retry / cancel
 
     /// Re-runs a saved dictation. Chunks that already succeeded are reused; only failed ones are re-sent.
@@ -958,6 +1064,7 @@ final class SessionController: ObservableObject {
         pressedAt = nil
         pasteTarget = nil
         handsFree = false
+        mode = .dictation
         processingTask = nil
     }
 

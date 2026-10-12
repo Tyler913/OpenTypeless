@@ -51,6 +51,12 @@ struct Hotkey: Codable, Equatable {
 
     var modifierFlag: CGEventFlags { Hotkey.modifierKeys[keyCode] ?? [] }
 
+    /// As shortcuts are compared (see `ShortcutMap`).
+    var chord: KeyChord {
+        KeyChord(keyCode: keyCode, modifiers: CGEventFlags(rawValue: modifiers).intersection(Hotkey.comboModifiers).rawValue,
+                 isModifierOnly: isModifierOnly)
+    }
+
     /// Whether a modifier-only hotkey's own key is down in `flags`. The shared ⌘ flag stays on while the other ⌘ is
     /// held, so with Right ⌘ as the hotkey and Left ⌘ down, letting go of Right ⌘ would go unseen: the side's own bit
     /// tells. Keys posted by software sometimes carry only the shared flag; then that is all there is to go by.
@@ -105,12 +111,50 @@ struct Hotkey: Codable, Equatable {
     }
 }
 
+extension ShortcutAction {
+    var title: String {
+        switch self {
+        case .pasteLastDictation: return L("粘贴上一次听写", "Paste last dictation")
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .pasteLastDictation:
+            return L("把最近一次听写的文字再插入到光标处；如果它转写失败了，会先重新转写",
+                     "Inserts your latest dictation at the cursor again; if it failed, it's transcribed again first")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .pasteLastDictation: return "doc.on.clipboard"
+        }
+    }
+}
+
+extension ShortcutConflict {
+    var message: String {
+        switch self {
+        case .modifierOnly:
+            return L("单独的修饰键不能用作这个快捷键，请再加一个键。", "A modifier on its own can't be used here — add a key to it.")
+        case .escape:
+            return L("Esc 用来取消听写，请换一个键。", "Esc cancels a dictation — pick another key.")
+        case .dictation:
+            return L("这是听写快捷键，请换一个。", "That's the dictation shortcut — pick another.")
+        case let .action(other):
+            return L("已被「\(other.title)」使用，请换一个。", "Already used by “\(other.title)” — pick another.")
+        }
+    }
+}
+
 /// Listens globally for the configured hotkey via a CGEventTap.
 ///
 /// Uses a default (active) tap because that only needs Accessibility permission, which the app needs
 /// anyway for pasting; a listen-only tap would also require Input Monitoring. Everything is passed
 /// through untouched except the keystrokes of a key-combination hotkey, which are swallowed so that
-/// e.g. ⌥Space doesn't also type a character into the focused app, and Esc while a dictation is under way.
+/// e.g. ⌥Space doesn't also type a character into the focused app, Esc while a dictation is under way, and the keys
+/// of an action's shortcut or of a mode chord.
 ///
 /// The press, release and other-key callbacks get the key event's own time (`ProcessInfo.systemUptime` clock),
 /// see `HotkeyPress`.
@@ -119,13 +163,23 @@ final class HotkeyMonitor {
 
     var onPress: ((TimeInterval) -> Void)?
     var onRelease: ((TimeInterval) -> Void)?
-    /// Another key went down while a modifier-only hotkey was held (e.g. Fn+F1 for brightness).
-    var onOtherKey: ((TimeInterval) -> Void)?
+    /// Another key went down while the hotkey was held, by its key code: with a modifier-only hotkey any key (e.g.
+    /// Fn+F1 for brightness), with a key combination only a mode chord (see `modeChordKeys`).
+    var onOtherKey: ((Int64, TimeInterval) -> Void)?
     var onEscape: (() -> Void)?
+    /// An action's shortcut went down (see `shortcuts`).
+    var onAction: ((ShortcutAction) -> Void)?
 
     /// Set while a dictation is recording or processing: Esc then cancels it and is kept from the focused app, where
     /// it would also interrupt a command-line AI tool or close a dialog. Main thread only, like the tap.
     var swallowsEscape = false
+
+    /// The shortcuts of actions besides dictating. Their keys are always kept from the focused app, whatever the
+    /// session makes of them. Main thread only, like the tap.
+    var shortcuts = ShortcutMap()
+
+    /// Keys that switch the recording's mode while the hotkey is held (see `ModeChords`); kept from the focused app then.
+    var modeChordKeys: Set<Int64> = []
 
     var hotkey: Hotkey = .fn {
         didSet { isDown = false }
@@ -144,6 +198,8 @@ final class HotkeyMonitor {
     /// An Esc key-down was swallowed: its auto-repeats and its key-up are swallowed too, even once the dictation has
     /// ended, so the focused app never sees half a key press.
     private var escapeSwallowed = false
+    /// Keys whose key-down was swallowed as an action's shortcut or a mode chord: their auto-repeats and key-up go too.
+    private var swallowedKeys: Set<Int64> = []
 
     /// Starts the tap, retrying every 2 s until Accessibility permission is granted.
     func start() {
@@ -225,8 +281,12 @@ final class HotkeyMonitor {
                     return true
                 }
             }
+            let repeated = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+            if repeated, swallowedKeys.contains(keyCode) { return true }
+            // A new press: a key-up missed meanwhile (while recording a shortcut, say) mustn't swallow this one's.
+            if !repeated { swallowedKeys.remove(keyCode) }
             if keyCode == 53 { // Escape
-                if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return escapeSwallowed }
+                if repeated { return escapeSwallowed }
                 fire(onEscape)
                 escapeSwallowed = swallowsEscape
                 return escapeSwallowed
@@ -236,10 +296,29 @@ final class HotkeyMonitor {
                 // shortcut for the mouse button that MasterKey turns into Fn — don't, and must not cancel.
                 if event.flags.contains(hotkey.modifierFlag) {
                     HotkeyLog.debug("combo key (code \(keyCode)) with \(hotkey.displayName) · \(HotkeyLog.describe(event))")
-                    fire(onOtherKey, at: Self.time(of: event))
+                    fire(onOtherKey, key: keyCode, at: Self.time(of: event))
+                    if modeChordKeys.contains(keyCode) {
+                        swallowedKeys.insert(keyCode)
+                        return true
+                    }
                 } else {
                     HotkeyLog.debug("ignored key (code \(keyCode)) without \(hotkey.displayName) flag · \(HotkeyLog.describe(event))")
                 }
+            } else if isDown, modeChordKeys.contains(keyCode), !repeated {
+                // A key-combination hotkey held: other keys are left alone, as they always were, but a chord counts.
+                HotkeyLog.debug("chord key (code \(keyCode)) with \(hotkey.displayName)")
+                fire(onOtherKey, key: keyCode, at: Self.time(of: event))
+                swallowedKeys.insert(keyCode)
+                return true
+            }
+            // After the combo above, which cancels a dictation the shortcut's modifier may have just started.
+            if let action = shortcuts.action(keyCode: keyCode, modifiers: event.flags.intersection(Hotkey.comboModifiers).rawValue) {
+                if !repeated {
+                    HotkeyLog.debug("\(action.rawValue) shortcut · \(HotkeyLog.describe(event))")
+                    fire(onAction, action)
+                }
+                swallowedKeys.insert(keyCode)
+                return true
             }
             return false
 
@@ -254,6 +333,7 @@ final class HotkeyMonitor {
                 escapeSwallowed = false
                 return true
             }
+            if swallowedKeys.remove(keyCode) != nil { return true }
             return false
 
         default:
@@ -274,6 +354,21 @@ final class HotkeyMonitor {
         fire(onRelease, at: ProcessInfo.processInfo.systemUptime)
     }
 
+    /// Waits until none of `shortcut`'s keys is physically held any more (its key, and any of ⌃⌥⇧⌘), so that what is
+    /// sent next isn't read together with them: a posted ⌘V carries its own flags, but some apps go by the modifiers
+    /// held at the time. Returns false when they're still held after `timeout`.
+    static func waitForRelease(of shortcut: Hotkey, timeout: TimeInterval = 3) async -> Bool {
+        let deadline = ProcessInfo.processInfo.systemUptime + timeout
+        while !Task.isCancelled {
+            let modifiers = CGEventSource.flagsState(.hidSystemState).intersection(Hotkey.comboModifiers)
+            let keyHeld = !shortcut.isModifierOnly && CGEventSource.keyState(.hidSystemState, key: CGKeyCode(shortcut.keyCode))
+            if modifiers.isEmpty, !keyHeld { return true }
+            if ProcessInfo.processInfo.systemUptime >= deadline { return false }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        return false
+    }
+
     /// When the key event happened, on the `ProcessInfo.systemUptime` clock (NSEvent converts the event's stamp).
     private static func time(of event: CGEvent) -> TimeInterval {
         HotkeyPress.eventTime(NSEvent(cgEvent: event)?.timestamp ?? 0, now: ProcessInfo.processInfo.systemUptime)
@@ -285,6 +380,14 @@ final class HotkeyMonitor {
 
     private func fire(_ callback: ((TimeInterval) -> Void)?, at time: TimeInterval) {
         DispatchQueue.main.async { callback?(time) }
+    }
+
+    private func fire(_ callback: ((Int64, TimeInterval) -> Void)?, key: Int64, at time: TimeInterval) {
+        DispatchQueue.main.async { callback?(key, time) }
+    }
+
+    private func fire(_ callback: ((ShortcutAction) -> Void)?, _ action: ShortcutAction) {
+        DispatchQueue.main.async { callback?(action) }
     }
 }
 

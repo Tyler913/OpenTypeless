@@ -6,8 +6,9 @@ using OpenTypeless.Native;
 namespace OpenTypeless.Services;
 
 /// <summary>
-/// All provider keys in one Windows Credential Manager entry ("OpenTypeless/credentials"), so the app touches
-/// the credential store once at launch. The counterpart of the single macOS Keychain item.
+/// All provider keys in one Windows Credential Manager entry ("OpenTypeless/credentials"), so the app reads the
+/// credential store once at launch (and again only to merge before saving a change). The counterpart of the macOS
+/// <c>credentials.json</c>.
 /// </summary>
 public static class Credentials
 {
@@ -34,12 +35,16 @@ public static class Credentials
         }
     }
 
-    public static void Save(Dictionary<string, string> keys)
+    /// <summary>False when Credential Manager refused the change (the error is logged), so the caller can say so.</summary>
+    public static bool Save(Dictionary<string, string> keys)
     {
         if (keys.Count == 0)
         {
-            Win32.CredDelete(Target, Win32.CRED_TYPE_GENERIC, 0);
-            return;
+            if (Win32.CredDelete(Target, Win32.CRED_TYPE_GENERIC, 0)) return true;
+            var deleteError = Marshal.GetLastWin32Error();
+            if (deleteError == ErrorNotFound) return true;
+            AppLog.Debug("credentials", $"CredDelete failed: error {deleteError}");
+            return false;
         }
         var bytes = JsonSerializer.SerializeToUtf8Bytes(keys);
         var blob = Marshal.AllocHGlobal(bytes.Length);
@@ -56,11 +61,17 @@ public static class Credentials
                 Persist = Win32.CRED_PERSIST_LOCAL_MACHINE,
                 UserName = Environment.UserName,
             };
-            Win32.CredWrite(ref credential, 0);
+            if (Win32.CredWrite(ref credential, 0)) return true;
+            // E.g. keys past the 2,560-byte limit of one entry, or no logon session to store them in.
+            var writeError = Marshal.GetLastWin32Error();
+            AppLog.Debug("credentials", $"CredWrite failed: error {writeError}");
+            return false;
         }
         finally
         {
             Marshal.FreeHGlobal(blob);
         }
     }
+
+    private const int ErrorNotFound = 1168;
 }

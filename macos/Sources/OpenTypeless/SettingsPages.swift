@@ -603,13 +603,20 @@ private struct ProviderCard: View {
                 VStack(alignment: .leading, spacing: 12) {
                     FieldRow(label: "API Key") {
                         SecureField(id.keyPlaceholder, text: Binding(
-                            get: { settings.apiKey(for: id) },
+                            get: { settings.savedAPIKey(for: id) },
                             set: { settings.setAPIKey($0, for: id) }
                         ))
                         .textFieldStyle(.roundedBorder)
                         Button(L("粘贴", "Paste")) {
                             if let text = NSPasteboard.general.string(forType: .string) { settings.setAPIKey(text, for: id) }
                         }
+                    }
+                    if id == .openrouter, AppSettings.openRouterKeyFromEnvironment != nil {
+                        Text(L("正在使用环境变量 OPENROUTER_API_KEY 中的 Key；没有设置这个变量时才用这里保存的 Key",
+                               "Using the key in the OPENROUTER_API_KEY environment variable; the key saved here is used when it isn't set"))
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                            .padding(.leading, 78)
                     }
                     FieldRow(label: "Base URL") {
                         TextField(id == .custom ? "http://localhost:8000/v1" : id.defaultBaseURL, text: Binding(

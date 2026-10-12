@@ -336,15 +336,22 @@ public struct UsageLedger: Equatable, Sendable {
 
     /// An unreadable file gives an empty ledger rather than blocking the app.
     public init(jsonData: Data) {
-        let stored = try? JSONDecoder().decode(Stored.self, from: jsonData)
-        days = (stored?.days ?? [:]).filter { CalendarDay(key: $0.key) != nil }
+        self = UsageLedger(storedData: jsonData) ?? UsageLedger()
     }
 
-    /// Nil when there's no file yet (first run of a version that keeps it).
+    /// Nil when the data isn't a saved ledger.
+    init?(storedData: Data) {
+        guard let stored = try? JSONDecoder().decode(Stored.self, from: storedData) else { return nil }
+        days = stored.days.filter { CalendarDay(key: $0.key) != nil }
+    }
+
+    /// Nil when there's no file yet (first run of a version that keeps it). A file that can't be read is moved aside
+    /// (see SafeFile) before an empty ledger takes its place, so the next save doesn't overwrite the lifetime totals.
     public static func load(from url: URL) -> UsageLedger? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        guard let data = try? Data(contentsOf: url) else { return UsageLedger() }
-        return UsageLedger(jsonData: data)
+        if let data = try? Data(contentsOf: url), let ledger = UsageLedger(storedData: data) { return ledger }
+        SafeFile.moveAside(url)
+        return UsageLedger()
     }
 
     public func save(to url: URL) {

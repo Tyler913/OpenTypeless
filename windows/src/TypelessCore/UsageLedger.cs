@@ -253,41 +253,50 @@ public sealed class UsageLedger
 
     public string ToJson() => JsonSerializer.Serialize(new Stored { Days = new Dictionary<string, DayUsage>(_days) }, Json);
 
-    public static UsageLedger FromJson(string json)
+    /// <summary>An unreadable file gives an empty ledger rather than blocking the app.</summary>
+    public static UsageLedger FromJson(string json) => TryFromJson(json) ?? new UsageLedger();
+
+    /// <summary>Null when the text isn't a saved ledger.</summary>
+    internal static UsageLedger? TryFromJson(string json)
     {
-        var ledger = new UsageLedger();
         try
         {
-            var stored = JsonSerializer.Deserialize<Stored>(json, Json);
-            foreach (var (key, day) in stored?.Days ?? [])
+            if (JsonSerializer.Deserialize<Stored>(json, Json) is not { } stored) return null;
+            var ledger = new UsageLedger();
+            foreach (var (key, day) in stored.Days ?? [])
             {
                 if (ParseKey(key) != null && day != null) ledger._days[key] = day;
             }
+            return ledger;
         }
-        catch (JsonException) { }
-        return ledger;
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
-    /// <summary>Null when there's no file yet (first run of a version that keeps it).</summary>
+    /// <summary>
+    /// Null when there's no file yet (first run of a version that keeps it). A file that can't be read (after a few
+    /// tries, see <see cref="SafeFile"/>) or parsed is moved aside before an empty ledger takes its place, so the next
+    /// save doesn't overwrite the lifetime totals.
+    /// </summary>
     public static UsageLedger? Load(string path)
     {
+        if (!File.Exists(path)) return null;
         try
         {
-            return File.Exists(path) ? FromJson(File.ReadAllText(path)) : null;
+            if (TryFromJson(SafeFile.ReadAllText(path)) is { } ledger) return ledger;
         }
-        catch (IOException)
-        {
-            return new UsageLedger();
-        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        SafeFile.MoveAside(path);
+        return new UsageLedger();
     }
 
     public void Save(string path)
     {
         try
         {
-            var temp = path + ".tmp";
-            File.WriteAllText(temp, ToJson());
-            File.Move(temp, path, overwrite: true);
+            SafeFile.WriteAllText(path, ToJson());
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }

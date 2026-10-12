@@ -367,7 +367,12 @@ public class LatencyTests
         var requests = new List<(HttpMethod Method, string Url, bool HasKey)>();
         MockOpenRouter.Handler = (request, _) =>
         {
-            lock (MockOpenRouter.Lock) requests.Add((request.Method, request.RequestUri!.AbsoluteUri, request.Headers.Contains("Authorization")));
+            // A transcription or clean-up still on its way from an earlier test (one cancelled late) isn't this one's.
+            var path = request.RequestUri!.AbsolutePath;
+            if (!path.EndsWith("/transcriptions", StringComparison.Ordinal) && !path.EndsWith("/chat/completions", StringComparison.Ordinal))
+            {
+                lock (MockOpenRouter.Lock) requests.Add((request.Method, request.RequestUri!.AbsoluteUri, request.Headers.Contains("Authorization")));
+            }
             return (404, []);
         };
         var now = 100.0;

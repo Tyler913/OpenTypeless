@@ -336,7 +336,9 @@ extension PipelineTests {
     @Test func preconnectWarmsEachHostOnceWithoutTheKey() async throws {
         let requests = Recorded<URLRequest>()
         MockOpenRouter.handler = { request, _ in
-            requests.add(request)
+            // A transcription or clean-up still on its way from an earlier test (one cancelled late) isn't this one's.
+            let path = request.url?.path ?? ""
+            if !path.hasSuffix("/transcriptions"), !path.hasSuffix("/chat/completions") { requests.add(request) }
             return (404, Data())
         }
         let now = Recorded<Double>()

@@ -1,0 +1,107 @@
+import Foundation
+
+/// What a shortcut of its own can do besides dictating; the dictation hotkey stays separate (see `HotkeyPress`). An
+/// action fires as its keys go down, is ignored while a dictation is under way, and its keys are kept from the focused
+/// app. None has a shortcut until the user records one. A new action is a new case here.
+public enum ShortcutAction: String, CaseIterable, Sendable {
+    /// Puts the newest finished dictation at the cursor again (see `LastDictation`).
+    case pasteLastDictation
+}
+
+/// A key and the modifiers held with it, in the platform's own codes (macOS: a virtual key code and `CGEventFlags` bits;
+/// Windows: a virtual-key code and `HotkeyModifiers`), or a modifier key held on its own.
+public struct KeyChord: Hashable, Sendable {
+    public var keyCode: Int64
+    /// Only the modifiers shortcuts are made of (⌃⌥⇧⌘, or Ctrl Alt Shift Win); none for a modifier on its own.
+    public var modifiers: UInt64
+    public var isModifierOnly: Bool
+
+    public init(keyCode: Int64, modifiers: UInt64 = 0, isModifierOnly: Bool = false) {
+        self.keyCode = keyCode
+        self.modifiers = isModifierOnly ? 0 : modifiers
+        self.isModifierOnly = isModifierOnly
+    }
+}
+
+/// Why a key combination can't be an action's shortcut.
+public enum ShortcutConflict: Equatable, Sendable {
+    /// A modifier on its own would fire with every other shortcut that uses it.
+    case modifierOnly
+    /// Esc cancels a dictation (and is kept from the focused app meanwhile).
+    case escape
+    /// It's the dictation hotkey.
+    case dictation
+    /// It's already this action's shortcut.
+    case action(ShortcutAction)
+}
+
+/// The shortcuts the user gave to actions, and which action a key going down fires.
+public struct ShortcutMap: Equatable, Sendable {
+    public private(set) var chords: [ShortcutAction: KeyChord]
+
+    /// A modifier on its own never makes a shortcut here (see `ShortcutConflict.modifierOnly`), whatever was saved.
+    public init(_ chords: [ShortcutAction: KeyChord] = [:]) {
+        self.chords = chords.filter { !$0.value.isModifierOnly }
+    }
+
+    public var isEmpty: Bool { chords.isEmpty }
+
+    /// The action whose shortcut is this key with exactly these modifiers held (counting only those shortcuts are made
+    /// of), if any: ⌃⌘V doesn't also fire on ⌃⌥⌘V.
+    public func action(keyCode: Int64, modifiers: UInt64) -> ShortcutAction? {
+        let pressed = KeyChord(keyCode: keyCode, modifiers: modifiers)
+        return ShortcutAction.allCases.first { chords[$0] == pressed }
+    }
+
+    /// Why `chord` can't be the shortcut of `action`, or nil when it can. `dictation` is the dictation hotkey.
+    public func conflict(_ chord: KeyChord, for action: ShortcutAction, dictation: KeyChord,
+                         escapeKeyCode: Int64) -> ShortcutConflict? {
+        if chord.isModifierOnly { return .modifierOnly }
+        if chord.keyCode == escapeKeyCode { return .escape }
+        if chord == dictation { return .dictation }
+        if let other = ShortcutAction.allCases.first(where: { $0 != action && chords[$0] == chord }) {
+            return .action(other)
+        }
+        return nil
+    }
+}
+
+/// Which dictation "Paste last dictation" puts at the cursor again: the newest that finished with text. When the newest
+/// one failed and its recording is saved, that one is re-sent instead and pasted once it's done, as the menu bar's
+/// Retry does: what the user is after is what they said last, not the dictation before it.
+public enum LastDictation {
+    public struct Entry: Equatable, Sendable {
+        public var kind: HistoryPruning.Kind
+        /// Its text (cleaned up, or as transcribed) isn't empty.
+        public var hasText: Bool
+        public var hasAudio: Bool
+
+        public init(kind: HistoryPruning.Kind, hasText: Bool, hasAudio: Bool) {
+            self.kind = kind
+            self.hasText = hasText
+            self.hasAudio = hasAudio
+        }
+    }
+
+    public enum Choice: Equatable, Sendable {
+        /// Paste the text of the entry at this index.
+        case paste(Int)
+        /// Re-send the recording of the entry at this index, and paste what comes back.
+        case retry(Int)
+        /// There's nothing to paste.
+        case nothing
+    }
+
+    /// `entries` are newest first, as History keeps them. Passed over: dictations still under way, cancelled ones (the
+    /// user threw them away with Esc), ones that heard no speech, and failed ones whose recording is gone.
+    public static func choose(_ entries: [Entry]) -> Choice {
+        for (index, entry) in entries.enumerated() {
+            switch entry.kind {
+            case .finished where entry.hasText: return .paste(index)
+            case .failed where entry.hasAudio: return .retry(index)
+            default: continue
+            }
+        }
+        return .nothing
+    }
+}

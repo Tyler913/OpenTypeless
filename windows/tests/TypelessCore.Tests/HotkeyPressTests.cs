@@ -55,4 +55,39 @@ public class HotkeyPressTests
         // An event time from after "now" is an untrustworthy stamp, not one 49.7 days old.
         Assert.Equal(100.0, HotkeyPress.TickTime(100_005, 100_000), 9);
     }
+
+    private enum Mode { Dictation, Translate }
+
+    [Fact]
+    public void WithNoChordRegisteredOtherKeysAreReadAsBefore()
+    {
+        var chords = new ModeChords<Mode>();
+        Assert.True(chords.IsEmpty);
+        Assert.Equal(new OtherKeyOutcome<Mode>.Cancel(), chords.OtherKey(0x43, 50, 50.4, handsFree: false));
+        Assert.Equal(new OtherKeyOutcome<Mode>.Ignore(), chords.OtherKey(0x43, 50, 51, handsFree: false));
+        Assert.Equal(new OtherKeyOutcome<Mode>.Ignore(), chords.OtherKey(0x43, 50, 50.4, handsFree: true));
+    }
+
+    [Fact]
+    public void ARegisteredChordSwitchesTheModeInsteadOfCancelling()
+    {
+        var chords = new ModeChords<Mode>();
+        chords.Register(0x54, Mode.Translate);
+        Assert.True(chords.Keys.SetEquals([0x54]));
+        Assert.True(chords.TryGetMode(0x54, out var mode));
+        Assert.Equal(Mode.Translate, mode);
+        // Straight after the press, where any other key would cancel…
+        Assert.Equal(new OtherKeyOutcome<Mode>.SwitchMode(Mode.Translate), chords.OtherKey(0x54, 50, 50.2, handsFree: false));
+        // …and long after it, for as long as the hotkey is held.
+        Assert.Equal(new OtherKeyOutcome<Mode>.SwitchMode(Mode.Translate), chords.OtherKey(0x54, 50, 58, handsFree: false));
+        // Keys that aren't registered still make a combination.
+        Assert.Equal(new OtherKeyOutcome<Mode>.Cancel(), chords.OtherKey(0x43, 50, 50.2, handsFree: false));
+
+        chords.Register(0x54, Mode.Dictation);
+        Assert.Equal(new OtherKeyOutcome<Mode>.SwitchMode(Mode.Dictation), chords.OtherKey(0x54, 50, 50.2, handsFree: false));
+        chords.Unregister(0x54);
+        Assert.True(chords.IsEmpty);
+        Assert.False(chords.TryGetMode(0x54, out _));
+        Assert.Equal(new OtherKeyOutcome<Mode>.Cancel(), chords.OtherKey(0x54, 50, 50.2, handsFree: false));
+    }
 }

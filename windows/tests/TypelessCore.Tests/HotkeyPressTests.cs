@@ -3,6 +3,20 @@ namespace TypelessCore.Tests;
 /// <summary>Reading a hotkey press: tap or hold, key combinations, and which time a key event counts at.</summary>
 public class HotkeyPressTests
 {
+
+    [Fact]
+    public void TapComboAndEventAgeBoundariesAreExclusive()
+    {
+        Assert.True(HotkeyPress.IsTap(0, Math.BitDecrement(HotkeyPress.TapThreshold)));
+        Assert.False(HotkeyPress.IsTap(0, HotkeyPress.TapThreshold));
+        Assert.True(HotkeyPress.IsCombo(0, Math.BitDecrement(HotkeyPress.ComboWindow)));
+        Assert.False(HotkeyPress.IsCombo(0, HotkeyPress.ComboWindow));
+        Assert.Equal(100, HotkeyPress.EventTime(90, 100));
+        Assert.Equal(90.001, HotkeyPress.EventTime(90.001, 100));
+        foreach (var stamp in new[] { -1.0, double.NaN, double.PositiveInfinity, double.NegativeInfinity })
+            Assert.Equal(100, HotkeyPress.EventTime(stamp, 100));
+    }
+
     [Fact]
     public void HoldOrTapIsMeasuredFromTheKeys()
     {

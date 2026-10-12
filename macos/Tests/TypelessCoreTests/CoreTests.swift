@@ -262,3 +262,85 @@ func XCTAssertLessThanOrEqual<T: Comparable>(_ a: T, _ b: T, sourceLocation: Sou
 func XCTFail(_ message: String = "", sourceLocation: SourceLocation = #_sourceLocation) {
     Issue.record(Comment(rawValue: message), sourceLocation: sourceLocation)
 }
+
+extension WAVTests {
+
+    @Test func unfinalizedDataAfterAnOddSizedMetadataChunk() {
+        for size: UInt32 in [0, .max, 1000] {
+            var data = WAV.encode(samples: [7, -8, .min, .max])
+            data.replaceSubrange(40..<44, with: Data(le: size))
+            // RIFF chunks with odd lengths have a pad byte; the data header is no longer at offset 36.
+            var metadata = Data("JUNK".utf8)
+            metadata.append(Data(le: UInt32(3)))
+            metadata.append(contentsOf: [1, 2, 3, 0])
+            data.insert(contentsOf: metadata, at: 36)
+            data.append(0x12) // a torn final sample is ignored
+            #expect(WAV.decodeSamples(data) == [7, -8, .min, .max])
+        }
+        #expect(WAV.decodeSamples(WAV.header(dataByteCount: 0)) == [])
+    }
+
+    @Test func writeAndFinalizeFailuresKeepTheFirstErrorAndSavedAudio() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = try WAVFileWriter(url: url)
+        defer { writer.close() }
+        writer.append([7, -8])
+        // Test-only fault injection: no production hook and no full disk required. Closing the underlying handle
+        // makes its throwing I/O fail while the writer still believes the recording is open.
+        let handle = try #require(Mirror(reflecting: writer).children.first { $0.label == "handle" }?.value as? FileHandle)
+        try handle.close()
+        writer.append([])
+        #expect(writer.failure == nil)
+        writer.append([9])
+        let first = try #require(writer.failure) as NSError
+        writer.append([10])
+        writer.finalize()
+        #expect((writer.failure as NSError?) == first)
+        let data = try Data(contentsOf: url)
+        #expect(data.readLE32(at: 40) == 0)
+        #expect(WAV.decodeSamples(data) == [7, -8])
+    }
+
+    @Test func finalizeFailureIsReportedEvenWithoutAnAppendFailure() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = try WAVFileWriter(url: url)
+        defer { writer.close() }
+        writer.append([1, 2])
+        let handle = try #require(Mirror(reflecting: writer).children.first { $0.label == "handle" }?.value as? FileHandle)
+        try handle.close()
+        writer.finalize()
+        #expect(writer.failure != nil)
+        #expect(try WAV.decodeSamples(Data(contentsOf: url)) == [1, 2])
+    }
+}
+
+extension JoinerTests {
+
+    @Test func koreanSpacingSurvivesEmptyChunksAndPunctuation() {
+        #expect(TranscriptJoiner.join([" 오늘은 ", "\n", "좋아요", ",", "정말", "!", "Next", "한국어", "123"]) == "오늘은 좋아요, 정말! Next 한국어 123")
+        // Decomposed and compatibility Jamo still need word spacing.
+        #expect(TranscriptJoiner.join(["한", "글"]) == "한 글")
+        #expect(TranscriptJoiner.join(["ㄱㄴ", "ㄷㄹ"]) == "ㄱㄴ ㄷㄹ")
+    }
+}
+
+extension ChunkerTests {
+
+    @Test func pauseRequiresItsLastSampleAndLayoutIsVersioned() throws {
+        #expect(Chunker.layout == 2) // saved chunkTexts from layout 1 must not be reused
+        let chunker = Chunker()
+        let speech = [Int16](repeating: 6000, count: 144_000) // 9 seconds, exactly 300 VAD frames
+        #expect(chunker.append(speech).isEmpty)
+        #expect(chunker.append([Int16](repeating: 0, count: 4_799)).isEmpty)
+        let ready = chunker.append([0]) // exactly ten whole quiet frames (0.3 s)
+        #expect(ready.count == 1)
+        let first = try #require(ready.first)
+        #expect(first.index == 0 && first.startSample == 0 && first.samples.count == 146_400)
+        let tail = try #require(chunker.finish())
+        #expect(tail.index == 1 && tail.startSample == 146_400 && tail.samples.count == 2_400)
+        #expect(first.samples + tail.samples == speech + [Int16](repeating: 0, count: 4_800))
+        #expect(chunker.finish() == nil)
+    }
+}

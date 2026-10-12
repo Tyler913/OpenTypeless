@@ -39,3 +39,63 @@ import Testing
         #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).count == 2)
     }
 }
+
+extension SafeFileTests {
+
+    @Test func unreadableLedgerIsNotRenamedOrSavedAfterAccessReturns() throws {
+        let folder = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("usage.json")
+        let original = Data("{not JSON, but unreadable is not corrupt".utf8)
+        try original.write(to: file)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: file.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path) }
+        #expect(throws: (any Error).self) { try Data(contentsOf: file) }
+        let ledger = try #require(UsageLedger.load(from: file))
+        #expect(ledger.isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["usage.json"])
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        ledger.save(to: file)
+        #expect(try Data(contentsOf: file) == original)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["usage.json"])
+    }
+
+    @Test func moveAsidePreservesEveryCollision() throws {
+        let folder = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("usage.json")
+        let date = Date(timeIntervalSince1970: 1_790_000_000)
+        var saved: [URL] = []
+        for contents in ["first", "second", "third"] {
+            try Data(contents.utf8).write(to: file)
+            saved.append(try #require(SafeFile.moveAside(file, now: date)))
+        }
+        #expect(saved[2].lastPathComponent.hasSuffix("-3"))
+        #expect(try saved.map { try String(contentsOf: $0, encoding: .utf8) } == ["first", "second", "third"])
+        #expect(SafeFile.moveAside(file, now: date) == nil)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path).count == 3)
+    }
+}
+
+extension SafeFileTests {
+
+    @Test func failedMoveAsideMustNotAllowLaterSaveToDestroyCorruptBytes() throws {
+        let folder = try temporaryFolder()
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.path)
+            try? FileManager.default.removeItem(at: folder)
+        }
+        let file = folder.appendingPathComponent("usage.json")
+        let original = Data("{damaged lifetime totals".utf8)
+        try original.write(to: file)
+        // Reading works, but renaming does not until the folder becomes writable again.
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: folder.path)
+        #expect(SafeFile.moveAside(file) == nil)
+        let ledger = try #require(UsageLedger.load(from: file))
+        #expect(try Data(contentsOf: file) == original)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.path)
+        ledger.save(to: file)
+        let afterSave = try Data(contentsOf: file)
+        #expect(afterSave == original)
+    }
+}

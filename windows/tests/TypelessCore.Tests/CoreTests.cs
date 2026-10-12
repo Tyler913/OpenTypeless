@@ -5,6 +5,93 @@ namespace TypelessCore.Tests;
 
 public class WavTests
 {
+
+    [Fact]
+    public void UnfinalizedDataAfterAnOddSizedMetadataChunk()
+    {
+        foreach (var size in new uint[] { 0, uint.MaxValue, 1000 })
+        {
+            var data = Wav.Encode([7, -8, short.MinValue, short.MaxValue]);
+            BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(40), size);
+            // Three metadata bytes and a pad byte move the data header away from offset 36.
+            byte[] metadata = [(byte)'J', (byte)'U', (byte)'N', (byte)'K', 3, 0, 0, 0, 1, 2, 3, 0];
+            data = [.. data[..36], .. metadata, .. data[36..], 0x12];
+            Assert.Equal(new short[] { 7, -8, short.MinValue, short.MaxValue }, Wav.DecodeSamples(data));
+        }
+        Assert.Empty(Wav.DecodeSamples(Wav.Header(0))!);
+    }
+
+    // Test-only I/O injection, without filling a real disk or adding a production hook.
+    private sealed class FailingFileStream(string path) : FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read, 1)
+    {
+        public bool FailWrites;
+        public int WriteAttempts;
+        public IOException Error = new("injected disk write failure");
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            WriteAttempts++;
+            if (FailWrites) throw Error;
+            base.Write(buffer);
+        }
+    }
+
+    private static FailingFileStream ReplaceStream(WavFileWriter writer, string path)
+    {
+        var field = typeof(WavFileWriter).GetField("_stream", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        ((FileStream)field.GetValue(writer)!).Dispose();
+        var stream = new FailingFileStream(path);
+        stream.Seek(0, SeekOrigin.End);
+        field.SetValue(writer, stream);
+        return stream;
+    }
+
+    [Fact]
+    public void WriteAndFinalizeFailuresKeepTheFirstErrorAndSavedAudio()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
+        try
+        {
+            using var writer = new WavFileWriter(path);
+            writer.Append([7, -8]);
+            var stream = ReplaceStream(writer, path);
+            stream.FailWrites = true;
+            writer.Append([]);
+            Assert.Null(writer.Failure);
+            writer.Append([9]);
+            var firstError = stream.Error;
+            Assert.Same(firstError, writer.Failure);
+            Assert.Equal(1, stream.WriteAttempts);
+            writer.Append([10]);
+            Assert.Equal(1, stream.WriteAttempts); // a failed append disables later appends
+            stream.Error = new IOException("a later header failure");
+            writer.FinalizeHeader();
+            Assert.Same(firstError, writer.Failure);
+            writer.Close();
+            var data = File.ReadAllBytes(path);
+            Assert.Equal(0u, Wav.ReadLE32(data, 40));
+            Assert.Equal(new short[] { 7, -8 }, Wav.DecodeSamples(data));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void FinalizeFailureIsReportedEvenWithoutAnAppendFailure()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
+        try
+        {
+            using var writer = new WavFileWriter(path);
+            writer.Append([1, 2]);
+            var stream = ReplaceStream(writer, path);
+            stream.FailWrites = true;
+            writer.FinalizeHeader();
+            Assert.Same(stream.Error, writer.Failure);
+            writer.Close();
+            Assert.Equal(new short[] { 1, 2 }, Wav.DecodeSamples(File.ReadAllBytes(path)));
+        }
+        finally { File.Delete(path); }
+    }
+
     [Fact]
     public void RoundTrip()
     {
@@ -86,6 +173,27 @@ public class WavTests
 
 public class ChunkerTests
 {
+
+    [Fact]
+    public void PauseRequiresItsLastSampleAndLayoutIsVersioned()
+    {
+        Assert.Equal(2, Chunker.Layout); // saved chunkTexts from layout 1 must not be reused
+        var chunker = new Chunker();
+        var speech = Enumerable.Repeat((short)6000, 144_000).ToArray();
+        Assert.Empty(chunker.Append(speech));
+        Assert.Empty(chunker.Append(new short[4_799]));
+        var first = Assert.Single(chunker.Append(new short[] { 0 })); // exactly ten quiet frames
+        Assert.Equal(0, first.Index);
+        Assert.Equal(0, first.StartSample);
+        Assert.Equal(146_400, first.Samples.Length);
+        var tail = Assert.IsType<AudioChunk>(chunker.Finish());
+        Assert.Equal(1, tail.Index);
+        Assert.Equal(146_400, tail.StartSample);
+        Assert.Equal(2_400, tail.Samples.Length);
+        Assert.Equal(speech.Concat(new short[4_800]), first.Samples.Concat(tail.Samples));
+        Assert.Null(chunker.Finish());
+    }
+
     /// <summary>Loud "speech" with quiet gaps at the given seconds.</summary>
     internal static short[] Signal(double seconds, double[] gaps)
     {
@@ -154,6 +262,16 @@ public class ChunkerTests
 
 public class JoinerTests
 {
+
+    [Fact]
+    public void KoreanSpacingSurvivesEmptyChunksAndPunctuation()
+    {
+        Assert.Equal("오늘은 좋아요, 정말! Next 한국어 123", TranscriptJoiner.Join([" 오늘은 ", "\n", "좋아요", ",", "정말", "!", "Next", "한국어", "123"]));
+        // Decomposed and compatibility Jamo still need word spacing.
+        Assert.Equal("한 글", TranscriptJoiner.Join(["한", "글"]));
+        Assert.Equal("ㄱㄴ ㄷㄹ", TranscriptJoiner.Join(["ㄱㄴ", "ㄷㄹ"]));
+    }
+
     [Fact]
     public void Join()
     {

@@ -176,3 +176,68 @@ private final class TextLog: @unchecked Sendable {
     func add(_ text: String) { lock.withLock { texts.append(text) } }
     var all: [String] { lock.withLock { texts } }
 }
+
+extension PolishGuardTests {
+
+    @Test func droppedWordThresholdStartsAt150AndKeepsAtLeast55Percent() {
+        #expect(!Prompts.droppedTooMuch(input: String(repeating: "我", count: 149), output: "我"))
+        let input = String(repeating: "我", count: 150)
+        #expect(Prompts.droppedTooMuch(input: input, output: String(repeating: "我", count: 82)))
+        #expect(!Prompts.droppedTooMuch(input: input, output: String(repeating: "我", count: 83)))
+    }
+
+    @Test func exactly55PercentIsNotASummary() {
+        #expect(!Prompts.droppedTooMuch(input: String(repeating: "我", count: 200), output: String(repeating: "我", count: 110)))
+    }
+
+    @Test func strayingRequiresSubstitutionsNotJustDeletions() {
+        #expect(!Prompts.strayedFromTranscript(input: "abcdefghi", output: ""))
+        #expect(Prompts.strayedFromTranscript(input: "abcdefghij", output: " \n!?"))
+        #expect(!Prompts.strayedFromTranscript(input: "ABCDEFGHIJ", output: "a b c d e f g h i j!"))
+        let input = String(repeating: "a", count: 40)
+        #expect(!Prompts.strayedFromTranscript(input: input, output: "aaa"))
+        #expect(!Prompts.strayedFromTranscript(input: input, output: "aaaaaaabbb")) // exactly 30% changed
+        #expect(Prompts.strayedFromTranscript(input: input, output: "aaaaaabbbb"))
+    }
+
+    @Test func fallbackPrecedenceWhenGuardsOverlap() {
+        let input = String(repeating: "我", count: 150)
+        let summary = String(repeating: "你", count: 20)
+        #expect(Prompts.droppedTooMuch(input: input, output: summary))
+        #expect(Prompts.strayedFromTranscript(input: input, output: summary))
+        #expect(Prompts.fallback(input: input, output: summary, truncated: false) == .summarised)
+        #expect(Prompts.fallback(input: input, output: summary, truncated: true) == .truncated)
+        let answer = String(repeating: "你", count: 500)
+        #expect(Prompts.looksLikeAnAnswer(input: input, output: answer))
+        #expect(Prompts.strayedFromTranscript(input: input, output: answer))
+        #expect(Prompts.fallback(input: input, output: answer, truncated: false) == .answered)
+        #expect(Prompts.fallback(input: input, output: answer, truncated: true) == .truncated)
+    }
+}
+
+extension SegmentedPolishTests {
+
+    @Test func splitBoundaryAndEmptyInput() {
+        #expect(SegmentedPolish.parts(of: "") == [""])
+        let single = "  " + String(repeating: "我", count: 400) + "\n"
+        #expect(!SegmentedPolish.needsParts(single))
+        #expect(SegmentedPolish.parts(of: single) == [single])
+        let long = String(repeating: "我", count: 401)
+        let parts = SegmentedPolish.parts(of: " \n" + long + "\n ")
+        #expect(parts.map { WordCount.count($0) } == [201, 200])
+        #expect(parts.joined() == long)
+    }
+
+    @Test func splitKeepsClosingPunctuationAndNumericClauses() {
+        let sentences = "“第一句！”  （第二句？）\n第三句。"
+        #expect(SegmentedPolish.split(sentences, at: SegmentedPolish.isSentenceEnd) == ["“第一句！”  ", "（第二句？）\n", "第三句。"])
+        let clauses = "At 10:30, use 1,000 items: version 3.5, please"
+        #expect(SegmentedPolish.split(clauses, at: SegmentedPolish.isClauseEnd) == ["At 10:30, ", "use 1,000 items: ", "version 3.5, ", "please"])
+    }
+
+    @Test func blankPartsDoNotLoseParagraphBoundaries() {
+        #expect(SegmentedPolish.join(["  ", "Intro.", "", "one\ntwo", " \n ", "Next.", "Last."]) == "Intro.\n\none\ntwo\n\nNext. Last.")
+        #expect(SegmentedPolish.join(["", " \n"]) == "")
+        #expect(SegmentedPolish.join(["오늘은", "좋아요."]) == "오늘은 좋아요.")
+    }
+}

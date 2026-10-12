@@ -26,3 +26,18 @@ import Testing
         #expect(HotkeyPress.eventTime(80, now: 100) == 100) // implausibly old
     }
 }
+
+extension HotkeyPressTests {
+
+    @Test func tapComboAndEventAgeBoundariesAreExclusive() {
+        #expect(HotkeyPress.isTap(pressedAt: 0, releasedAt: HotkeyPress.tapThreshold.nextDown))
+        #expect(!HotkeyPress.isTap(pressedAt: 0, releasedAt: HotkeyPress.tapThreshold))
+        #expect(HotkeyPress.isCombo(pressedAt: 0, otherKeyAt: HotkeyPress.comboWindow.nextDown))
+        #expect(!HotkeyPress.isCombo(pressedAt: 0, otherKeyAt: HotkeyPress.comboWindow))
+        #expect(HotkeyPress.eventTime(90, now: 100) == 100)
+        #expect(HotkeyPress.eventTime(90.001, now: 100) == 90.001)
+        for stamp in [-1.0, .nan, .infinity, -.infinity] {
+            #expect(HotkeyPress.eventTime(stamp, now: 100) == 100)
+        }
+    }
+}

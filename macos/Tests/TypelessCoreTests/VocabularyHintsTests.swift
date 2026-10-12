@@ -138,3 +138,16 @@ final class MockTranscriber: URLProtocol {
         #expect(MockTranscriber.lock.withLock { MockTranscriber.bodies.count } == 1)
     }
 }
+
+extension VocabularyHintsTests {
+
+    @Test func tokenCapIncludesSeparatorsAndStopsAtTheFirstOverflow() {
+        let exact = String(repeating: "a", count: 400)
+        #expect(VocabularyHints.prompt([exact]) == exact)
+        #expect(VocabularyHints.prompt([exact + "a", "small"]) == "")
+        let mixed = String(repeating: "中", count: 98) + "abcd"
+        #expect(VocabularyHints.prompt([mixed, "xy", "z"]) == mixed + ", xy") // 98 + ceil(8/4) = 100
+        #expect(VocabularyHints.prompt([mixed, "xyz", "x"]) == mixed) // separator makes it 101, don't skip ahead
+        #expect(VocabularyHints.prompt([String(repeating: "中", count: 101), "x"]) == "")
+    }
+}

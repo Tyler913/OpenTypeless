@@ -163,6 +163,22 @@
         { "kind": "tone", "seconds": 1.0, "amplitude": 6000 }
       ],
       "cuts": [321280, 517600]
+    },
+    {
+      "name": "successive exact pauses reset frame tracking after each half-pause cut",
+      "segments": [
+        { "kind": "tone", "seconds": 9.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.3 },
+        { "kind": "tone", "seconds": 9.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.3 },
+        { "kind": "tone", "seconds": 1.0, "amplitude": 6000 }
+      ],
+      "cuts": [146400, 295200]
+    },
+    {
+      "name": "silence past the pause threshold does not cut without preceding speech",
+      "segments": [{ "kind": "silence", "seconds": 12.0 }],
+      "cuts": []
     }
   ]
 }

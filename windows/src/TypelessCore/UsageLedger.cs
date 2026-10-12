@@ -296,8 +296,8 @@ public sealed class UsageLedger
             return new UsageLedger { _unreadable = true };
         }
         if (TryFromJson(text) is { } ledger) return ledger;
-        SafeFile.MoveAside(path);
-        return new UsageLedger();
+        // Not moved aside (the folder is read-only, say): then it's the only copy, and isn't saved over either.
+        return SafeFile.MoveAside(path) == null ? new UsageLedger { _unreadable = true } : new UsageLedger();
     }
 
     public void Save(string path)

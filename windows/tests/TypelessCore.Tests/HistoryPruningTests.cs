@@ -3,6 +3,34 @@ namespace TypelessCore.Tests;
 /// <summary>What History deletes: retention by age, and the cap on the recordings' total size.</summary>
 public class HistoryPruningTests
 {
+
+    [Fact]
+    public void DefaultGigabyteBudgetIsInclusiveAndUsesWideTotals()
+    {
+        var entries = Enumerable.Range(0, 10).Select(_ => Entry(HistoryPruning.Kind.Finished, 0, 90_000_000)).ToList();
+        entries.Add(Entry(HistoryPruning.Kind.Finished, 1, 100_000_000));
+        Assert.All(HistoryPruning.Plan(entries, null, Now), action => Assert.Equal(HistoryPruning.Action.Keep, action));
+        entries[10] = entries[10] with { AudioBytes = 100_000_001 };
+        Assert.Equal([.. Repeat(HistoryPruning.Action.Keep, 10), HistoryPruning.Action.RemoveAudio], HistoryPruning.Plan(entries, null, Now));
+        entries.Add(Entry(HistoryPruning.Kind.Finished, 2, 3_000_000_000));
+        Assert.Equal([.. Repeat(HistoryPruning.Action.Keep, 10), .. Repeat(HistoryPruning.Action.RemoveAudio, 2)], HistoryPruning.Plan(entries, null, Now));
+    }
+
+    [Fact]
+    public void FailedExpiryBoundaryAndMissingAudioStillRespectTextFloor()
+    {
+        var entries = Enumerable.Range(0, 201).Select(_ => Entry(HistoryPruning.Kind.Failed, 30, 0)).ToList();
+        Assert.Equal([.. Repeat(HistoryPruning.Action.Keep, 200), HistoryPruning.Action.Remove], HistoryPruning.Plan(entries, TimeSpan.Zero, Now));
+        entries[199] = entries[199] with { AudioBytes = 1 };
+        entries[200] = entries[200] with { Date = Now - Month + TimeSpan.FromSeconds(1) };
+        var actions = HistoryPruning.Plan(entries, TimeSpan.Zero, Now);
+        Assert.Equal(HistoryPruning.Action.RemoveAudio, actions[199]);
+        Assert.Equal(HistoryPruning.Action.Keep, actions[200]);
+        entries[200] = Entry(HistoryPruning.Kind.InProgress, 365, 2_000_000_000);
+        Assert.Equal(HistoryPruning.Action.Keep, HistoryPruning.Plan(entries, TimeSpan.Zero, Now)[200]);
+        Assert.Empty(HistoryPruning.Plan([], TimeSpan.Zero, Now));
+    }
+
     private static readonly DateTimeOffset Now = new(2026, 9, 21, 13, 46, 40, TimeSpan.Zero);
     private static readonly TimeSpan Month = TimeSpan.FromDays(30);
 

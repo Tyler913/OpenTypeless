@@ -302,15 +302,37 @@ extension PipelineTests {
         #expect(sent.all.count == 1)
     }
 
-    @Test func latchWakesWaitersAndCancelledTasks() async {
+    @Test func latchWakesWaitersAndCancelledTasks() async throws {
         let latch = AsyncLatch()
+        defer { latch.open() } // release tasks even if registration fails an assertion
+        // Inspect under the latch's own lock: a "started" signal before wait() or a sleep doesn't prove a waiter
+        // was registered. Reflection stays in the test so no production-only testing API is needed.
+        let lock = try #require(Mirror(reflecting: latch).children.first { $0.label == "lock" }?.value as? NSLock)
+        func pending() throws -> Int {
+            try lock.withLock {
+                let waiters = try #require(Mirror(reflecting: latch).children.first { $0.label == "waiters" }?.value
+                    as? [Int: CheckedContinuation<Void, Never>])
+                return waiters.count
+            }
+        }
+        func registered(_ count: Int) async throws {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while try pending() != count, ContinuousClock.now < deadline { await Task.yield() }
+            try #require(pending() == count, "waiters must be registered before cancelling or opening")
+        }
         let cancelled = Task { await latch.wait() }
-        cancelled.cancel()
-        await cancelled.value // returns although the latch is still closed
         let waiting = Task { await latch.wait(); return true }
+        let alsoWaiting = Task { await latch.wait(); return true }
+        try await registered(3)
+        cancelled.cancel()
+        await cancelled.value // returns while the latch stays closed and the other two remain pending
+        #expect(try pending() == 2)
         latch.open()
         #expect(await waiting.value)
-        await latch.wait() // already open: at once
+        #expect(await alsoWaiting.value)
+        #expect(try pending() == 0)
+        latch.open() // idempotent; must not resume any continuation twice
+        await latch.wait() // already open
     }
 
     @Test func noSpeculationWithoutSpeech() async throws {

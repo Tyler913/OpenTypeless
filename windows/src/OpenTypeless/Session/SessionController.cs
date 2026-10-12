@@ -225,6 +225,7 @@ public sealed class SessionController
                 break;
         }
         UpdateWarmMicrophone();
+        SilenceWarmMicrophoneIfLocked();
     }
 
     /// <summary>The session was unlocked: a warm microphone can come back on.</summary>
@@ -469,6 +470,19 @@ public sealed class SessionController
         // The dictation went on from the audio in memory; only a retry from History would miss what didn't reach the file.
         if (_writer?.Failure is { } failure) Note("recording file incomplete: " + failure.Message);
         _writer = null;
+        SilenceWarmMicrophoneIfLocked();
+    }
+
+    /// <summary>
+    /// While locked, a warm microphone goes off as soon as no dictation is capturing, also mid-processing: kept warm, it
+    /// would go on filling the pre-roll behind the lock screen until the text was in.
+    /// </summary>
+    private void SilenceWarmMicrophoneIfLocked()
+    {
+        if (!_isLocked || IsCapturing || !_recorder.IsRecording) return;
+        _recorder.Stop();
+        _openDeviceId = null;
+        _sink.End();
     }
 
     /// <summary>
@@ -929,6 +943,8 @@ public sealed class SessionController
         record.Error = null;
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again.
         var preset = saved.ChunkLayout == Chunker.Layout ? saved.ChunkTexts : new Dictionary<int, string>();
+        // Saved with the new layout, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).
+        record.ChunkTexts = new Dictionary<int, string>(preset);
         record.ChunkLayout = Chunker.Layout;
         _history.Update(record);
         _record = record;

@@ -18,8 +18,10 @@ public sealed class TrayIcon : IDisposable
     public event Action<Win32.RECT>? Clicked;
     /// <summary>The screen was locked or the PC is going to sleep (which of them, for the log).</summary>
     public event Action<string>? Locked;
-    /// <summary>This session was unlocked again.</summary>
+    /// <summary>This session was unlocked again, or woke from sleep without being locked.</summary>
     public event Action? Unlocked;
+    /// <summary>Between this session locking and unlocking (Windows locks it as it sleeps when sign-in is required).</summary>
+    private bool _sessionLocked;
 
     public nint Hwnd { get; }
 
@@ -137,8 +139,18 @@ public sealed class TrayIcon : IDisposable
             Add(); // Explorer restarted
             return 0;
         }
-        if (msg == Win32.WM_WTSSESSION_CHANGE && (int)wParam == Win32.WTS_SESSION_LOCK) Locked?.Invoke("screen locked");
-        if (msg == Win32.WM_WTSSESSION_CHANGE && (int)wParam == Win32.WTS_SESSION_UNLOCK) Unlocked?.Invoke();
+        if (msg == Win32.WM_WTSSESSION_CHANGE && (int)wParam == Win32.WTS_SESSION_LOCK)
+        {
+            _sessionLocked = true;
+            Locked?.Invoke("screen locked");
+        }
+        if (msg == Win32.WM_WTSSESSION_CHANGE && (int)wParam == Win32.WTS_SESSION_UNLOCK)
+        {
+            _sessionLocked = false;
+            Unlocked?.Invoke();
+        }
+        // Waking without the sign-in screen (it isn't required after sleep) brings no unlock: the resume is the unlock.
+        if (msg == Win32.WM_POWERBROADCAST && (int)wParam == Win32.PBT_APMRESUMEAUTOMATIC && !_sessionLocked) Unlocked?.Invoke();
         if (msg == Win32.WM_POWERBROADCAST && (int)wParam == Win32.PBT_APMSUSPEND) Locked?.Invoke("going to sleep");
         if (Input.TextInserter.HandleClipboardMessage(hwnd, msg, wParam)) return 0;
         if (msg is WM_SETTINGCHANGE or WM_DPICHANGED or WM_DISPLAYCHANGE)

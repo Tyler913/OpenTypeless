@@ -189,7 +189,10 @@ final class SessionController: ObservableObject {
     func systemLocked(_ reason: String) {
         // A warm microphone doesn't stay on behind the lock screen either; see `systemUnlocked`.
         isLocked = true
-        defer { updateWarmMicrophone() }
+        defer {
+            updateWarmMicrophone()
+            silenceWarmMicrophoneIfLocked()
+        }
         switch state {
         case .idle:
             return
@@ -200,6 +203,15 @@ final class SessionController: ObservableObject {
             note("\(reason) while processing — the text goes to the clipboard")
             deliverByPaste = false
         }
+    }
+
+    /// While locked, a warm microphone goes off as soon as no dictation is capturing, also mid-processing: kept warm, it
+    /// would go on filling the pre-roll behind the lock screen until the text was in.
+    private func silenceWarmMicrophoneIfLocked() {
+        guard isLocked, !isCapturing, recorder.isRecording else { return }
+        recorder.stop()
+        openDeviceUID = nil
+        sink.end()
     }
 
     /// The screen was unlocked (or the Mac woke without locking it): a warm microphone can come back on.
@@ -438,6 +450,7 @@ final class SessionController: ObservableObject {
         // The dictation went on from the audio in memory; only a retry from History would miss what didn't reach the file.
         if let failure = writer?.failure { note("recording file incomplete: \(failure.localizedDescription)") }
         writer = nil
+        silenceWarmMicrophoneIfLocked()
     }
 
     /// How long capture goes on after the key is released, in nanoseconds. The microphone hands its audio over a block
@@ -862,6 +875,8 @@ final class SessionController: ObservableObject {
         record.error = nil
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again.
         let preset = saved.chunkLayout == Chunker.layout ? saved.chunkTexts : [:]
+        // Saved with the new layout, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).
+        record.chunkTexts = preset
         record.chunkLayout = Chunker.layout
         history.update(record)
         self.record = record

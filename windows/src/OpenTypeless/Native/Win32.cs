@@ -429,6 +429,7 @@ public static partial class Win32
     public const uint NOTIFY_FOR_THIS_SESSION = 0;
     public const uint WM_POWERBROADCAST = 0x0218;
     public const int PBT_APMSUSPEND = 0x4;
+    public const int PBT_APMRESUMEAUTOMATIC = 0x12;
 
     [DllImport("wtsapi32.dll", SetLastError = true)]
     public static extern bool WTSRegisterSessionNotification(nint hWnd, uint dwFlags);

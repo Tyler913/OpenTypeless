@@ -76,17 +76,28 @@ final class SessionController: ObservableObject {
             guard sink.isRecording else { return }
             DispatchQueue.main.async { hudModel.push(level: level) }
         }
+        // A warm recorder that fell back to the default input when the chosen one went away goes back to it once it's
+        // plugged in again (the engine only follows the default on its own).
+        Microphones.observeDeviceList { [weak self] in
+            MainActor.assumeIsolated { self?.updateWarmMicrophone() }
+        }
     }
 
     private var chosenDeviceUID: String? { settings.microphoneUID.isEmpty ? nil : settings.microphoneUID }
 
+    /// The running dictation is still capturing: recording, or in the moment after the key is released while the last
+    /// of the audio comes in (see `finishRecording`).
+    private var isCapturing: Bool { writer != nil }
+
     /// With "Keep microphone ready" on, keeps the recorder running between dictations (on the chosen input), so a
     /// dictation starts at once and includes the moment before the key; otherwise lets it stop. Called at launch,
-    /// when settings change and after each dictation.
+    /// when settings change, when a device is connected or disconnected, and after each dictation.
     func updateWarmMicrophone() {
         guard state == .idle else { return }
         if settings.keepMicrophoneWarm, Permissions.microphoneGranted {
-            if recorder.isRecording, openDeviceUID == chosenDeviceUID { return }
+            // Running on the right input, or on the default because the chosen one is still disconnected.
+            if recorder.isRecording, openDeviceUID == chosenDeviceUID,
+               recorder.isOnChosenDevice || chosenDeviceUID.flatMap(Microphones.deviceID(uid:)) == nil { return }
             recorder.stop()
             recorder.deviceUID = chosenDeviceUID
             do {
@@ -221,6 +232,8 @@ final class SessionController: ObservableObject {
         do {
             writer = try WAVFileWriter(url: record.audioURL)
         } catch {
+            // Otherwise the record stays "recording" and turns into a failed entry with no audio at the next launch.
+            history.delete(record)
             hud.show(.error(L("无法创建录音文件：", "Can't create the recording file: ") + error.localizedDescription),
                      autoHideAfter: 4)
             return
@@ -350,16 +363,22 @@ final class SessionController: ObservableObject {
         preview = nil
         hud.model.preview = ""
         writer?.close()
+        // The dictation went on from the audio in memory; only a retry from History would miss what didn't reach the file.
+        if let failure = writer?.failure { note("recording file incomplete: \(failure.localizedDescription)") }
         writer = nil
     }
 
+    /// How long capture goes on after the key is released, in nanoseconds. The microphone hands its audio over a block
+    /// at a time: the block with the last syllable would otherwise be cut off when the tap is removed or, with a warm
+    /// microphone, land in the pre-roll and be thrown away.
+    private static let releaseTail: UInt64 = 100_000_000
+
     private func finishRecording() {
         guard state == .recording, var record, let pipeline else { return }
-        stopCapture()
-        playSound("Pop")
-
         record.duration = counter.seconds
         if record.duration - preRollSeconds < 0.4 {
+            stopCapture()
+            playSound("Pop")
             note(String(format: "discarded — only %.2fs of audio", record.duration))
             // Accidental tap.
             pipeline.cancel()
@@ -375,8 +394,21 @@ final class SessionController: ObservableObject {
         state = .processing
         hud.showWorking(polishes: settings.polishEnabled)
 
+        // No waiting when the speaker paused before letting go and that pause is already being transcribed as the last
+        // chunk: the moment's (quiet) audio changes nothing then, and the text may be ready at once.
+        let waitsForTail = !pipeline.endsInCoveredPause
+        let released = record
         processingTask = Task { [weak self] in
-            await self?.process(record: record, pipeline: pipeline)
+            if waitsForTail { try? await Task.sleep(nanoseconds: SessionController.releaseTail) }
+            // Cancelled meanwhile: `cancel` stopped the capture itself.
+            guard let self, !Task.isCancelled else { return }
+            // Then the stop sound, which the microphone would have picked up (and muting would have cut off).
+            self.stopCapture()
+            self.playSound("Pop")
+            var record = released
+            record.duration = self.counter.seconds
+            self.record = record
+            await self.process(record: record, pipeline: pipeline)
         }
     }
 
@@ -705,8 +737,9 @@ final class SessionController: ObservableObject {
         let wasRecording = state == .recording
         processingTask?.cancel()
         pipeline?.cancel()
+        // Also right after the key was released, while the last of the audio is still coming in: no waiting for it.
+        if isCapturing { stopCapture() }
         if wasRecording {
-            stopCapture()
             if let record { history.delete(record) }
         } else if var record {
             // Cancelled while processing: keep what was transcribed; it can be re-transcribed for a day.
@@ -721,6 +754,22 @@ final class SessionController: ObservableObject {
         }
         reset()
         if silently { hud.show(.hidden) } else { hud.show(.error(L("已取消", "Cancelled")), autoHideAfter: 1) }
+    }
+
+    /// Quitting mid-recording keeps the dictation instead of losing it: capture stops, the recording file is closed (so
+    /// it's complete) and the record stays in History, where the next launch shows it as interrupted with its audio saved,
+    /// ready to retry. Runs while the app terminates, so it only does what's quick; a dictation already being processed
+    /// is left as it is, for the next launch to show the same way.
+    func stopForQuit() {
+        guard isCapturing, var record else { return }
+        processingTask?.cancel()
+        pipeline?.cancel()
+        stopCapture()
+        record.duration = counter.seconds
+        // A retry reuses the segments already transcribed.
+        if let pipeline { record.chunkTexts = pipeline.completedTranscripts() }
+        // An accidental tap isn't worth an entry.
+        if record.duration - preRollSeconds < 0.4 { history.delete(record) } else { history.update(record) }
     }
 
     private func abort(message: String) {

@@ -49,7 +49,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] state in
                 self?.updateStatusIcon(state)
-                if state == .idle { self?.updater.sessionBecameIdle() }
+                guard state == .idle else { return }
+                self?.updater.sessionBecameIdle()
+                // A warm microphone that failed, or that the chosen input came back for, during the dictation.
+                self?.controller.updateWarmMicrophone()
             }
             .store(in: &cancellables)
 
@@ -96,7 +99,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Quitting mid-recording mustn't leave the speakers muted.
+        // Quitting mid-recording keeps what was said, retryable from History.
+        controller.stopForQuit()
+        // And mustn't leave the speakers muted.
         OutputMute.restoreLeftover()
     }
 

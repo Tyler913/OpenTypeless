@@ -5,8 +5,9 @@ namespace TypelessCore;
 public static class TranscriptJoiner
 {
     /// <summary>
-    /// Joins per-chunk transcripts. CJK text is concatenated directly; a space is inserted only
-    /// where both sides are Latin letters/digits (so "hello" + "world" doesn't become "helloworld").
+    /// Joins per-chunk transcripts. Chinese and Japanese text is concatenated directly; elsewhere (Latin letters,
+    /// digits, Korean, which puts spaces between words) a space goes in, so "hello" + "world" doesn't become
+    /// "helloworld".
     /// </summary>
     public static string Join(IEnumerable<string> parts)
     {
@@ -29,12 +30,18 @@ public static class TranscriptJoiner
 
     private static bool NeedsSpace(Rune a, Rune b)
     {
-        if (IsCJK(a) || IsCJK(b)) return false;
+        if (JoinsWithoutSpace(a) || JoinsWithoutSpace(b)) return false;
         if (Rune.IsWhiteSpace(a)) return false;
         // After sentence punctuation like "." or "," a space reads naturally in Latin text.
         if (Rune.IsPunctuation(b)) return false;
         return true;
     }
+
+    /// <summary>
+    /// Script written without spaces between words: Han, kana, CJK punctuation and full-width forms. Not Hangul, unlike
+    /// <see cref="IsCJK"/>: Korean separates its words with spaces, so two Korean chunks need one between them.
+    /// </summary>
+    internal static bool JoinsWithoutSpace(Rune s) => IsCJK(s) && s.Value is not (>= 0xAC00 and <= 0xD7AF);
 
     internal static bool IsCJK(Rune s) => s.Value switch
     {

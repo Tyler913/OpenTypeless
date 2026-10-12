@@ -94,6 +94,18 @@ public sealed class TranscriptionPipeline
     /// <summary>Whether the last chunk's transcript came from a speculative tail, so nothing was left to send when the recording ended.</summary>
     public bool TailWasSpeculative { get; private set; }
 
+    /// <summary>
+    /// The audio so far ends in a pause a speculative tail is already transcribing: if the recording ended now, that
+    /// answer would be the last chunk's. A moment more of (quiet) audio after the key is released changes nothing then.
+    /// </summary>
+    public bool EndsInCoveredPause
+    {
+        get
+        {
+            lock (_lock) return _speculation is { } speculation && !_pauses.SpeechAfter(speculation.End, includePartial: true);
+        }
+    }
+
     /// <param name="preset">Lets a retry reuse transcripts that already succeeded (keyed by chunk index).</param>
     /// <param name="trimSilence">Sends each chunk without the silence before and after its speech (see <see cref="AudioChunk.Trimmed"/>).</param>
     /// <param name="speculate">Transcribes the pending audio ahead of time whenever the speaker pauses (see the class summary).</param>

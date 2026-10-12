@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text.Json.Nodes;
 
 namespace TypelessCore.Tests;
@@ -34,6 +35,52 @@ public class WavTests
         {
             File.Delete(path);
         }
+    }
+
+    [Fact]
+    public void UnfinalizedFileStillDecodes()
+    {
+        // The app quit or crashed mid-recording: the header still says 0 bytes, but the samples are all there.
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
+        var writer = new WavFileWriter(path);
+        try
+        {
+            writer.Append(new short[] { 1, 2, 3 });
+            writer.Append(new short[] { -4, 5 });
+            byte[] data;
+            using (var reader = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var copy = new MemoryStream())
+            {
+                reader.CopyTo(copy);
+                data = copy.ToArray();
+            }
+            Assert.Equal(0u, Wav.ReadLE32(data, 40));
+            Assert.Equal(new short[] { 1, 2, 3, -4, 5 }, Wav.DecodeSamples(data));
+            Assert.Null(writer.Failure);
+        }
+        finally
+        {
+            writer.Close();
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void UnknownOrOversizedDataSizeReadsToTheEnd()
+    {
+        short[] samples = [7, -8, 9];
+        byte[] Patched(uint size, params byte[] extra)
+        {
+            var wav = Wav.Encode(samples).Concat(extra).ToArray();
+            BinaryPrimitives.WriteUInt32LittleEndian(wav.AsSpan(40), size);
+            return wav;
+        }
+        Assert.Equal(samples, Wav.DecodeSamples(Patched(0xFFFF_FFFF)));
+        Assert.Equal(samples, Wav.DecodeSamples(Patched(1000)));
+        // Whole samples only: half a sample at the end of a cut-off file is dropped.
+        Assert.Equal(samples, Wav.DecodeSamples(Patched(0, 0x01)));
+        // A size that fits is still trusted (whatever follows the chunk isn't audio).
+        Assert.Equal(new short[] { 7, -8 }, Wav.DecodeSamples(Patched(4, 0x01, 0x02)));
     }
 }
 
@@ -115,6 +162,19 @@ public class JoinerTests
         Assert.Equal("用 SwiftUI写界面", TranscriptJoiner.Join(["用 SwiftUI", "写界面"]));
         Assert.Equal("done. Next", TranscriptJoiner.Join(["done.", " Next"]));
         Assert.Equal("a", TranscriptJoiner.Join(["", "  a ", ""]));
+    }
+
+    [Fact]
+    public void KoreanChunksGetASpace()
+    {
+        // Korean puts spaces between words, so chunks don't run together like Chinese or Japanese ones do.
+        Assert.Equal("안녕하세요 반갑습니다", TranscriptJoiner.Join(["안녕하세요", "반갑습니다"]));
+        Assert.Equal("오늘은 OpenTypeless", TranscriptJoiner.Join(["오늘은", "OpenTypeless"]));
+        Assert.Equal("今日はいい天気", TranscriptJoiner.Join(["今日は", "いい天気"]));
+        Assert.Equal("안녕하세요。", TranscriptJoiner.Join(["안녕하세요", "。"]));
+        // Counting still treats Hangul as CJK.
+        Assert.True(TranscriptJoiner.IsCJK(new System.Text.Rune('한')));
+        Assert.False(TranscriptJoiner.JoinsWithoutSpace(new System.Text.Rune('한')));
     }
 }
 

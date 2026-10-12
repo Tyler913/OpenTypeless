@@ -15,7 +15,8 @@ public sealed partial class ApiClient
         timeout.CancelAfter(TimeSpan.FromSeconds(10));
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Head, Endpoint.BaseUrl);
+            // HTTP/2 like the requests it warms up for, so they find the connection it leaves open.
+            using var request = NewRequest(HttpMethod.Head, Endpoint.BaseUrl);
             using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
         }
         catch

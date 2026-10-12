@@ -421,6 +421,20 @@ public static partial class Win32
 
     public static readonly nint HWND_MESSAGE = -3;
 
+    // MARK: Session and power
+
+    public const uint WM_WTSSESSION_CHANGE = 0x02B1;
+    public const int WTS_SESSION_LOCK = 0x7;
+    public const uint NOTIFY_FOR_THIS_SESSION = 0;
+    public const uint WM_POWERBROADCAST = 0x0218;
+    public const int PBT_APMSUSPEND = 0x4;
+
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    public static extern bool WTSRegisterSessionNotification(nint hWnd, uint dwFlags);
+
+    [DllImport("wtsapi32.dll")]
+    public static extern bool WTSUnRegisterSessionNotification(nint hWnd);
+
     // MARK: Icons
 
     [StructLayout(LayoutKind.Sequential)]

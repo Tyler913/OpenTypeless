@@ -213,6 +213,9 @@ public sealed class EditWatcher
     {
         await Task.Delay(120); // let the app apply the selection first
         if (_session != session) return;
+        // In a terminal Ctrl+C would interrupt the program running there (mintty and PuTTY always send it, and a program
+        // reading the mouse leaves no selection to copy): the cursor stays unknown instead.
+        if (FocusProbe.ForegroundIsTerminal()) return;
         var selected = await TextInserter.CopySelection();
         if (_session == session && !string.IsNullOrEmpty(selected)) session.Keys!.Select(selected);
     }

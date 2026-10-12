@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.UI.Dispatching;
 using OpenTypeless.Audio;
 using OpenTypeless.Input;
+using OpenTypeless.Native;
 using OpenTypeless.Services;
 using OpenTypeless.UI;
 using TypelessCore;
@@ -58,8 +59,21 @@ public sealed class SessionController
     private WavFileWriter? _writer;
     private DictationRecord? _record;
     private SampleCounter _counter = new();
-    private DateTimeOffset? _pressedAt;
+    /// <summary>When the hotkey went down, by the key event's own time (seconds on the tick clock, see <see cref="HotkeyPress"/>).</summary>
+    private double? _pressedAt;
     private bool _handsFree;
+    /// <summary>
+    /// Which dictation is current: bumped whenever one ends or is cancelled, so work still out for an earlier one (its
+    /// paste, its Enter, its reset) can tell it's no longer wanted and leaves the next dictation alone.
+    /// </summary>
+    private int _generation;
+    /// <summary>The foreground window when the recording stopped, where the text is meant to go (0 for a retry).</summary>
+    private nint _pasteTarget;
+    /// <summary>
+    /// Cancelled recordings still being transcribed in the background (see <see cref="KeepCancelledRecording"/>). A retry
+    /// from History takes the record over, and the background result is then dropped rather than written over the retry's.
+    /// </summary>
+    private readonly HashSet<string> _keptInBackground = new();
     private CancellationTokenSource? _processing;
     private DispatcherQueueTimer? _maxDurationTimer;
     /// <summary>Keeps the connections warm while recording (see <see cref="WarmConnections"/>).</summary>
@@ -72,11 +86,8 @@ public sealed class SessionController
     /// <summary>Clean-ups started ahead of time that finished but were then dropped because the speaker went on: they were billed too.</summary>
     private readonly List<HedgedPolishResult> _discardedPolishes = new();
     private Dictionary<string, ModelInfo> _modelInfo = new();
-    /// <summary>False when retrying from the history page: the result goes to the clipboard instead.</summary>
+    /// <summary>False when retrying from the history page, or once the screen locked: the result goes to the clipboard instead.</summary>
     private bool _deliverByPaste = true;
-
-    /// <summary>A press shorter than this toggles hands-free mode instead of push-to-talk.</summary>
-    private static readonly TimeSpan TapThreshold = TimeSpan.FromSeconds(0.35);
 
     public SessionController()
     {
@@ -138,13 +149,14 @@ public sealed class SessionController
 
     private static void Note(string text) => AppLog.Debug("session", text);
 
-    public void HotkeyPressed()
+    /// <param name="at">When the key went down (the event's own time, see <see cref="HotkeyPress"/>).</param>
+    public void HotkeyPressed(double at)
     {
         switch (State)
         {
             case SessionState.Idle:
                 Note("start recording");
-                StartRecording();
+                StartRecording(at);
                 break;
             case SessionState.Recording when _handsFree:
                 Note("stop (hands-free)");
@@ -159,22 +171,43 @@ public sealed class SessionController
         }
     }
 
-    public void HotkeyReleased()
+    public void HotkeyReleased(double at)
     {
         if (State != SessionState.Recording || _handsFree || _pressedAt is not { } pressedAt) return;
-        var held = DateTimeOffset.Now - pressedAt;
-        Note(held < TapThreshold ? $"tap ({held.TotalSeconds:0.00}s) → hands-free" : $"released after {held.TotalSeconds:0.00}s → stop");
-        if (held < TapThreshold) _handsFree = true;
+        var held = at - pressedAt;
+        var tap = HotkeyPress.IsTap(pressedAt, at);
+        Note(tap ? $"tap ({held:0.00}s) → hands-free" : $"released after {held:0.00}s → stop");
+        if (tap) _handsFree = true;
         else FinishRecording();
     }
 
     /// <summary>Right Ctrl + C and similar combos shouldn't start a dictation.</summary>
-    public void OtherKeyPressed()
+    public void OtherKeyPressed(double at)
     {
         if (State != SessionState.Recording || _handsFree || _pressedAt is not { } pressedAt
-            || DateTimeOffset.Now - pressedAt >= TimeSpan.FromSeconds(1)) return;
+            || !HotkeyPress.IsCombo(pressedAt, at)) return;
         Note("cancelled — another key was pressed with the shortcut (treated as a key combo)");
         Cancel(silently: true);
+    }
+
+    /// <summary>
+    /// The screen was locked or the PC is going to sleep. A hands-free recording mustn't keep the microphone open on the
+    /// lock screen, nor its text land in whatever has focus afterwards: a recording stops as with Esc (a long one is kept
+    /// in History), and one being processed goes to the clipboard instead of being pasted.
+    /// </summary>
+    public void SystemLocked(string reason)
+    {
+        switch (State)
+        {
+            case SessionState.Recording:
+                Note($"{reason} while recording — cancelled as with Esc");
+                EscapePressed();
+                break;
+            case SessionState.Processing:
+                Note($"{reason} while processing — the text goes to the clipboard");
+                _deliverByPaste = false;
+                break;
+        }
     }
 
     public void EscapePressed()
@@ -199,6 +232,7 @@ public sealed class SessionController
         Note($"cancelled after {record.Duration:0.0}s — kept in History");
         Reset();
         Hud.Show(new HudPhase.Error(L("已取消，录音在历史记录中保留 24 小时", "Cancelled — kept in History for 24 hours")), 2.5);
+        _keptInBackground.Add(record.Id);
         _ = Finish();
 
         async Task Finish()
@@ -216,6 +250,12 @@ public sealed class SessionController
             {
                 raw = TranscriptJoiner.Join(pipeline.CompletedTranscripts().OrderBy(p => p.Key).Select(p => p.Value));
             }
+            if (!_keptInBackground.Remove(record.Id))
+            {
+                // Retried from History meanwhile: that run owns the record now. Only what this one spent is counted.
+                Account(record, pipeline, null);
+                return;
+            }
             if (_history.Records.All(r => r.Id != record.Id)) return; // deleted meanwhile
             record.RawText = raw;
             record.ChunkTexts = pipeline.CompletedTranscripts();
@@ -226,7 +266,11 @@ public sealed class SessionController
 
     // MARK: - Recording
 
-    private void StartRecording()
+    /// <param name="pressedAt">
+    /// The key event's own time: opening a cold microphone (a Bluetooth one can take a second or more) mustn't count
+    /// against how long the key was held.
+    /// </param>
+    private void StartRecording(double pressedAt)
     {
         // First of all, so the connections are ready by the time the first request goes out.
         WarmConnections();
@@ -317,7 +361,7 @@ public sealed class SessionController
         _pipeline = pipeline;
         _counter = counter;
         _deliverByPaste = true;
-        _pressedAt = DateTimeOffset.Now;
+        _pressedAt = pressedAt;
         _handsFree = false;
         State = SessionState.Recording;
         LastError = null;
@@ -417,16 +461,18 @@ public sealed class SessionController
         _history.Update(record);
         _record = record;
         State = SessionState.Processing;
+        // Where the text should go: if another window is in front by the time it's ready, it goes to the clipboard.
+        _pasteTarget = Win32.GetForegroundWindow();
         Hud.ShowWorking(_settings.PolishEnabled);
 
         var processing = new CancellationTokenSource();
         _processing = processing;
-        _ = Process(record, pipeline, processing.Token);
+        _ = Process(record, pipeline, _generation, processing.Token);
     }
 
     // MARK: - Processing
 
-    private async Task Process(DictationRecord record, TranscriptionPipeline pipeline, CancellationToken token)
+    private async Task Process(DictationRecord record, TranscriptionPipeline pipeline, int generation, CancellationToken token)
     {
         var started = Stopwatch.StartNew();
         // Moves the bar as the speech-to-text chunks still out come back.
@@ -452,7 +498,7 @@ public sealed class SessionController
                 Finish(new HudPhase.Error(L("没有识别到语音", "No speech detected")), 2);
                 return;
             }
-            await PolishAndDeliver(record, pipeline, token);
+            await PolishAndDeliver(record, pipeline, generation, token);
         }
         catch (PipelineFailure failure)
         {
@@ -490,7 +536,7 @@ public sealed class SessionController
         }
     }
 
-    private async Task PolishAndDeliver(DictationRecord record, TranscriptionPipeline pipeline, CancellationToken token)
+    private async Task PolishAndDeliver(DictationRecord record, TranscriptionPipeline pipeline, int generation, CancellationToken token)
     {
         var text = record.RawText;
         string? notice = null;
@@ -568,16 +614,27 @@ public sealed class SessionController
         }
         if (record.Status == DictationStatus.PolishFailed) record.PolishedText = null;
 
-        if (!token.IsCancellationRequested)
+        // Taken now: once the text is in, the next dictation may already be collecting its own.
+        var discarded = _discardedPolishes.ToList();
+        _discardedPolishes.Clear();
+        if (IsCurrent(generation, token))
         {
             Hud.Model.Progress.Reach(new ProcessingProgress.Milestone.Delivered());
-            await Deliver(text, notice);
+            await Deliver(text, notice, generation, token);
         }
+        // Esc came before the text was in place (or while it went in): Cancel has kept the record as cancelled, and so
+        // it stays, now with its clean-up.
+        if (token.IsCancellationRequested) record.Status = DictationStatus.Cancelled;
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
-        Account(record, pipeline, polished, _discardedPolishes.ToList());
-        _discardedPolishes.Clear();
+        Account(record, pipeline, polished, discarded);
         _history.Update(record);
     }
+
+    /// <summary>Whether the dictation <paramref name="generation"/> is still the one under way, not cancelled or followed by another.</summary>
+    private bool IsCurrent(int generation, CancellationToken token) => generation == _generation && !token.IsCancellationRequested;
+
+    /// <summary>Whether the window in front is no longer the one the recording was made for.</summary>
+    private bool FocusMoved => _pasteTarget != 0 && Win32.GetForegroundWindow() != _pasteTarget;
 
     // MARK: - Clean-up ahead of time
 
@@ -634,29 +691,47 @@ public sealed class SessionController
     }
 
     /// <summary>
-    /// Pastes at the cursor unless focus is clearly not a text input. Whether the paste actually landed is
-    /// detected from the target app reading the clipboard: if it did, the user's previous clipboard is restored;
-    /// if not, the text stays on the clipboard and the HUD says so.
+    /// Pastes at the cursor unless focus is clearly not a text input, or has moved to another window since the
+    /// recording stopped. Whether the paste actually landed is detected from the target app reading the clipboard: if
+    /// it did, the user's previous clipboard is restored; if not, the text stays on the clipboard and the HUD says so.
+    ///
+    /// Esc (or the screen locking) can come at any point while the text goes in: the paste and the Enter are only sent
+    /// while the dictation is still current, and a cancelled one leaves the session and the HUD to what replaced it.
     /// </summary>
-    private async Task Deliver(string text, string? notice)
+    private async Task Deliver(string text, string? notice, int generation, CancellationToken token)
     {
         if (_deliverByPaste) await TextInserter.LeaveMenuMode();
         var target = _deliverByPaste ? await FocusProbe.FocusedTarget() : FocusProbe.Target.NotEditable;
-        if (target == FocusProbe.Target.NotEditable)
+        if (!IsCurrent(generation, token))
         {
-            Note("deliver → clipboard (focus not editable)");
+            Note("deliver → nothing, the dictation was cancelled meanwhile");
+            return;
+        }
+        if (target == FocusProbe.Target.NotEditable || _deliverByPaste && FocusMoved)
+        {
+            Note($"deliver → clipboard ({(target == FocusProbe.Target.NotEditable ? "focus not editable" : "another window in front")})");
             TextInserter.CopyToClipboard(text);
             Finish(notice is { } n ? new HudPhase.Error(n) : new HudPhase.Copied(), 1.6);
             return;
         }
-        var outcome = await TextInserter.Insert(text, _settings.RestoreClipboard);
+        var outcome = await TextInserter.Insert(text, _settings.RestoreClipboard,
+                                                () => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved);
+        if (!IsCurrent(generation, token))
+        {
+            Note($"deliver → {outcome}, but the dictation was cancelled meanwhile");
+            return;
+        }
         Note($"deliver → {outcome} (focus {target})");
         switch (outcome)
         {
             case TextInserter.Outcome.Pasted:
                 // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
-                var sent = _settings.PressEnterAfterInsert;
-                if (sent) await TextInserter.PressEnter();
+                var sent = false;
+                if (_settings.PressEnterAfterInsert)
+                {
+                    sent = await TextInserter.PressEnter(() => IsCurrent(generation, token));
+                    if (!IsCurrent(generation, token)) return;
+                }
                 if (notice is { } message)
                 {
                     Finish(new HudPhase.Error(message), 3);
@@ -667,6 +742,11 @@ public sealed class SessionController
                     Hud.FinishWorking();
                 }
                 if (_settings.LearnFromEdits && !sent) _editWatcher.Watch(text);
+                break;
+            case TextInserter.Outcome.Skipped:
+                // The screen locked or another window came to the front just as Ctrl+V was due.
+                TextInserter.CopyToClipboard(text);
+                Finish(notice is { } skippedNotice ? new HudPhase.Error(skippedNotice) : new HudPhase.Copied(), 1.6);
                 break;
             default:
                 Finish(new HudPhase.Copied(), 1.6);
@@ -746,6 +826,8 @@ public sealed class SessionController
             return;
         }
         _deliverByPaste = paste;
+        // A cancelled recording still being transcribed in the background is this run's now.
+        _keptInBackground.Remove(saved.Id);
         var record = saved.Copy();
         record.Status = DictationStatus.Processing;
         record.Error = null;
@@ -758,6 +840,7 @@ public sealed class SessionController
         _pipeline = pipeline;
         var processing = new CancellationTokenSource();
         _processing = processing;
+        var generation = _generation;
         _ = RunRetry();
 
         async Task RunRetry()
@@ -765,7 +848,7 @@ public sealed class SessionController
             // Let the menu close and focus return to the previous app before pasting.
             try { await Task.Delay(300, processing.Token); } catch (OperationCanceledException) { return; }
             pipeline.Append(samples);
-            await Process(record, pipeline, processing.Token);
+            await Process(record, pipeline, generation, processing.Token);
         }
     }
 
@@ -815,11 +898,13 @@ public sealed class SessionController
     private void Reset()
     {
         DropSpeculativePolish();
+        _generation++;
         State = SessionState.Idle;
         _preRollSeconds = 0;
         _pipeline = null;
         _record = null;
         _pressedAt = null;
+        _pasteTarget = 0;
         _handsFree = false;
         _processing = null;
     }

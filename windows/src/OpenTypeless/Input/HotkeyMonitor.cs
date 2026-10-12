@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using OpenTypeless.Native;
+using TypelessCore;
 
 namespace OpenTypeless.Input;
 
@@ -24,17 +25,32 @@ public readonly record struct MouseButton(int Message, int X, int Y, uint Time);
 ///
 /// The hook runs on its own thread with its own message loop, so a busy UI thread can never make Windows
 /// drop it for being slow. Everything is passed through untouched except the keystrokes of a key-combination
-/// hotkey, which are swallowed so that e.g. Alt+Space doesn't also reach the focused app.
+/// hotkey, which are swallowed so that e.g. Alt+Space doesn't also reach the focused app, and Esc while a dictation
+/// is under way.
+///
+/// The press, release and other-key callbacks get the key event's own time, in seconds on the
+/// <see cref="Environment.TickCount64"/> clock (see <see cref="HotkeyPress"/>).
 /// </summary>
 public sealed class HotkeyMonitor
 {
     public static HotkeyMonitor Shared { get; } = new();
 
-    public Action? OnPress;
-    public Action? OnRelease;
+    public Action<double>? OnPress;
+    public Action<double>? OnRelease;
     /// <summary>Another key went down while a modifier-only hotkey was held (e.g. Right Ctrl + C).</summary>
-    public Action? OnOtherKey;
+    public Action<double>? OnOtherKey;
     public Action? OnEscape;
+
+    /// <summary>
+    /// Set (on the UI thread) while a dictation is recording or processing: Esc then cancels it and is kept from the
+    /// focused app, where it would also interrupt a command-line AI tool or close a dialog.
+    /// </summary>
+    public volatile bool SwallowsEscape;
+    /// <summary>
+    /// An Esc key-down was swallowed: its auto-repeats and its key-up are swallowed too, even once the dictation has
+    /// ended, so the focused app never sees half a key press. Hook thread only.
+    /// </summary>
+    private bool _escapeSwallowed;
 
     private volatile Hotkey _hotkey = Hotkey.Default;
     public Hotkey Hotkey
@@ -205,6 +221,7 @@ public sealed class HotkeyMonitor
         if (Recorder is { } recorder) return recorder(new KeyEvent(vk, down, injected));
         if (_isSuspended) return false;
 
+        var time = HotkeyPress.TickTime(info.time, Environment.TickCount64);
         var hotkey = _hotkey;
         if (hotkey.IsModifierOnly)
         {
@@ -221,7 +238,7 @@ public sealed class HotkeyMonitor
                     // still open the menu bar of a native app, which then swallows the Ctrl+V of the paste.
                     // Send it from the hook thread's message loop instead, once this key-down has gone through.
                     if (hotkey.NeedsMenuMask) Win32.PostThreadMessage(_threadId, WM_SEND_MENU_MASK, 0, 0);
-                    Fire(OnPress);
+                    Fire(OnPress, time);
                 }
                 else if (up && _isDown)
                 {
@@ -230,24 +247,25 @@ public sealed class HotkeyMonitor
                     // And once more from inside the hook, which lands ahead of the release while the key is still
                     // held, in case the tap was too quick for the posted mask. A spare mask is harmless.
                     if (hotkey.NeedsMenuMask) SendMenuMask();
-                    Fire(OnRelease);
+                    Fire(OnRelease, time);
                 }
                 // Auto-repeat while held arrives as more key-downs: ignored.
                 return false;
             }
+            if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
             if (!down) return false;
-            if (vk == Hotkey.VK_ESCAPE)
-            {
-                Fire(OnEscape);
-            }
-            else if (_isDown)
+            // Shift, Ctrl… pressed with the hotkey make no combo on their own (macOS doesn't count them either). AltGr
+            // layouts also send a made-up Left Ctrl with every Right Alt event, auto-repeat included, which would
+            // otherwise cancel a dictation held on Right Alt.
+            if (IsModifier(vk) || info.scanCode == AltGrControlScanCode) return false;
+            if (_isDown)
             {
                 // A real combo (Right Ctrl + C…) comes from the keyboard. Keys injected by other software at
                 // the same moment (e.g. a mouse utility sending its own shortcut) don't count and must not cancel.
                 if (!injected)
                 {
                     HotkeyLog.Debug($"combo key (vk {vk}) with {hotkey.DisplayName}");
-                    Fire(OnOtherKey);
+                    Fire(OnOtherKey, time);
                 }
                 else
                 {
@@ -267,7 +285,7 @@ public sealed class HotkeyMonitor
                     _isDown = true;
                     HotkeyLog.Debug($"{hotkey.DisplayName} down");
                     if ((hotkey.Modifiers & (HotkeyModifiers.Alt | HotkeyModifiers.Win)) != 0) SendMenuMask();
-                    Fire(OnPress);
+                    Fire(OnPress, time);
                 }
                 return true;
             }
@@ -275,13 +293,34 @@ public sealed class HotkeyMonitor
             {
                 _isDown = false;
                 HotkeyLog.Debug($"{hotkey.DisplayName} up");
-                Fire(OnRelease);
+                Fire(OnRelease, time);
                 return true;
             }
             return false;
         }
-        if (down && vk == Hotkey.VK_ESCAPE) Fire(OnEscape);
+        if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
         return false;
+    }
+
+    /// <summary>The scan code of the Left Ctrl that AltGr layouts send along with Right Alt.</summary>
+    private const uint AltGrControlScanCode = 0x21D;
+
+    /// <summary>Shift, Ctrl, Alt or Win, either side or the side-less code.</summary>
+    private static bool IsModifier(int vk) => vk is >= 0x10 and <= 0x12 || Hotkey.ModifierKeys.ContainsKey(vk);
+
+    /// <summary>Esc cancels a dictation under way; returns whether the key is swallowed (see <see cref="SwallowsEscape"/>).</summary>
+    private bool HandleEscape(bool down)
+    {
+        if (!down)
+        {
+            var swallowed = _escapeSwallowed;
+            _escapeSwallowed = false;
+            return swallowed;
+        }
+        if (_escapeSwallowed) return true; // auto-repeat of a swallowed Esc
+        Fire(OnEscape);
+        _escapeSwallowed = SwallowsEscape;
+        return _escapeSwallowed;
     }
 
     public static HotkeyModifiers CurrentModifiers()
@@ -306,6 +345,12 @@ public sealed class HotkeyMonitor
     {
         if (callback == null) return;
         _dispatcher?.TryEnqueue(DispatcherQueuePriority.High, () => callback());
+    }
+
+    private void Fire(Action<double>? callback, double time)
+    {
+        if (callback == null) return;
+        _dispatcher?.TryEnqueue(DispatcherQueuePriority.High, () => callback(time));
     }
 }
 

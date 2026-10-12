@@ -180,7 +180,7 @@ internal sealed class ProviderCard : UserControl
                 key.Password = _settings.ApiKey(_id);
             }
         };
-        _details.Children.Add(FieldRow("API Key", key, paste));
+        _details.Children.Add(FieldRow(L("API Key", "API Key"), key, paste));
 
         // Base URL
         var url = new TextBox
@@ -197,7 +197,7 @@ internal sealed class ProviderCard : UserControl
             _settings.SetBaseUrl(_id.DefaultBaseUrl(), _id);
             url.Text = _settings.BaseUrl(_id);
         };
-        _details.Children.Add(FieldRow("Base URL", url, _reset));
+        _details.Children.Add(FieldRow(L("接口地址", "Base URL"), url, _reset));
 
         // Link / hint, test result, test button
         var bottom = new Grid
@@ -248,13 +248,14 @@ internal sealed class ProviderCard : UserControl
             ColumnSpacing = 8,
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = new GridLength(72) },
+                new ColumnDefinition { Width = new GridLength(96) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 new ColumnDefinition { Width = GridLength.Auto },
             },
         };
         var text = Ui.Text(label, 12, FontWeights.Medium, Ui.Secondary);
         text.VerticalAlignment = VerticalAlignment.Center;
+        text.TextTrimming = TextTrimming.CharacterEllipsis;
         grid.Children.Add(text);
         Grid.SetColumn(field, 1);
         grid.Children.Add(field);

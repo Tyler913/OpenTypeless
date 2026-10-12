@@ -102,6 +102,8 @@ public sealed class UsageLedger
     public const int Version = 1;
 
     private readonly SortedDictionary<string, DayUsage> _days = new(StringComparer.Ordinal);
+    /// <summary>Standing in for a file that couldn't be read this session, so never saved over it.</summary>
+    private bool _unreadable;
 
     public IReadOnlyDictionary<string, DayUsage> Days => _days;
 
@@ -276,24 +278,31 @@ public sealed class UsageLedger
     }
 
     /// <summary>
-    /// Null when there's no file yet (first run of a version that keeps it). A file that can't be read (after a few
-    /// tries, see <see cref="SafeFile"/>) or parsed is moved aside before an empty ledger takes its place, so the next
-    /// save doesn't overwrite the lifetime totals.
+    /// Null when there's no file yet (first run of a version that keeps it). A file that can't be parsed is moved aside
+    /// (see <see cref="SafeFile"/>) before an empty ledger takes its place, so the next save doesn't overwrite the
+    /// lifetime totals. One that still can't be read after a few tries is held by another program, not damaged: it
+    /// stays, and the empty ledger standing in for it this session is never saved.
     /// </summary>
     public static UsageLedger? Load(string path)
     {
         if (!File.Exists(path)) return null;
+        string text;
         try
         {
-            if (TryFromJson(SafeFile.ReadAllText(path)) is { } ledger) return ledger;
+            text = SafeFile.ReadAllText(path);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new UsageLedger { _unreadable = true };
+        }
+        if (TryFromJson(text) is { } ledger) return ledger;
         SafeFile.MoveAside(path);
         return new UsageLedger();
     }
 
     public void Save(string path)
     {
+        if (_unreadable) return;
         try
         {
             SafeFile.WriteAllText(path, ToJson());

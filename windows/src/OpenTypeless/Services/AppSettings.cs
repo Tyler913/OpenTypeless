@@ -28,6 +28,8 @@ public sealed class AppSettings : INotifyPropertyChanged
     private readonly object _lock = new();
     private readonly string _path;
     private readonly JsonObject _store;
+    /// <summary>False when the settings file is there but couldn't be read: the defaults run and nothing is saved over it.</summary>
+    private readonly bool _writable = true;
     /// <summary>The saved keys only: OPENROUTER_API_KEY overrides one in <see cref="ApiKey"/> but never lands in here.</summary>
     private readonly Dictionary<string, string> _apiKeys;
 
@@ -35,7 +37,7 @@ public sealed class AppSettings : INotifyPropertyChanged
     {
         _path = AppPaths.SettingsFile;
         var existed = File.Exists(_path);
-        _store = existed ? LoadStore(_path) : new JsonObject();
+        _store = existed ? LoadStore(_path, out _writable) : new JsonObject();
         // The hotkey is always stored, so a new default only reaches new installs: one that ran before without
         // choosing a hotkey had Right Ctrl, the default until 1.4.0, and keeps it.
         if (_store["hotkey"] == null)
@@ -50,19 +52,33 @@ public sealed class AppSettings : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// The saved settings. A file that can't be read (after a few tries) or parsed is moved aside (see
-    /// <see cref="SafeFile"/>) and the defaults start, rather than blocking launch or being saved over it.
+    /// The saved settings. One that can't be parsed is moved aside (see <see cref="SafeFile"/>) and the defaults start,
+    /// rather than blocking launch or being saved over it. One that still can't be read after a few tries is held by
+    /// another program (antivirus, OneDrive) rather than damaged: it stays, the defaults run for this session, and
+    /// <paramref name="writable"/> is false so nothing is saved over it.
     /// </summary>
-    private static JsonObject LoadStore(string path)
+    private static JsonObject LoadStore(string path, out bool writable)
     {
+        writable = true;
+        string text;
         try
         {
             // Read as text so a byte-order mark (e.g. after hand-editing in Notepad) is handled.
-            if (JsonNode.Parse(SafeFile.ReadAllText(path)) is JsonObject loaded) return loaded;
+            text = SafeFile.ReadAllText(path);
         }
-        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            AppLog.Debug("settings", $"can't read {path}: {e.Message}");
+            AppLog.Debug("settings", $"can't read {path}, not saving over it this session: {e.Message}");
+            writable = false;
+            return new JsonObject();
+        }
+        try
+        {
+            if (JsonNode.Parse(text) is JsonObject loaded) return loaded;
+        }
+        catch (JsonException e)
+        {
+            AppLog.Debug("settings", $"can't parse {path}: {e.Message}");
         }
         var aside = SafeFile.MoveAside(path);
         AppLog.Debug("settings", aside != null ? $"damaged settings moved to {aside}" : "damaged settings couldn't be moved aside");
@@ -623,6 +639,7 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     private void Save()
     {
+        if (!_writable) return;
         try
         {
             // Flushed to disk before it replaces the old file, so a power cut can't leave a file of zeros.

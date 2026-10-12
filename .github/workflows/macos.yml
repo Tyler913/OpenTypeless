@@ -12,6 +12,11 @@ name: macOS build
 
 on:
   workflow_call:
+    secrets: # release.yml passes them; CI doesn't, so pull requests are signed ad hoc
+      MACOS_SIGNING_CERTIFICATE:
+        required: false
+      MACOS_SIGNING_CERTIFICATE_PASSWORD:
+        required: false
   workflow_dispatch:
 
 permissions:

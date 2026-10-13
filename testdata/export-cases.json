@@ -1,0 +1,340 @@
+{
+  "_comment": "Shared by the macOS (swift-testing) and Windows (xUnit) test suites, so both apps write byte-identical History exports (CSV without its UTF-8 byte-order mark, JSON, Markdown) and vocabulary files, and read imported vocabulary the same way. Dates are Unix seconds plus the local offset in minutes.",
+  "history": {
+    "entries": [
+      {
+        "unix": 1791786725,
+        "offsetMinutes": 480,
+        "duration": 42.25,
+        "status": "done",
+        "finalText": "明天下午三点开会，记得带上 Q3 的报告。",
+        "rawText": "嗯明天下午三点开会 记得带上那个 Q3 的报告",
+        "cost": 0.000508
+      },
+      {
+        "unix": 1791767159,
+        "offsetMinutes": 480,
+        "duration": 12.25,
+        "status": "polishFailed",
+        "finalText": "Three things:\n1. Ship the \"export\" feature, then\n2. write the docs",
+        "rawText": "three things ship the export feature then write the docs",
+        "cost": null
+      },
+      {
+        "unix": 1791723600,
+        "offsetMinutes": 480,
+        "duration": 0.04,
+        "status": "failed",
+        "finalText": "",
+        "rawText": "",
+        "cost": null
+      },
+      {
+        "unix": 1791688800,
+        "offsetMinutes": -300,
+        "duration": 7.95,
+        "status": "cancelled",
+        "finalText": "Path: C:\\Users\\tyler\ttab\u0001end  \r\n\r\n  indented line\r\nlast line\t ",
+        "rawText": "path c users tyler",
+        "cost": 4e-07
+      },
+      {
+        "unix": 1791675000,
+        "offsetMinutes": 60,
+        "duration": 65.0,
+        "status": "done",
+        "finalText": "Late night, early morning.",
+        "rawText": "late night early morning",
+        "cost": 0.0021
+      },
+      {
+        "unix": 1791620130.75,
+        "offsetMinutes": 345,
+        "duration": 3.3333333,
+        "status": "done",
+        "finalText": "こんにちは world 👋 don't stop",
+        "rawText": "こんにちは world don't stop",
+        "cost": 1.2
+      }
+    ],
+    "csv": "date,durationSeconds,status,finalText,rawText,costUSD,words\r\n2026-10-12T14:32:05+08:00,42.3,done,明天下午三点开会，记得带上 Q3 的报告。,嗯明天下午三点开会 记得带上那个 Q3 的报告,0.000508,16\r\n2026-10-12T09:05:59+08:00,12.3,polishFailed,\"Three things:\n1. Ship the \"\"export\"\" feature, then\n2. write the docs\",three things ship the export feature then write the docs,,12\r\n2026-10-11T21:00:00+08:00,0.0,failed,,,,0\r\n2026-10-10T22:20:00-05:00,8.0,cancelled,\"Path: C:\\Users\\tyler\ttab\u0001end  \r\n\r\n  indented line\r\nlast line\t \",path c users tyler,0.000000,10\r\n2026-10-11T00:30:00+01:00,65.0,done,\"Late night, early morning.\",late night early morning,0.002100,4\r\n2026-10-10T14:00:30+05:45,3.3,done,こんにちは world 👋 don't stop,こんにちは world don't stop,1.200000,8\r\n",
+    "json": "[\n  {\n    \"date\": \"2026-10-12T14:32:05+08:00\",\n    \"durationSeconds\": 42.3,\n    \"status\": \"done\",\n    \"finalText\": \"明天下午三点开会，记得带上 Q3 的报告。\",\n    \"rawText\": \"嗯明天下午三点开会 记得带上那个 Q3 的报告\",\n    \"costUSD\": 0.000508,\n    \"words\": 16\n  },\n  {\n    \"date\": \"2026-10-12T09:05:59+08:00\",\n    \"durationSeconds\": 12.3,\n    \"status\": \"polishFailed\",\n    \"finalText\": \"Three things:\\n1. Ship the \\\"export\\\" feature, then\\n2. write the docs\",\n    \"rawText\": \"three things ship the export feature then write the docs\",\n    \"costUSD\": null,\n    \"words\": 12\n  },\n  {\n    \"date\": \"2026-10-11T21:00:00+08:00\",\n    \"durationSeconds\": 0.0,\n    \"status\": \"failed\",\n    \"finalText\": \"\",\n    \"rawText\": \"\",\n    \"costUSD\": null,\n    \"words\": 0\n  },\n  {\n    \"date\": \"2026-10-10T22:20:00-05:00\",\n    \"durationSeconds\": 8.0,\n    \"status\": \"cancelled\",\n    \"finalText\": \"Path: C:\\\\Users\\\\tyler\\ttab\\u0001end  \\r\\n\\r\\n  indented line\\r\\nlast line\\t \",\n    \"rawText\": \"path c users tyler\",\n    \"costUSD\": 0.000000,\n    \"words\": 10\n  },\n  {\n    \"date\": \"2026-10-11T00:30:00+01:00\",\n    \"durationSeconds\": 65.0,\n    \"status\": \"done\",\n    \"finalText\": \"Late night, early morning.\",\n    \"rawText\": \"late night early morning\",\n    \"costUSD\": 0.002100,\n    \"words\": 4\n  },\n  {\n    \"date\": \"2026-10-10T14:00:30+05:45\",\n    \"durationSeconds\": 3.3,\n    \"status\": \"done\",\n    \"finalText\": \"こんにちは world 👋 don't stop\",\n    \"rawText\": \"こんにちは world don't stop\",\n    \"costUSD\": 1.200000,\n    \"words\": 8\n  }\n]\n",
+    "markdown": "# 2026-10-12\n\n## 14:32\n\n明天下午三点开会，记得带上 Q3 的报告。\n\n## 09:05\n\nThree things:\n\n1. Ship the \"export\" feature, then\n\n2. write the docs\n\n# 2026-10-10\n\n## 22:20\n\nPath: C:\\Users\\tyler\ttab\u0001end\n\n  indented line\n\nlast line\n\n# 2026-10-11\n\n## 00:30\n\nLate night, early morning.\n\n# 2026-10-10\n\n## 14:00\n\nこんにちは world 👋 don't stop\n"
+  },
+  "values": {
+    "timestamps": [
+      {
+        "unix": 0,
+        "offsetMinutes": 0,
+        "expected": "1970-01-01T00:00:00+00:00"
+      },
+      {
+        "unix": -1.5,
+        "offsetMinutes": 0,
+        "expected": "1969-12-31T23:59:58+00:00"
+      },
+      {
+        "unix": 1772953199,
+        "offsetMinutes": -480,
+        "expected": "2026-03-07T22:59:59-08:00"
+      },
+      {
+        "unix": 1791786725.999,
+        "offsetMinutes": 480,
+        "expected": "2026-10-12T14:32:05+08:00"
+      },
+      {
+        "unix": 1791786725,
+        "offsetMinutes": 330,
+        "expected": "2026-10-12T12:02:05+05:30"
+      },
+      {
+        "unix": 1791786725,
+        "offsetMinutes": -570,
+        "expected": "2026-10-11T21:02:05-09:30"
+      },
+      {
+        "unix": 1791786725,
+        "offsetMinutes": 900,
+        "expected": "2026-10-12T20:32:05+14:00"
+      }
+    ],
+    "seconds": [
+      {
+        "value": 0,
+        "expected": "0.0"
+      },
+      {
+        "value": 0.04,
+        "expected": "0.0"
+      },
+      {
+        "value": 0.05,
+        "expected": "0.1"
+      },
+      {
+        "value": 0.15,
+        "expected": "0.2"
+      },
+      {
+        "value": 12.25,
+        "expected": "12.3"
+      },
+      {
+        "value": 59.94,
+        "expected": "59.9"
+      },
+      {
+        "value": 59.95,
+        "expected": "60.0"
+      },
+      {
+        "value": 1234.56,
+        "expected": "1234.6"
+      },
+      {
+        "value": -3,
+        "expected": "0.0"
+      }
+    ],
+    "usd": [
+      {
+        "value": 0,
+        "expected": "0.000000"
+      },
+      {
+        "value": 4e-07,
+        "expected": "0.000000"
+      },
+      {
+        "value": 5e-07,
+        "expected": "0.000001"
+      },
+      {
+        "value": 0.000508,
+        "expected": "0.000508"
+      },
+      {
+        "value": 0.0021,
+        "expected": "0.002100"
+      },
+      {
+        "value": 0.0123455,
+        "expected": "0.012346"
+      },
+      {
+        "value": 1.2,
+        "expected": "1.200000"
+      },
+      {
+        "value": 1234.5,
+        "expected": "1234.500000"
+      },
+      {
+        "value": -1,
+        "expected": "0.000000"
+      }
+    ]
+  },
+  "vocabulary": {
+    "terms": [
+      {
+        "term": "Claude",
+        "heardAs": []
+      },
+      {
+        "term": "Typeless",
+        "heardAs": [
+          "TypeList",
+          "type less"
+        ]
+      },
+      {
+        "term": "李明",
+        "heardAs": [
+          "黎明"
+        ]
+      },
+      {
+        "term": "\"Quoted\" Inc",
+        "heardAs": [
+          "quoted, inc"
+        ]
+      }
+    ],
+    "csv": "term,heardAs\r\nClaude,\r\nTypeless,TypeList; type less\r\n李明,黎明\r\n\"\"\"Quoted\"\" Inc\",\"quoted, inc\"\r\n",
+    "text": "Claude\nTypeless\n李明\n\"Quoted\" Inc\n",
+    "imports": [
+      {
+        "kind": "csv",
+        "input": "term,heardAs\r\nClaude,\r\nTypeless,TypeList; type less\r\n李明,黎明\r\n\"\"\"Quoted\"\" Inc\",\"quoted, inc\"\r\n",
+        "terms": [
+          "Claude",
+          "Typeless",
+          "李明",
+          "\"Quoted\" Inc"
+        ]
+      },
+      {
+        "kind": "csv",
+        "input": "Claude\nOpenRouter\n\n  SwiftUI  \r\nGitHub",
+        "terms": [
+          "Claude",
+          "OpenRouter",
+          "SwiftUI",
+          "GitHub"
+        ]
+      },
+      {
+        "kind": "csv",
+        "input": "Vocabulary;Note\r\nKubernetes;k8s\r\n\"Smith, John\";person\r\n",
+        "terms": [
+          "Kubernetes",
+          "Smith",
+          "John"
+        ]
+      },
+      {
+        "kind": "csv",
+        "input": "word\theard\nTypeless\ttype list\n",
+        "terms": [
+          "word",
+          "Typeless"
+        ]
+      },
+      {
+        "kind": "csv",
+        "input": "\"multi\nline\",x\n\"\"\"quoted\"\"\",y\n,empty first\nunclosed \"quote\n",
+        "terms": [
+          "multi",
+          "line",
+          "\"quoted\"",
+          "unclosed \"quote"
+        ]
+      },
+      {
+        "kind": "text",
+        "input": "Claude\nOpenRouter, SwiftUI，GitHub\r\n\r\n   \n  Typeless  \n张三",
+        "terms": [
+          "Claude",
+          "OpenRouter",
+          "SwiftUI",
+          "GitHub",
+          "Typeless",
+          "张三"
+        ]
+      },
+      {
+        "kind": "text",
+        "input": "",
+        "terms": []
+      }
+    ],
+    "merges": [
+      {
+        "existing": [
+          "Claude",
+          "OpenRouter"
+        ],
+        "imported": [
+          "claude",
+          "GitHub",
+          "github",
+          "李明",
+          "OPENROUTER",
+          "Swift"
+        ],
+        "added": [
+          "GitHub",
+          "李明",
+          "Swift"
+        ]
+      },
+      {
+        "existing": [],
+        "imported": [
+          "A",
+          "a",
+          "B"
+        ],
+        "added": [
+          "A",
+          "B"
+        ]
+      },
+      {
+        "existing": [
+          "X"
+        ],
+        "imported": [],
+        "added": []
+      }
+    ],
+    "decode": [
+      {
+        "base64": "77u/Q2xhdWRlCuadjuaYjg==",
+        "text": "Claude\n李明"
+      },
+      {
+        "base64": "Q2xhdWRlCuadjuaYjg==",
+        "text": "Claude\n李明"
+      },
+      {
+        "base64": "//5DAGwAYQB1AGQAZQAKAE5nDmY=",
+        "text": "Claude\n李明"
+      },
+      {
+        "base64": "/v8AQwBsAGEAdQBkAGUACmdOZg4=",
+        "text": "Claude\n李明"
+      },
+      {
+        "base64": "Q2xhdWRlCsDuw/c=",
+        "text": null
+      },
+      {
+        "base64": "",
+        "text": ""
+      }
+    ]
+  }
+}

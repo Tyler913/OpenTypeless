@@ -33,6 +33,21 @@ public sealed class StylePage : PageBase
         RenderLearning();
         Body.Children.Add(_learning);
 
+        var context = new CardSection
+        {
+            Title = L("光标附近的文字", "Text around the cursor"),
+            Footer = L("开始录音时，读取你正在输入的文本框里光标前后最多 1500 个字符，连同转写一起发给文字整理模型，只用来把你说到的名字和术语拼成那里的写法，不会把其中的内容抄进你的文字。密码框永远不会读取，这些文字也不会保存在历史记录里。",
+                       "When recording starts, up to 1,500 characters around your cursor in the field you're dictating into are read and sent with the transcript to your clean-up models, only so that the names and terms you say are spelled the way they appear there. Nothing from it is copied into your text. Password fields are never read, and the text isn't kept in History."),
+        };
+        var contextToggle = new ToggleSwitch { IsOn = _settings.UseCursorContext, OnContent = "", OffContent = "", MinWidth = 0 };
+        contextToggle.Toggled += (_, _) => _settings.UseCursorContext = contextToggle.IsOn;
+        context.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Search, Tint = Tint.Blue, Title = L("参考光标附近的文字拼写名字", "Use text around the cursor to spell names"),
+            Trailing = contextToggle,
+        });
+        Body.Children.Add(context);
+
         var preferences = new CardSection
         {
             Title = L("整理偏好（可选）", "Clean-up preferences (optional)"),

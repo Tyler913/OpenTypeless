@@ -21,6 +21,8 @@ public static class PolishEval
         [JsonPropertyName("mustContain")] public List<string>? MustContain { get; set; }
         [JsonPropertyName("mustNotContain")] public List<string>? MustNotContain { get; set; }
         [JsonPropertyName("anyOf")] public List<List<string>>? AnyOf { get; set; }
+        /// <summary>Text around the cursor sent with the transcript (see <see cref="CursorContext"/>), as the app would.</summary>
+        [JsonPropertyName("context")] public string? Context { get; set; }
     }
 
     public sealed record Job(
@@ -175,7 +177,8 @@ public static class PolishEval
                     {
                         var model = models[(i + offset) % models.Count];
                         var price = prices[model];
-                        var plan = client.EvaluationPlan(c.Input, options[model], price.Prompt, price.Completion, providerTag, providerRouting);
+                        var plan = client.EvaluationPlan(c.Input, options[model] with { Context = c.Context }, price.Prompt, price.Completion,
+                                                         providerTag, providerRouting);
                         if (tierThresholds.TryGetValue(model, out var threshold) && plan.InputTokenBound >= threshold)
                         {
                             throw ApiException.BadResponse("input crosses unbudgeted price tier");
@@ -212,7 +215,7 @@ public static class PolishEval
                 foreach (var s in c.MustNotContain ?? []) if (attempt.Output.Contains(s)) failures.Add($"still has “{s}”");
                 foreach (var g in c.AnyOf ?? []) if (!g.Any(attempt.Output.Contains)) failures.Add($"none of [{string.Join(", ", g)}]");
                 // The app's own checks: it would insert the transcript as spoken instead of this output.
-                if (attempt.Output.Length > 0 && Prompts.Fallback(c.Input, attempt.Output, truncated: false) is { } fallback)
+                if (attempt.Output.Length > 0 && Prompts.Fallback(c.Input, attempt.Output, truncated: false, c.Context) is { } fallback)
                 {
                     failures.Add($"the app would reject it: {fallback.ToString().ToLowerInvariant()}");
                 }

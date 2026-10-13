@@ -90,6 +90,11 @@ public sealed class SessionController
     private Dictionary<string, ModelInfo> _modelInfo = new();
     /// <summary>False when retrying from the history page, or once the screen locked: the result goes to the clipboard instead.</summary>
     private bool _deliverByPaste = true;
+    /// <summary>
+    /// The text around the cursor in the field being dictated into, read as recording started, for the clean-up to spell
+    /// names by (see <see cref="CursorContext"/>); null when that's off or there was none. Never saved.
+    /// </summary>
+    private string? _cursorContext;
 
     public SessionController()
     {
@@ -400,6 +405,8 @@ public sealed class SessionController
         Hud.Model.StartedAt = DateTimeOffset.Now;
         Hud.Show(new HudPhase.Recording());
         PlaySound(Sounds.Kind.Start);
+        // Read now, while the field holds only what the speaker typed: the dictation goes in at the end.
+        if (_settings.PolishEnabled && _settings.UseCursorContext) _ = ReadCursorContext(record.Id);
         // After the start sound, which muting would cut off.
         if (_settings.MuteWhileRecording) _outputMute.Mute(TimeSpan.FromMilliseconds(_settings.PlaySounds ? 300 : 0));
 
@@ -415,6 +422,19 @@ public sealed class SessionController
         _warmTimer.IsRepeating = true;
         _warmTimer.Tick += (_, _) => WarmConnections();
         _warmTimer.Start();
+    }
+
+    /// <summary>
+    /// Reads the text around the cursor in the window in front, off the UI thread, for the dictation
+    /// <paramref name="recordId"/>. Whatever isn't in by the time the clean-up starts isn't waited for.
+    /// </summary>
+    private async Task ReadCursorContext(string recordId)
+    {
+        var context = await CursorContextReader.Read();
+        if (_record?.Id != recordId || State == SessionState.Idle) return;
+        _cursorContext = context;
+        // Its length only: the text stays out of the log.
+        Note(context is null ? "no text around the cursor" : $"text around the cursor: {context.Length} characters");
     }
 
     /// <summary>
@@ -632,8 +652,10 @@ public sealed class SessionController
             Task<SegmentedPolishResult> polishing;
             var ahead = 0.0;
             CancellationTokenRegistration adopted = default;
-            // One that already failed (while recording) gets a fresh attempt instead.
-            if (_speculativePolish is { } speculative && speculative.Raw == record.RawText
+            var context = _cursorContext;
+            // One that already failed (while recording) gets a fresh attempt instead, and so does one started before the
+            // text around the cursor was in.
+            if (_speculativePolish is { } speculative && speculative.Raw == record.RawText && speculative.Context == context
                 && !speculative.Task.IsFaulted && !speculative.Task.IsCanceled)
             {
                 _speculativePolish = null;
@@ -648,8 +670,10 @@ public sealed class SessionController
             else
             {
                 DropSpeculativePolish();
-                polishing = Polish(record.RawText, OnPolishPartial(record.RawText), token);
+                polishing = Polish(record.RawText, context, OnPolishPartial(record.RawText), token);
             }
+            // That it was sent, for History; the text itself is never kept.
+            if (context != null && record.Timing is { } sent) sent.UsedContext = true;
             // Saved while the clean-up runs, so the transcript survives a crash.
             _history.Update(record);
             try
@@ -728,9 +752,9 @@ public sealed class SessionController
 
     // MARK: - Clean-up ahead of time
 
-    /// <summary>A clean-up of <c>Raw</c>, started while recording.</summary>
-    private sealed record SpeculativePolish(string Raw, Stopwatch Started, Task<SegmentedPolishResult> Task, CancellationTokenSource Cancel,
-                                            PartialRelay Partials);
+    /// <summary>A clean-up of <c>Raw</c>, started while recording, with the text around the cursor that was in by then.</summary>
+    private sealed record SpeculativePolish(string Raw, string? Context, Stopwatch Started, Task<SegmentedPolishResult> Task,
+                                            CancellationTokenSource Cancel, PartialRelay Partials);
 
     /// <summary>
     /// Where a clean-up started ahead of time sends its partial text: nowhere until the dictation takes it over, so one
@@ -757,10 +781,11 @@ public sealed class SessionController
         if (SegmentedPolish.NeedsParts(raw)) return;
         var cancel = new CancellationTokenSource();
         var partials = new PartialRelay();
-        var task = Polish(raw, partials.Send, cancel.Token);
+        var context = _cursorContext;
+        var task = Polish(raw, context, partials.Send, cancel.Token);
         // A dropped clean-up's failure (usually its cancellation) is expected; observe it so it isn't reported.
         _ = task.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-        _speculativePolish = new SpeculativePolish(raw, Stopwatch.StartNew(), task, cancel, partials);
+        _speculativePolish = new SpeculativePolish(raw, context, Stopwatch.StartNew(), task, cancel, partials);
         Note("clean-up started ahead of time (speaker paused)");
     }
 
@@ -861,18 +886,19 @@ public sealed class SessionController
         }
     }
 
-    private async Task<SegmentedPolishResult> Polish(string raw, Action<string>? onPartial, CancellationToken token)
+    /// <param name="context">The text around the cursor, which goes with every request (both routes, every part).</param>
+    private async Task<SegmentedPolishResult> Polish(string raw, string? context, Action<string>? onPartial, CancellationToken token)
     {
         if (_settings.PolishEndpoint is not { } endpoint || !_settings.IsConfigured(_settings.PolishProvider))
         {
             throw ApiException.MissingApiKey(_settings.PolishProvider.DisplayName());
         }
-        var primary = Route(endpoint, _settings.PolishModel);
-        var backup = _settings.PolishBackupEndpoint is { } backupEndpoint ? Route(backupEndpoint, _settings.PolishBackupModel) : null;
+        var primary = Route(endpoint, _settings.PolishModel, context);
+        var backup = _settings.PolishBackupEndpoint is { } backupEndpoint ? Route(backupEndpoint, _settings.PolishBackupModel, context) : null;
         return await SegmentedPolish.Run(raw, primary, backup, onPartial, token);
     }
 
-    private PolishRoute Route(ProviderEndpoint endpoint, string model)
+    private PolishRoute Route(ProviderEndpoint endpoint, string model, string? context)
     {
         model = model.Trim();
         return new PolishRoute(new ApiClient(endpoint), new PolishOptions(
@@ -881,7 +907,8 @@ public sealed class SessionController
             _settings.ExtraInstructions,
             endpoint.Id == ProviderId.OpenRouter ? _modelInfo.GetValueOrDefault(model) : null,
             Misheard: _settings.MisheardHints,
-            Host: endpoint.Id == ProviderId.OpenRouter ? _settings.OpenRouterHost(model) : null));
+            Host: endpoint.Id == ProviderId.OpenRouter ? _settings.OpenRouterHost(model) : null,
+            Context: context));
     }
 
     /// <summary>
@@ -1054,6 +1081,7 @@ public sealed class SessionController
         _pasteTarget = 0;
         _handsFree = false;
         _processing = null;
+        _cursorContext = null;
     }
 
     // MARK: - Misc

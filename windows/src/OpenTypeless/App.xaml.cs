@@ -73,10 +73,13 @@ public partial class App : Application
         _tray.Unlocked += _controller.SystemUnlocked;
 
         _hotkey.Hotkey = _settings.Hotkey;
+        _hotkey.Shortcuts = _settings.Shortcuts;
+        _hotkey.ModeChordKeys = _controller.ModeChords.Keys;
         _hotkey.OnPress = _controller.HotkeyPressed;
         _hotkey.OnRelease = _controller.HotkeyReleased;
         _hotkey.OnOtherKey = _controller.OtherKeyPressed;
         _hotkey.OnEscape = _controller.EscapePressed;
+        _hotkey.OnAction = action => _controller.Perform(action, _settings.Shortcut(action));
         _hotkey.Start();
 
         _settings.PropertyChanged += OnSettingsChanged;
@@ -140,6 +143,7 @@ public partial class App : Application
             var hotkey = _settings.Hotkey;
             if (_hotkey.Hotkey != hotkey) _hotkey.Hotkey = hotkey;
         }
+        if (e.PropertyName == nameof(AppSettings.Shortcuts)) _hotkey.Shortcuts = _settings.Shortcuts;
     }
 
     /// <summary>After the guide: the page for whatever is still missing, or Home.</summary>

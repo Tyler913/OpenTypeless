@@ -456,6 +456,59 @@ public sealed class AppSettings : INotifyPropertyChanged
         PolishBackupModel = id.DefaultBackupChatModel();
     }
 
+    // MARK: Action shortcuts
+
+    /// <summary>The shortcut the user gave <paramref name="action"/> (see <see cref="ShortcutAction"/>); none by default.</summary>
+    public Hotkey? Shortcut(ShortcutAction action)
+    {
+        lock (_lock)
+        {
+            if ((_store["shortcuts"] as JsonObject)?[action.RawValue()] is JsonObject obj)
+            {
+                try
+                {
+                    return obj.Deserialize<Hotkey>();
+                }
+                catch (JsonException) { }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Null clears it. Saved under "shortcuts" by the action's name, as on macOS; one saved by a newer version for an
+    /// action this one doesn't know is left as it is.
+    /// </summary>
+    public void SetShortcut(ShortcutAction action, Hotkey? hotkey)
+    {
+        lock (_lock)
+        {
+            if (_store["shortcuts"] is not JsonObject shortcuts)
+            {
+                shortcuts = new JsonObject();
+                _store["shortcuts"] = shortcuts;
+            }
+            if (hotkey is null) shortcuts.Remove(action.RawValue());
+            else shortcuts[action.RawValue()] = JsonSerializer.SerializeToNode(hotkey);
+            Save();
+        }
+        Raise(nameof(Shortcuts));
+    }
+
+    /// <summary>The actions' shortcuts, as the hotkey hook matches keys against them.</summary>
+    public ShortcutMap Shortcuts
+    {
+        get
+        {
+            var chords = new Dictionary<ShortcutAction, KeyChord>();
+            foreach (var action in ShortcutActions.All)
+            {
+                if (Shortcut(action) is { } hotkey) chords[action] = hotkey.Chord;
+            }
+            return new ShortcutMap(chords);
+        }
+    }
+
     // MARK: OpenRouter hosts
 
     /// <summary>The OpenRouter host (endpoint tag) to ask first for this clean-up model, or null to let OpenRouter pick the fastest.</summary>

@@ -161,13 +161,19 @@ enum TextInserter {
         postKey(CGKeyCode(kVK_ANSI_V), flags: .maskCommand)
     }
 
+    /// Marks the key events this app posts (`eventSourceUserData`), so its own event tap lets them through untouched:
+    /// a ⌘V set as an action's shortcut must not swallow the paste of a dictation. The Windows app tags its keys the same.
+    static let eventSignature: Int64 = 0x4F544C53 // "OTLS"
+
     /// Explicit flags, so a modifier still held (or stuck) doesn't turn the key into a shortcut.
     private static func postKey(_ key: CGKeyCode, flags: CGEventFlags) {
         let source = CGEventSource(stateID: .privateState)
         guard let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true),
               let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) else { return }
-        down.flags = flags
-        up.flags = flags
+        for event in [down, up] {
+            event.flags = flags
+            event.setIntegerValueField(.eventSourceUserData, value: eventSignature)
+        }
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
     }

@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace TypelessCore;
 
 /// <summary>
@@ -35,5 +37,48 @@ public static class HotkeyPress
         // How long ago the event was, from the low 32 bits of both: right across a wrap too.
         var age = unchecked((uint)nowTicks - eventTicks);
         return EventTime((nowTicks - age) / 1000.0, nowTicks / 1000.0);
+    }
+}
+
+/// <summary>What another key, pressed while the dictation hotkey is held, does to the recording.</summary>
+public abstract record OtherKeyOutcome<TMode>
+{
+    /// <summary>A registered chord: the recording goes on, in this mode.</summary>
+    public sealed record SwitchMode(TMode Mode) : OtherKeyOutcome<TMode>;
+    /// <summary>A key combination with the hotkey (Right Ctrl + C…): the dictation is cancelled.</summary>
+    public sealed record Cancel : OtherKeyOutcome<TMode>;
+    /// <summary>Nothing happens.</summary>
+    public sealed record Ignore : OtherKeyOutcome<TMode>;
+}
+
+/// <summary>
+/// Second keys that, pressed while the dictation hotkey is held, switch the recording's mode instead of making a key
+/// combination that cancels it. Key codes are the platform's (see <see cref="KeyChord"/>); the app keeps the registered
+/// keys from the focused app. With none registered, every other key is read as it always was.
+/// </summary>
+public sealed class ModeChords<TMode> where TMode : notnull
+{
+    private readonly Dictionary<int, TMode> _modes = new();
+
+    public IReadOnlySet<int> Keys => _modes.Keys.ToHashSet();
+    public bool IsEmpty => _modes.Count == 0;
+
+    public void Register(int keyCode, TMode mode) => _modes[keyCode] = mode;
+
+    public void Unregister(int keyCode) => _modes.Remove(keyCode);
+
+    public bool TryGetMode(int keyCode, [MaybeNullWhen(false)] out TMode mode) => _modes.TryGetValue(keyCode, out mode);
+
+    /// <summary>
+    /// What <paramref name="keyCode"/>, pressed at <paramref name="at"/> while the hotkey pressed at
+    /// <paramref name="pressedAt"/> is down, does. A chord works for as long as the hotkey is held; any other key only
+    /// makes a combination soon after the press, and never once the recording is hands-free.
+    /// </summary>
+    public OtherKeyOutcome<TMode> OtherKey(int keyCode, double pressedAt, double at, bool handsFree)
+    {
+        if (_modes.TryGetValue(keyCode, out var mode)) return new OtherKeyOutcome<TMode>.SwitchMode(mode);
+        return !handsFree && HotkeyPress.IsCombo(pressedAt, at)
+            ? new OtherKeyOutcome<TMode>.Cancel()
+            : new OtherKeyOutcome<TMode>.Ignore();
     }
 }

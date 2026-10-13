@@ -247,6 +247,9 @@ final class HotkeyMonitor {
             resyncAfterOutage()
             return false
         }
+        // Keys this app posts itself (a paste's ⌘V, ⌘C, Return) are never the hotkey or a shortcut, even when one is set
+        // to the same keys, and leave the bookkeeping of the user's own keys alone.
+        if event.getIntegerValueField(.eventSourceUserData) == TextInserter.eventSignature { return false }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         if isSuspended {
             if type == .flagsChanged, keyCode == hotkey.keyCode {

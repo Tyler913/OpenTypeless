@@ -639,7 +639,8 @@ final class SessionController: ObservableObject {
         // Snippets go in here, in code, never through the clean-up: a model would paraphrase or translate a long expansion,
         // and its guards would take one for an answer. History keeps what was said (word counts go by it) and what went in.
         let expanded = SnippetExpander.expand(text, with: settings.snippets)
-        record.insertedText = expanded == text ? nil : expanded
+        // Scalar by scalar: an expansion that is the trigger in another composition is still a change (as on Windows).
+        record.insertedText = expanded.unicodeScalars.elementsEqual(text.unicodeScalars) ? nil : expanded
         text = expanded
 
         // Taken now: once the text is in, the next dictation may already be collecting its own.

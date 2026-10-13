@@ -20,17 +20,37 @@ import Testing
         let cases: [SnippetCase]
     }
 
-    /// testdata/snippet-cases.json, shared with the Windows tests so both apps insert the same text.
-    @Test func sharedCases() throws {
+    private static func fixture() throws -> Data {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let data = try Data(contentsOf: root.appendingPathComponent("testdata/snippet-cases.json"))
-        let file = try JSONDecoder().decode(CaseFile.self, from: data)
-        #expect(file.cases.count >= 20)
+        return try Data(contentsOf: root.appendingPathComponent("testdata/snippet-cases.json"))
+    }
+
+    /// testdata/snippet-cases.json, shared with the Windows tests so both apps insert the same text. Compared scalar by
+    /// scalar, as Windows compares strings, not by Swift's canonical equivalence.
+    @Test func sharedCases() throws {
+        let file = try JSONDecoder().decode(CaseFile.self, from: Self.fixture())
+        #expect(file.cases.count >= 30)
         for c in file.cases {
             let snippets = (c.snippets ?? file.snippets).map { Snippet(trigger: $0.trigger, expansion: $0.expansion) }
-            #expect(SnippetExpander.expand(c.text, with: snippets) == c.expected, "\(c.id)")
+            let expanded = SnippetExpander.expand(c.text, with: snippets)
+            #expect(Array(expanded.unicodeScalars) == Array(c.expected.unicodeScalars), "\(c.id): \(expanded)")
         }
+    }
+
+    /// The fixture's saved list: unreadable entries are left out, missing, blank and repeated IDs replaced.
+    @Test func storedListIsReadEntryByEntry() throws {
+        let root = try #require(try JSONSerialization.jsonObject(with: Self.fixture()) as? [String: Any])
+        let stored = try #require(root["stored"] as? [String: Any])
+        let list = Snippet.list(from: try JSONSerialization.data(withJSONObject: try #require(stored["json"])))
+        #expect(list.snippets.map(\.trigger) == stored["triggers"] as? [String])
+        #expect(list.repaired == stored["repaired"] as? Bool)
+        #expect(list.snippets.first?.id == "a1")
+        #expect(Set(list.snippets.map(\.id)).count == list.snippets.count)
+        #expect(list.snippets.allSatisfy { !$0.id.trimmingCharacters(in: .whitespaces).isEmpty })
+        let clean = Snippet.list(from: try JSONSerialization.data(withJSONObject: try #require(stored["clean"])))
+        #expect(clean.snippets.map(\.id) == ["a1"] && !clean.repaired)
+        #expect(Snippet.list(from: Data("{}".utf8)).snippets.isEmpty)
     }
 
     @Test func nothingToExpand() {
@@ -55,6 +75,17 @@ import Testing
         #expect(SnippetExpander.key("我的 GitHub") == SnippetExpander.key("我的GitHub"))
         #expect(SnippetExpander.key("C#") != SnippetExpander.key("C"))
         #expect(SnippetExpander.key("  ？ ").isEmpty)
+        // Composed and decomposed are the same trigger, scalar for scalar (as Windows compares them).
+        #expect(Array(SnippetExpander.key("caf\u{E9}").unicodeScalars) == Array(SnippetExpander.key("cafe\u{301}").unicodeScalars))
+        #expect(Array(SnippetExpander.key("\u{D55C}").unicodeScalars) == Array(SnippetExpander.key("\u{1112}\u{1161}\u{11AB}").unicodeScalars))
+    }
+
+    @Test func oneClassifierForEveryBlock() {
+        #expect(SnippetExpander.isHanOrKana(0x20BB7))   // 𠮷
+        #expect(SnippetExpander.isHanOrKana(0x30000))   // Extension G
+        #expect(SnippetExpander.isHangul(0x1100) && SnippetExpander.isHangul(0xD7B0))
+        #expect(!SnippetExpander.isLatinWord(0x20BB7) && !SnippetExpander.isLatinWord(0x1161))
+        #expect(SnippetExpander.isLatinWord(0x65) && SnippetExpander.isLatinWord(0xE9) && SnippetExpander.isLatinWord(0x33))
     }
 
     @Test func triggersGoAheadOfTheVocabulary() {

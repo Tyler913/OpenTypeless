@@ -267,7 +267,8 @@ public sealed class StylePage : PageBase
         save.Click += (_, _) =>
         {
             _editing = null;
-            _settings.SaveSnippet(original with { Trigger = _draftTrigger.Trim(), Expansion = _draftExpansion.Trim() });
+            // The expansion exactly as written, indentation and final line break included.
+            _settings.SaveSnippet(original with { Trigger = _draftTrigger.Trim(), Expansion = _draftExpansion });
             RenderSnippets();
         };
         Update();

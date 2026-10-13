@@ -74,11 +74,13 @@ final class AppSettings: ObservableObject {
         learnedTerms = UserDefaults.standard.data(forKey: "learnedVocabulary")
             .flatMap { try? JSONDecoder().decode([LearnedTerm].self, from: $0) } ?? []
         forgottenTerms = Set(UserDefaults.standard.stringArray(forKey: "forgottenVocabulary") ?? [])
-        snippets = UserDefaults.standard.data(forKey: "snippets")
-            .flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
+        let savedSnippets = UserDefaults.standard.data(forKey: "snippets").map(Snippet.list(from:))
+        snippets = savedSnippets?.snippets ?? []
         modelPrices = UserDefaults.standard.data(forKey: "modelPrices")
             .flatMap { try? JSONDecoder().decode([String: ModelPrice].self, from: $0) } ?? [:]
         openRouterHosts = (UserDefaults.standard.dictionary(forKey: "openRouterHosts") as? [String: String]) ?? [:]
+        // IDs given to entries that had none (or another's) are kept, so editing or deleting them works next time too.
+        if savedSnippets?.repaired == true { saveSnippets() }
     }
 
     // MARK: Hotkey

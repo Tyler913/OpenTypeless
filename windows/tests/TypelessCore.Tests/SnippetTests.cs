@@ -20,14 +20,41 @@ public class SnippetTests
         var file = Fixture();
         var shared = Snippets(file["snippets"]!);
         var cases = file["cases"]!.AsArray();
-        Assert.True(cases.Count >= 20);
+        Assert.True(cases.Count >= 30);
         foreach (var node in cases)
         {
             var snippets = node!["snippets"] is { } own ? Snippets(own) : shared;
             var expected = (string)node["expected"]!;
             var actual = SnippetExpander.Expand((string)node["text"]!, snippets);
-            Assert.True(expected == actual, $"{node["id"]}: expected “{expected}”, got “{actual}”");
+            Assert.True(string.Equals(expected, actual, StringComparison.Ordinal), $"{node["id"]}: expected “{expected}”, got “{actual}”");
         }
+    }
+
+    /// <summary>The fixture's saved list: unreadable entries are left out, missing, blank and repeated IDs replaced.</summary>
+    [Fact]
+    public void StoredListIsReadEntryByEntry()
+    {
+        var stored = Fixture()["stored"]!.AsObject();
+        var (snippets, repaired) = Snippet.ReadList(stored["json"]);
+        Assert.Equal(stored["triggers"]!.AsArray().Select(n => (string)n!).ToArray(), snippets.Select(s => s.Trigger).ToArray());
+        Assert.Equal((bool)stored["repaired"]!, repaired);
+        Assert.Equal("a1", snippets[0].Id);
+        Assert.Equal(snippets.Count, snippets.Select(s => s.Id).Distinct().Count());
+        Assert.All(snippets, s => Assert.False(string.IsNullOrWhiteSpace(s.Id)));
+        var (clean, cleanRepaired) = Snippet.ReadList(stored["clean"]);
+        Assert.Equal(new[] { "a1" }, clean.Select(s => s.Id).ToArray());
+        Assert.False(cleanRepaired);
+        Assert.Empty(Snippet.ReadList(new JsonObject()).Snippets);
+    }
+
+    [Fact]
+    public void OneClassifierForEveryBlock()
+    {
+        Assert.True(SnippetExpander.IsHanOrKana(0x20BB7)); // 𠮷
+        Assert.True(SnippetExpander.IsHanOrKana(0x30000)); // Extension G
+        Assert.True(SnippetExpander.IsHangul(0x1100) && SnippetExpander.IsHangul(0xD7B0));
+        Assert.False(SnippetExpander.IsLatinWord(0x20BB7) || SnippetExpander.IsLatinWord(0x1161));
+        Assert.True(SnippetExpander.IsLatinWord(0x65) && SnippetExpander.IsLatinWord(0xE9) && SnippetExpander.IsLatinWord(0x33));
     }
 
     [Fact]
@@ -58,6 +85,9 @@ public class SnippetTests
         Assert.Equal(SnippetExpander.Key("我的GitHub"), SnippetExpander.Key("我的 GitHub"));
         Assert.NotEqual(SnippetExpander.Key("C"), SnippetExpander.Key("C#"));
         Assert.Equal("", SnippetExpander.Key("  ？ "));
+        // Composed and decomposed are the same trigger.
+        Assert.Equal(SnippetExpander.Key("café"), SnippetExpander.Key("café"));
+        Assert.Equal(SnippetExpander.Key("한"), SnippetExpander.Key("한"));
     }
 
     [Fact]

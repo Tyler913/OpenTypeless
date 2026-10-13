@@ -1285,8 +1285,9 @@ private struct SnippetEditor: View {
                 Spacer()
                 Button(L("取消", "Cancel"), action: onDone)
                 Button(L("保存", "Save")) {
+                    // The expansion exactly as written, indentation and final line break included.
                     settings.saveSnippet(Snippet(id: original.id, trigger: trigger.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                 expansion: expansion.trimmingCharacters(in: .whitespacesAndNewlines)))
+                                                 expansion: expansion))
                     onDone()
                 }
                 .disabled(!canSave)

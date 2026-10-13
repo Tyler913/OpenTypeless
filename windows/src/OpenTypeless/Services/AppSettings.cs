@@ -45,6 +45,14 @@ public sealed class AppSettings : INotifyPropertyChanged
             _store["hotkey"] = JsonSerializer.SerializeToNode(existed ? Hotkey.RightControl : Hotkey.Default);
             Save();
         }
+        // Snippets are told apart by ID: one saved without its own (none, or another's) is given one now, and kept, so
+        // editing or deleting it works (an ID made up on every read would change under the editor).
+        var (savedSnippets, snippetsRepaired) = Snippet.ReadList(_store["snippets"]);
+        if (snippetsRepaired)
+        {
+            _store["snippets"] = JsonSerializer.SerializeToNode(savedSnippets);
+            Save();
+        }
         // Loaded even when OPENROUTER_API_KEY is set: it only stands in for the OpenRouter key, and the app launched
         // with it still needs the others (and must not save over them when one is edited).
         _apiKeys = Credentials.Load();
@@ -619,21 +627,8 @@ public sealed class AppSettings : INotifyPropertyChanged
     {
         get
         {
-            lock (_lock)
-            {
-                try
-                {
-                    // An entry edited by hand into null, or without its text, is left out rather than failing every dictation.
-                    return (_store["snippets"]?.Deserialize<List<Snippet?>>() ?? [])
-                        .OfType<Snippet>()
-                        .Where(s => s.Trigger != null && s.Expansion != null)
-                        .ToList();
-                }
-                catch (JsonException)
-                {
-                    return [];
-                }
-            }
+            // Entry by entry: one edited by hand into null, or without its text, is left out rather than hiding the others.
+            lock (_lock) return Snippet.ReadList(_store["snippets"]).Snippets;
         }
         private set => SetNode("snippets", JsonSerializer.SerializeToNode(value));
     }

@@ -49,12 +49,18 @@ final class SessionController: ObservableObject {
     var modeChords = ModeChords<RecordingMode>()
     /// What the running recording is for; plain dictation at every start.
     private(set) var mode: RecordingMode = .dictation
-    /// Set while "Paste last dictation" waits for its keys to be let go or pastes, so pressing it again meanwhile does nothing.
-    private var isPastingLast = false
+    /// The "Paste last dictation" waiting for its keys to be let go, or pasting, by its number. A new dictation, Esc or
+    /// the screen locking drops it (nil), and what it still had to do is left undone. Pressing it again meanwhile does nothing.
+    private var pendingPasteLast: Int?
+    private var pasteLastCount = 0
+    /// The app last in front other than this one: where the menu-bar panel's "Paste last dictation" goes, should the
+    /// click on the panel have brought this app forward.
+    private var lastOtherApp: pid_t?
     /// Which dictation is current: bumped whenever one ends or is cancelled, so work still out for an earlier one (its
     /// paste, its Return, its reset) can tell it's no longer wanted and leaves the next dictation alone.
     private var generation = 0
-    /// The app in front when the recording stopped, where the text is meant to go (nil for a retry).
+    /// The app in front when the recording stopped, where the text is meant to go (for a retry, the app "Paste last
+    /// dictation" was asked for in, or nil).
     private var pasteTarget: pid_t?
     /// Between the screen locking (or sleep) and unlocking: no warm microphone meanwhile.
     private var isLocked = false
@@ -104,6 +110,14 @@ final class SessionController: ObservableObject {
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil,
                                                           queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.systemLocked("going to sleep") }
+        }
+        lastOtherApp = SessionController.otherApp(NSWorkspace.shared.frontmostApplication)
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
+                                                          object: nil, queue: .main) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            MainActor.assumeIsolated {
+                if let other = SessionController.otherApp(app) { self?.lastOtherApp = other }
+            }
         }
         DistributedNotificationCenter.default().addObserver(forName: .init("com.apple.screenIsLocked"), object: nil,
                                                             queue: .main) { [weak self] _ in
@@ -214,6 +228,8 @@ final class SessionController: ObservableObject {
             updateWarmMicrophone()
             silenceWarmMicrophoneIfLocked()
         }
+        // Nor does a "Paste last dictation" still waiting go ahead once the screen is unlocked again.
+        dropPendingPasteLast(reason)
         switch state {
         case .idle:
             return
@@ -248,7 +264,10 @@ final class SessionController: ObservableObject {
     }
 
     func escapePressed() {
-        guard state != .idle else { return }
+        guard state != .idle else {
+            dropPendingPasteLast("Esc")
+            return
+        }
         if state == .recording, CancelPolicy.keeps(recordedSeconds: counter.seconds - preRollSeconds) {
             keepCancelledRecording()
         } else {
@@ -305,6 +324,8 @@ final class SessionController: ObservableObject {
         warmConnections()
         // Someone is dictating, so the screen is unlocked, whatever notification was missed (a wake without a lock).
         isLocked = false
+        // The new dictation is what the user is after now.
+        dropPendingPasteLast("a dictation started")
         guard let sttEndpoint = settings.sttEndpoint, settings.isConfigured(settings.sttProvider) else {
             note("not started — speech-to-text provider not configured")
             hud.show(.error(L("请先在设置里配置语音转文字服务商（\(settings.sttProvider.displayName)）",
@@ -899,12 +920,19 @@ final class SessionController: ObservableObject {
     /// clipboard put back afterwards, or left on the clipboard when it can't be. When the newest one failed with its
     /// recording saved, re-sends that instead and pastes the result (see `LastDictation`).
     ///
+    /// The text goes to the app in front when it was asked for (from the menu-bar panel: the app in front before the
+    /// panel was clicked), and only while that app is still in front; otherwise to the clipboard.
+    ///
     /// `shortcut`: the keys that asked for it, let go of before anything is pasted, since a paste read together with
     /// keys still held would be another shortcut altogether. nil from the menu bar, whose panel first has to give focus
     /// back to the app the text goes to.
     func pasteLastDictation(releasing shortcut: Hotkey?) {
-        guard state == .idle, !isPastingLast else { return }
-        isPastingLast = true
+        guard state == .idle, pendingPasteLast == nil else { return }
+        let front = NSWorkspace.shared.frontmostApplication
+        let target = shortcut == nil ? Self.otherApp(front) ?? lastOtherApp : front?.processIdentifier
+        pasteLastCount += 1
+        let id = pasteLastCount
+        pendingPasteLast = id
         Task { [weak self] in
             let released: Bool
             if let shortcut {
@@ -913,15 +941,15 @@ final class SessionController: ObservableObject {
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 released = true
             }
-            await self?.pasteLast(released: released)
+            await self?.pasteLast(id, into: target, released: released)
         }
     }
 
     /// `released`: false when the shortcut's keys were still held after a while; the text then goes to the clipboard.
-    private func pasteLast(released: Bool) async {
-        defer { isPastingLast = false }
-        // A dictation started while the keys were still held: it comes first.
-        guard state == .idle else { return }
+    private func pasteLast(_ id: Int, into target: pid_t?, released: Bool) async {
+        defer { if pendingPasteLast == id { pendingPasteLast = nil } }
+        // Dropped meanwhile: by Esc, the screen locking, or a dictation started while the keys were still held.
+        guard pasteLastIsCurrent(id) else { return }
         let records = history.records
         let entries = records.map {
             LastDictation.Entry(kind: $0.status.pruningKind,
@@ -935,29 +963,32 @@ final class SessionController: ObservableObject {
             hud.show(.error(L("还没有可以粘贴的听写", "No dictation to paste yet")), autoHideAfter: 2)
         case let .retry(index):
             note("paste last dictation → the newest one failed: retried")
-            retry(records[index], paste: released)
+            // Its text goes in like a dictation's: only into `target`, while it's still in front (see `focusMoved`).
+            retry(records[index], paste: released && !isLocked, target: target)
         case let .paste(index):
             let text = records[index].finalText
-            // Focus on something that can't take text, the keys still held, or the screen locked: the clipboard instead.
-            guard released, !isLocked, FocusProbe.focusedTarget() != .notEditable else {
+            // The keys still held, another app in front, or focus on something that can't take text: the clipboard.
+            guard released, isInFront(target), FocusProbe.focusedTarget() != .notEditable else {
                 note("paste last dictation → clipboard")
                 TextInserter.copyToClipboard(text)
                 hud.show(.copied, autoHideAfter: 1.6)
                 return
             }
             let outcome = await TextInserter.insert(text, restoreClipboard: settings.restoreClipboard) {
-                self.state == .idle && !self.isLocked
+                self.pasteLastIsCurrent(id) && self.isInFront(target)
             }
             note("paste last dictation → \(outcome) in \(frontmostID)")
+            // Esc, the screen locking or a new dictation while it went in: that leaves the HUD and the clipboard alone.
+            guard pasteLastIsCurrent(id) else { return }
             switch outcome {
             case .pasted:
                 break
             case .notPasted:
                 hud.show(.copied, autoHideAfter: 1.6)
             case .skipped:
-                // The screen locked, or a dictation started, just as ⌘V was due.
+                // Another app came to the front just as ⌘V was due.
                 TextInserter.copyToClipboard(text)
-                if state == .idle { hud.show(.copied, autoHideAfter: 1.6) }
+                hud.show(.copied, autoHideAfter: 1.6)
             case .noPermission:
                 hud.show(.error(L("没有辅助功能权限，文字已复制到剪贴板",
                                   "No Accessibility permission — text copied to the clipboard")), autoHideAfter: 3)
@@ -965,10 +996,33 @@ final class SessionController: ObservableObject {
         }
     }
 
+    /// Whether the "Paste last dictation" `id` is still wanted: not dropped, and no dictation under way.
+    private func pasteLastIsCurrent(_ id: Int) -> Bool {
+        pendingPasteLast == id && state == .idle && !isLocked
+    }
+
+    private func dropPendingPasteLast(_ reason: String) {
+        guard pendingPasteLast != nil else { return }
+        pendingPasteLast = nil
+        note("paste last dictation dropped — \(reason)")
+    }
+
+    /// Whether `app` is in front (nil: the app couldn't be told when it was asked for, so there's nothing to check).
+    private func isInFront(_ app: pid_t?) -> Bool {
+        app == nil || NSWorkspace.shared.frontmostApplication?.processIdentifier == app
+    }
+
+    /// `app`, unless it's this one.
+    private static func otherApp(_ app: NSRunningApplication?) -> pid_t? {
+        guard let app, app.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return nil }
+        return app.processIdentifier
+    }
+
     // MARK: - Retry / cancel
 
-    /// Re-runs a saved dictation. Chunks that already succeeded are reused; only failed ones are re-sent.
-    func retry(_ saved: DictationRecord, paste: Bool) {
+    /// Re-runs a saved dictation. Chunks that already succeeded are reused; only failed ones are re-sent. `target`: the
+    /// app its text is pasted into, only while that app is in front (nil: whichever is in front then).
+    func retry(_ saved: DictationRecord, paste: Bool, target: pid_t? = nil) {
         guard state == .idle else { return }
         guard let endpoint = settings.sttEndpoint else { return }
         guard saved.hasAudio, let data = try? Data(contentsOf: saved.audioURL),
@@ -989,6 +1043,7 @@ final class SessionController: ObservableObject {
         record.chunkLayout = Chunker.layout
         history.update(record)
         self.record = record
+        pasteTarget = target
         state = .processing
         hud.showWorking(polishes: settings.polishEnabled)
 

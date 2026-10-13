@@ -31,6 +31,11 @@ public sealed class PopoverWindow : Window
     private DateTimeOffset _hiddenAt = DateTimeOffset.MinValue;
     private string? _copiedId;
     private (Updater.UpdatePhase, bool) _updateState;
+    /// <summary>
+    /// The window in front before the panel opened, where "Paste last dictation" goes; 0 when that was this app, the
+    /// desktop or the taskbar (a click on the tray icon may already have made the taskbar the window in front).
+    /// </summary>
+    private nint _windowBefore;
 
     public nint Hwnd { get; }
     public bool IsOpen { get; private set; }
@@ -86,6 +91,11 @@ public sealed class PopoverWindow : Window
     public void Open(Win32.RECT anchor)
     {
         _anchor = anchor;
+        var front = Win32.GetForegroundWindow();
+        Win32.GetWindowThreadProcessId(front, out var owner);
+        _windowBefore = owner == (uint)Environment.ProcessId
+                        || Win32.ClassName(front) is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" or "Progman" or "WorkerW"
+            ? 0 : front;
         _root.Children.Clear();
         _root.Children.Add(BuildContent());
         IsOpen = true;
@@ -395,7 +405,7 @@ public sealed class PopoverWindow : Window
         pasteLast.Click += (_, _) =>
         {
             Dismiss();
-            _controller.PasteLastDictation(null);
+            _controller.PasteLastDictation(null, _windowBefore);
         };
         Grid.SetColumn(pasteLast, 2);
         grid.Children.Add(pasteLast);

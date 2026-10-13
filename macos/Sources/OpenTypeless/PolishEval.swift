@@ -10,6 +10,8 @@ enum PolishEval {
         var mustContain: [String]?
         var mustNotContain: [String]?
         var anyOf: [[String]]?
+        /// Text around the cursor sent with the transcript (see CursorContext), as the app would.
+        var context: String?
     }
     struct Job: Codable {
         let id: String
@@ -125,7 +127,9 @@ enum PolishEval {
                     let offset = (index + round - 1) % models.count
                     for i in 0..<models.count {
                         let model = models[(i + offset) % models.count], price = prices[model]!
-                        let plan = try client.evaluationPlan(transcript: c.input, options: options[model]!,
+                        var caseOptions = options[model]!
+                        caseOptions.context = c.context
+                        let plan = try client.evaluationPlan(transcript: c.input, options: caseOptions,
                                                             promptPrice: price.0, completionPrice: price.1, providerTag: providerTag,
                                                             providerRouting: providerRouting)
                         if let threshold = tierThresholds[model], plan.inputTokenBound >= threshold {
@@ -162,7 +166,8 @@ enum PolishEval {
                 for s in c.mustNotContain ?? [] where attempt.output.contains(s) { failures.append("still has “\(s)”") }
                 for g in c.anyOf ?? [] where !g.contains(where: attempt.output.contains) { failures.append("none of \(g)") }
                 // The app's own checks: it would insert the transcript as spoken instead of this output.
-                if !attempt.output.isEmpty, let fallback = Prompts.fallback(input: c.input, output: attempt.output, truncated: false) {
+                if !attempt.output.isEmpty, let fallback = Prompts.fallback(input: c.input, output: attempt.output,
+                                                                            truncated: false, context: c.context) {
                     failures.append("the app would reject it: \(fallback.rawValue)")
                 }
                 if attempt.truncated { failures.append("truncated") }

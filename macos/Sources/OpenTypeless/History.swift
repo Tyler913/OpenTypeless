@@ -51,6 +51,8 @@ struct DictationRecord: Codable, Identifiable, Equatable {
         var lastChunkRoute: String?
         /// How long the clean-up taken over at release had been running by then (started while the speaker paused).
         var polishHeadStart: Double?
+        /// The clean-up was sent the text around the cursor to spell names by (see CursorContext); the text isn't kept.
+        var usedContext: Bool?
         /// Release → the text ready and handed over for delivery (focus is checked, then it's pasted or copied at once).
         var delivered: Double?
         /// "pasted"; "copied" (focus wasn't a text field); "failed" (the paste didn't land, or wasn't allowed; the text
@@ -69,6 +71,7 @@ struct DictationRecord: Codable, Identifiable, Equatable {
                 var detail: [String] = []
                 if let polishFirstToken { detail.append(L("首字 ", "first token ") + secs(polishFirstToken)) }
                 if let polishModel { detail.append((usedBackup == true ? L("备用 ", "backup ") : "") + polishModel) }
+                if usedContext == true { detail.append(L("参考了光标附近的文字", "with text around the cursor")) }
                 parts.append(L("整理 ", "Clean-up ") + secs(polish)
                              + (detail.isEmpty ? "" : L("（", " (") + detail.joined(separator: L("，", ", ")) + L("）", ")")))
             }

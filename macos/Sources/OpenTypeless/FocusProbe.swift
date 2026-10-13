@@ -42,10 +42,7 @@ enum FocusProbe {
         AXUIElementSetMessagingTimeout(element, 0.3)
 
         let role = string(element, kAXRoleAttribute) ?? ""
-        if textRoles.contains(role) { return .editable }
-        // Inside editable web content (contenteditable, rich editors) WebKit and Chromium expose these.
-        if has(element, "AXEditableAncestor") || has(element, "AXHighestEditableAncestor") { return .editable }
-        if isSettable(element, kAXSelectedTextRangeAttribute) { return .editable }
+        if isTextInput(element, role: role) { return .editable }
         if nonTextRoles.contains(role) {
             // Browsers and Electron apps often don't expose their page's accessibility tree (Firefox
             // only builds it for assistive tech), and report the window or a scroll area as focused even
@@ -54,6 +51,14 @@ enum FocusProbe {
             return .notEditable
         }
         return .unknown
+    }
+
+    /// A text field, text view or editable web content. `role`: the element's, when it was already asked.
+    static func isTextInput(_ element: AXUIElement, role: String? = nil) -> Bool {
+        if textRoles.contains(role ?? string(element, kAXRoleAttribute) ?? "") { return true }
+        // Inside editable web content (contenteditable, rich editors) WebKit and Chromium expose these.
+        if has(element, "AXEditableAncestor") || has(element, "AXHighestEditableAncestor") { return true }
+        return isSettable(element, kAXSelectedTextRangeAttribute)
     }
 
     private static let browserBundleIDs: Set<String> = [

@@ -48,7 +48,7 @@ final class EditWatcher {
     private static let pollInterval: TimeInterval = 0.5
     private static let maxDuration: TimeInterval = 120
     /// Big documents and terminal scrollback aren't worth re-reading twice a second.
-    private static let maxFieldLength = 50_000
+    nonisolated private static let maxFieldLength = 50_000
     /// How often, and how far apart, an app that shows no focused field (or not yet the pasted text) is asked again:
     /// about two seconds in all. Chrome builds its tree a while after being asked, which `prepare()` does while the
     /// user is still speaking; waiting much longer would leave the first keys of an edit unfollowed.
@@ -339,7 +339,7 @@ final class EditWatcher {
     /// an assistive app reads their role. AXEnhancedUserInterface is left alone on purpose: it puts the app in
     /// screen-reader mode, which in Chromium apps such as Claude takes keyboard focus away from the field being typed in
     /// (seen by OpenWhispr).
-    private static func switchOnAccessibility(_ pid: pid_t) {
+    nonisolated static func switchOnAccessibility(_ pid: pid_t) {
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.2)
         _ = string(app, kAXRoleAttribute)
@@ -348,7 +348,7 @@ final class EditWatcher {
 
     /// The focused element of this app, asked of the app itself (some answer that but not the system-wide query), or
     /// else system-wide.
-    private static func focusedElement(pid: pid_t) -> AXUIElement? {
+    nonisolated static func focusedElement(pid: pid_t) -> AXUIElement? {
         guard AXIsProcessTrusted() else { return nil }
         for source in [AXUIElementCreateApplication(pid), AXUIElementCreateSystemWide()] {
             AXUIElementSetMessagingTimeout(source, 0.2)
@@ -365,7 +365,7 @@ final class EditWatcher {
     }
 
     /// The field's text: its value, or for editors that have none (rich text, web content), the text of its whole range.
-    private static func value(of element: AXUIElement) -> String? {
+    nonisolated static func value(of element: AXUIElement) -> String? {
         var value: CFTypeRef?
         if AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success, let text = value as? String {
             return text
@@ -381,13 +381,13 @@ final class EditWatcher {
         return text as? String
     }
 
-    private static func string(_ element: AXUIElement, _ attribute: String) -> String? {
+    nonisolated private static func string(_ element: AXUIElement, _ attribute: String) -> String? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
         return value as? String
     }
 
-    private static func isSecure(_ element: AXUIElement) -> Bool {
+    nonisolated static func isSecure(_ element: AXUIElement) -> Bool {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &value) == .success else { return false }
         return (value as? String) == kAXSecureTextFieldSubrole

@@ -63,6 +63,9 @@ final class SessionController: ObservableObject {
     private var modelInfo: [String: APIClient.ModelInfo] = [:]
     /// False when retrying from the history window, or once the screen locked: the result goes to the clipboard instead.
     private var deliverByPaste = true
+    /// The text around the cursor in the field being dictated into, read as recording started, for the clean-up to spell
+    /// names by (see CursorContext); nil when that's off or there was none. Never saved.
+    private var cursorContext: String?
 
     init() {
         editWatcher.onCorrections = { [weak self] corrections, quiet in
@@ -384,6 +387,8 @@ final class SessionController: ObservableObject {
         hud.model.startedAt = Date()
         hud.show(.recording)
         playSound("Tink")
+        // Read now, while the field holds only what the speaker typed: the dictation goes in at the end.
+        if settings.polishEnabled, settings.useCursorContext { readCursorContext(for: record.id) }
         // After the start sound, which muting would cut off.
         if settings.muteWhileRecording { outputMute.mute(after: .milliseconds(settings.playSounds ? 300 : 0)) }
 
@@ -395,6 +400,18 @@ final class SessionController: ObservableObject {
         // A long dictation keeps the clean-up's connection (idle while speech-to-text works) from timing out.
         warmTimer = Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.warmConnections() }
+        }
+    }
+
+    /// Reads the text around the cursor in the app in front, off the main thread, for the dictation `recordID`. Whatever
+    /// isn't in by the time the clean-up starts isn't waited for.
+    private func readCursorContext(for recordID: String) {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return }
+        CursorContextReader.read(pid: app.processIdentifier) { [weak self] context in
+            guard let self, self.record?.id == recordID, self.state != .idle else { return }
+            self.cursorContext = context
+            // Its length only: the text stays out of the log.
+            self.note(context.map { "text around the cursor: \($0.count) characters" } ?? "no text around the cursor")
         }
     }
 
@@ -577,8 +594,11 @@ final class SessionController: ObservableObject {
             // started while they were still holding the key: take it over (often it's already done).
             let polishing: Task<SegmentedPolishResult, Error>
             var ahead = 0.0
-            // One that already failed (while recording) gets a fresh attempt instead.
-            if let speculative = speculativePolish, speculative.raw == record.rawText, !speculative.outcome.failed {
+            let context = cursorContext
+            // One that already failed (while recording) gets a fresh attempt instead, and so does one started before the
+            // text around the cursor was in.
+            if let speculative = speculativePolish, speculative.raw == record.rawText, speculative.context == context,
+               !speculative.outcome.failed {
                 speculativePolish = nil
                 polishing = speculative.task
                 // What it streams from now on moves this dictation's bar.
@@ -591,8 +611,10 @@ final class SessionController: ObservableObject {
                 dropSpeculativePolish()
                 let raw = record.rawText
                 let onPartial = onPolishPartial(expected: raw)
-                polishing = Task { try await self.polish(raw, onPartial: onPartial) }
+                polishing = Task { try await self.polish(raw, context: context, onPartial: onPartial) }
             }
+            // That it was sent, for History; the text itself is never kept.
+            if context != nil { record.timing?.usedContext = true }
             // Saved while the clean-up runs, so the transcript survives a crash.
             history.update(record)
             do {
@@ -666,9 +688,10 @@ final class SessionController: ObservableObject {
 
     // MARK: - Clean-up ahead of time
 
-    /// A clean-up of `raw`, started while recording.
+    /// A clean-up of `raw`, started while recording, with the text around the cursor that was in by then.
     private struct SpeculativePolish {
         let raw: String
+        let context: String?
         let startedAt: TimeInterval
         let task: Task<SegmentedPolishResult, Error>
         let outcome: PolishOutcome
@@ -705,10 +728,11 @@ final class SessionController: ObservableObject {
         guard !SegmentedPolish.needsParts(raw) else { return }
         let outcome = PolishOutcome()
         let partials = PartialRelay()
+        let context = cursorContext
         let task = Task { [weak self] () async throws -> SegmentedPolishResult in
             guard let self else { throw APIError.cancelled }
             do {
-                let result = try await self.polish(raw, onPartial: { partials.send($0) })
+                let result = try await self.polish(raw, context: context, onPartial: { partials.send($0) })
                 outcome.result = result
                 return result
             } catch {
@@ -716,8 +740,8 @@ final class SessionController: ObservableObject {
                 throw error
             }
         }
-        speculativePolish = SpeculativePolish(raw: raw, startedAt: ProcessInfo.processInfo.systemUptime, task: task,
-                                              outcome: outcome, partials: partials)
+        speculativePolish = SpeculativePolish(raw: raw, context: context, startedAt: ProcessInfo.processInfo.systemUptime,
+                                              task: task, outcome: outcome, partials: partials)
         note("clean-up started ahead of time (speaker paused)")
     }
 
@@ -805,16 +829,18 @@ final class SessionController: ObservableObject {
 
     private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
 
-    private func polish(_ raw: String, onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
+    /// `context`: the text around the cursor, which goes with every request (both routes, every part).
+    private func polish(_ raw: String, context: String?,
+                        onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
-        let primary = route(endpoint, model: settings.polishModel)
-        let backup = settings.polishBackupEndpoint.map { route($0, model: settings.polishBackupModel) }
+        let primary = route(endpoint, model: settings.polishModel, context: context)
+        let backup = settings.polishBackupEndpoint.map { route($0, model: settings.polishBackupModel, context: context) }
         return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup, onPartial: onPartial)
     }
 
-    private func route(_ endpoint: ProviderEndpoint, model: String) -> PolishRoute {
+    private func route(_ endpoint: ProviderEndpoint, model: String, context: String?) -> PolishRoute {
         let model = model.trimmingCharacters(in: .whitespaces)
         return PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
@@ -822,7 +848,8 @@ final class SessionController: ObservableObject {
             misheard: settings.misheardHints,
             extraInstructions: settings.extraInstructions,
             modelInfo: endpoint.id == .openrouter ? modelInfo[model] : nil,
-            host: endpoint.id == .openrouter ? settings.openRouterHost(for: model) : nil
+            host: endpoint.id == .openrouter ? settings.openRouterHost(for: model) : nil,
+            context: context
         ))
     }
 
@@ -959,6 +986,7 @@ final class SessionController: ObservableObject {
         pasteTarget = nil
         handsFree = false
         processingTask = nil
+        cursorContext = nil
     }
 
     // MARK: - Misc

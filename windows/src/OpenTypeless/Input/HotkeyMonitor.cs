@@ -62,6 +62,12 @@ public sealed class HotkeyMonitor
     private readonly HashSet<int> _swallowedKeys = new();
 
     /// <summary>
+    /// The keys physically down, from every key event the hook sees, the ones it swallows too. Noted on the hook thread,
+    /// asked on the UI thread (see <see cref="WaitForRelease"/>).
+    /// </summary>
+    private readonly HeldKeys _held = new();
+
+    /// <summary>
     /// Set (on the UI thread) while a dictation is recording or processing: Esc then cancels it and is kept from the
     /// focused app, where it would also interrupt a command-line AI tool or close a dialog.
     /// </summary>
@@ -237,9 +243,23 @@ public sealed class HotkeyMonitor
         if (!down && !up) return false;
         var vk = (int)info.vkCode;
         var injected = (info.flags & Win32.LLKHF_INJECTED) != 0;
+        // First of all, so the keys held are known while a shortcut is being recorded too. A low-level hook gets no
+        // auto-repeat flag: a key-down for a key already down is one.
+        var repeat = _held.Note(vk, down, info.time);
 
         if (Recorder is { } recorder) return recorder(new KeyEvent(vk, down, injected));
         if (_isSuspended) return false;
+
+        // A key whose press was swallowed (an action's shortcut, a mode chord) stays swallowed until it's let go, its
+        // auto-repeats and key-up alike, whatever is held with it by then: letting go of Shift while Shift + F5 is still
+        // down mustn't turn F5's repeats into the F5 that starts a dictation.
+        if (_swallowedKeys.Contains(vk))
+        {
+            if (up) return _swallowedKeys.Remove(vk);
+            if (repeat) return true;
+            // A new press: the last one's key-up went by while a shortcut was being recorded (or the hook was off).
+            _swallowedKeys.Remove(vk);
+        }
 
         var time = HotkeyPress.TickTime(info.time, Environment.TickCount64);
         var hotkey = _hotkey;
@@ -273,7 +293,7 @@ public sealed class HotkeyMonitor
                 return false;
             }
             if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
-            if (!down) return Swallowed(vk);
+            if (!down) return false;
             // Shift, Ctrl… pressed with the hotkey make no combo on their own (macOS doesn't count them either). AltGr
             // layouts also send a made-up Left Ctrl with every Right Alt event, auto-repeat included, which would
             // otherwise cancel a dictation held on Right Alt.
@@ -284,11 +304,9 @@ public sealed class HotkeyMonitor
                 // the same moment (e.g. a mouse utility sending its own shortcut) don't count and must not cancel.
                 if (!injected)
                 {
-                    var chord = ModeChordKeys.Contains(vk);
-                    if (chord && _swallowedKeys.Contains(vk)) return true; // a chord key's auto-repeat
                     HotkeyLog.Debug($"combo key (vk {vk}) with {hotkey.DisplayName}");
                     Fire(OnOtherKey, vk, time);
-                    if (chord) return Swallow(vk);
+                    if (ModeChordKeys.Contains(vk)) return Swallow(vk);
                 }
                 else
                 {
@@ -296,7 +314,7 @@ public sealed class HotkeyMonitor
                 }
             }
             // After the combo above, which cancels a dictation the shortcut's modifier may have just started.
-            return HandleAction(vk);
+            return HandleAction(vk, repeat);
         }
 
         // Key combination.
@@ -323,28 +341,26 @@ public sealed class HotkeyMonitor
             // Otherwise the same key with other modifiers, which may be an action's shortcut (F5 dictates, Shift + F5 pastes).
         }
         if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
-        if (!down) return Swallowed(vk);
+        if (!down) return false;
         if (_isDown && !injected && ModeChordKeys.Contains(vk))
         {
             // Other keys are left alone while a key-combination hotkey is held, as they always were, but a chord counts.
-            if (!_swallowedKeys.Contains(vk))
+            if (!repeat)
             {
                 HotkeyLog.Debug($"chord key (vk {vk}) with {hotkey.DisplayName}");
                 Fire(OnOtherKey, vk, time);
             }
             return Swallow(vk);
         }
-        return HandleAction(vk);
+        return HandleAction(vk, repeat);
     }
 
     /// <summary>
     /// A key going down that is an action's shortcut fires the action (once, not on its auto-repeats), and is swallowed,
     /// like the rest of its presses.
     /// </summary>
-    private bool HandleAction(int vk)
+    private bool HandleAction(int vk, bool repeat)
     {
-        // Was swallowed last time: this is an auto-repeat, as long as it's still the shortcut.
-        var repeat = _swallowedKeys.Remove(vk);
         var shortcuts = Shortcuts;
         // Every key typed comes through here: with no shortcut set, nothing more is asked of the system.
         if (shortcuts.IsEmpty || shortcuts.ActionFor(vk, (int)CurrentModifiers()) is not { } action) return false;
@@ -365,20 +381,18 @@ public sealed class HotkeyMonitor
         return true;
     }
 
-    /// <summary>A key-up is swallowed when its key-down was.</summary>
-    private bool Swallowed(int vk) => _swallowedKeys.Remove(vk);
-
     /// <summary>
     /// Waits until none of <paramref name="shortcut"/>'s keys is physically held any more (its key, and any of Ctrl, Alt,
     /// Shift and Win): a Ctrl+V sent meanwhile would be read together with them, as another shortcut altogether. Returns
-    /// false when they're still held after <paramref name="timeout"/>.
+    /// false when they're still held after <paramref name="timeout"/>. The key itself is followed through the hook: its
+    /// presses were swallowed, so <c>GetAsyncKeyState</c> never heard of them (modifiers always go through).
     /// </summary>
-    public static async Task<bool> WaitForRelease(Hotkey shortcut, TimeSpan timeout)
+    public async Task<bool> WaitForRelease(Hotkey shortcut, TimeSpan timeout)
     {
         var clock = Stopwatch.StartNew();
         while (true)
         {
-            var keyHeld = !shortcut.IsModifierOnly && (Win32.GetAsyncKeyState(shortcut.KeyCode) & 0x8000) != 0;
+            var keyHeld = !shortcut.IsModifierOnly && _held.IsHeld(shortcut.KeyCode, unchecked((uint)Environment.TickCount));
             if (CurrentModifiers() == HotkeyModifiers.None && !keyHeld) return true;
             if (clock.Elapsed >= timeout) return false;
             await Task.Delay(20);

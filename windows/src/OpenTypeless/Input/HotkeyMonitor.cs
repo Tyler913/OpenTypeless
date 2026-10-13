@@ -39,7 +39,8 @@ public sealed class HotkeyMonitor
     public Action<double>? OnRelease;
     /// <summary>
     /// Another key went down while the hotkey was held, by its virtual-key code: with a modifier-only hotkey any key
-    /// (e.g. Right Ctrl + C), with a key combination only a mode chord (see <see cref="ModeChordKeys"/>).
+    /// (e.g. Right Ctrl + C), with a key combination only a mode chord (see <see cref="ModeChordKeys"/>). A modifier only
+    /// counts as a mode chord.
     /// </summary>
     public Action<int, double>? OnOtherKey;
     public Action? OnEscape;
@@ -294,6 +295,15 @@ public sealed class HotkeyMonitor
             }
             if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
             if (!down) return false;
+            // A mode chord pressed with the hotkey counts, a modifier too (Right Alt + Shift translates), and is kept
+            // from the focused app, where Shift on its own would switch a Chinese or Japanese input method between its
+            // own letters and English, and Alt + Shift the keyboard layout. Not AltGr's made-up Left Ctrl (below).
+            if (_isDown && !injected && !repeat && ModeChordKeys.Contains(vk) && info.scanCode != AltGrControlScanCode)
+            {
+                HotkeyLog.Debug($"chord key (vk {vk}) with {hotkey.DisplayName}");
+                Fire(OnOtherKey, vk, time);
+                return Swallow(vk);
+            }
             // Shift, Ctrl… pressed with the hotkey make no combo on their own (macOS doesn't count them either). AltGr
             // layouts also send a made-up Left Ctrl with every Right Alt event, auto-repeat included, which would
             // otherwise cancel a dictation held on Right Alt.
@@ -306,7 +316,6 @@ public sealed class HotkeyMonitor
                 {
                     HotkeyLog.Debug($"combo key (vk {vk}) with {hotkey.DisplayName}");
                     Fire(OnOtherKey, vk, time);
-                    if (ModeChordKeys.Contains(vk)) return Swallow(vk);
                 }
                 else
                 {
@@ -342,7 +351,7 @@ public sealed class HotkeyMonitor
         }
         if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
         if (!down) return false;
-        if (_isDown && !injected && ModeChordKeys.Contains(vk))
+        if (_isDown && !injected && ModeChordKeys.Contains(vk) && info.scanCode != AltGrControlScanCode)
         {
             // Other keys are left alone while a key-combination hotkey is held, as they always were, but a chord counts.
             if (!repeat)

@@ -135,6 +135,20 @@ public sealed record Hotkey(
     }
 }
 
+public static class TranslationChordText
+{
+    /// <summary>Its key cap, as the shortcut page shows it next to the hotkey's.</summary>
+    public static string KeyCap(this TranslationChord chord) => chord switch
+    {
+        TranslationChord.Control => "Ctrl",
+        TranslationChord.Alt => "Alt",
+        _ => "Shift",
+    };
+
+    /// <summary>As Settings names it.</summary>
+    public static string Label(this TranslationChord chord) => chord.KeyCap();
+}
+
 public static class ShortcutActionText
 {
     public static string Title(this ShortcutAction action) => action switch

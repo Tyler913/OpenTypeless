@@ -247,6 +247,50 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("learnFromEdits", value);
     }
 
+    /// <summary>
+    /// Translation mode: holding the hotkey and pressing <see cref="TranslationChord"/> inserts that dictation translated
+    /// (see <see cref="TranslationTarget"/>). Off until the user turns it on and picks a language.
+    /// </summary>
+    public bool TranslationEnabled
+    {
+        get => GetBool("translationEnabled", false);
+        set => SetValue("translationEnabled", value);
+    }
+
+    /// <summary>
+    /// A listed language's code (see <see cref="TypelessCore.TranslationLanguage"/>), or <see cref="OtherTranslationLanguage"/>
+    /// for the one typed in <see cref="TranslationOtherLanguage"/>.
+    /// </summary>
+    public string TranslationLanguage
+    {
+        get => GetString("translationLanguage", TypelessCore.TranslationLanguage.English.Code());
+        set => SetValue("translationLanguage", value);
+    }
+
+    public string TranslationOtherLanguage
+    {
+        get => GetString("translationOtherLanguage", "");
+        set => SetValue("translationOtherLanguage", value);
+    }
+
+    public TranslationChord TranslationChord
+    {
+        get => TranslationChords.Parse(GetString("translationChord", "")) ?? TypelessCore.TranslationChord.Shift;
+        set => SetValue("translationChord", value.RawValue());
+    }
+
+    /// <summary>What <see cref="TranslationLanguage"/> holds when the language is typed in.</summary>
+    public const string OtherTranslationLanguage = "other";
+
+    /// <summary>
+    /// What a translation dictation is translated into; null while translation mode is off, or another language is picked
+    /// without a name.
+    /// </summary>
+    public TranslationTarget? TranslationTarget =>
+        TranslationEnabled
+            ? TypelessCore.TranslationTarget.From(TranslationLanguage == OtherTranslationLanguage ? TranslationOtherLanguage : TranslationLanguage)
+            : null;
+
     /// <summary>The microphone to record from, by endpoint ID; "" follows the default input.</summary>
     public string MicrophoneId
     {

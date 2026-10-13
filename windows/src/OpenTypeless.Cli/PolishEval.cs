@@ -21,6 +21,8 @@ public static class PolishEval
         [JsonPropertyName("mustContain")] public List<string>? MustContain { get; set; }
         [JsonPropertyName("mustNotContain")] public List<string>? MustNotContain { get; set; }
         [JsonPropertyName("anyOf")] public List<List<string>>? AnyOf { get; set; }
+        /// <summary>Translate into this language (a <see cref="TranslationTarget"/> id) instead of cleaning up, as translation mode does.</summary>
+        [JsonPropertyName("translateTo")] public string? TranslateTo { get; set; }
     }
 
     public sealed record Job(
@@ -175,7 +177,8 @@ public static class PolishEval
                     {
                         var model = models[(i + offset) % models.Count];
                         var price = prices[model];
-                        var plan = client.EvaluationPlan(c.Input, options[model], price.Prompt, price.Completion, providerTag, providerRouting);
+                        var caseOptions = options[model] with { Translation = TranslationTarget.From(c.TranslateTo) };
+                        var plan = client.EvaluationPlan(c.Input, caseOptions, price.Prompt, price.Completion, providerTag, providerRouting);
                         if (tierThresholds.TryGetValue(model, out var threshold) && plan.InputTokenBound >= threshold)
                         {
                             throw ApiException.BadResponse("input crosses unbudgeted price tier");
@@ -211,14 +214,20 @@ public static class PolishEval
                 foreach (var s in c.MustContain ?? []) if (!attempt.Output.Contains(s)) failures.Add($"missing “{s}”");
                 foreach (var s in c.MustNotContain ?? []) if (attempt.Output.Contains(s)) failures.Add($"still has “{s}”");
                 foreach (var g in c.AnyOf ?? []) if (!g.Any(attempt.Output.Contains)) failures.Add($"none of [{string.Join(", ", g)}]");
-                // The app's own checks: it would insert the transcript as spoken instead of this output.
-                if (attempt.Output.Length > 0 && Prompts.Fallback(c.Input, attempt.Output, truncated: false) is { } fallback)
+                // The app's own checks: it would insert the transcript as spoken (or, for a translation, its clean-up)
+                // instead of this output.
+                var translation = TranslationTarget.From(c.TranslateTo);
+                var rejected = translation is null
+                    ? Prompts.Fallback(c.Input, attempt.Output, truncated: false)
+                    : Prompts.TranslationFallback(c.Input, attempt.Output, truncated: false, translation);
+                if (attempt.Output.Length > 0 && rejected is { } fallback)
                 {
                     failures.Add($"the app would reject it: {fallback.ToString().ToLowerInvariant()}");
                 }
                 if (attempt.Truncated) failures.Add("truncated");
                 if (attempt.Error != null) failures.Add("request error; see private attempt");
-                var ok = attempt.Error == null && attempt.Output.Length > 0;
+                // English kept and similarity measure a clean-up against its transcript, which a translation isn't.
+                var ok = attempt.Error == null && attempt.Output.Length > 0 && translation is null;
                 results.Add(new Result(c.Id, job.Round, job.Plan.Model, reservation, job.Plan, attempt, failures,
                                        ok ? PolishMetrics.LatinRetention(c.Input, attempt.Output, c.MustNotContain) : null,
                                        ok ? PolishMetrics.Similarity(c.Input, attempt.Output) : null));

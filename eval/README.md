@@ -8,14 +8,16 @@ The clean-up prompt lives in `macos/Sources/TypelessCore/Prompts.swift` and `win
 |---|---|
 | `polish-cases.json` | Development set. Some cases resemble the prompt's own examples, so it can be over-fit. |
 | `polish-holdout.json` | Held-out set: different wording and content. **Use this to decide whether a change is an improvement.** |
+| `polish-context.json` | Text around the cursor (**Use text around the cursor to spell names**): names and terms to spell from it, and context that tries to mislead (instructions inside it, a thread in another language, the answer to a dictated question, a greeting and sign-off to copy). Run it after changing the context note in `Prompts`. |
 
 Each case has an `input` and optional checks:
 
 - `mustContain`: every string must appear in the output.
 - `mustNotContain`: none may appear (e.g. the value a self-correction replaced).
 - `anyOf`: a list of groups; each group needs at least one match.
+- `context`: text around the cursor, sent after the transcript exactly as the app sends it.
 
-Every output is also checked for truncation and against the apps' own guards (`Prompts.fallback`), which insert the transcript as spoken instead of an output that is much longer than the input (an answer), keeps under 55% of the words of an input of 150 words or more (a summary), or has little in common with the input (an answer, translation or refusal). `testdata/polish-guard-cases.json` holds the heaviest legitimate clean-up of every case here, which the guards must let through. Two metrics are reported per model:
+Every output is also checked for truncation and against the apps' own guards (`Prompts.fallback`), which insert the transcript as spoken instead of an output that is much longer than the input (an answer), keeps under 55% of the words of an input of 150 words or more (a summary), or has little in common with the input (an answer, translation or refusal), or, with a `context`, took text over from it beyond the names it was there to spell. `testdata/polish-guard-cases.json` holds the heaviest legitimate clean-up of every case here, which the guards must let through. Two metrics are reported per model:
 
 - **English kept**: the share of English words in a mostly-Chinese input that survive in the output (fillers and `mustNotContain` words excluded). Translating "dark mode" to 深色模式 lowers it; recognition fixes such as "swift UI" → SwiftUI don't.
 - **Similarity**: 1 − normalised character edit distance between input and output, ignoring spacing and punctuation. Lower means heavier rewriting. It should drop for cases full of fillers and corrections and stay high otherwise.

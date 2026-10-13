@@ -3,8 +3,9 @@ using System.Runtime.InteropServices;
 namespace OpenTypeless.Native;
 
 /// <summary>
-/// The slice of the UI Automation client API the edit watcher needs: the focused element, whether it's still
-/// the same element, and its text. Calls go into the other app's process, so make them off the UI thread.
+/// The slice of the UI Automation client API the edit watcher and the paste need: the focused element, whether it's still
+/// the same element, its text, and the text around its cursor. Calls go into the other app's process, so make them off
+/// the UI thread.
 /// </summary>
 internal static class UIAutomation
 {
@@ -78,6 +79,53 @@ internal static class UIAutomation
         return null;
     }
 
+    private const int TextPatternRangeEndpoint_Start = 0, TextPatternRangeEndpoint_End = 1, TextUnit_Character = 0;
+
+    /// <summary>
+    /// What's just before and after the cursor (or the selection) in the focused element, from its Text pattern: up to
+    /// <paramref name="before"/> and <paramref name="after"/> characters, "" at the start or end of the field; After is
+    /// null when it couldn't be read. Null when the element is a password field, has no Text pattern or no single
+    /// selection, or answers in a way that doesn't add up.
+    /// </summary>
+    public static (string Before, string? After)? TextAroundCursor(int before, int after)
+    {
+        try
+        {
+            if (FocusedElement() is not { } element || IsPassword(element)) return null;
+            if (element.GetCurrentPropertyValue(UIA_IsTextPatternAvailablePropertyId, out var hasText) != 0 || hasText is not true
+                || element.GetCurrentPattern(UIA_TextPatternId, out var pattern) != 0 || pattern is not IUIAutomationTextPattern textPattern
+                || textPattern.GetSelection(out var ranges) != 0 || ranges == null
+                || ranges.GetLength(out var count) != 0 || count != 1
+                || ranges.GetElement(0, out var selection) != 0 || selection == null)
+            {
+                return null;
+            }
+            if (selection.Clone(out var head) != 0 || head == null
+                || head.MoveEndpointByRange(TextPatternRangeEndpoint_End, selection, TextPatternRangeEndpoint_Start) != 0
+                || head.MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, -before, out var back) != 0
+                || head.GetText(before * 2, out var beforeText) != 0 || beforeText == null
+                // Moved back, but no text came (or the other way round): the range can't be trusted.
+                || (back == 0) != (beforeText.Length == 0))
+            {
+                return null;
+            }
+            string? afterText = null;
+            if (selection.Clone(out var tail) == 0 && tail != null
+                && tail.MoveEndpointByRange(TextPatternRangeEndpoint_Start, selection, TextPatternRangeEndpoint_End) == 0
+                && tail.MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, after, out var onward) == 0
+                && tail.GetText(after * 2, out var read) == 0 && read != null
+                && (onward == 0) == (read.Length == 0))
+            {
+                afterText = read;
+            }
+            return (beforeText, afterText);
+        }
+        catch (Exception e) when (e is COMException or InvalidCastException)
+        {
+            return null;
+        }
+    }
+
     // Only the vtable slots before the methods we call need to exist; they are never invoked.
     [ComImport, Guid("30cbe57d-d9d0-452a-ab13-7ac5ac4825ee"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     internal interface IUIAutomation
@@ -114,15 +162,22 @@ internal static class UIAutomation
     {
         void RangeFromPoint();
         void RangeFromChild();
-        void GetSelection();
+        [PreserveSig] int GetSelection(out IUIAutomationTextRangeArray? ranges);
         void GetVisibleRanges();
         [PreserveSig] int GetDocumentRange(out IUIAutomationTextRange? range);
+    }
+
+    [ComImport, Guid("ce4ae76a-e717-4c98-81ea-47371d028eb6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IUIAutomationTextRangeArray
+    {
+        [PreserveSig] int GetLength(out int length);
+        [PreserveSig] int GetElement(int index, out IUIAutomationTextRange? element);
     }
 
     [ComImport, Guid("a543cc6a-f4ae-494b-8239-c814481187a8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     internal interface IUIAutomationTextRange
     {
-        void Clone();
+        [PreserveSig] int Clone(out IUIAutomationTextRange? clone);
         void Compare();
         void CompareEndpoints();
         void ExpandToEnclosingUnit();
@@ -132,6 +187,9 @@ internal static class UIAutomation
         void GetBoundingRectangles();
         void GetEnclosingElement();
         [PreserveSig] int GetText(int maxLength, [MarshalAs(UnmanagedType.BStr)] out string? text);
+        void Move();
+        [PreserveSig] int MoveEndpointByUnit(int endpoint, int unit, int count, out int moved);
+        [PreserveSig] int MoveEndpointByRange(int sourceEndpoint, IUIAutomationTextRange range, int targetEndpoint);
     }
 }
 

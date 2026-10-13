@@ -962,6 +962,24 @@
     "fr": "Remet le contenu précédent du presse-papiers après l’insertion",
     "de": "Stellt nach dem Einfügen den vorherigen Inhalt der Zwischenablage wieder her"
   },
+  "Fit spacing and capitalisation to the surrounding text": {
+    "ja": "前後の文章に合わせてスペースと大文字小文字を整える",
+    "ko": "앞뒤 문장에 맞춰 띄어쓰기와 대소문자 맞추기",
+    "es": "Ajustar espacios y mayúsculas al texto de alrededor",
+    "pt": "Ajustar espaços e maiúsculas ao texto ao redor",
+    "ru": "Подгонять пробелы и регистр под окружающий текст",
+    "fr": "Adapter les espaces et les majuscules au texte autour",
+    "de": "Leerzeichen und Großschreibung an den umgebenden Text anpassen"
+  },
+  "When you dictate into existing text, adds a missing space, lowercases a capital in mid-sentence and drops a full stop that would end the sentence early, going by the text around the cursor. Where that can't be read (a password field, some apps), the text goes in as it is.": {
+    "ja": "既存の文章の途中に音声入力すると、カーソル前後の文章を見て、足りないスペースを補い、文の途中の大文字を小文字にし、文を途中で終わらせてしまう句点を取り除きます。カーソル付近の文章を読み取れないとき（パスワード欄や一部のアプリ）は、そのまま挿入します。",
+    "ko": "기존 텍스트 중간에 받아쓰면 커서 앞뒤 텍스트를 보고 빠진 띄어쓰기를 넣고, 문장 중간의 대문자를 소문자로 바꾸고, 문장을 일찍 끝내 버리는 마침표를 뺍니다. 커서 주변 텍스트를 읽을 수 없으면(비밀번호 입력란, 일부 앱) 그대로 삽입합니다.",
+    "es": "Al dictar dentro de un texto existente, añade el espacio que falta, pone en minúscula una mayúscula a mitad de frase y quita el punto que cerraría la frase antes de tiempo, según el texto que rodea al cursor. Si no se puede leer (un campo de contraseña, algunas apps), el texto se inserta tal cual.",
+    "pt": "Ao ditar no meio de um texto existente, adiciona o espaço que falta, deixa em minúscula uma maiúscula no meio da frase e tira o ponto final que encerraria a frase antes da hora, com base no texto em volta do cursor. Quando ele não pode ser lido (um campo de senha, alguns apps), o texto entra como está.",
+    "ru": "Когда вы диктуете внутрь уже написанного текста, добавляет недостающий пробел, делает строчной заглавную букву посреди предложения и убирает точку, которая завершила бы предложение раньше времени, — по тексту вокруг курсора. Если его не прочитать (поле пароля, некоторые приложения), текст вставляется как есть.",
+    "fr": "Quand vous dictez au milieu d’un texte existant, ajoute l’espace manquante, met en minuscule une majuscule en milieu de phrase et retire le point qui terminerait la phrase trop tôt, d’après le texte autour du curseur. S’il ne peut pas être lu (champ de mot de passe, certaines apps), le texte est inséré tel quel.",
+    "de": "Wenn du in bestehenden Text diktierst, ergänzt es ein fehlendes Leerzeichen, schreibt einen Großbuchstaben mitten im Satz klein und lässt einen Punkt weg, der den Satz zu früh beenden würde – anhand des Textes um den Cursor. Wo der nicht lesbar ist (ein Passwortfeld, manche Apps), wird der Text unverändert eingefügt."
+  },
   "Press Return after inserting": {
     "ja": "挿入後に Return キーを押す",
     "ko": "삽입 후 Return 키 누르기",

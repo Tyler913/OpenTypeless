@@ -82,6 +82,8 @@
     { "id": "question-mark-kept", "before": "I asked ", "after": "and she said yes", "text": "Why not?",
       "expect": "why not? ", "changes": ["lowercase first word", "space after"] },
     { "id": "start-of-field-before-text", "before": "", "after": "world is big", "text": "Hello.",
+      "expect": "Hello.", "changes": [] },
+    { "id": "after-newline-before-text", "before": "Notes\n", "after": "world is big", "text": "Hello.",
       "expect": "Hello ", "changes": ["no final full stop", "space after"] },
     { "id": "empty-field", "before": "", "after": "", "text": "Hello there.",
       "expect": "Hello there.", "changes": [] },

@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Carbon.HIToolbox
 
 /// Asks the Accessibility API what currently has keyboard focus, to decide between pasting at the
 /// cursor and leaving the text on the clipboard.
@@ -54,6 +55,71 @@ enum FocusProbe {
             return .notEditable
         }
         return .unknown
+    }
+
+    /// The text either side of the cursor in the focused field.
+    struct Surroundings {
+        /// Up to a few characters before the cursor (or the selection the paste replaces); "" at the start of the field.
+        let before: String
+        /// Up to a few characters after it; "" at the end of the field, nil when that couldn't be read.
+        let after: String?
+    }
+
+    /// Terminals report their whole scrollback as the field, with a selection that isn't the shell's cursor.
+    private static let terminalBundleIDs: Set<String> = [
+        "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "net.kovidgoyal.kitty", "org.alacritty",
+        "io.alacritty", "com.github.wez.wezterm", "com.mitchellh.ghostty", "co.zeit.hyper",
+    ]
+
+    /// What's just before and after the cursor in the focused field, for fitting the dictation to it (see
+    /// InsertionJoiner). nil whenever it can't be told for sure: no Accessibility, a password field or secure input on,
+    /// a terminal, a field that doesn't report its cursor, or an answer that doesn't add up. Each call into the other app
+    /// waits at most 0.2 s.
+    static func textAroundCursor(before beforeCount: Int = 12, after afterCount: Int = 8) -> Surroundings? {
+        guard AXIsProcessTrusted(), !IsSecureEventInputEnabled(),
+              !terminalBundleIDs.contains(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "") else { return nil }
+        let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, 0.2)
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
+        let element = focused as! AXUIElement
+        AXUIElementSetMessagingTimeout(element, 0.2)
+        guard string(element, kAXSubroleAttribute) != kAXSecureTextFieldSubrole else { return nil }
+
+        var rangeValue: CFTypeRef?
+        var selection = CFRange()
+        guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
+              let rangeValue, CFGetTypeID(rangeValue) == AXValueGetTypeID(),
+              AXValueGetValue(rangeValue as! AXValue, .cfRange, &selection),
+              selection.location >= 0, selection.length >= 0 else { return nil }
+        var count: CFTypeRef?
+        let total = AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute as CFString, &count) == .success
+            ? count as? Int : nil
+        let end = selection.location + selection.length
+        if let total, end > total { return nil }
+
+        let start = max(0, selection.location - beforeCount)
+        guard let before = text(element, CFRange(location: start, length: selection.location - start)) else { return nil }
+        let after: String?
+        if let total {
+            after = text(element, CFRange(location: end, length: min(afterCount, total - end)))
+        } else {
+            after = nil
+        }
+        return Surroundings(before: before, after: after)
+    }
+
+    /// The field's text in `range` (UTF-16 offsets, as Accessibility counts), only when exactly that much came back.
+    private static func text(_ element: AXUIElement, _ range: CFRange) -> String? {
+        guard range.length > 0 else { return "" }
+        var range = range
+        guard let rangeValue = AXValueCreate(.cfRange, &range) else { return nil }
+        var value: CFTypeRef?
+        guard AXUIElementCopyParameterizedAttributeValue(element, kAXStringForRangeParameterizedAttribute as CFString,
+                                                         rangeValue, &value) == .success,
+              let text = value as? String, text.utf16.count == range.length else { return nil }
+        return text
     }
 
     private static let browserBundleIDs: Set<String> = [

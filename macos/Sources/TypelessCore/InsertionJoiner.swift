@@ -16,18 +16,18 @@ public enum InsertionJoiner {
     }
 
     /// `before` and `after` are the text just before the cursor (or the selection the text replaces) and just after it,
-    /// as read from the field: "" at the start or end of the field, nil when it couldn't be read. Without `before`
-    /// nothing is changed; without `after` only the start of the text is. A dozen characters each side are plenty.
-    /// `isCommonWord` tells whether a lowercase word is an ordinary English dictionary word.
+    /// as read from the field: "" at the start or end of the field, nil when it couldn't be read. Without `before`, or at
+    /// the start of the field (empty or not: an app that can't tell where its cursor is may say so), nothing is changed;
+    /// without `after` only the start of the text is. A dozen characters each side are plenty. `isCommonWord` tells
+    /// whether a lowercase word is an ordinary English dictionary word.
     public static func fit(_ text: String, before: String?, after: String?, vocabulary: [String] = [],
                            isCommonWord: (String) -> Bool) -> Result {
         let unchanged = Result(text: text, changes: [])
         // A block of lines (a list, paragraphs) stands on its own rather than inside a sentence.
-        guard let before, let first = text.unicodeScalars.first,
+        guard let before, let previous = before.unicodeScalars.last, let first = text.unicodeScalars.first,
               !text.unicodeScalars.contains(where: { kind($0, after: nil) == .newline }) else { return unchanged }
-        let previous = before.unicodeScalars.last
         let next = after?.unicodeScalars.first
-        let previousKind = previous.map { kind($0, after: secondLast(before.unicodeScalars)) }
+        let previousKind = kind(previous, after: secondLast(before.unicodeScalars))
         // The cursor is inside a word: what the speaker meant there can't be told.
         if previousKind == .word, let next, kind(next, after: previous) == .word { return unchanged }
         // Japanese doesn't put spaces around Latin words the way Chinese text does here.
@@ -45,8 +45,7 @@ public enum InsertionJoiner {
             body = trimmed
             changes.append("no final full stop")
         }
-        if let previous, let previousKind,
-           needsSpace(previous, previousKind, first, kind(first, after: previous), japanese: japanese) {
+        if needsSpace(previous, previousKind, first, kind(first, after: previous), japanese: japanese) {
             body = " " + body
             changes.insert("space before", at: 0)
         }

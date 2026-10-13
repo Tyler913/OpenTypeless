@@ -167,6 +167,19 @@ public static class FocusProbe
         return IsTerminal(foreground, pid);
     }
 
+    /// <summary>
+    /// What's just before and after the cursor in the focused field, for fitting the dictation to it (see
+    /// InsertionJoiner). Null whenever it can't be told for sure: a terminal (its buffer's selection isn't the shell's
+    /// cursor), a password field, an element without a Text pattern, or an app that doesn't answer within 0.3 s.
+    /// </summary>
+    public static async Task<(string Before, string? After)?> TextAroundCursor()
+    {
+        if (ForegroundIsTerminal()) return null;
+        // UI Automation calls into the other process; never let a hung app stall the paste.
+        var read = Task.Run(() => UIAutomation.TextAroundCursor(before: 12, after: 8));
+        return await Task.WhenAny(read, Task.Delay(300)) == read && read.IsCompletedSuccessfully ? read.Result : null;
+    }
+
     private static int Int(IUIAutomationElement element, int property) =>
         element.GetCurrentPropertyValue(property, out var value) == 0 && value is int i ? i : 0;
 

@@ -799,7 +799,8 @@ public sealed class SessionController
     /// Pastes at the cursor unless focus is clearly not a text input, or has moved to another window since the
     /// recording stopped. Whether the paste actually landed is detected from the target app reading the clipboard: if
     /// it did, the user's previous clipboard is restored; if not, the text stays on the clipboard and the HUD says so.
-    /// Returns how it went, for History (see <see cref="DictationTiming.Delivery"/>).
+    /// Returns how it went, for History (see <see cref="DictationTiming.Delivery"/>). A paste is fitted to the text
+    /// around the cursor first (see <see cref="Fitted"/>); what goes to the clipboard instead is the text as cleaned up.
     ///
     /// Esc (or the screen locking) can come at any point while the text goes in: the paste and the Enter are only sent
     /// while the dictation is still current, and a cancelled one leaves the session and the HUD to what replaced it.
@@ -820,7 +821,8 @@ public sealed class SessionController
             Finish(notice is { } n ? new HudPhase.Error(n) : new HudPhase.Copied(), 1.6);
             return "copied";
         }
-        var outcome = await TextInserter.Insert(text, _settings.RestoreClipboard,
+        var inserted = await Fitted(text);
+        var outcome = await TextInserter.Insert(inserted, _settings.RestoreClipboard,
                                                 () => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved);
         if (!IsCurrent(generation, token))
         {
@@ -848,7 +850,7 @@ public sealed class SessionController
                     Reset();
                     Hud.FinishWorking();
                 }
-                if (_settings.LearnFromEdits && !sent) _editWatcher.Watch(text);
+                if (_settings.LearnFromEdits && !sent) _editWatcher.Watch(inserted);
                 return "pasted";
             case TextInserter.Outcome.Skipped:
                 // The screen locked or another window came to the front just as Ctrl+V was due.
@@ -856,9 +858,23 @@ public sealed class SessionController
                 Finish(notice is { } skippedNotice ? new HudPhase.Error(skippedNotice) : new HudPhase.Copied(), 1.6);
                 return "copied";
             default:
+                // Left on the clipboard for pasting anywhere: the text as cleaned up, not as fitted to this cursor.
+                if (inserted != text && ClipboardSnapshot.ReadText() == inserted) TextInserter.CopyToClipboard(text);
                 Finish(new HudPhase.Copied(), 1.6);
                 return "failed";
         }
+    }
+
+    /// <summary>
+    /// The text with its spacing and capitalisation fitted to the text around the cursor (see InsertionJoiner), when
+    /// that's on and the field can be read; otherwise as it is. History keeps the cleaned text: this is only how it goes in.
+    /// </summary>
+    private async Task<string> Fitted(string text)
+    {
+        if (!_settings.FitToSurroundingText || await FocusProbe.TextAroundCursor() is not { } around) return text;
+        var result = InsertionJoiner.Fit(text, around.Before, around.After, _settings.VocabularyList, SpellChecker.IsCommonWord);
+        if (result.Changes.Count > 0) Note($"fitted to the text around the cursor: {string.Join(", ", result.Changes)}");
+        return result.Text;
     }
 
     private async Task<SegmentedPolishResult> Polish(string raw, Action<string>? onPartial, CancellationToken token)

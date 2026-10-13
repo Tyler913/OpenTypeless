@@ -24,22 +24,23 @@ public static class InsertionJoiner
     /// <summary>
     /// <paramref name="before"/> and <paramref name="after"/> are the text just before the cursor (or the selection the
     /// text replaces) and just after it, as read from the field: "" at the start or end of the field, null when it
-    /// couldn't be read. Without <paramref name="before"/> nothing is changed; without <paramref name="after"/> only the
-    /// start of the text is. A dozen characters each side are plenty. <paramref name="isCommonWord"/> tells whether a
-    /// lowercase word is an ordinary English dictionary word.
+    /// couldn't be read. Without <paramref name="before"/>, or at the start of the field (empty or not: an app that can't
+    /// tell where its cursor is may say so), nothing is changed; without <paramref name="after"/> only the start of the
+    /// text is. A dozen characters each side are plenty. <paramref name="isCommonWord"/> tells whether a lowercase word
+    /// is an ordinary English dictionary word.
     /// </summary>
     public static Result Fit(string text, string? before, string? after, IReadOnlyList<string> vocabulary, Func<string, bool> isCommonWord)
     {
         var unchanged = new Result(text, []);
         var runes = Runes(text);
         // A block of lines (a list, paragraphs) stands on its own rather than inside a sentence.
-        if (before == null || runes.Count == 0 || runes.Any(r => KindOf(r, null) == Kind.Newline)) return unchanged;
+        if (string.IsNullOrEmpty(before) || runes.Count == 0 || runes.Any(r => KindOf(r, null) == Kind.Newline)) return unchanged;
         var beforeRunes = Runes(before);
         var afterRunes = after == null ? null : Runes(after);
         var first = runes[0];
-        Rune? previous = beforeRunes.Count > 0 ? beforeRunes[^1] : null;
+        var previous = beforeRunes[^1];
         Rune? next = afterRunes is { Count: > 0 } ? afterRunes[0] : null;
-        Kind? previousKind = previous is { } p ? KindOf(p, SecondLast(beforeRunes)) : null;
+        var previousKind = KindOf(previous, SecondLast(beforeRunes));
         // The cursor is inside a word: what the speaker meant there can't be told.
         if (previousKind == Kind.Word && next is { } n && KindOf(n, previous) == Kind.Word) return unchanged;
         // Japanese doesn't put spaces around Latin words the way Chinese text does here.
@@ -65,7 +66,7 @@ public static class InsertionJoiner
             body = trimmed;
             changes.Add("no final full stop");
         }
-        if (previous is { } a && previousKind is { } ka && NeedsSpace(a, ka, first, KindOf(first, a), japanese))
+        if (NeedsSpace(previous, previousKind, first, KindOf(first, previous), japanese))
         {
             body = " " + body;
             changes.Insert(0, "space before");

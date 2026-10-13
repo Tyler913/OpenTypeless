@@ -63,6 +63,8 @@ final class AppSettings: ObservableObject {
     @Published private(set) var modelPrices: [String: ModelPrice]
     /// The OpenRouter host the user picked for a clean-up model (endpoint tag, by model ID); none means automatic.
     @Published private(set) var openRouterHosts: [String: String]
+    /// Settings for particular apps, by bundle ID, applied to a dictation started in them (see AppProfile). None at first.
+    @Published private(set) var appProfiles: [AppProfile]
 
     private init() {
         // Loaded even when OPENROUTER_API_KEY is set: it only stands in for the OpenRouter key, and the app launched
@@ -75,6 +77,11 @@ final class AppSettings: ObservableObject {
         modelPrices = UserDefaults.standard.data(forKey: "modelPrices")
             .flatMap { try? JSONDecoder().decode([String: ModelPrice].self, from: $0) } ?? [:]
         openRouterHosts = (UserDefaults.standard.dictionary(forKey: "openRouterHosts") as? [String: String]) ?? [:]
+        // An entry that isn't a profile is skipped, not the whole list; an ID that's missing or taken is repaired once and
+        // saved, so edits, Remove and retries keep finding their profile.
+        let savedProfiles = UserDefaults.standard.data(forKey: "appProfiles").flatMap(AppProfile.list(from:)) ?? []
+        appProfiles = AppProfile.withUniqueIDs(savedProfiles)
+        if appProfiles != savedProfiles { saveAppProfiles() }
     }
 
     // MARK: Hotkey
@@ -198,6 +205,60 @@ final class AppSettings: ObservableObject {
         guard !model.isEmpty else { return }
         openRouterHosts[model] = host?.isEmpty == false ? host : nil
         UserDefaults.standard.set(openRouterHosts, forKey: "openRouterHosts")
+    }
+
+    // MARK: App profiles
+
+    /// What a dictation runs with when no profile applies.
+    var globalDictationSettings: DictationSettings {
+        DictationSettings(polishEnabled: polishEnabled, pressEnter: pressEnterAfterInsert, language: sttLanguage,
+                          extraInstructions: extraInstructions)
+    }
+
+    /// What a dictation started in the app with this bundle ID runs with.
+    func dictationSettings(forApp bundleID: String?) -> DictationSettings {
+        globalDictationSettings.applying(AppProfile.matching(bundleID, in: appProfiles))
+    }
+
+    /// What a retry of a dictation made with the profile `id` runs with: that profile's settings while it still exists,
+    /// the global ones otherwise.
+    func dictationSettings(profileID id: String?) -> DictationSettings {
+        globalDictationSettings.applying(appProfiles.first { $0.id == id })
+    }
+
+    /// Adds a profile for an app, following the global settings until it's edited; an app that has one already keeps it.
+    @discardableResult
+    func addAppProfile(bundleID: String, name: String) -> AppProfile {
+        if let existing = AppProfile.matching(bundleID, in: appProfiles) { return existing }
+        let profile = AppProfile(app: bundleID, name: name)
+        appProfiles.append(profile)
+        saveAppProfiles()
+        return profile
+    }
+
+    func updateAppProfile(_ profile: AppProfile) {
+        guard let index = appProfiles.firstIndex(where: { $0.id == profile.id }), appProfiles[index] != profile else { return }
+        appProfiles[index] = profile
+        saveAppProfiles()
+    }
+
+    func removeAppProfile(id: String) {
+        appProfiles.removeAll { $0.id == id }
+        saveAppProfiles()
+    }
+
+    /// Set for the UI snapshots: the profiles shown are samples, and nothing about them is saved.
+    private var appProfilesAreSamples = false
+
+    /// For the UI snapshots: shows these profiles in place of the saved ones, which stay as they are.
+    func showSampleAppProfiles(_ profiles: [AppProfile]) {
+        appProfilesAreSamples = true
+        appProfiles = profiles
+    }
+
+    private func saveAppProfiles() {
+        guard !appProfilesAreSamples else { return }
+        UserDefaults.standard.set(try? JSONEncoder().encode(appProfiles), forKey: "appProfiles")
     }
 
     // MARK: Model prices

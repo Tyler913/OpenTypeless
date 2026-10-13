@@ -158,6 +158,34 @@ public static class FocusProbe
         return exe != null && TerminalExecutables.Contains(Path.GetFileNameWithoutExtension(exe), StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>The executable of the app in front ("slack.exe"), to pick its app profile; null when it can't be read.</summary>
+    public static string? ForegroundExecutable()
+    {
+        var foreground = Win32.GetForegroundWindow();
+        if (foreground == 0 || ExecutablePath(foreground) is not { } path) return null;
+        return Path.GetFileName(path);
+    }
+
+    /// <summary>
+    /// The full path of the app a top-level window belongs to; null when it can't be read. A Store app's window belongs
+    /// to ApplicationFrameHost, which only frames it: the app is the process behind its content.
+    /// </summary>
+    public static string? ExecutablePath(nint window)
+    {
+        Win32.GetWindowThreadProcessId(window, out var pid);
+        var path = Win32.ProcessImagePath(pid);
+        if (!string.Equals(Path.GetFileName(path), "ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase)) return path;
+        uint hosted = 0;
+        Win32.EnumChildWindows(window, (child, _) =>
+        {
+            Win32.GetWindowThreadProcessId(child, out var owner);
+            if (owner == pid || owner == 0) return true;
+            hosted = owner;
+            return false;
+        }, 0);
+        return hosted != 0 && Win32.ProcessImagePath(hosted) is { } hostedPath ? hostedPath : path;
+    }
+
     /// <summary>Whether the foreground window is a terminal, where Ctrl+C interrupts the running program instead of copying.</summary>
     public static bool ForegroundIsTerminal()
     {

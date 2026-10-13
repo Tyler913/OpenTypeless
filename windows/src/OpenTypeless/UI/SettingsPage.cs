@@ -5,12 +5,13 @@ using OpenTypeless.Services;
 
 namespace OpenTypeless.UI;
 
-public enum SettingsPage { Home, General, Shortcut, Providers, Models, Style, History }
+public enum SettingsPage { Home, General, Shortcut, Providers, Models, Style, Apps, History }
 
 public static class SettingsPageInfo
 {
     public static readonly SettingsPage[] All =
-        [SettingsPage.Home, SettingsPage.General, SettingsPage.Shortcut, SettingsPage.Providers, SettingsPage.Models, SettingsPage.Style, SettingsPage.History];
+        [SettingsPage.Home, SettingsPage.General, SettingsPage.Shortcut, SettingsPage.Providers, SettingsPage.Models, SettingsPage.Style, SettingsPage.Apps,
+         SettingsPage.History];
 
     public static string RawValue(this SettingsPage page) => page.ToString().ToLowerInvariant();
 
@@ -24,6 +25,7 @@ public static class SettingsPageInfo
         SettingsPage.Providers => L("服务商", "Providers"),
         SettingsPage.Models => L("模型", "Models"),
         SettingsPage.Style => L("词汇与风格", "Vocabulary & Style"),
+        SettingsPage.Apps => L("应用", "Apps"),
         _ => L("历史记录", "History"),
     };
 
@@ -36,6 +38,7 @@ public static class SettingsPageInfo
                                     "Add API keys. Speech-to-text and clean-up can use different providers."),
         SettingsPage.Models => L("为语音转文字和文字整理分别选择模型", "Pick a model for each step"),
         SettingsPage.Style => L("让整理结果更符合你的用词和习惯", "Teach the clean-up your terms and preferences"),
+        SettingsPage.Apps => L("在特定应用里听写时使用的设置", "Settings used when you dictate into a particular app"),
         _ => L("每次听写都会保存，失败的可以重试", "Every dictation is saved; failed ones can be retried"),
     };
 
@@ -47,6 +50,7 @@ public static class SettingsPageInfo
         SettingsPage.Providers => Glyphs.Key,
         SettingsPage.Models => Glyphs.Component,
         SettingsPage.Style => Glyphs.Font,
+        SettingsPage.Apps => Glyphs.AllApps,
         _ => Glyphs.History,
     };
 
@@ -58,6 +62,7 @@ public static class SettingsPageInfo
         SettingsPage.Providers => UI.Tint.Orange,
         SettingsPage.Models => UI.Tint.Purple,
         SettingsPage.Style => UI.Tint.Green,
+        SettingsPage.Apps => UI.Tint.Teal,
         _ => UI.Tint.Indigo,
     };
 }

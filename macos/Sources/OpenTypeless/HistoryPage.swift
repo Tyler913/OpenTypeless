@@ -346,12 +346,13 @@ private struct HistoryDetail: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    /// "0:42 · 123 words · $0.0012"
+    /// "0:42 · 123 words · $0.0012 · Slack" (the app profile it was made with, if any).
     private var details: String {
         var parts = [record.duration.durationLabel]
         let words = WordCount.count(record.finalText)
         if words > 0 { parts.append(L("\(UsageFormat.count(words)) 字", "\(UsageFormat.count(words)) words")) }
         if let cost = record.cost { parts.append(UsageFormat.money(cost)) }
+        if let profile = record.profileName { parts.append(profile) }
         return parts.joined(separator: " · ")
     }
 }

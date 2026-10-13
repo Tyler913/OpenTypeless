@@ -1,0 +1,99 @@
+{
+  "matching": [
+    { "apps": ["com.tinyspeck.slackmacgap", "com.apple.Safari"], "app": "com.apple.Safari", "expected": 1 },
+    { "apps": ["com.tinyspeck.slackmacgap", "com.apple.Safari"], "app": "com.apple.safari", "expected": 1 },
+    { "apps": ["com.tinyspeck.slackmacgap"], "app": "com.tinyspeck.slackmacgap.helper", "expected": null },
+    { "apps": ["com.tinyspeck.slackmacgap"], "app": "com.tinyspeck", "expected": null },
+    { "apps": ["slack.exe", "chrome.exe"], "app": "Chrome.EXE", "expected": 1 },
+    { "apps": ["slack.exe"], "app": "slack", "expected": 0 },
+    { "apps": ["Slack"], "app": "slack.exe", "expected": 0 },
+    { "apps": [" slack.exe "], "app": "slack.exe", "expected": 0 },
+    { "apps": ["slack.exe"], "app": "slack.exe.bak", "expected": null },
+    { "apps": ["notepad.exe", "Notepad.exe"], "app": "NOTEPAD.EXE", "expected": 0 },
+    { "apps": ["", "code.exe"], "app": "", "expected": null },
+    { "apps": [".exe"], "app": "", "expected": null },
+    { "apps": ["code.exe"], "app": null, "expected": null },
+    { "apps": [], "app": "code.exe", "expected": null }
+  ],
+  "resolution": [
+    {
+      "name": "no profile: the global settings as they are",
+      "global": { "polishEnabled": true, "pressEnter": false, "language": "", "extraInstructions": "Keep my casual tone" },
+      "profile": null,
+      "expected": { "polishEnabled": true, "pressEnter": false, "language": "", "extraInstructions": "Keep my casual tone", "profileID": null, "profileName": null }
+    },
+    {
+      "name": "a profile that sets nothing still names itself",
+      "global": { "polishEnabled": true, "pressEnter": false, "language": "zh", "extraInstructions": "" },
+      "profile": { "id": "P1", "app": "com.apple.mail", "name": "Mail" },
+      "expected": { "polishEnabled": true, "pressEnter": false, "language": "zh", "extraInstructions": "", "profileID": "P1", "profileName": "Mail" }
+    },
+    {
+      "name": "every override",
+      "global": { "polishEnabled": true, "pressEnter": false, "language": "", "extraInstructions": "" },
+      "profile": { "id": "P2", "app": "slack.exe", "name": "Slack", "polish": false, "pressEnter": true, "language": "en", "instructions": "Short messages" },
+      "expected": { "polishEnabled": false, "pressEnter": true, "language": "en", "extraInstructions": "Short messages", "profileID": "P2", "profileName": "Slack" }
+    },
+    {
+      "name": "the app's preferences come after the global ones",
+      "global": { "polishEnabled": false, "pressEnter": true, "language": "en", "extraInstructions": "  Never use bullet lists\n" },
+      "profile": { "id": "P3", "app": "com.microsoft.Outlook", "name": "Outlook", "polish": true, "pressEnter": false, "instructions": "\nUse a formal tone  " },
+      "expected": { "polishEnabled": true, "pressEnter": false, "language": "en", "extraInstructions": "Never use bullet lists\nUse a formal tone", "profileID": "P3", "profileName": "Outlook" }
+    },
+    {
+      "name": "auto-detect overrides a fixed global language",
+      "global": { "polishEnabled": true, "pressEnter": false, "language": "zh", "extraInstructions": "Keep technical terms lowercase" },
+      "profile": { "id": "P4", "app": "code.exe", "name": "Visual Studio Code", "language": "", "instructions": "   " },
+      "expected": { "polishEnabled": true, "pressEnter": false, "language": "", "extraInstructions": "Keep technical terms lowercase", "profileID": "P4", "profileName": "Visual Studio Code" }
+    },
+    {
+      "name": "fields of the wrong type or unknown fields count as unset; a missing name is the app",
+      "global": { "polishEnabled": true, "pressEnter": true, "language": "ja", "extraInstructions": "" },
+      "profile": { "id": "P5", "app": "wechat.exe", "polish": "no", "pressEnter": null, "language": 7, "website": "example.com" },
+      "expected": { "polishEnabled": true, "pressEnter": true, "language": "ja", "extraInstructions": "", "profileID": "P5", "profileName": "wechat.exe" }
+    }
+  ],
+  "lists": [
+    {
+      "name": "entries that aren't profiles are skipped, the rest kept in order; missing, empty and repeated IDs get new ones",
+      "saved": [
+        { "id": "A", "app": "com.apple.mail", "name": "Mail" },
+        42,
+        "slack.exe",
+        null,
+        [],
+        { "app": "slack.exe", "name": "Slack" },
+        { "id": "A", "app": "code.exe" },
+        { "id": "", "app": "notes.exe" },
+        { "id": "B", "app": "wechat.exe" }
+      ],
+      "apps": ["com.apple.mail", "slack.exe", "code.exe", "notes.exe", "wechat.exe"],
+      "keptIDs": ["A", null, null, null, "B"]
+    },
+    {
+      "name": "not a list at all",
+      "saved": { "id": "A", "app": "com.apple.mail" },
+      "apps": [],
+      "keptIDs": []
+    }
+  ],
+  "delivery": [
+    { "name": "no profiles: wherever the text lands, as before", "profiles": [], "started": "com.apple.mail", "delivered": "com.apple.Terminal", "expected": true },
+    { "name": "the profile's own app, however it's spelled", "profiles": [["P1", "slack.exe"]], "started": "slack.exe", "delivered": "Slack.EXE", "expected": true },
+    { "name": "a profile's settings never go into another app", "profiles": [["P1", "slack.exe"]], "started": "slack.exe", "delivered": "WindowsTerminal.exe", "expected": false },
+    { "name": "an app's own profile isn't skipped", "profiles": [["P1", "slack.exe"]], "started": "notepad.exe", "delivered": "slack.exe", "expected": false },
+    { "name": "two apps without a profile, while others have one", "profiles": [["P1", "slack.exe"]], "started": "notepad.exe", "delivered": "code.exe", "expected": true },
+    { "name": "two apps with different profiles", "profiles": [["P1", "slack.exe"], ["P2", "code.exe"]], "started": "slack.exe", "delivered": "code.exe", "expected": false },
+    { "name": "an unknown app in front gets no profile", "profiles": [["P1", "slack.exe"]], "started": "slack.exe", "delivered": null, "expected": false },
+    { "name": "unknown at both ends", "profiles": [["P1", "slack.exe"]], "started": null, "delivered": null, "expected": true }
+  ],
+  "reuse": [
+    { "name": "same chunks, same language", "sameLayout": true, "saved": "en", "language": "en", "expected": true },
+    { "name": "the language changed", "sameLayout": true, "saved": "en", "language": "zh", "expected": false },
+    { "name": "fixed language, now auto-detect", "sameLayout": true, "saved": "zh", "language": "", "expected": false },
+    { "name": "auto-detect both times", "sameLayout": true, "saved": "", "language": "", "expected": true },
+    { "name": "saved before the language was kept, auto-detect now", "sameLayout": true, "saved": null, "language": "", "expected": true },
+    { "name": "saved before the language was kept, a language now", "sameLayout": true, "saved": null, "language": "en", "expected": false },
+    { "name": "cut into different chunks", "sameLayout": false, "saved": "en", "language": "en", "expected": false }
+  ]
+}

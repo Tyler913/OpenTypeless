@@ -570,6 +570,8 @@ public sealed class SessionController
             // A new transcript supersedes a clean-up from an earlier run (a retry): History mustn't show that one if this
             // run inserts the raw text (clean-up off or failed). A retry that fails before this keeps the old result.
             record.PolishedText = null;
+            // And so does what its snippets put in: expanded again from this run's text, with the snippets as they are now.
+            record.InsertedText = null;
             record.Error = null;
             if (raw.Trim().Length == 0)
             {
@@ -949,8 +951,6 @@ public sealed class SessionController
         var record = saved.Copy();
         record.Status = DictationStatus.Processing;
         record.Error = null;
-        // Expanded again from this run's text, with the snippets as they are now.
-        record.InsertedText = null;
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again.
         var preset = saved.ChunkLayout == Chunker.Layout ? saved.ChunkTexts : new Dictionary<int, string>();
         // Saved with the new layout, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).

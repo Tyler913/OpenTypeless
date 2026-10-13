@@ -536,6 +536,8 @@ final class SessionController: ObservableObject {
             // A new transcript supersedes a clean-up from an earlier run (a retry): History mustn't show that one if this
             // run inserts the raw text (clean-up off or failed). A retry that fails before this keeps the old result.
             record.polishedText = nil
+            // And so does what its snippets put in: expanded again from this run's text, with the snippets as they are now.
+            record.insertedText = nil
             record.error = nil
             guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 record.status = .done
@@ -882,8 +884,6 @@ final class SessionController: ObservableObject {
         var record = saved
         record.status = .processing
         record.error = nil
-        // Expanded again from this run's text, with the snippets as they are now.
-        record.insertedText = nil
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again.
         let preset = saved.chunkLayout == Chunker.layout ? saved.chunkTexts : [:]
         // Saved with the new layout, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).

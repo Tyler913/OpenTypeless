@@ -29,6 +29,9 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     /// How the recording was cut into those chunks (`Chunker.layout`; nil before it was saved): a retry that cuts it
     /// differently can't reuse them by index.
     var chunkLayout: Int?
+    /// The language hint those chunks were transcribed with ("" auto-detect; nil before it was saved): a retry with
+    /// another one sends them again (see `DictationSettings.reusesTranscripts`).
+    var chunkLanguage: String?
     var timing: Timing?
     /// What processing it cost so far in USD, retries included (nil when nothing could be priced).
     var cost: Double?

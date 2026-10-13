@@ -38,6 +38,11 @@ public sealed class DictationRecord
     /// retry that cuts it differently can't reuse them by index.
     /// </summary>
     [JsonPropertyName("chunkLayout")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? ChunkLayout { get; set; }
+    /// <summary>
+    /// The language hint those chunks were transcribed with ("" auto-detect; null before it was saved): a retry with
+    /// another one sends them again (see <see cref="TypelessCore.DictationSettings.ReusesTranscripts"/>).
+    /// </summary>
+    [JsonPropertyName("chunkLanguage")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ChunkLanguage { get; set; }
     [JsonPropertyName("timing")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public DictationTiming? Timing { get; set; }
     /// <summary>What processing it cost so far in USD, retries included (null when nothing could be priced).</summary>
     [JsonPropertyName("cost")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Cost { get; set; }

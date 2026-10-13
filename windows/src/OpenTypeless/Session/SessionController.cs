@@ -334,6 +334,7 @@ public sealed class SessionController
         record.Status = DictationStatus.Recording;
         record.ProfileId = dictation.ProfileId;
         record.ProfileName = dictation.ProfileName;
+        record.ChunkLanguage = dictation.Language;
         _history.Update(record);
 
         WavFileWriter writer;
@@ -534,6 +535,13 @@ public sealed class SessionController
         State = SessionState.Processing;
         // Where the text should go: if another window is in front by the time it's ready, it goes to the clipboard.
         _pasteTarget = Win32.GetForegroundWindow();
+        // Released in an app with other settings than the one the recording was started in (see Suits): the text was
+        // spoken for that one, so it goes to the clipboard, with no Enter.
+        if (!Suits(dictation))
+        {
+            Note("released in an app with other settings than the one the recording started in → clipboard");
+            _deliverByPaste = false;
+        }
         Hud.ShowWorking(dictation.PolishEnabled);
 
         // No waiting when the speaker paused before letting go and that pause is already being transcribed as the last
@@ -726,7 +734,7 @@ public sealed class SessionController
         {
             Hud.Model.Progress.Reach(new ProcessingProgress.Milestone.Delivered());
             if (record.Timing is { } timing) timing.Delivered = (timing.Transcription ?? 0) + begun.Elapsed.TotalSeconds;
-            var delivery = await Deliver(text, notice, generation, dictation.PressEnter, token);
+            var delivery = await Deliver(text, notice, generation, dictation, token);
             if (record.Timing != null) record.Timing.Delivery = delivery;
         }
         // Esc came before the text was in place (or while it went in): Cancel has kept the record as cancelled, and so
@@ -742,6 +750,12 @@ public sealed class SessionController
 
     /// <summary>Whether the window in front is no longer the one the recording was made for.</summary>
     private bool FocusMoved => _pasteTarget != 0 && Win32.GetForegroundWindow() != _pasteTarget;
+
+    /// <summary>
+    /// Whether the app in front gets the settings <paramref name="dictation"/> runs with: the same app profile as the app it
+    /// was started in, or like it none (see <see cref="DictationSettings.Suit"/>). Without any profiles, always.
+    /// </summary>
+    private bool Suits(DictationSettings dictation) => dictation.Suit(FocusProbe.ForegroundExecutable(), _settings.AppProfiles);
 
     // MARK: - Clean-up ahead of time
 
@@ -814,15 +828,16 @@ public sealed class SessionController
 
     /// <summary>
     /// Pastes at the cursor unless focus is clearly not a text input, or has moved to another window since the
-    /// recording stopped. Whether the paste actually landed is detected from the target app reading the clipboard: if
-    /// it did, the user's previous clipboard is restored; if not, the text stays on the clipboard and the HUD says so.
-    /// Returns how it went, for History (see <see cref="DictationTiming.Delivery"/>).
+    /// recording stopped, or the app in front has other settings than the dictation's (see <see cref="Suits"/>). Whether
+    /// the paste actually landed is detected from the target app reading the clipboard: if it did, the user's previous
+    /// clipboard is restored; if not, the text stays on the clipboard and the HUD says so. Returns how it went, for
+    /// History (see <see cref="DictationTiming.Delivery"/>). Enter follows the paste when the dictation's settings (its
+    /// app profile's, or the global one) say so.
     ///
     /// Esc (or the screen locking) can come at any point while the text goes in: the paste and the Enter are only sent
     /// while the dictation is still current, and a cancelled one leaves the session and the HUD to what replaced it.
     /// </summary>
-    /// <param name="pressEnter">Enter follows the paste (the dictation's setting, which its app profile can change).</param>
-    private async Task<string> Deliver(string text, string? notice, int generation, bool pressEnter, CancellationToken token)
+    private async Task<string> Deliver(string text, string? notice, int generation, DictationSettings dictation, CancellationToken token)
     {
         if (_deliverByPaste) await TextInserter.LeaveMenuMode();
         var target = _deliverByPaste ? await FocusProbe.FocusedTarget() : FocusProbe.Target.NotEditable;
@@ -831,15 +846,18 @@ public sealed class SessionController
             Note("deliver → nothing, the dictation was cancelled meanwhile");
             return "cancelled";
         }
-        if (target == FocusProbe.Target.NotEditable || _deliverByPaste && FocusMoved)
+        var otherSettings = _deliverByPaste && !Suits(dictation);
+        if (target == FocusProbe.Target.NotEditable || _deliverByPaste && FocusMoved || otherSettings)
         {
-            Note($"deliver → clipboard ({(target == FocusProbe.Target.NotEditable ? "focus not editable" : "another window in front")})");
+            var reason = target == FocusProbe.Target.NotEditable ? "focus not editable"
+                : otherSettings ? "an app with other settings in front" : "another window in front";
+            Note($"deliver → clipboard ({reason})");
             TextInserter.CopyToClipboard(text);
             Finish(notice is { } n ? new HudPhase.Error(n) : new HudPhase.Copied(), 1.6);
             return "copied";
         }
         var outcome = await TextInserter.Insert(text, _settings.RestoreClipboard,
-                                                () => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved);
+                                                () => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved && Suits(dictation));
         if (!IsCurrent(generation, token))
         {
             Note($"deliver → {outcome}, but the dictation was cancelled meanwhile");
@@ -851,10 +869,10 @@ public sealed class SessionController
             case TextInserter.Outcome.Pasted:
                 // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
                 var sent = false;
-                if (pressEnter)
+                if (dictation.PressEnter)
                 {
                     // Not into another window that came to the front after the paste, nor once the screen locked.
-                    sent = await TextInserter.PressEnter(() => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved);
+                    sent = await TextInserter.PressEnter(() => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved && Suits(dictation));
                     if (!IsCurrent(generation, token)) return "pasted";
                 }
                 if (notice is { } message)
@@ -972,11 +990,13 @@ public sealed class SessionController
         record.Error = null;
         record.ProfileId = dictation.ProfileId;
         record.ProfileName = dictation.ProfileName;
-        // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again.
-        var preset = saved.ChunkLayout == Chunker.Layout ? saved.ChunkTexts : new Dictionary<int, string>();
-        // Saved with the new layout, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).
+        // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again, and
+        // transcribed with the same language hint (a profile, or the global setting, may have changed it since).
+        var preset = dictation.ReusesTranscripts(saved.ChunkLayout, saved.ChunkLanguage) ? saved.ChunkTexts : new Dictionary<int, string>();
+        // Saved with the new layout and language, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).
         record.ChunkTexts = new Dictionary<int, string>(preset);
         record.ChunkLayout = Chunker.Layout;
+        record.ChunkLanguage = dictation.Language;
         _history.Update(record);
         _record = record;
         _dictationSettings = dictation;

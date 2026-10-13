@@ -318,6 +318,7 @@ final class SessionController: ObservableObject {
         record.status = .recording
         record.profileID = dictation.profileID
         record.profileName = dictation.profileName
+        record.chunkLanguage = dictation.language
         history.update(record)
 
         let writer: WAVFileWriter
@@ -491,6 +492,12 @@ final class SessionController: ObservableObject {
         state = .processing
         // Where the text should go: if another app is in front by the time it's ready, it goes to the clipboard.
         pasteTarget = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        // Released in an app with other settings than the one the recording was started in (see `suits`): the text was
+        // spoken for that one, so it goes to the clipboard, with no Return.
+        if !suits(dictation) {
+            note("released in \(frontmostID), which has other settings than the app the recording started in → clipboard")
+            deliverByPaste = false
+        }
         hud.showWorking(polishes: dictation.polishEnabled)
 
         // No waiting when the speaker paused before letting go and that pause is already being transcribed as the last
@@ -657,7 +664,7 @@ final class SessionController: ObservableObject {
             hud.model.bar.reach(.delivered)
             let transcription = record.timing?.transcription ?? 0
             record.timing?.delivered = transcription + ProcessInfo.processInfo.systemUptime - begun
-            record.timing?.delivery = await deliver(text, notice: notice, generation: generation, pressEnter: dictation.pressEnter)
+            record.timing?.delivery = await deliver(text, notice: notice, generation: generation, dictation: dictation)
         }
         // Esc came before the text was in place (or while it went in): `cancel` has kept the record as cancelled, and
         // so it stays, now with its clean-up.
@@ -676,6 +683,12 @@ final class SessionController: ObservableObject {
     private var focusMoved: Bool {
         guard let pasteTarget else { return false }
         return NSWorkspace.shared.frontmostApplication?.processIdentifier != pasteTarget
+    }
+
+    /// Whether the app in front gets the settings `dictation` runs with: the same app profile as the app it was started
+    /// in, or like it none (see `DictationSettings.suit`). Without any profiles, always.
+    private func suits(_ dictation: DictationSettings) -> Bool {
+        dictation.suit(NSWorkspace.shared.frontmostApplication?.bundleIdentifier, in: settings.appProfiles)
     }
 
     // MARK: - Clean-up ahead of time
@@ -760,24 +773,27 @@ final class SessionController: ObservableObject {
     }
 
     /// Pastes at the cursor unless focus is clearly not a text input, or has moved to another app since the recording
-    /// stopped. Whether the paste actually landed is detected from the target app reading the clipboard: if it did, the
-    /// user's previous clipboard is restored; if not, the text stays on the clipboard and the HUD says so. Returns how it
-    /// went, for History (see `DictationRecord.Timing.delivery`). `pressEnter`: Return follows the paste (the dictation's
-    /// setting, which its app profile can change).
+    /// stopped, or the app in front has other settings than the dictation's (see `suits`). Whether the paste actually
+    /// landed is detected from the target app reading the clipboard: if it did, the user's previous clipboard is
+    /// restored; if not, the text stays on the clipboard and the HUD says so. Returns how it went, for History (see
+    /// `DictationRecord.Timing.delivery`). Return follows the paste when the dictation's settings (its app profile's, or
+    /// the global one) say so.
     ///
     /// Esc (or the screen locking) can come at any point while the text goes in: the paste and the Return are only sent
     /// while the dictation is still current, and a cancelled one leaves the session and the HUD to what replaced it.
     @discardableResult
-    private func deliver(_ text: String, notice: String?, generation: Int, pressEnter: Bool) async -> String {
+    private func deliver(_ text: String, notice: String?, generation: Int, dictation: DictationSettings) async -> String {
         let target = deliverByPaste ? FocusProbe.focusedTarget() : .notEditable
-        if target == .notEditable || deliverByPaste && focusMoved {
-            note("deliver → clipboard (\(target == .notEditable ? "focus not editable" : "another app in front")) in \(frontmostID)")
+        let otherSettings = deliverByPaste && !suits(dictation)
+        if target == .notEditable || deliverByPaste && focusMoved || otherSettings {
+            let reason = target == .notEditable ? "focus not editable" : otherSettings ? "an app with other settings in front" : "another app in front"
+            note("deliver → clipboard (\(reason)) in \(frontmostID)")
             TextInserter.copyToClipboard(text)
             finish(showing: notice.map { .error($0) } ?? .copied, hideAfter: 1.6)
             return "copied"
         }
         let outcome = await TextInserter.insert(text, restoreClipboard: settings.restoreClipboard) {
-            self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved
+            self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved && self.suits(dictation)
         }
         guard isCurrent(generation) else {
             note("deliver → \(outcome), but the dictation was cancelled meanwhile")
@@ -788,10 +804,10 @@ final class SessionController: ObservableObject {
         case .pasted:
             // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
             var sent = false
-            if pressEnter {
+            if dictation.pressEnter {
                 // Not into another app that came to the front after the paste, nor once the screen locked.
                 sent = await TextInserter.pressReturn {
-                    self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved
+                    self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved && self.suits(dictation)
                 }
                 guard isCurrent(generation) else { return "pasted" }
             }
@@ -900,11 +916,13 @@ final class SessionController: ObservableObject {
         record.error = nil
         record.profileID = dictation.profileID
         record.profileName = dictation.profileName
-        // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again.
-        let preset = saved.chunkLayout == Chunker.layout ? saved.chunkTexts : [:]
-        // Saved with the new layout, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).
+        // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again, and
+        // transcribed with the same language hint (a profile, or the global setting, may have changed it since).
+        let preset = dictation.reusesTranscripts(layout: saved.chunkLayout, language: saved.chunkLanguage) ? saved.chunkTexts : [:]
+        // Saved with the new layout and language, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).
         record.chunkTexts = preset
         record.chunkLayout = Chunker.layout
+        record.chunkLanguage = dictation.language
         history.update(record)
         self.record = record
         dictationSettings = dictation

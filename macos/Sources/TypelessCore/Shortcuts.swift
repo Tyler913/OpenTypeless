@@ -66,6 +66,43 @@ public struct ShortcutMap: Equatable, Sendable {
     }
 }
 
+/// A JSON object of entries by name saved as one value (the actions' shortcuts, by action name), read and changed one
+/// entry at a time: an entry this version can't read (saved by a newer one, or damaged) neither hides the others nor is
+/// lost when another one changes. The Windows app's settings file does the same with its JSON nodes.
+public enum StoredEntries {
+    /// Each entry of `data` that decodes as `T`, by name.
+    public static func decode<T: Decodable>(_ data: Data?, as type: T.Type) -> [String: T] {
+        var decoded: [String: T] = [:]
+        for (name, value) in object(data) {
+            // Only an object or an array can be serialised on its own (anything else would raise, not throw).
+            guard JSONSerialization.isValidJSONObject(value),
+                  let entry = try? JSONSerialization.data(withJSONObject: value),
+                  let item = try? JSONDecoder().decode(T.self, from: entry) else { continue }
+            decoded[name] = item
+        }
+        return decoded
+    }
+
+    /// `data` with the entry `name` replaced by `value` (removed when nil) and every other one as it was; `data` itself
+    /// when `value` can't be encoded.
+    public static func replacing<T: Encodable>(_ name: String, with value: T?, in data: Data?) -> Data? {
+        var entries = object(data)
+        if let value {
+            guard let encoded = try? JSONEncoder().encode(value),
+                  let entry = try? JSONSerialization.jsonObject(with: encoded) else { return data }
+            entries[name] = entry
+        } else {
+            entries[name] = nil
+        }
+        guard JSONSerialization.isValidJSONObject(entries) else { return data }
+        return try? JSONSerialization.data(withJSONObject: entries, options: [.sortedKeys])
+    }
+
+    private static func object(_ data: Data?) -> [String: Any] {
+        data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+    }
+}
+
 /// Which dictation "Paste last dictation" puts at the cursor again: the newest that finished with text. When the newest
 /// one failed and its recording is saved, that one is re-sent instead and pasted once it's done, as the menu bar's
 /// Retry does: what the user is after is what they said last, not the dictation before it.

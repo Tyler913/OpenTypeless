@@ -49,6 +49,39 @@ import Testing
         #expect(set.conflict(pasteChord, for: .pasteLastDictation, dictation: fn, escapeKeyCode: 53) == nil)
     }
 
+    private struct Saved: Codable, Equatable {
+        var keyCode: Int64
+        var modifiers: UInt64 = 0
+    }
+
+    private func json(_ data: Data?) -> [String: Any] {
+        (try? JSONSerialization.jsonObject(with: data ?? Data()) as? [String: Any]) ?? [:]
+    }
+
+    @Test func storedEntriesAreReadOneByOne() {
+        let data = Data(#"{"pasteLastDictation": {"keyCode": 9, "modifiers": 1310720}, "broken": 7, "other": {"x": 1}}"#.utf8)
+        // The damaged entry and the one of another shape don't hide the one that can be read.
+        #expect(StoredEntries.decode(data, as: Saved.self) == ["pasteLastDictation": Saved(keyCode: 9, modifiers: 1_310_720)])
+        #expect(StoredEntries.decode(nil, as: Saved.self).isEmpty)
+        #expect(StoredEntries.decode(Data("not json".utf8), as: Saved.self).isEmpty)
+    }
+
+    @Test func changingOneStoredEntryKeepsTheOthersAsTheyWere() {
+        let data = Data(#"{"pasteLastDictation": {"keyCode": 9}, "newerAction": {"keyCode": 1, "fromTheFuture": true}, "broken": 7}"#.utf8)
+        let changed = StoredEntries.replacing("pasteLastDictation", with: Saved(keyCode: 97), in: data)
+        let object = json(changed)
+        #expect(object["broken"] as? Int == 7)
+        #expect((object["newerAction"] as? [String: Any])?["fromTheFuture"] as? Bool == true)
+        #expect(StoredEntries.decode(changed, as: Saved.self)["pasteLastDictation"] == Saved(keyCode: 97))
+
+        let cleared = StoredEntries.replacing("pasteLastDictation", with: Saved?.none, in: changed)
+        #expect(json(cleared)["pasteLastDictation"] == nil)
+        #expect(json(cleared).count == 2)
+        // Nothing saved yet, or something unreadable: a new object.
+        #expect(StoredEntries.decode(StoredEntries.replacing("a", with: Saved(keyCode: 1), in: nil), as: Saved.self) == ["a": Saved(keyCode: 1)])
+        #expect(json(StoredEntries.replacing("a", with: Saved(keyCode: 1), in: Data("[1]".utf8))).count == 1)
+    }
+
     private func entry(_ kind: HistoryPruning.Kind, text: Bool = true, audio: Bool = true) -> LastDictation.Entry {
         LastDictation.Entry(kind: kind, hasText: text, hasAudio: audio)
     }

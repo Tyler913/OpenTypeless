@@ -38,8 +38,10 @@ public sealed record SegmentedPolishResult(string Text, IReadOnlyList<SegmentedP
 /// of 54 real dictations of a minute or more, 15 came back with under 60% of their words (the worst 2,023 → 379), often
 /// rewritten into numbered lists. A part of a few hundred words gets edited as asked. The parts are split at sentence
 /// ends, cleaned up in parallel with the same prompt, checked one by one, and joined again, so a long dictation is also
-/// ready sooner. Each part goes on its own: the prompt has no place for read-only context, and a neighbouring part
-/// pasted in as such could end up cleaned up into the answer as well.
+/// ready sooner. Each part goes on its own: a neighbouring part pasted in as reference could end up cleaned up into the
+/// answer as well. The text around the cursor (see <see cref="CursorContext"/>), when there is some, goes with every part,
+/// since each is a request of its own and a name can come up in any of them; it's at most a few hundred tokens, and only
+/// long dictations have more than one part.
 /// </summary>
 public static class SegmentedPolish
 {
@@ -128,18 +130,19 @@ public static class SegmentedPolish
         var policy = new RetryPolicy(MaxAttempts: 2, RetriesTimeouts: false);
         return Run(transcript, (part, partial, token) => policy.Run(
                        (_, ct) => HedgedPolish.Run(part, primary, backup, cancellationToken: ct, onPartial: partial), cancellationToken: token),
-                   onPartial, cancellationToken);
+                   onPartial, cancellationToken, primary.Options.Context);
     }
 
     /// <summary>
     /// Cleans up the parts of <paramref name="transcript"/> with <paramref name="polish"/>, all at once, and puts each part's
     /// answer through <see cref="Prompts.Fallback"/>: a part whose answer is unusable, or that got none, goes in as spoken.
     /// Throws only when no part got an answer (the first part's error), or when cancelled. <paramref name="onPartial"/>
-    /// gets the parts' text so far, joined.
+    /// gets the parts' text so far, joined. <paramref name="context"/>: the text around the cursor the requests carry, if any.
     /// </summary>
     public static async Task<SegmentedPolishResult> Run(string transcript,
                                                         Func<string, Action<string>?, CancellationToken, Task<HedgedPolishResult>> polish,
-                                                        Action<string>? onPartial = null, CancellationToken cancellationToken = default)
+                                                        Action<string>? onPartial = null, CancellationToken cancellationToken = default,
+                                                        string? context = null)
     {
         var texts = Parts(transcript);
         var clock = Stopwatch.StartNew();
@@ -152,7 +155,7 @@ public static class SegmentedPolish
             var (answer, error) = outcomes[i];
             if (answer != null)
             {
-                var fallback = Prompts.Fallback(texts[i], answer.Result.Text, answer.Result.Truncated);
+                var fallback = Prompts.Fallback(texts[i], answer.Result.Text, answer.Result.Truncated, context);
                 results.Add(new SegmentedPolishResult.Part(texts[i], answer, fallback, null));
             }
             else

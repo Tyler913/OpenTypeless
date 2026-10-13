@@ -19,7 +19,9 @@ public sealed record PolishOptions(
     /// The OpenRouter host (an endpoint tag such as "groq" or "deepinfra/fp8") the user wants this model served by;
     /// null lets OpenRouter pick the fastest.
     /// </summary>
-    string? Host = null);
+    string? Host = null,
+    /// <summary>The text around the speaker's cursor, sent after the transcript to spell names by (see <see cref="CursorContext"/>); null for none.</summary>
+    string? Context = null);
 
 public static class ReasoningConfig
 {
@@ -128,7 +130,7 @@ public sealed partial class ApiClient
     internal static string[] PolishMessages(string transcript, PolishOptions options) =>
     [
         options.SystemPromptOverride ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard),
-        Prompts.PolishUserMessage(transcript),
+        Prompts.PolishUserMessage(transcript, options.Context),
     ];
 
     /// <summary>

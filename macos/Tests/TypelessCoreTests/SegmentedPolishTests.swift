@@ -8,6 +8,8 @@ import Testing
         let input: String
         let output: String
         let expect: String?
+        /// The text around the cursor the clean-up had, if any.
+        let context: String?
     }
 
     private struct GuardFile: Decodable {
@@ -23,7 +25,8 @@ import Testing
         let cases = try JSONDecoder().decode(GuardFile.self, from: data).cases
         #expect(cases.count > 50)
         for c in cases {
-            #expect(Prompts.fallback(input: c.input, output: c.output, truncated: false)?.rawValue == c.expect, "\(c.id)")
+            #expect(Prompts.fallback(input: c.input, output: c.output, truncated: false, context: c.context)?.rawValue
+                    == c.expect, "\(c.id)")
         }
     }
 

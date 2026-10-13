@@ -1,0 +1,113 @@
+{
+  "_comment": "The excerpt of the text around the cursor that goes to the clean-up (CursorContext), shared by the macOS and Windows tests so both apps send the same. A case gives either before/selected/after, or text with a selection in UTF-16 offsets ([location, length], null when the field doesn't say). expect null: nothing is sent.",
+  "cases": [
+    {
+      "id": "whole-field-squeezed",
+      "before": "Hi Siobhan,\n\n   thanks for the notes. ",
+      "selected": "",
+      "after": "",
+      "limit": 1500,
+      "expect": "Hi Siobhan,\nthanks for the notes."
+    },
+    {
+      "id": "centred-on-cursor",
+      "before": "aaaa bbbb cccc dddd",
+      "selected": "",
+      "after": " eeee ffff gggg hhhh",
+      "limit": 10,
+      "expect": "dddd eeee"
+    },
+    {
+      "id": "short-side-gives-its-room-away",
+      "before": "one two three four five six",
+      "selected": "",
+      "after": " end",
+      "limit": 16,
+      "expect": "five six end"
+    },
+    {
+      "id": "selection-kept-cut-words-dropped",
+      "before": "Please review ",
+      "selected": "the Kubernetes rollout",
+      "after": " before Friday.",
+      "limit": 30,
+      "expect": "the Kubernetes rollout"
+    },
+    {
+      "id": "long-selection-cut",
+      "before": "x",
+      "selected": "abcdefghij",
+      "after": "y",
+      "limit": 4,
+      "expect": "abcd"
+    },
+    {
+      "id": "chinese-cut-anywhere",
+      "before": "王小明：明天上午十点的会还开吗？",
+      "selected": "",
+      "after": "",
+      "limit": 8,
+      "expect": "十点的会还开吗？"
+    },
+    {
+      "id": "korean-cut-word-dropped",
+      "before": "회의는 내일 오후입니다",
+      "selected": "",
+      "after": "",
+      "limit": 7,
+      "expect": "오후입니다"
+    },
+    {
+      "id": "lone-cut-word-dropped",
+      "before": "",
+      "selected": "",
+      "after": "Christopher wrote",
+      "limit": 6,
+      "expect": null
+    },
+    {
+      "id": "broken-characters-at-the-edges",
+      "before": "�abc ",
+      "selected": "",
+      "after": "def�",
+      "limit": 1500,
+      "expect": "abc def"
+    },
+    {
+      "id": "only-whitespace",
+      "before": "   \n\t ",
+      "selected": "",
+      "after": " ",
+      "limit": 1500,
+      "expect": null
+    },
+    {
+      "id": "text-selection-centred",
+      "text": "alpha beta gamma delta epsilon",
+      "selection": [11, 5],
+      "limit": 15,
+      "expect": "beta gamma"
+    },
+    {
+      "id": "text-cursor-inside-an-emoji",
+      "text": "Hi 😀 there",
+      "selection": [4, 0],
+      "limit": 4,
+      "expect": "😀"
+    },
+    {
+      "id": "text-cursor-unknown-is-at-the-end",
+      "text": "first line\nsecond line",
+      "selection": null,
+      "limit": 11,
+      "expect": "second line"
+    },
+    {
+      "id": "text-selection-past-the-end",
+      "text": "abc def",
+      "selection": [100, 5],
+      "limit": 1500,
+      "expect": "abc def"
+    }
+  ]
+}

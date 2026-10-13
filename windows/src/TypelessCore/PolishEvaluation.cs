@@ -397,6 +397,41 @@ public static class PolishMetrics
         return previous[m];
     }
 
+    /// <summary>Five letters in a row of a normalised text.</summary>
+    internal const int GramLength = 5;
+
+    /// <summary>Every run of five letters, by where it starts.</summary>
+    internal static List<(int, int, int, int, int)> Grams(int[] text)
+    {
+        var grams = new List<(int, int, int, int, int)>();
+        for (var i = 0; i + GramLength <= text.Length; i++) grams.Add((text[i], text[i + 1], text[i + 2], text[i + 3], text[i + 4]));
+        return grams;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="gram"/> is in <paramref name="text"/> in order, with at most <paramref name="gap"/> letters
+    /// left out in between: the clean-up removed a filler or two there.
+    /// </summary>
+    internal static bool Occurs((int, int, int, int, int) gram, int[] text, int gap)
+    {
+        int[] letters = [gram.Item1, gram.Item2, gram.Item3, gram.Item4, gram.Item5];
+        for (var start = 0; start < text.Length; start++)
+        {
+            if (text[start] != letters[0]) continue;
+            var matched = 1;
+            var end = Math.Min(text.Length, start + letters.Length + gap);
+            for (var index = start + 1; index < end && matched < letters.Length; index++)
+            {
+                if (text[index] == letters[matched]) matched++;
+            }
+            if (matched == letters.Length) return true;
+        }
+        return false;
+    }
+
+    /// <summary><see cref="Normalized"/>, as Unicode scalar values.</summary>
+    internal static int[] Scalars(string text) => Normalized(text).Select(r => r.Value).ToArray();
+
     internal static List<string> LatinWords(string text) =>
         text.ToLowerInvariant()
             .Split(c => !(char.IsAscii(c) && char.IsLetterOrDigit(c)))

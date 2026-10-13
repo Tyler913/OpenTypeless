@@ -274,6 +274,42 @@ public enum PolishMetrics {
         return previous[m]
     }
 
+    /// Five letters in a row of a normalised text.
+    struct Gram: Hashable {
+        static let length = 5
+        let a, b, c, d, e: UInt32
+    }
+
+    /// Every run of five letters, by where it starts.
+    static func grams(_ text: [UInt32]) -> [Gram] {
+        guard text.count >= Gram.length else { return [] }
+        return (0...(text.count - Gram.length)).map {
+            Gram(a: text[$0], b: text[$0 + 1], c: text[$0 + 2], d: text[$0 + 3], e: text[$0 + 4])
+        }
+    }
+
+    /// Whether `gram` is in `text` in order, with at most `gap` letters left out in between: the clean-up removed a filler
+    /// or two there.
+    static func occurs(_ gram: Gram, in text: [UInt32], gap: Int) -> Bool {
+        let letters = [gram.a, gram.b, gram.c, gram.d, gram.e]
+        for start in text.indices where text[start] == letters[0] {
+            var matched = 1
+            var index = start + 1
+            let end = min(text.count, start + letters.count + gap)
+            while index < end, matched < letters.count {
+                if text[index] == letters[matched] { matched += 1 }
+                index += 1
+            }
+            if matched == letters.count { return true }
+        }
+        return false
+    }
+
+    /// `normalized`, as Unicode scalar values, which compare far faster than characters.
+    static func scalars(_ text: String) -> [UInt32] {
+        normalized(text).unicodeScalars.map(\.value)
+    }
+
     static func latinWords(_ text: String) -> [String] {
         text.lowercased().split { !($0.isASCII && ($0.isLetter || $0.isNumber)) }.map(String.init)
             .filter { $0.first?.isLetter == true }

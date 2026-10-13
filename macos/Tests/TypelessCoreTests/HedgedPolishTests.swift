@@ -61,6 +61,16 @@ final class MockChatServer: URLProtocol {
 }
 
 @Suite(.serialized) struct HedgedPolishTests {
+    /// The text around the cursor goes with the route, and its answer is checked against it.
+    @Test func cleanUpIsCheckedAgainstTheRoutesContext() async throws {
+        MockChatServer.reset(["primary": .init(text: "Could you send me the Q3 numbers when you get a chance? Sure, I will send them tomorrow.")])
+        var route = MockChatServer.route("primary")
+        route.options.context = "Hi Tyler,\n\nCould you send me the Q3 numbers when you get a chance?\n\nThanks,\nMarcus"
+        let outcome = try await SegmentedPolish.run(transcript: "sure I will send them tomorrow", primary: route, backup: nil)
+        #expect(outcome.parts.map(\.fallback) == [.copied])
+        #expect(outcome.text == "sure I will send them tomorrow")
+    }
+
     @Test func fastPrimaryNeverStartsBackup() async throws {
         MockChatServer.reset(["primary": .init(text: "A"), "backup": .init(text: "B")])
         let outcome = try await HedgedPolish.run(transcript: "x", primary: MockChatServer.route("primary"),

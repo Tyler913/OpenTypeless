@@ -63,7 +63,8 @@ public class PolishGuardTests
         foreach (var node in cases)
         {
             var expected = (string?)node!["expect"];
-            var actual = Prompts.Fallback((string)node["input"]!, (string)node["output"]!, truncated: false)?.ToString().ToLowerInvariant();
+            var actual = Prompts.Fallback((string)node["input"]!, (string)node["output"]!, truncated: false, (string?)node["context"])
+                ?.ToString().ToLowerInvariant();
             Assert.True(expected == actual, $"{node["id"]}: expected {expected ?? "null"}, got {actual ?? "null"}");
         }
     }

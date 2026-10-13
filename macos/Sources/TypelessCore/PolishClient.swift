@@ -13,9 +13,12 @@ public struct PolishOptions: Sendable {
     /// The OpenRouter host (an endpoint tag such as "groq" or "deepinfra/fp8") the user wants this model served by;
     /// nil lets OpenRouter pick the fastest.
     public var host: String?
+    /// The text around the speaker's cursor, sent after the transcript to spell names by (see CursorContext); nil for none.
+    public var context: String?
 
     public init(model: String, vocabulary: [String] = [], misheard: [Correction] = [], extraInstructions: String = "",
-                modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil) {
+                modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil,
+                context: String? = nil) {
         self.model = model
         self.vocabulary = vocabulary
         self.misheard = misheard
@@ -23,6 +26,7 @@ public struct PolishOptions: Sendable {
         self.modelInfo = modelInfo
         self.systemPromptOverride = systemPromptOverride
         self.host = host
+        self.context = context
     }
 }
 
@@ -114,7 +118,7 @@ extension APIClient {
     static func polishMessages(transcript: String, options: PolishOptions) -> [String] {
         [options.systemPromptOverride ?? Prompts.polishSystemPrompt(
             vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions),
-         Prompts.polishUserMessage(transcript: transcript)]
+         Prompts.polishUserMessage(transcript: transcript, context: options.context)]
     }
 
     /// Builds the chat request body. Optional tuning parameters are only sent where they're known to

@@ -221,6 +221,16 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("pressEnterAfterInsert", value);
     }
 
+    /// <summary>
+    /// Fit the spacing and capitalisation of pasted text to the text around the cursor (see InsertionJoiner). Safe on by
+    /// default: a field that can't be read gets the text as it is.
+    /// </summary>
+    public bool FitToSurroundingText
+    {
+        get => GetBool("fitToSurroundingText", true);
+        set => SetValue("fitToSurroundingText", value);
+    }
+
     /// <summary>Mute the speakers while recording (see OutputMute).</summary>
     public bool MuteWhileRecording
     {

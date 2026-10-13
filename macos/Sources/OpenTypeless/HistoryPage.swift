@@ -1,9 +1,10 @@
 import AppKit
 import SwiftUI
 import TypelessCore
+import UniformTypeIdentifiers
 
 /// Every dictation, newest first and grouped by day, with search; the selected one's text, details and actions
-/// on the right. How long recordings are kept sits in the toolbar.
+/// on the right. How long recordings are kept, and exporting what the list shows, sit in the toolbar.
 struct HistoryPage: View {
     @ObservedObject var history: HistoryStore
     @ObservedObject var settings: AppSettings
@@ -11,10 +12,15 @@ struct HistoryPage: View {
     @State private var selection: DictationRecord.ID?
     @State private var storageBytes: Int64?
     @State private var query = ""
+    @State private var exporting = false
+    @State private var exported = false
+    @State private var exportFailure: String?
 
     var body: some View {
         PageScaffold(page: .history, scrolls: false) {
-            toolbar
+            // Filtered once per update: every row needs the selection, and searching compares every record's text.
+            let records = filtered
+            toolbar(records)
             if history.records.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "waveform.badge.mic").font(.system(size: 36)).foregroundStyle(.tertiary)
@@ -25,8 +31,6 @@ struct HistoryPage: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // Filtered once per update: every row needs the selection, and searching compares every record's text.
-                let records = filtered
                 let selected = selectedID(in: records)
                 HStack(alignment: .top, spacing: 14) {
                     list(records, selected: selected).frame(width: 260)
@@ -44,11 +48,16 @@ struct HistoryPage: View {
         .task(id: history.changeCount) {
             storageBytes = await Task.detached { HistoryStore.storageBytes() }.value
         }
+        .alert(L("导出失败", "Couldn't export"), isPresented: Binding(get: { exportFailure != nil }, set: { if !$0 { exportFailure = nil } })) {
+            Button(L("好", "OK")) {}
+        } message: {
+            Text(exportFailure ?? "")
+        }
     }
 
     // MARK: Toolbar
 
-    private var toolbar: some View {
+    private func toolbar(_ records: [DictationRecord]) -> some View {
         HStack(spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -79,6 +88,50 @@ struct HistoryPage: View {
                 ForEach(HistoryRetention.allCases) { Text($0.label).tag($0) }
             }
             .fixedSize()
+            exportMenu(records)
+        }
+    }
+
+    /// Exports what the list shows: everything, or what the search found.
+    private func exportMenu(_ records: [DictationRecord]) -> some View {
+        Menu {
+            Section(Self.exportTitle(count: records.count, searching: records.count != history.records.count)) {
+                Button(L("CSV（可用 Excel 打开）…", "CSV (opens in Excel)…")) { export(records, as: .csv) }
+                Button { export(records, as: .json) } label: { Text(verbatim: "JSON…") }
+                Button { export(records, as: .markdown) } label: { Text(verbatim: "Markdown…") }
+            }
+        } label: {
+            Label(exported ? L("已导出", "Exported") : L("导出", "Export"), systemImage: exported ? "checkmark" : "square.and.arrow.up")
+        }
+        .fixedSize()
+        .disabled(records.isEmpty || exporting)
+    }
+
+    private static func exportTitle(count: Int, searching: Bool) -> String {
+        let n = UsageFormat.count(count)
+        if searching {
+            return count == 1 ? L("导出搜索到的 1 条听写", "Export the 1 matching dictation") : L("导出搜索到的 \(n) 条听写", "Export the \(n) matching dictations")
+        }
+        return count == 1 ? L("导出 1 条听写", "Export 1 dictation") : L("导出全部 \(n) 条听写", "Export all \(n) dictations")
+    }
+
+    private func export(_ records: [DictationRecord], as format: HistoryExport.Format) {
+        // What the list showed when Export was chosen, even if a dictation arrives while the save dialog is open.
+        let entries = records.map(\.exportEntry)
+        let name = Exports.fileName(L("OpenTypeless 历史记录", "OpenTypeless History"), date: Date(), extension: format.fileExtension)
+        Exports.chooseDestination(name: name, type: format.contentType) { url in
+            exporting = true
+            Task {
+                let failure = await Exports.write(to: url) { HistoryExport.data(entries, format: format) }
+                exporting = false
+                if let failure {
+                    exportFailure = failure
+                    return
+                }
+                exported = true
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                exported = false
+            }
         }
     }
 
@@ -225,6 +278,9 @@ private struct HistoryDetail: View {
     @State private var showRaw = false
     @State private var copied = false
     @State private var confirmingDelete = false
+    @State private var savingRecording = false
+    @State private var savedRecording = false
+    @State private var saveFailure: String?
 
     var body: some View {
         Card {
@@ -315,10 +371,21 @@ private struct HistoryDetail: View {
                             Label(L("重新转写", "Re-transcribe"), systemImage: "arrow.clockwise")
                         }
                         .help(L("完成后复制到剪贴板", "Copies the result to the clipboard"))
-                        Button { NSWorkspace.shared.activateFileViewerSelecting([record.audioURL]) } label: {
-                            Image(systemName: "folder")
+                        // Showing it in Finder on a click, saving a copy from the arrow: a button of its own would
+                        // squeeze Re-transcribe at the window's usual width.
+                        Menu {
+                            Button(L("在访达中显示录音", "Show recording in Finder")) { revealRecording() }
+                            Button(L("将录音另存为…", "Save recording…")) { saveRecording() }
+                                // Still being written while it records; a copy then would stop part way.
+                                .disabled(savingRecording || record.status == .recording || record.status == .processing)
+                        } label: {
+                            Image(systemName: savedRecording ? "checkmark" : "folder")
+                        } primaryAction: {
+                            revealRecording()
                         }
+                        .fixedSize()
                         .help(L("在访达中显示录音", "Show recording in Finder"))
+                        .accessibilityLabel(L("在访达中显示录音", "Show recording in Finder"))
                     }
                     Spacer()
                     Button(role: .destructive) {
@@ -344,6 +411,34 @@ private struct HistoryDetail: View {
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
+        .alert(L("无法保存录音", "Couldn't save the recording"), isPresented: Binding(get: { saveFailure != nil }, set: { if !$0 { saveFailure = nil } })) {
+            Button(L("好", "OK")) {}
+        } message: {
+            Text(saveFailure ?? "")
+        }
+    }
+
+    private func revealRecording() {
+        NSWorkspace.shared.activateFileViewerSelecting([record.audioURL])
+    }
+
+    /// Copies the recording (16 kHz mono WAV) to where the user chooses.
+    private func saveRecording() {
+        let source = record.audioURL
+        Exports.chooseDestination(name: Exports.fileName("OpenTypeless", date: record.date, time: true, extension: "wav"), type: .wav) { url in
+            savingRecording = true
+            Task {
+                let failure = await Exports.copy(source, to: url)
+                savingRecording = false
+                if let failure {
+                    saveFailure = failure
+                    return
+                }
+                savedRecording = true
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                savedRecording = false
+            }
+        }
     }
 
     /// "0:42 · 123 words · $0.0012"

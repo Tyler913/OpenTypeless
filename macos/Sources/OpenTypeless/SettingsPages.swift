@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import SwiftUI
 import TypelessCore
+import UniformTypeIdentifiers
 
 // MARK: - General
 
@@ -1111,6 +1112,20 @@ private struct ModelField: View {
 
 struct StylePage: View {
     @ObservedObject var settings: AppSettings
+    /// An imported file's terms, waiting for the user to confirm what it adds.
+    @State private var pendingImport: VocabularyImport?
+    @State private var notice: Notice?
+    @State private var exported = false
+
+    private struct VocabularyImport {
+        let terms: [String]
+        let added: [String]
+    }
+
+    private struct Notice {
+        let title: String
+        let message: String
+    }
 
     var body: some View {
         PageScaffold(page: .style) {
@@ -1122,6 +1137,8 @@ struct StylePage: View {
                     .scrollContentBackground(.hidden)
                     .padding(10)
                     .frame(height: 110)
+                CardDivider(inset: 0)
+                transferButtons
             }
             CardSection(title: L("自动学习", "Learning"),
                         footer: L("粘贴后如果你改了某个识别错的词（比如把 TypeList 改成 Typeless），离开输入框或发送后会自动把它加进词汇表。能读取的输入框直接比较前后内容；读不到的（微信、Firefox、Electron 应用等）会跟随你粘贴后的按键，但用中文、日文、韩文输入法打的字跟随不了。只学发音相近的改动，不学改写、改数字和普通词替换。一切都在本机完成。",
@@ -1145,6 +1162,108 @@ struct StylePage: View {
                     .frame(height: 150)
             }
         }
+        .alert(pendingImport.map { Self.importTitle($0.added.count) } ?? "",
+               isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } }),
+               presenting: pendingImport) { pending in
+            Button(L("导入", "Import")) { settings.importVocabulary(pending.terms) }
+            Button(L("取消", "Cancel"), role: .cancel) {}
+        } message: { pending in
+            Text(Self.importSummary(pending))
+        }
+    }
+
+    // MARK: Import and export
+
+    private var transferButtons: some View {
+        HStack(spacing: 8) {
+            Button { importVocabulary() } label: {
+                Label(L("导入…", "Import…"), systemImage: "square.and.arrow.down")
+            }
+            .help(L("从 CSV 或文本文件添加词汇，已有的词不会重复添加", "Add terms from a CSV or text file; ones you already have aren't added twice"))
+            Menu {
+                Button(L("CSV（含学到的误听写法）…", "CSV (with how learned terms were misheard)…")) { exportVocabulary(csv: true) }
+                Button(L("纯文本（每行一个词）…", "Plain text (one term per line)…")) { exportVocabulary(csv: false) }
+            } label: {
+                Label(exported ? L("已导出", "Exported") : L("导出", "Export"), systemImage: exported ? "checkmark" : "square.and.arrow.up")
+            }
+            .fixedSize()
+            .disabled(settings.vocabularyList.isEmpty)
+            Spacer()
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        // On the row rather than the page, which already has the import confirmation: one alert per view.
+        .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } }), presenting: notice) { _ in
+            Button(L("好", "OK")) {}
+        } message: { notice in
+            Text(notice.message)
+        }
+    }
+
+    /// Reads the file, then asks before adding what's new to the vocabulary.
+    private func importVocabulary() {
+        Exports.chooseFile(types: [.commaSeparatedText, .tabSeparatedText, .plainText]) { url in
+            Task {
+                switch await Exports.readVocabulary(url) {
+                case let .failure(error):
+                    notice = Notice(title: L("无法导入", "Couldn't import"), message: error.message)
+                case let .success(terms):
+                    let added = VocabularyTransfer.newTerms(terms, existing: settings.vocabularyList)
+                    if terms.isEmpty {
+                        notice = Notice(title: L("文件里没有词", "No terms in this file"),
+                                        message: L("每行一个词，或用逗号分隔；CSV 文件取第一列。",
+                                                   "Put one term per line or separate them with commas; from a CSV file, the first column is used."))
+                    } else if added.isEmpty {
+                        // Nothing to add, but importing still means the user wants these terms (see importVocabulary).
+                        settings.importVocabulary(terms)
+                        let count = Self.distinctCount(terms)
+                        notice = Notice(title: L("没有新词可导入", "Nothing new to import"),
+                                        message: count == 1
+                                            ? L("文件里的词已经在词汇表里了。", "The term in the file is already in your vocabulary.")
+                                            : L("文件里的 \(count) 个词都已经在词汇表里了。", "All \(count) terms in the file are already in your vocabulary."))
+                    } else {
+                        pendingImport = VocabularyImport(terms: terms, added: added)
+                    }
+                }
+            }
+        }
+    }
+
+    private func exportVocabulary(csv: Bool) {
+        let terms = settings.vocabularyForExport
+        let name = Exports.fileName(L("OpenTypeless 词汇表", "OpenTypeless Vocabulary"), extension: csv ? "csv" : "txt")
+        Exports.chooseDestination(name: name, type: csv ? .commaSeparatedText : .plainText) { url in
+            Task {
+                if let failure = await Exports.write(to: url, { VocabularyTransfer.data(terms, csv: csv) }) {
+                    notice = Notice(title: L("导出失败", "Couldn't export"), message: failure)
+                    return
+                }
+                exported = true
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                exported = false
+            }
+        }
+    }
+
+    private static func importTitle(_ count: Int) -> String {
+        count == 1 ? L("导入 1 个新词？", "Import 1 new term?") : L("导入 \(count) 个新词？", "Import \(count) new terms?")
+    }
+
+    /// The first few new terms, and how many of the file's terms are already in the vocabulary.
+    private static func importSummary(_ pending: VocabularyImport) -> String {
+        var summary = pending.added.prefix(10).joined(separator: L("、", ", ")) + (pending.added.count > 10 ? "…" : "")
+        let known = distinctCount(pending.terms) - pending.added.count
+        if known > 0 {
+            summary += "\n\n" + (known == 1 ? L("另有 1 个已经在词汇表里。", "1 more is already in your vocabulary.")
+                                            : L("另有 \(known) 个已经在词汇表里。", "\(known) more are already in your vocabulary."))
+        }
+        return summary
+    }
+
+    /// Terms counted once however often the file repeats them, compared the way the vocabulary is.
+    private static func distinctCount(_ terms: [String]) -> Int {
+        Set(terms.map { $0.lowercased() }).count
     }
 }
 

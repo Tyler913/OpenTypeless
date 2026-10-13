@@ -82,6 +82,13 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var folder: URL { AppPaths.sessions.appendingPathComponent(id, isDirectory: true) }
     var audioURL: URL { folder.appendingPathComponent("audio.wav") }
     var hasAudio: Bool { FileManager.default.fileExists(atPath: audioURL.path) }
+
+    /// This dictation as History exports it. A record keeps no time zone, so its time is written in this Mac's, with the
+    /// offset that zone had on that date.
+    var exportEntry: HistoryExport.Entry {
+        HistoryExport.Entry(date: date, utcOffsetMinutes: TimeZone.current.secondsFromGMT(for: date) / 60, duration: duration,
+                            status: status.rawValue, finalText: finalText, rawText: rawText, cost: cost)
+    }
 }
 
 /// How long finished dictations are kept. The recording is the big part (about 1.9 MB per minute

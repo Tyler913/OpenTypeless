@@ -1,0 +1,207 @@
+using System.Globalization;
+using System.Text;
+
+namespace TypelessCore;
+
+/// <summary>
+/// Fits dictated text to the text around the cursor it's pasted at, the way someone typing it there would: a space
+/// where it would otherwise run into the word before or after it, a lowercase first word in the middle of a sentence,
+/// and no full stop that would end the sentence early ("Hello there.Next sentence" → "Hello there. Next sentence").
+///
+/// Decided from the actual neighbours, unlike OpenWhispr (a trailing space unless the text is CJK) or whisper-writer and
+/// Handy (a trailing space, a dropped final period, by setting). Whatever can't be told for sure is left as it is, which
+/// is how the text would be pasted without this.
+/// </summary>
+public static class InsertionJoiner
+{
+    /// <param name="Text">The text to paste.</param>
+    /// <param name="Changes">
+    /// What was changed, for the session log ("space before", "lowercase first word", "no final full stop",
+    /// "space after"); empty when nothing was.
+    /// </param>
+    public sealed record Result(string Text, IReadOnlyList<string> Changes);
+
+    /// <summary>
+    /// <paramref name="before"/> and <paramref name="after"/> are the text just before the cursor (or the selection the
+    /// text replaces) and just after it, as read from the field: "" at the start or end of the field, null when it
+    /// couldn't be read. Without <paramref name="before"/> nothing is changed; without <paramref name="after"/> only the
+    /// start of the text is. A dozen characters each side are plenty. <paramref name="isCommonWord"/> tells whether a
+    /// lowercase word is an ordinary English dictionary word.
+    /// </summary>
+    public static Result Fit(string text, string? before, string? after, IReadOnlyList<string> vocabulary, Func<string, bool> isCommonWord)
+    {
+        var unchanged = new Result(text, []);
+        var runes = Runes(text);
+        // A block of lines (a list, paragraphs) stands on its own rather than inside a sentence.
+        if (before == null || runes.Count == 0 || runes.Any(r => KindOf(r, null) == Kind.Newline)) return unchanged;
+        var beforeRunes = Runes(before);
+        var afterRunes = after == null ? null : Runes(after);
+        var first = runes[0];
+        Rune? previous = beforeRunes.Count > 0 ? beforeRunes[^1] : null;
+        Rune? next = afterRunes is { Count: > 0 } ? afterRunes[0] : null;
+        Kind? previousKind = previous is { } p ? KindOf(p, SecondLast(beforeRunes)) : null;
+        // The cursor is inside a word: what the speaker meant there can't be told.
+        if (previousKind == Kind.Word && next is { } n && KindOf(n, previous) == Kind.Word) return unchanged;
+        // Japanese doesn't put spaces around Latin words the way Chinese text does here.
+        var japanese = beforeRunes.Any(IsKana) || runes.Any(IsKana) || (afterRunes?.Any(IsKana) ?? false);
+        Rune? mark = null;
+        for (var i = beforeRunes.Count - 1; i >= 0; i--)
+        {
+            if (KindOf(beforeRunes[i], null) == Kind.Space) continue;
+            mark = beforeRunes[i];
+            break;
+        }
+        var body = text;
+        var changes = new List<string>();
+
+        if (mark is { } m && (KindOf(m, null) == Kind.Word || m.Value is ',' or ';')
+            && LowercasingFirstWord(body, vocabulary, isCommonWord) is { } lowered)
+        {
+            body = lowered;
+            changes.Add("lowercase first word");
+        }
+        if (after != null && RunsOn(afterRunes!, mark is { } sentence && IsMidSentence(sentence)) && DroppingFinalStop(body) is { } trimmed)
+        {
+            body = trimmed;
+            changes.Add("no final full stop");
+        }
+        if (previous is { } a && previousKind is { } ka && NeedsSpace(a, ka, first, KindOf(first, a), japanese))
+        {
+            body = " " + body;
+            changes.Insert(0, "space before");
+        }
+        var bodyRunes = Runes(body);
+        if (next is { } b && bodyRunes.Count > 0)
+        {
+            var last = bodyRunes[^1];
+            if (NeedsSpace(last, KindOf(last, SecondLast(bodyRunes)), b, KindOf(b, last), japanese))
+            {
+                body += " ";
+                changes.Add("space after");
+            }
+        }
+        return new Result(body, changes);
+    }
+
+    // MARK: Characters
+
+    internal enum Kind { Space, Newline, Word, Cjk, Closing, Other }
+
+    /// <summary>
+    /// What a character is for spacing: <c>Word</c> is a letter or digit of a script that puts spaces between words
+    /// (Latin, Cyrillic, Korean…), <c>Cjk</c> one of a script that doesn't (Han, kana, full-width forms).
+    /// <paramref name="previous"/> tells a straight quote that closes (after a word) from one that opens.
+    /// </summary>
+    internal static Kind KindOf(Rune r, Rune? previous)
+    {
+        if (Newlines.Contains(r.Value)) return Kind.Newline;
+        if (r.Value == '\t' || Rune.GetUnicodeCategory(r) == UnicodeCategory.SpaceSeparator) return Kind.Space;
+        if (Rune.IsLetter(r) || Rune.IsNumber(r)) return TranscriptJoiner.JoinsWithoutSpace(r) ? Kind.Cjk : Kind.Word;
+        if (Closers.Contains(r.Value)) return Kind.Closing;
+        if (r.Value is '"' or '\'' && previous is { } p && KindOf(p, null) is Kind.Word or Kind.Cjk or Kind.Closing) return Kind.Closing;
+        return Kind.Other;
+    }
+
+    private static readonly HashSet<int> Newlines = ['\n', '\r', 0x0B, 0x0C, 0x85, 0x2028, 0x2029];
+    /// <summary>Punctuation a following word is separated from by a space.</summary>
+    private static readonly HashSet<int> Closers = ['.', ',', '!', '?', ';', ':', ')', ']', '}', 0x2026, 0x201D, 0x2019, 0xBB, '%'];
+
+    private static bool IsHan(Rune r) => r.Value is >= 0x3400 and <= 0x4DBF or >= 0x4E00 and <= 0x9FFF or >= 0xF900 and <= 0xFAFF;
+
+    private static bool IsKana(Rune r) => r.Value is >= 0x3040 and <= 0x30FF or >= 0xFF66 and <= 0xFF9F;
+
+    private static List<Rune> Runes(string text) => text.EnumerateRunes().ToList();
+
+    private static Rune? SecondLast(List<Rune> runes) => runes.Count >= 2 ? runes[^2] : null;
+
+    // MARK: Rules
+
+    /// <summary>
+    /// Whether a space belongs between two neighbouring characters: between words, after closing punctuation, and
+    /// between Chinese and Latin letters or digits, as the clean-up prompt writes them ("用 SwiftUI 写"). Never next to a
+    /// space, a line break, an opening bracket or quote, or between CJK characters.
+    /// </summary>
+    private static bool NeedsSpace(Rune a, Kind ka, Rune b, Kind kb, bool japanese) => (ka, kb) switch
+    {
+        (Kind.Word, Kind.Word) or (Kind.Closing, Kind.Word) => true,
+        (Kind.Cjk, Kind.Word) => !japanese && IsHan(a),
+        (Kind.Word, Kind.Cjk) => !japanese && IsHan(b),
+        _ => false,
+    };
+
+    /// <summary>Before the cursor, the sentence is still going: the last thing there (spaces aside) is a word or a comma.</summary>
+    private static bool IsMidSentence(Rune mark) =>
+        KindOf(mark, null) is Kind.Word or Kind.Cjk || mark.Value is ',' or ';' or '，' or '、' or '；';
+
+    /// <summary>
+    /// The text after the cursor carries on the sentence the dictation goes into: it starts (spaces aside) with a
+    /// lowercase letter, or with any word while the sentence before the cursor is still going.
+    /// </summary>
+    private static bool RunsOn(List<Rune> after, bool midSentence)
+    {
+        foreach (var next in after)
+        {
+            var kind = KindOf(next, null);
+            if (kind == Kind.Space) continue;
+            if (Rune.GetUnicodeCategory(next) == UnicodeCategory.LowercaseLetter) return true;
+            return midSentence && kind is Kind.Word or Kind.Cjk;
+        }
+        return false;
+    }
+
+    /// <summary>Abbreviations whose full stop stays when they end the text.</summary>
+    private static readonly HashSet<string> Abbreviations = ["etc", "vs", "mr", "mrs", "ms", "dr", "prof", "st", "jr", "sr", "inc", "ltd", "corp"];
+
+    /// <summary>
+    /// The text without its final "." or "。", when that ends a sentence after a word: not "…" or "...", nor the full
+    /// stop of an abbreviation ("etc.", "e.g.", "U.S.") or an initial ("J."). Null when it stays.
+    /// </summary>
+    internal static string? DroppingFinalStop(string text)
+    {
+        var runes = Runes(text);
+        if (runes.Count < 2 || runes[^1].Value is not ('.' or '。') || KindOf(runes[^2], null) is not (Kind.Word or Kind.Cjk)) return null;
+        var stop = runes[^1];
+        if (stop.Value == '.')
+        {
+            var start = runes.Count - 1;
+            while (start > 0 && KindOf(runes[start - 1], null) != Kind.Space) start--;
+            var word = string.Concat(runes.Skip(start).Take(runes.Count - 1 - start).Select(r => r.ToString()));
+            var letters = runes.Skip(start).Take(runes.Count - 1 - start).Count(r => Rune.IsLetter(r) || Rune.IsNumber(r));
+            if (word.Contains('.') || letters == 1 || Abbreviations.Contains(word.ToLowerInvariant())) return null;
+        }
+        return text[..^stop.Utf16SequenceLength];
+    }
+
+    /// <summary>
+    /// The text with its first word lowercased, when that word is only capitalised for starting a sentence: an ordinary
+    /// English word ("Then", "Maybe", "Don't"). Never "I" ("I'm"), a single letter, an acronym, a word with a capital
+    /// inside (GitHub, OpenAI) or an abbreviation ("Mr."), a vocabulary term, or a word the dictionary doesn't know as an
+    /// everyday one in lowercase (most names). Null when it stays.
+    /// </summary>
+    internal static string? LowercasingFirstWord(string text, IReadOnlyList<string> vocabulary, Func<string, bool> isCommonWord)
+    {
+        var token = new StringBuilder();
+        foreach (var r in text.EnumerateRunes())
+        {
+            if (KindOf(r, null) is Kind.Space or Kind.Newline) break;
+            token.Append(r.ToString());
+        }
+        var tokenText = token.ToString();
+        var core = tokenText;
+        while (core.Length > 0 && (Closers.Contains(core[^1]) || core[^1] is '"' or '\'')) core = core[..^1];
+        if (core.Length < 2 || core[0] is not (>= 'A' and <= 'Z')) return null;
+        static bool IsLower(char c) => c is >= 'a' and <= 'z';
+        for (var i = 1; i < core.Length; i++)
+        {
+            if (IsLower(core[i])) continue;
+            // An apostrophe inside a word ("Don't", "It's"), never right after its first letter ("I'm").
+            if (core[i] is not ('\'' or '’') || i < 2 || i + 1 >= core.Length || !IsLower(core[i - 1]) || !IsLower(core[i + 1])) return null;
+        }
+        // "Mr.", "Dr.", "St.": short words with a full stop are abbreviations.
+        if (tokenText.Length > core.Length && tokenText[core.Length] == '.' && core.Length <= 3) return null;
+        var lower = core.ToLowerInvariant();
+        var terms = vocabulary.Select(t => t.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant() ?? "");
+        if (terms.Contains(lower) || !isCommonWord(lower.Replace('’', '\''))) return null;
+        return char.ToLowerInvariant(text[0]) + text[1..];
+    }
+}

@@ -50,6 +50,15 @@ final class AppSettings: ObservableObject {
     /// The typing speed "time saved" on the Home page is measured against.
     @AppStorage("typingWordsPerMinute") var typingWordsPerMinute: Int = UsageTotals.defaultTypingWordsPerMinute
 
+    /// Translation mode: holding the hotkey and pressing `translationChord` inserts that dictation translated (see
+    /// `translationTarget`). Off until the user turns it on and picks a language.
+    @AppStorage("translationEnabled") var translationEnabled: Bool = false
+    /// A listed language's code (see `TranslationLanguage`), or `otherTranslationLanguage` for the one typed in
+    /// `translationOtherLanguage`.
+    @AppStorage("translationLanguage") var translationLanguage: String = TranslationLanguage.english.rawValue
+    @AppStorage("translationOtherLanguage") var translationOtherLanguage: String = ""
+    @AppStorage("translationChord") var translationChord: TranslationChord = .shift
+
     /// Learn vocabulary from the fixes the user makes to dictated text (see EditWatcher).
     @AppStorage("learnFromEdits") var learnFromEdits: Bool = true
     @Published private(set) var learnedTerms: [LearnedTerm]
@@ -122,6 +131,19 @@ final class AppSettings: ObservableObject {
             if let hotkey = shortcut(for: action) { chords[action] = hotkey.chord }
         }
         return ShortcutMap(chords)
+    }
+
+    // MARK: Translation
+
+    /// What `translationLanguage` holds when the language is typed in.
+    static let otherTranslationLanguage = "other"
+
+    /// What a translation dictation is translated into; nil while translation mode is off, or another language is picked
+    /// without a name.
+    var translationTarget: TranslationTarget? {
+        guard translationEnabled else { return nil }
+        return TranslationTarget(translationLanguage == Self.otherTranslationLanguage ? translationOtherLanguage
+                                                                                      : translationLanguage)
     }
 
     // MARK: Providers

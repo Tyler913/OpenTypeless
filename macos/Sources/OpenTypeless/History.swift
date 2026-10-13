@@ -34,6 +34,20 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var cost: Double?
     /// Its words are in the usage totals (so re-transcribing it doesn't count them twice).
     var counted: Bool?
+    /// "translate" for a translation dictation (see `TranslationTarget.recordMode`), nil for plain dictation: records from
+    /// before translation, and older versions reading newer ones, see a dictation.
+    var mode: String?
+    /// The language a translation dictation is written in (`TranslationTarget.id`).
+    var targetLanguage: String?
+
+    /// What a translation dictation is translated into; nil for plain dictation. A retry translates it again.
+    var translation: TranslationTarget? {
+        get { TranslationTarget(mode: mode, targetLanguage: targetLanguage) }
+        set {
+            mode = newValue == nil ? nil : TranslationTarget.recordMode
+            targetLanguage = newValue?.id
+        }
+    }
 
     /// Where the wait after the key was released went, in seconds.
     struct Timing: Codable, Equatable {

@@ -346,12 +346,15 @@ private struct HistoryDetail: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    /// "0:42 · 123 words · $0.0012"
+    /// "0:42 · 123 words · $0.0012", and "Translation → English" for a translation dictation.
     private var details: String {
         var parts = [record.duration.durationLabel]
         let words = WordCount.count(record.finalText)
         if words > 0 { parts.append(L("\(UsageFormat.count(words)) 字", "\(UsageFormat.count(words)) words")) }
         if let cost = record.cost { parts.append(UsageFormat.money(cost)) }
+        if let translation = record.translation {
+            parts.append(L("翻译 → \(translation.displayName)", "Translation → \(translation.displayName)"))
+        }
         return parts.joined(separator: " · ")
     }
 }

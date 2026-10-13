@@ -133,6 +133,26 @@ extension ShortcutAction {
     }
 }
 
+extension TranslationChord {
+    /// Its key cap, as the shortcut page shows it next to the hotkey's.
+    var keyCap: String {
+        switch self {
+        case .shift: return "⇧"
+        case .control: return "⌃"
+        case .alt: return "⌥"
+        }
+    }
+
+    /// As Settings names it.
+    var label: String {
+        switch self {
+        case .shift: return "⇧ Shift"
+        case .control: return "⌃ Control"
+        case .alt: return "⌥ Option"
+        }
+    }
+}
+
 extension ShortcutConflict {
     var message: String {
         switch self {
@@ -164,7 +184,8 @@ final class HotkeyMonitor {
     var onPress: ((TimeInterval) -> Void)?
     var onRelease: ((TimeInterval) -> Void)?
     /// Another key went down while the hotkey was held, by its key code: with a modifier-only hotkey any key (e.g.
-    /// Fn+F1 for brightness), with a key combination only a mode chord (see `modeChordKeys`).
+    /// Fn+F1 for brightness), with a key combination only a mode chord (see `modeChordKeys`). A modifier only counts as
+    /// a mode chord.
     var onOtherKey: ((Int64, TimeInterval) -> Void)?
     var onEscape: (() -> Void)?
     /// An action's shortcut went down (see `shortcuts`).
@@ -260,6 +281,7 @@ final class HotkeyMonitor {
 
         switch type {
         case .flagsChanged:
+            if keyCode != hotkey.keyCode, modeChordKeys.contains(keyCode) { return handleModifierChord(keyCode, event: event) }
             guard hotkey.isModifierOnly, keyCode == hotkey.keyCode else { return false }
             let down = hotkey.isHeld(in: event.flags)
             if down != isDown {
@@ -342,6 +364,23 @@ final class HotkeyMonitor {
         default:
             return false
         }
+    }
+
+    /// A modifier registered as a mode chord (Shift, for translation) went down or up. Pressed while the hotkey is held,
+    /// it switches the recording's mode, and its press and release are kept from the focused app, where Shift on its own
+    /// would switch a Chinese or Japanese input method between its own letters and English. Otherwise it's an ordinary
+    /// modifier. Its own side's flag says which way it went (see `Hotkey.isHeld`).
+    private func handleModifierChord(_ keyCode: Int64, event: CGEvent) -> Bool {
+        guard Hotkey(keyCode: keyCode, isModifierOnly: true).isHeld(in: event.flags) else {
+            return swallowedKeys.remove(keyCode) != nil
+        }
+        // A new press: a release missed meanwhile (while recording a shortcut, say) mustn't keep this one from counting.
+        swallowedKeys.remove(keyCode)
+        guard isDown else { return false }
+        HotkeyLog.debug("chord key (code \(keyCode)) with \(hotkey.displayName) · \(HotkeyLog.describe(event))")
+        fire(onOtherKey, key: keyCode, at: Self.time(of: event))
+        swallowedKeys.insert(keyCode)
+        return true
     }
 
     /// While the tap was off its events were lost, the hotkey's release among them: a hotkey still marked down that no

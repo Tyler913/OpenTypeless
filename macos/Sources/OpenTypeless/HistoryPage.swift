@@ -88,7 +88,8 @@ struct HistoryPage: View {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return history.records }
         return history.records.filter {
-            $0.finalText.localizedCaseInsensitiveContains(needle) || $0.rawText.localizedCaseInsensitiveContains(needle)
+            $0.outputText.localizedCaseInsensitiveContains(needle) || $0.finalText.localizedCaseInsensitiveContains(needle)
+                || $0.rawText.localizedCaseInsensitiveContains(needle)
         }
     }
 
@@ -192,7 +193,7 @@ private struct HistoryRow: View {
                     .font(.system(size: 12.5))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                    .foregroundStyle(record.finalText.isEmpty ? .secondary : .primary)
+                    .foregroundStyle(record.outputText.isEmpty ? .secondary : .primary)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -207,7 +208,7 @@ private struct HistoryRow: View {
     }
 
     private var preview: String {
-        if !record.finalText.isEmpty { return record.finalText }
+        if !record.outputText.isEmpty { return record.outputText }
         switch record.status {
         case .recording: return L("正在录音…", "Recording…")
         case .processing: return L("正在处理…", "Processing…")
@@ -216,12 +217,13 @@ private struct HistoryRow: View {
     }
 }
 
-/// The selected dictation: when, how long, how many words and what it cost; the text itself; the raw transcript
-/// behind a disclosure when it was cleaned up; and the actions.
+/// The selected dictation: when, how long, how many words and what it cost; the text that went in; what was said before
+/// snippets were expanded, and the raw transcript when it was cleaned up, behind disclosures; and the actions.
 private struct HistoryDetail: View {
     let record: DictationRecord
     let controller: SessionController
     let history: HistoryStore
+    @State private var showSpoken = false
     @State private var showRaw = false
     @State private var copied = false
     @State private var confirmingDelete = false
@@ -255,7 +257,7 @@ private struct HistoryDetail: View {
                         if let error = record.error {
                             Banner(symbol: "exclamationmark.triangle.fill", color: .orange, text: error) { EmptyView() }
                         }
-                        if record.finalText.isEmpty && (record.status == .recording || record.status == .processing) {
+                        if record.outputText.isEmpty && (record.status == .recording || record.status == .processing) {
                             HStack(spacing: 8) {
                                 ProgressView().controlSize(.small)
                                 Text(record.status == .recording ? L("正在录音…", "Recording…") : L("正在处理…", "Processing…"))
@@ -263,27 +265,18 @@ private struct HistoryDetail: View {
                             }
                             .frame(maxWidth: .infinity, minHeight: 120)
                         } else {
-                            Text(record.finalText.isEmpty ? L("（没有文字）", "(no text)") : record.finalText)
+                            Text(record.outputText.isEmpty ? L("（没有文字）", "(no text)") : record.outputText)
                                 .font(.system(size: 14))
                                 .lineSpacing(3)
-                                .foregroundStyle(record.finalText.isEmpty ? .secondary : .primary)
+                                .foregroundStyle(record.outputText.isEmpty ? .secondary : .primary)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                            // What was said, before snippets replaced their triggers.
+                            if record.insertedText != nil {
+                                disclosure(L("快捷短语替换前", "Before snippets"), text: record.finalText, isExpanded: $showSpoken)
+                            }
                             if record.polishedText != nil, !record.rawText.isEmpty {
-                                DisclosureGroup(isExpanded: $showRaw) {
-                                    Text(record.rawText)
-                                        .font(.system(size: 12.5))
-                                        .foregroundStyle(.secondary)
-                                        .textSelection(.enabled)
-                                        .padding(10)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.04)))
-                                        .padding(.top, 6)
-                                } label: {
-                                    Text(L("原始转写", "Raw transcript"))
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(.secondary)
-                                }
+                                disclosure(L("原始转写", "Raw transcript"), text: record.rawText, isExpanded: $showRaw)
                             }
                         }
                         if let timing = record.timing?.summary {
@@ -300,7 +293,7 @@ private struct HistoryDetail: View {
 
                 HStack(spacing: 8) {
                     Button {
-                        TextInserter.copyToClipboard(record.finalText)
+                        TextInserter.copyToClipboard(record.outputText)
                         copied = true
                         Task {
                             try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -309,7 +302,7 @@ private struct HistoryDetail: View {
                     } label: {
                         Label(copied ? L("已复制", "Copied") : L("复制", "Copy"), systemImage: copied ? "checkmark" : "doc.on.doc")
                     }
-                    .disabled(record.finalText.isEmpty)
+                    .disabled(record.outputText.isEmpty)
                     if record.hasAudio {
                         Button { controller.retry(record, paste: false) } label: {
                             Label(L("重新转写", "Re-transcribe"), systemImage: "arrow.clockwise")
@@ -346,7 +339,25 @@ private struct HistoryDetail: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    /// "0:42 · 123 words · $0.0012"
+    /// An earlier form of the text, folded away under `title`.
+    private func disclosure(_ title: String, text: String, isExpanded: Binding<Bool>) -> some View {
+        DisclosureGroup(isExpanded: isExpanded) {
+            Text(text)
+                .font(.system(size: 12.5))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.04)))
+                .padding(.top, 6)
+        } label: {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// "0:42 · 123 words · $0.0012" (the words said, not what snippets put in)
     private var details: String {
         var parts = [record.duration.durationLabel]
         let words = WordCount.count(record.finalText)

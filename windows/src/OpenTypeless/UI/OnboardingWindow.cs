@@ -598,7 +598,7 @@ public sealed class OnboardingWindow : Window
         {
             case DictationStatus.Done or DictationStatus.PolishFailed:
                 _tryError = null;
-                if (string.IsNullOrWhiteSpace(_tryText) && _tryBox != null) _tryBox.Text = latest.FinalText;
+                if (string.IsNullOrWhiteSpace(_tryText) && _tryBox != null) _tryBox.Text = latest.OutputText;
                 break;
             case DictationStatus.Failed:
                 _tryError = latest.Error;

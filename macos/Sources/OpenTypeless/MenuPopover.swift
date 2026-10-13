@@ -83,7 +83,7 @@ struct MenuPopoverView: View {
     }
 
     @ViewBuilder private var recent: some View {
-        let records = Array(history.records.filter { !$0.finalText.isEmpty }.prefix(5))
+        let records = Array(history.records.filter { !$0.outputText.isEmpty }.prefix(5))
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(L("最近", "Recent")).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
@@ -159,7 +159,7 @@ struct MenuPopoverView: View {
     }
 
     private func copy(_ record: DictationRecord) {
-        TextInserter.copyToClipboard(record.finalText)
+        TextInserter.copyToClipboard(record.outputText)
         copiedID = record.id
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             if copiedID == record.id { copiedID = nil }
@@ -174,7 +174,7 @@ private struct RecentRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(record.finalText)
+                Text(record.outputText)
                     .font(.system(size: 12.5))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)

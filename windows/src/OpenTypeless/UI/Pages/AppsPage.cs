@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using OpenTypeless.Input;
 using OpenTypeless.Native;
 using OpenTypeless.Services;
 using TypelessCore;
@@ -17,13 +19,15 @@ namespace OpenTypeless.UI;
 public sealed class AppsPage : PageBase
 {
     private readonly AppSettings _settings = AppSettings.Shared;
+    private readonly SettingsWindow _window;
     private readonly StackPanel _content = new() { Spacing = 10 };
     private readonly HashSet<string> _expanded = new();
     /// <summary>The running apps are being listed for the Add menu.</summary>
     private bool _listing;
 
-    public AppsPage() : base(SettingsPage.Apps)
+    public AppsPage(SettingsWindow window) : base(SettingsPage.Apps)
     {
+        _window = window;
         Body.Children.Add(_content);
         var footer = Ui.Text(L("开始录音时在最前面的应用决定用哪个配置，松开按键前换到别的应用也不变。配置里设为「默认」的项目跟随你平时的设置。",
                                "The app in front when you start recording decides which profile is used, even if you switch apps before you finish. Whatever a profile leaves on Default follows your usual settings."),
@@ -83,7 +87,7 @@ public sealed class AppsPage : PageBase
         _content.Children.Add(more);
     }
 
-    /// <summary>Lists the running apps that have no profile yet, to add one.</summary>
+    /// <summary>Lists the running apps that have no profile yet, and a file picker for any other program, to add one.</summary>
     private Button AddButton()
     {
         var label = L("添加应用", "Add app");
@@ -126,6 +130,10 @@ public sealed class AppsPage : PageBase
                 item.Click += (_, _) => Add(app);
                 flyout.Items.Add(item);
             }
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            var choose = new MenuFlyoutItem { Text = L("选择程序…", "Choose a program…") };
+            choose.Click += async (_, _) => await ChooseProgram();
+            flyout.Items.Add(choose);
             flyout.ShowAt(button);
         };
         return button;
@@ -136,6 +144,31 @@ public sealed class AppsPage : PageBase
         var profile = _settings.AddAppProfile(app.Executable, app.Name);
         _expanded.Add(profile.Id);
         Render();
+    }
+
+    /// <summary>A program that isn't running: picked by its .exe, like an app from the Applications folder on macOS.</summary>
+    private async Task ChooseProgram()
+    {
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker
+            {
+                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.ComputerFolder,
+                ViewMode = Windows.Storage.Pickers.PickerViewMode.List,
+            };
+            picker.FileTypeFilter.Add(".exe");
+            // An unpackaged app has to tell the picker which window it belongs to.
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, _window.Hwnd);
+            var file = await picker.PickSingleFileAsync();
+            // Cancelled, or the page went away meanwhile.
+            if (file == null || XamlRoot == null) return;
+            Add(new RunningApp(file.Name, RunningApp.DisplayName(file.Path)));
+        }
+        catch (Exception e) when (e is COMException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // The picker can't open (it refuses to when the app runs as administrator): the running apps are still listed.
+            AppLog.Debug("apps", "can't show the file picker: " + e.Message);
+        }
     }
 }
 
@@ -359,52 +392,52 @@ internal sealed class AppProfileCard : UserControl
     private static string Normalize(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n');
 }
 
-/// <summary>An app in the Add menu: a process with a window on screen, other than OpenTypeless itself.</summary>
+/// <summary>An app in the Add menu: one with a window on screen, other than OpenTypeless itself.</summary>
 internal sealed record RunningApp(string Executable, string Name)
 {
-    /// <summary>Processes whose windows show other apps: a Store app's frame (the app is its own process), the touch keyboard.</summary>
-    private static readonly HashSet<string> Hosts = new(StringComparer.OrdinalIgnoreCase) { "ApplicationFrameHost.exe", "TextInputHost.exe" };
+    /// <summary>
+    /// Shell processes whose windows aren't apps to dictate into: a Store app's frame when the app behind it can't be
+    /// found (one suspended in the background), the touch keyboard, Start, search, the lock screen.
+    /// </summary>
+    private static readonly HashSet<string> Hosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ApplicationFrameHost.exe", "TextInputHost.exe", "ShellExperienceHost.exe", "StartMenuExperienceHost.exe",
+        "SearchHost.exe", "SearchApp.exe", "LockApp.exe",
+    };
 
     /// <summary>"Google Chrome (chrome.exe)", or just the file name when that's all there is.</summary>
     public string Label =>
         string.Equals(Name, Path.GetFileNameWithoutExtension(Executable), StringComparison.OrdinalIgnoreCase) ? Executable : $"{Name} ({Executable})";
 
+    /// <summary>
+    /// Every visible top-level window that's neither a tool window nor owned by another, by the app it belongs to (looking
+    /// past ApplicationFrameHost to the Store app it frames, as the profile lookup does), one entry per executable.
+    /// </summary>
     public static List<RunningApp> All()
     {
-        var self = Environment.ProcessId;
+        var windows = new List<nint>();
+        Win32.EnumWindows((window, _) =>
+        {
+            windows.Add(window);
+            return true;
+        }, 0);
+        var self = (uint)Environment.ProcessId;
         var apps = new Dictionary<string, RunningApp>(StringComparer.OrdinalIgnoreCase);
-        Process[] processes;
-        try
+        foreach (var window in windows)
         {
-            processes = Process.GetProcesses();
-        }
-        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            return [];
-        }
-        foreach (var process in processes)
-        {
-            using (process)
-            {
-                try
-                {
-                    if (process.Id == self || process.MainWindowHandle == 0) continue;
-                    if (Win32.ProcessImagePath((uint)process.Id) is not { } path) continue;
-                    var executable = Path.GetFileName(path);
-                    if (Hosts.Contains(executable) || apps.ContainsKey(executable)) continue;
-                    apps[executable] = new RunningApp(executable, DisplayName(path));
-                }
-                catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
-                {
-                    // It exited meanwhile, or can't be asked.
-                }
-            }
+            if (!Win32.IsWindowVisible(window) || Win32.GetWindow(window, Win32.GW_OWNER) != 0
+                || ((long)Win32.GetWindowLongPtr(window, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0) continue;
+            Win32.GetWindowThreadProcessId(window, out var pid);
+            if (pid == self || FocusProbe.ExecutablePath(window) is not { } path) continue;
+            var executable = Path.GetFileName(path);
+            if (Hosts.Contains(executable) || apps.ContainsKey(executable)) continue;
+            apps[executable] = new RunningApp(executable, DisplayName(path));
         }
         return apps.Values.OrderBy(app => app.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
     /// <summary>The name the executable gives itself ("Google Chrome" for chrome.exe), or its file name.</summary>
-    private static string DisplayName(string path)
+    public static string DisplayName(string path)
     {
         try
         {

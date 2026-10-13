@@ -3607,5 +3607,14 @@
     "ru": "Обычные настройки",
     "fr": "Utilise vos réglages habituels",
     "de": "Nutzt deine üblichen Einstellungen"
+  },
+  "Choose a program…": {
+    "ja": "プログラムを選択…",
+    "ko": "프로그램 선택…",
+    "es": "Elegir un programa…",
+    "pt": "Escolher um programa…",
+    "ru": "Выбрать программу…",
+    "fr": "Choisir un programme…",
+    "de": "Programm auswählen …"
   }
 }

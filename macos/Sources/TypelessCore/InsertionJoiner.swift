@@ -16,23 +16,26 @@ public enum InsertionJoiner {
     }
 
     /// `before` and `after` are the text just before the cursor (or the selection the text replaces) and just after it,
-    /// as read from the field: "" at the start or end of the field, nil when it couldn't be read. Without `before`, or at
-    /// the start of the field (empty or not: an app that can't tell where its cursor is may say so), nothing is changed;
-    /// without `after` only the start of the text is. A dozen characters each side are plenty. `isCommonWord` tells
-    /// whether a lowercase word is an ordinary English dictionary word.
+    /// as read from the field: "" at the start or end of the field, nil when it couldn't be read. Unless both sides are
+    /// known, or at the start of the field (empty or not: an app that can't tell where its cursor is may say so), nothing
+    /// is changed. A dozen characters each side are plenty. `isCommonWord` tells whether a lowercase word is an ordinary
+    /// English dictionary word.
     public static func fit(_ text: String, before: String?, after: String?, vocabulary: [String] = [],
                            isCommonWord: (String) -> Bool) -> Result {
         let unchanged = Result(text: text, changes: [])
+        // Each side as the base characters of its graphemes ("é" written as "e" + an accent counts as "e").
+        guard let before, let after else { return unchanged }
+        let left = bases(before.unicodeScalars), right = bases(after.unicodeScalars)
         // A block of lines (a list, paragraphs) stands on its own rather than inside a sentence.
-        guard let before, let previous = before.unicodeScalars.last, let first = text.unicodeScalars.first,
+        guard let previous = left.last, let first = bases(text.unicodeScalars).first,
               !text.unicodeScalars.contains(where: { kind($0, after: nil) == .newline }) else { return unchanged }
-        let next = after?.unicodeScalars.first
-        let previousKind = kind(previous, after: secondLast(before.unicodeScalars))
+        let next = right.first
+        let previousKind = kind(previous, after: left.dropLast().last)
         // The cursor is inside a word: what the speaker meant there can't be told.
         if previousKind == .word, let next, kind(next, after: previous) == .word { return unchanged }
         // Japanese doesn't put spaces around Latin words the way Chinese text does here.
-        let japanese = [before, text, after ?? ""].contains { $0.unicodeScalars.contains(where: isKana) }
-        let mark = before.unicodeScalars.last { kind($0, after: nil) != .space }
+        let japanese = [before, text, after].contains { $0.unicodeScalars.contains(where: isKana) }
+        let mark = left.last { kind($0, after: nil) != .space }
         var body = text
         var changes: [String] = []
 
@@ -41,7 +44,7 @@ public enum InsertionJoiner {
             body = lowered
             changes.append("lowercase first word")
         }
-        if let after, runsOn(after, midSentence: mark.map(isMidSentence) ?? false), let trimmed = droppingFinalStop(body) {
+        if runsOn(right, midSentence: mark.map(isMidSentence) ?? false), let trimmed = droppingFinalStop(body) {
             body = trimmed
             changes.append("no final full stop")
         }
@@ -49,8 +52,9 @@ public enum InsertionJoiner {
             body = " " + body
             changes.insert("space before", at: 0)
         }
-        if let next, let last = body.unicodeScalars.last,
-           needsSpace(last, kind(last, after: secondLast(body.unicodeScalars)), next, kind(next, after: last), japanese: japanese) {
+        let ending = bases(body.unicodeScalars)
+        if let next, let last = ending.last,
+           needsSpace(last, kind(last, after: ending.dropLast().last), next, kind(next, after: last), japanese: japanese) {
             body += " "
             changes.append("space after")
         }
@@ -62,12 +66,12 @@ public enum InsertionJoiner {
     enum Kind { case space, newline, word, cjk, closing, other }
 
     /// What a character is for spacing: `word` is a letter or digit of a script that puts spaces between words (Latin,
-    /// Cyrillic, Korean…), `cjk` one of a script that doesn't (Han, kana, full-width forms). `previous` tells a straight
-    /// quote that closes (after a word) from one that opens.
+    /// Cyrillic, Korean…), `cjk` one of a script that doesn't (Han, kana, bopomofo, full-width forms). `previous` tells a
+    /// straight quote that closes (after a word) from one that opens.
     static func kind(_ s: Unicode.Scalar, after previous: Unicode.Scalar?) -> Kind {
         if newlines.contains(s) { return .newline }
         if s == "\t" || s.properties.generalCategory == .spaceSeparator { return .space }
-        if isLetterOrNumber(s) { return TranscriptJoiner.joinsWithoutSpace(s) ? .cjk : .word }
+        if isLetterOrNumber(s) { return isWithoutSpaces(s) ? .cjk : .word }
         if closers.contains(s) { return .closing }
         if s == "\"" || s == "'", let previous, [.word, .cjk, .closing].contains(kind(previous, after: nil)) { return .closing }
         return .other
@@ -77,6 +81,21 @@ public enum InsertionJoiner {
     /// Punctuation a following word is separated from by a space.
     private static let closers: Set<Unicode.Scalar> = [".", ",", "!", "?", ";", ":", ")", "]", "}", "…", "\u{201D}", "\u{2019}", "»", "%"]
 
+    /// The characters of `scalars` without what only attaches to the one before: combining marks, the zero-width
+    /// joiner, variation selectors and skin-tone modifiers.
+    static func bases<S: Sequence<Unicode.Scalar>>(_ scalars: S) -> [Unicode.Scalar] {
+        scalars.filter { s in
+            switch s.properties.generalCategory {
+            case .nonspacingMark, .spacingMark, .enclosingMark: return false
+            default:
+                switch s.value {
+                case 0x200D, 0xFE00...0xFE0F, 0xE0100...0xE01EF, 0x1F3FB...0x1F3FF: return false
+                default: return true
+                }
+            }
+        }
+    }
+
     private static func isLetterOrNumber(_ s: Unicode.Scalar) -> Bool {
         switch s.properties.generalCategory {
         case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .modifierLetter, .otherLetter,
@@ -85,22 +104,28 @@ public enum InsertionJoiner {
         }
     }
 
+    /// Scripts written without spaces between words: Han in every plane, kana, bopomofo, and full-width forms.
+    private static func isWithoutSpaces(_ s: Unicode.Scalar) -> Bool {
+        if TranscriptJoiner.joinsWithoutSpace(s) || isHan(s) || isKana(s) { return true }
+        switch s.value {
+        case 0x3100...0x312F, 0x31A0...0x31BF: return true // bopomofo
+        default: return false
+        }
+    }
+
     private static func isHan(_ s: Unicode.Scalar) -> Bool {
         switch s.value {
-        case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF: true
+        case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF,
+             0x20000...0x323AF: true // extensions B and on, and the compatibility supplement
         default: false
         }
     }
 
     private static func isKana(_ s: Unicode.Scalar) -> Bool {
         switch s.value {
-        case 0x3040...0x30FF, 0xFF66...0xFF9F: true
+        case 0x3040...0x30FF, 0x31F0...0x31FF, 0xFF66...0xFF9F, 0x1B000...0x1B16F: true
         default: false
         }
-    }
-
-    private static func secondLast(_ scalars: String.UnicodeScalarView) -> Unicode.Scalar? {
-        scalars.dropLast().last
     }
 
     // MARK: Rules
@@ -125,8 +150,8 @@ public enum InsertionJoiner {
 
     /// The text after the cursor carries on the sentence the dictation goes into: it starts (spaces aside) with a
     /// lowercase letter, or with any word while the sentence before the cursor is still going.
-    private static func runsOn(_ after: String, midSentence: Bool) -> Bool {
-        guard let next = after.unicodeScalars.first(where: { kind($0, after: nil) != .space }) else { return false }
+    private static func runsOn(_ after: [Unicode.Scalar], midSentence: Bool) -> Bool {
+        guard let next = after.first(where: { kind($0, after: nil) != .space }) else { return false }
         if next.properties.generalCategory == .lowercaseLetter { return true }
         let kind = kind(next, after: nil)
         return midSentence && (kind == .word || kind == .cjk)
@@ -139,12 +164,13 @@ public enum InsertionJoiner {
     /// of an abbreviation ("etc.", "e.g.", "U.S.") or an initial ("J."). nil when it stays.
     static func droppingFinalStop(_ text: String) -> String? {
         let scalars = Array(text.unicodeScalars)
-        guard scalars.count >= 2, let stop = scalars.last, stop == "." || stop == "。",
-              [.word, .cjk].contains(kind(scalars[scalars.count - 2], after: nil)) else { return nil }
+        guard let stop = scalars.last, stop == "." || stop == "。", let before = bases(scalars.dropLast()).last,
+              [.word, .cjk].contains(kind(before, after: nil)) else { return nil }
         if stop == "." {
-            let word = String(String.UnicodeScalarView(scalars.dropLast().reversed().prefix { kind($0, after: nil) != .space }.reversed()))
-            let letters = word.unicodeScalars.filter(isLetterOrNumber)
-            if word.contains(".") || letters.count == 1 || abbreviations.contains(word.lowercased()) { return nil }
+            let word = Array(scalars.dropLast().reversed().prefix { kind($0, after: nil) != .space }.reversed())
+            let spelled = String(String.UnicodeScalarView(word))
+            if spelled.contains(".") || bases(word).filter(isLetterOrNumber).count == 1
+                || abbreviations.contains(spelled.lowercased()) { return nil }
         }
         return String(String.UnicodeScalarView(scalars.dropLast()))
     }

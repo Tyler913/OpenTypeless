@@ -24,32 +24,33 @@ public static class InsertionJoiner
     /// <summary>
     /// <paramref name="before"/> and <paramref name="after"/> are the text just before the cursor (or the selection the
     /// text replaces) and just after it, as read from the field: "" at the start or end of the field, null when it
-    /// couldn't be read. Without <paramref name="before"/>, or at the start of the field (empty or not: an app that can't
-    /// tell where its cursor is may say so), nothing is changed; without <paramref name="after"/> only the start of the
-    /// text is. A dozen characters each side are plenty. <paramref name="isCommonWord"/> tells whether a lowercase word
-    /// is an ordinary English dictionary word.
+    /// couldn't be read. Unless both sides are known, or at the start of the field (empty or not: an app that can't tell
+    /// where its cursor is may say so), nothing is changed. A dozen characters each side are plenty.
+    /// <paramref name="isCommonWord"/> tells whether a lowercase word is an ordinary English dictionary word.
     /// </summary>
     public static Result Fit(string text, string? before, string? after, IReadOnlyList<string> vocabulary, Func<string, bool> isCommonWord)
     {
         var unchanged = new Result(text, []);
-        var runes = Runes(text);
+        if (before == null || after == null) return unchanged;
+        // Each side as the base characters of its graphemes ("é" written as "e" + an accent counts as "e").
+        var left = Bases(before);
+        var right = Bases(after);
+        var textBases = Bases(text);
         // A block of lines (a list, paragraphs) stands on its own rather than inside a sentence.
-        if (string.IsNullOrEmpty(before) || runes.Count == 0 || runes.Any(r => KindOf(r, null) == Kind.Newline)) return unchanged;
-        var beforeRunes = Runes(before);
-        var afterRunes = after == null ? null : Runes(after);
-        var first = runes[0];
-        var previous = beforeRunes[^1];
-        Rune? next = afterRunes is { Count: > 0 } ? afterRunes[0] : null;
-        var previousKind = KindOf(previous, SecondLast(beforeRunes));
+        if (left.Count == 0 || textBases.Count == 0 || text.EnumerateRunes().Any(r => KindOf(r, null) == Kind.Newline)) return unchanged;
+        var previous = left[^1];
+        var first = textBases[0];
+        Rune? next = right.Count > 0 ? right[0] : null;
+        var previousKind = KindOf(previous, SecondLast(left));
         // The cursor is inside a word: what the speaker meant there can't be told.
         if (previousKind == Kind.Word && next is { } n && KindOf(n, previous) == Kind.Word) return unchanged;
         // Japanese doesn't put spaces around Latin words the way Chinese text does here.
-        var japanese = beforeRunes.Any(IsKana) || runes.Any(IsKana) || (afterRunes?.Any(IsKana) ?? false);
+        var japanese = before.EnumerateRunes().Any(IsKana) || text.EnumerateRunes().Any(IsKana) || after.EnumerateRunes().Any(IsKana);
         Rune? mark = null;
-        for (var i = beforeRunes.Count - 1; i >= 0; i--)
+        for (var i = left.Count - 1; i >= 0; i--)
         {
-            if (KindOf(beforeRunes[i], null) == Kind.Space) continue;
-            mark = beforeRunes[i];
+            if (KindOf(left[i], null) == Kind.Space) continue;
+            mark = left[i];
             break;
         }
         var body = text;
@@ -61,7 +62,7 @@ public static class InsertionJoiner
             body = lowered;
             changes.Add("lowercase first word");
         }
-        if (after != null && RunsOn(afterRunes!, mark is { } sentence && IsMidSentence(sentence)) && DroppingFinalStop(body) is { } trimmed)
+        if (RunsOn(right, mark is { } sentence && IsMidSentence(sentence)) && DroppingFinalStop(body) is { } trimmed)
         {
             body = trimmed;
             changes.Add("no final full stop");
@@ -71,11 +72,11 @@ public static class InsertionJoiner
             body = " " + body;
             changes.Insert(0, "space before");
         }
-        var bodyRunes = Runes(body);
-        if (next is { } b && bodyRunes.Count > 0)
+        var ending = Bases(body);
+        if (next is { } b && ending.Count > 0)
         {
-            var last = bodyRunes[^1];
-            if (NeedsSpace(last, KindOf(last, SecondLast(bodyRunes)), b, KindOf(b, last), japanese))
+            var last = ending[^1];
+            if (NeedsSpace(last, KindOf(last, SecondLast(ending)), b, KindOf(b, last), japanese))
             {
                 body += " ";
                 changes.Add("space after");
@@ -90,14 +91,14 @@ public static class InsertionJoiner
 
     /// <summary>
     /// What a character is for spacing: <c>Word</c> is a letter or digit of a script that puts spaces between words
-    /// (Latin, Cyrillic, Korean…), <c>Cjk</c> one of a script that doesn't (Han, kana, full-width forms).
+    /// (Latin, Cyrillic, Korean…), <c>Cjk</c> one of a script that doesn't (Han, kana, bopomofo, full-width forms).
     /// <paramref name="previous"/> tells a straight quote that closes (after a word) from one that opens.
     /// </summary>
     internal static Kind KindOf(Rune r, Rune? previous)
     {
         if (Newlines.Contains(r.Value)) return Kind.Newline;
         if (r.Value == '\t' || Rune.GetUnicodeCategory(r) == UnicodeCategory.SpaceSeparator) return Kind.Space;
-        if (Rune.IsLetter(r) || Rune.IsNumber(r)) return TranscriptJoiner.JoinsWithoutSpace(r) ? Kind.Cjk : Kind.Word;
+        if (Rune.IsLetter(r) || Rune.IsNumber(r)) return IsWithoutSpaces(r) ? Kind.Cjk : Kind.Word;
         if (Closers.Contains(r.Value)) return Kind.Closing;
         if (r.Value is '"' or '\'' && previous is { } p && KindOf(p, null) is Kind.Word or Kind.Cjk or Kind.Closing) return Kind.Closing;
         return Kind.Other;
@@ -107,11 +108,25 @@ public static class InsertionJoiner
     /// <summary>Punctuation a following word is separated from by a space.</summary>
     private static readonly HashSet<int> Closers = ['.', ',', '!', '?', ';', ':', ')', ']', '}', 0x2026, 0x201D, 0x2019, 0xBB, '%'];
 
-    private static bool IsHan(Rune r) => r.Value is >= 0x3400 and <= 0x4DBF or >= 0x4E00 and <= 0x9FFF or >= 0xF900 and <= 0xFAFF;
+    /// <summary>
+    /// The characters of <paramref name="runes"/> without what only attaches to the one before: combining marks, the
+    /// zero-width joiner, variation selectors and skin-tone modifiers.
+    /// </summary>
+    internal static List<Rune> Bases(IEnumerable<Rune> runes) => runes.Where(r =>
+        Rune.GetUnicodeCategory(r) is not (UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark)
+        && r.Value is not (0x200D or >= 0xFE00 and <= 0xFE0F or >= 0xE0100 and <= 0xE01EF or >= 0x1F3FB and <= 0x1F3FF)).ToList();
 
-    private static bool IsKana(Rune r) => r.Value is >= 0x3040 and <= 0x30FF or >= 0xFF66 and <= 0xFF9F;
+    internal static List<Rune> Bases(string text) => Bases(text.EnumerateRunes());
 
-    private static List<Rune> Runes(string text) => text.EnumerateRunes().ToList();
+    /// <summary>Scripts written without spaces between words: Han in every plane, kana, bopomofo, and full-width forms.</summary>
+    private static bool IsWithoutSpaces(Rune r) =>
+        TranscriptJoiner.JoinsWithoutSpace(r) || IsHan(r) || IsKana(r) || r.Value is >= 0x3100 and <= 0x312F or >= 0x31A0 and <= 0x31BF;
+
+    private static bool IsHan(Rune r) => r.Value is >= 0x3400 and <= 0x4DBF or >= 0x4E00 and <= 0x9FFF or >= 0xF900 and <= 0xFAFF
+        or >= 0x20000 and <= 0x323AF; // extensions B and on, and the compatibility supplement
+
+    private static bool IsKana(Rune r) => r.Value is >= 0x3040 and <= 0x30FF or >= 0x31F0 and <= 0x31FF or >= 0xFF66 and <= 0xFF9F
+        or >= 0x1B000 and <= 0x1B16F;
 
     private static Rune? SecondLast(List<Rune> runes) => runes.Count >= 2 ? runes[^2] : null;
 
@@ -159,16 +174,19 @@ public static class InsertionJoiner
     /// </summary>
     internal static string? DroppingFinalStop(string text)
     {
-        var runes = Runes(text);
-        if (runes.Count < 2 || runes[^1].Value is not ('.' or '。') || KindOf(runes[^2], null) is not (Kind.Word or Kind.Cjk)) return null;
+        var runes = text.EnumerateRunes().ToList();
+        if (runes.Count == 0 || runes[^1].Value is not ('.' or '。')) return null;
         var stop = runes[^1];
+        var beforeStop = Bases(runes.Take(runes.Count - 1));
+        if (beforeStop.Count == 0 || KindOf(beforeStop[^1], null) is not (Kind.Word or Kind.Cjk)) return null;
         if (stop.Value == '.')
         {
             var start = runes.Count - 1;
             while (start > 0 && KindOf(runes[start - 1], null) != Kind.Space) start--;
-            var word = string.Concat(runes.Skip(start).Take(runes.Count - 1 - start).Select(r => r.ToString()));
-            var letters = runes.Skip(start).Take(runes.Count - 1 - start).Count(r => Rune.IsLetter(r) || Rune.IsNumber(r));
-            if (word.Contains('.') || letters == 1 || Abbreviations.Contains(word.ToLowerInvariant())) return null;
+            var word = runes.Skip(start).Take(runes.Count - 1 - start).ToList();
+            var spelled = string.Concat(word.Select(r => r.ToString()));
+            if (spelled.Contains('.') || Bases(word).Count(r => Rune.IsLetter(r) || Rune.IsNumber(r)) == 1
+                || Abbreviations.Contains(spelled.ToLowerInvariant())) return null;
         }
         return text[..^stop.Utf16SequenceLength];
     }

@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Runtime.InteropServices;
 
 namespace OpenTypeless.Native;
@@ -80,50 +82,83 @@ internal static class UIAutomation
     }
 
     private const int TextPatternRangeEndpoint_Start = 0, TextPatternRangeEndpoint_End = 1, TextUnit_Character = 0;
+    /// <summary>A read around the cursor this long or longer returned more than was asked for.</summary>
+    private const int ReadLimit = 64;
+
+    /// <summary>The text either side of the cursor in a field, and the element and selection it was read at.</summary>
+    public sealed record CursorContext(string Before, string After, IUIAutomationElement Element, IUIAutomationTextRange Selection);
 
     /// <summary>
     /// What's just before and after the cursor (or the selection) in the focused element, from its Text pattern: up to
-    /// <paramref name="before"/> and <paramref name="after"/> characters, "" at the start or end of the field; After is
-    /// null when it couldn't be read. Null when the element is a password field, has no Text pattern or no single
-    /// selection, or answers in a way that doesn't add up.
+    /// <paramref name="before"/> and <paramref name="after"/> characters, "" at the start or end of the field. Null
+    /// unless the element says it isn't a password field and has one selection, and both reads add up.
     /// </summary>
-    public static (string Before, string? After)? TextAroundCursor(int before, int after)
+    public static CursorContext? TextAroundCursor(int before, int after)
     {
         try
         {
-            if (FocusedElement() is not { } element || IsPassword(element)) return null;
-            if (element.GetCurrentPropertyValue(UIA_IsTextPatternAvailablePropertyId, out var hasText) != 0 || hasText is not true
-                || element.GetCurrentPattern(UIA_TextPatternId, out var pattern) != 0 || pattern is not IUIAutomationTextPattern textPattern
-                || textPattern.GetSelection(out var ranges) != 0 || ranges == null
-                || ranges.GetLength(out var count) != 0 || count != 1
-                || ranges.GetElement(0, out var selection) != 0 || selection == null)
-            {
-                return null;
-            }
+            if (FocusedElement() is not { } element || IsPasswordField(element) != false || Selection(element) is not { } selection) return null;
             if (selection.Clone(out var head) != 0 || head == null
                 || head.MoveEndpointByRange(TextPatternRangeEndpoint_End, selection, TextPatternRangeEndpoint_Start) != 0
                 || head.MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, -before, out var back) != 0
-                || head.GetText(before * 2, out var beforeText) != 0 || beforeText == null
-                // Moved back, but no text came (or the other way round): the range can't be trusted.
-                || (back == 0) != (beforeText.Length == 0))
+                || head.GetText(ReadLimit, out var beforeText) != 0 || !Plausible(beforeText, back, before))
             {
                 return null;
             }
-            string? afterText = null;
-            if (selection.Clone(out var tail) == 0 && tail != null
-                && tail.MoveEndpointByRange(TextPatternRangeEndpoint_Start, selection, TextPatternRangeEndpoint_End) == 0
-                && tail.MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, after, out var onward) == 0
-                && tail.GetText(after * 2, out var read) == 0 && read != null
-                && (onward == 0) == (read.Length == 0))
+            if (selection.Clone(out var tail) != 0 || tail == null
+                || tail.MoveEndpointByRange(TextPatternRangeEndpoint_Start, selection, TextPatternRangeEndpoint_End) != 0
+                || tail.MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, after, out var onward) != 0
+                || tail.GetText(ReadLimit, out var afterText) != 0 || !Plausible(afterText, onward, after))
             {
-                afterText = read;
+                return null;
             }
-            return (beforeText, afterText);
+            return new CursorContext(beforeText, afterText, element, selection);
         }
         catch (Exception e) when (e is COMException or InvalidCastException)
         {
             return null;
         }
+    }
+
+    /// <summary>Whether the cursor is still where <paramref name="context"/> was read: the same focused element, with the same selection.</summary>
+    public static bool CursorStillAt(CursorContext context)
+    {
+        try
+        {
+            return FocusedElement() is { } element && SameElement(element, context.Element)
+                && Selection(element) is { } selection && selection.Compare(context.Selection, out var same) == 0 && same != 0;
+        }
+        catch (Exception e) when (e is COMException or InvalidCastException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Whether the element is a password field; null when it didn't say.</summary>
+    private static bool? IsPasswordField(IUIAutomationElement element) =>
+        element.GetCurrentPropertyValue(UIA_IsPasswordPropertyId, out var value) == 0 && value is bool password ? password : null;
+
+    /// <summary>The element's one selection (or degenerate range at the cursor), from its Text pattern.</summary>
+    private static IUIAutomationTextRange? Selection(IUIAutomationElement element) =>
+        element.GetCurrentPropertyValue(UIA_IsTextPatternAvailablePropertyId, out var hasText) == 0 && hasText is true
+        && element.GetCurrentPattern(UIA_TextPatternId, out var pattern) == 0 && pattern is IUIAutomationTextPattern textPattern
+        && textPattern.GetSelection(out var ranges) == 0 && ranges != null
+        && ranges.GetLength(out var count) == 0 && count == 1
+        && ranges.GetElement(0, out var selection) == 0
+            ? selection
+            : null;
+
+    /// <summary>
+    /// Whether a read next to the cursor is what was asked for: the endpoint moved no further than asked, the text isn't
+    /// cut off by the read limit, and it's as many characters as the endpoint moved (counted as UTF-16 units or as
+    /// graphemes). A provider without a character unit moves by words or lines instead, which this rejects.
+    /// </summary>
+    private static bool Plausible([NotNullWhen(true)] string? text, int moved, int asked)
+    {
+        if (text == null || text.Length >= ReadLimit) return false;
+        var count = Math.Abs(moved);
+        if (count > asked) return false;
+        return count == 0 ? text.Length == 0 : new StringInfo(text).LengthInTextElements <= count && count <= text.Length;
     }
 
     // Only the vtable slots before the methods we call need to exist; they are never invoked.
@@ -178,7 +213,7 @@ internal static class UIAutomation
     internal interface IUIAutomationTextRange
     {
         [PreserveSig] int Clone(out IUIAutomationTextRange? clone);
-        void Compare();
+        [PreserveSig] int Compare(IUIAutomationTextRange range, out int areSame);
         void CompareEndpoints();
         void ExpandToEnclosingUnit();
         void FindAttribute();

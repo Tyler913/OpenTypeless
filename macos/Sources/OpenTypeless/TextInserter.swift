@@ -26,7 +26,8 @@ enum TextInserter {
     private static let maxSnapshotBytes = 64 * 1024 * 1024
 
     private final class PasteTracker: NSObject, NSPasteboardItemDataProvider {
-        let text: String
+        /// What a read gets: the text, or its plain version once it no longer suits the cursor.
+        var text: String
         /// ⌘V has been sent. A read before that is a clipboard manager, not the paste.
         var armed = false
         var requested = false
@@ -42,12 +43,18 @@ enum TextInserter {
         }
     }
 
-    /// `shouldPaste` is asked right before ⌘V goes out (the dictation may have been cancelled, or focus moved, while
-    /// the clipboard was being prepared).
+    /// `shouldPaste` is asked before the clipboard is touched, and again right before ⌘V goes out (the dictation may have
+    /// been cancelled, or focus moved, while the clipboard was being prepared). `fallback` is the plain version of `text`,
+    /// when that was fitted to the text around the cursor (see InsertionJoiner): what's left on the clipboard whenever
+    /// the text stays there, and what's pasted after all when `stillFits`, asked right before ⌘V, says the cursor has
+    /// moved since.
     @MainActor
-    static func insert(_ text: String, restoreClipboard: Bool, shouldPaste: () -> Bool = { true }) async -> Outcome {
+    static func insert(_ text: String, fallback: String? = nil, restoreClipboard: Bool,
+                       shouldPaste: () -> Bool = { true }, stillFits: () -> Bool = { true }) async -> Outcome {
+        let plain = fallback ?? text
+        guard shouldPaste() else { return .skipped }
         guard AXIsProcessTrusted() else {
-            copyToClipboard(text)
+            copyToClipboard(plain)
             return .noPermission
         }
         let pasteboard = NSPasteboard.general
@@ -63,6 +70,7 @@ enum TextInserter {
         let ourChange = pasteboard.changeCount
 
         await pause(.milliseconds(60))
+        if plain != text, !stillFits() { tracker.text = plain }
         guard shouldPaste() else {
             if pasteboard.changeCount == ourChange {
                 pasteboard.clearContents()
@@ -89,13 +97,13 @@ enum TextInserter {
                 pasteboard.clearContents()
                 if !saved.isEmpty { pasteboard.writeObjects(saved) }
             } else {
-                copyToClipboard(text)
+                copyToClipboard(plain)
             }
             return .pasted
         }
         // Nothing pasted: replace the promise with a plain copy so the text stays available (and
         // clipboard managers may record it) after this app stops serving it.
-        copyToClipboard(text)
+        copyToClipboard(plain)
         return .notPasted
     }
 

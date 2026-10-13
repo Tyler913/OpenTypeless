@@ -69,6 +69,8 @@ public partial class App : Application
         TextInserter.ClipboardOwner = _tray.Hwnd;
         _popover = new PopoverWindow(_controller, page => ShowSettings(page), Quit);
         _tray.Clicked += rect => _popover.Toggle(rect);
+        _tray.Locked += _controller.SystemLocked;
+        _tray.Unlocked += _controller.SystemUnlocked;
 
         _hotkey.Hotkey = _settings.Hotkey;
         _hotkey.OnPress = _controller.HotkeyPressed;
@@ -80,8 +82,13 @@ public partial class App : Application
         _settings.PropertyChanged += OnSettingsChanged;
         _controller.StateChanged += () =>
         {
+            // Esc cancels a dictation under way, and then shouldn't reach the focused app too.
+            _hotkey.SwallowsEscape = _controller.State != SessionController.SessionState.Idle;
             _tray.SetState(_controller.State);
-            if (_controller.State == SessionController.SessionState.Idle) Updater.Shared.SessionBecameIdle();
+            if (_controller.State != SessionController.SessionState.Idle) return;
+            Updater.Shared.SessionBecameIdle();
+            // A warm microphone that failed during the dictation is opened again.
+            _dispatcher?.TryEnqueue(_controller.UpdateWarmMicrophone);
         };
         _controller.OpenSettingsRequested += page => ShowSettings(SettingsPageInfo.Parse(page));
         var dispatcher = DispatcherQueue.GetForCurrentThread();
@@ -152,7 +159,8 @@ public partial class App : Application
     private void Quit()
     {
         _popover.Dismiss();
-        if (_controller.State != SessionController.SessionState.Idle) _controller.Cancel(silently: true);
+        // Quitting mid-recording keeps what was said, retryable from History.
+        if (_controller.State != SessionController.SessionState.Idle) _controller.StopForQuit();
         _tray.Dispose();
         _onboarding?.CloseForExit();
         _settingsWindow?.CloseForExit();

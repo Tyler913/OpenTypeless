@@ -14,24 +14,30 @@ namespace OpenTypeless.UI;
 public sealed class ActiveAcrylicBackdrop : SystemBackdrop
 {
     private DesktopAcrylicController? _controller;
+    private SystemBackdropConfiguration? _configuration;
+    private ElementTheme? _theme;
+
+    /// <summary>
+    /// Follows a switch between light and dark made while the window exists (the window passes on its content's
+    /// ActualThemeChanged). The controller watches its configuration, so changing the theme there is enough.
+    /// </summary>
+    public void SetTheme(ElementTheme theme)
+    {
+        _theme = theme;
+        if (_configuration != null) _configuration.Theme = BackdropTheme(theme);
+    }
 
     protected override void OnTargetConnected(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot)
     {
         base.OnTargetConnected(target, xamlRoot);
-        var theme = (xamlRoot.Content as FrameworkElement)?.ActualTheme ?? ElementTheme.Default;
-        var configuration = new SystemBackdropConfiguration
+        _configuration = new SystemBackdropConfiguration
         {
             IsInputActive = true,
-            Theme = theme switch
-            {
-                ElementTheme.Dark => SystemBackdropTheme.Dark,
-                ElementTheme.Light => SystemBackdropTheme.Light,
-                _ => Application.Current.RequestedTheme == ApplicationTheme.Dark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light,
-            },
+            Theme = BackdropTheme(_theme ?? (xamlRoot.Content as FrameworkElement)?.ActualTheme ?? ElementTheme.Default),
         };
         _controller = new DesktopAcrylicController { Kind = DesktopAcrylicKind.Thin };
         _controller.AddSystemBackdropTarget(target);
-        _controller.SetSystemBackdropConfiguration(configuration);
+        _controller.SetSystemBackdropConfiguration(_configuration);
     }
 
     protected override void OnTargetDisconnected(ICompositionSupportsSystemBackdrop target)
@@ -40,7 +46,15 @@ public sealed class ActiveAcrylicBackdrop : SystemBackdrop
         _controller?.RemoveSystemBackdropTarget(target);
         _controller?.Dispose();
         _controller = null;
+        _configuration = null;
     }
+
+    private static SystemBackdropTheme BackdropTheme(ElementTheme theme) => theme switch
+    {
+        ElementTheme.Dark => SystemBackdropTheme.Dark,
+        ElementTheme.Light => SystemBackdropTheme.Light,
+        _ => Application.Current.RequestedTheme == ApplicationTheme.Dark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light,
+    };
 }
 
 public static class WindowHelpers

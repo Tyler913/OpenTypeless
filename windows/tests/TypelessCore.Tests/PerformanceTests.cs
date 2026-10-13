@@ -20,8 +20,9 @@ public class PerformanceTests
     /// <summary>
     /// The capture thread's work for each 40 ms block of a 20-minute dictation: hand the samples on through the sink,
     /// append them to the WAV file and the transcription pipeline, and measure the level for the capsule. The pipeline
-    /// cuts chunks, follows the pauses and, since the audio pauses every 2 s, transcribes the tail ahead of time about
-    /// 600 times, all answered at once by the mock server while the blocks keep coming.
+    /// follows the pauses and, since the audio pauses every 2 s, cuts a chunk at about every fourth pause (once 8 s are
+    /// pending) and transcribes the tail ahead of time at the others, about 450 times, all answered at once by the mock
+    /// server while the blocks keep coming.
     /// </summary>
     [PerformanceFact]
     public void LiveAudioKeepsUpWithTheMicrophone()

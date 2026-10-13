@@ -52,7 +52,7 @@ public struct EvaluationAttempt: Codable, Sendable {
             switch event {
             case let .content(piece): rawOutput += piece
             case let .finished(reason): finishReason = reason
-            case let .error(message): error = message
+            case let .error(message, _): error = message
             case .done: receivedDone = true
             case .usage: break // read from the raw chunk above, with the evaluation's own fields
             }
@@ -248,6 +248,11 @@ public enum PolishMetrics {
     public static func similarity(_ a: String, _ b: String) -> Double {
         let x = Array(normalized(a)), y = Array(normalized(b))
         if x.isEmpty || y.isEmpty { return x.count == y.count ? 1 : 0 }
+        return 1 - Double(distance(x, y)) / Double(max(x.count, y.count))
+    }
+
+    /// Edit distance between two normalised texts.
+    static func distance(_ x: [Character], _ y: [Character]) -> Int {
         // A shared start and end never change the distance, and after a small fix to a long text they are nearly all
         // of it: only the part in between needs the quadratic table (the learner runs this on the main thread).
         var start = 0
@@ -266,7 +271,7 @@ public enum PolishMetrics {
             }
             swap(&previous, &current)
         }
-        return 1 - Double(previous[m]) / Double(max(x.count, y.count))
+        return previous[m]
     }
 
     static func latinWords(_ text: String) -> [String] {

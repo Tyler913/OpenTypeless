@@ -68,6 +68,7 @@ final class MockChatServer: URLProtocol {
         #expect(outcome.result.text == "A")
         #expect(!outcome.usedBackup)
         #expect(MockChatServer.lock.withLock { MockChatServer.requested } == ["primary"])
+        #expect(outcome.cancelled.isEmpty)
     }
 
     @Test func slowPrimaryIsOvertakenByBackup() async throws {
@@ -77,6 +78,10 @@ final class MockChatServer: URLProtocol {
         #expect(outcome.result.text == "B")
         #expect(outcome.usedBackup && outcome.model == "backup")
         #expect(outcome.totalSeconds < 1.5)
+        // The primary's request was sent, then cancelled: what it read is estimated and billed with the answer.
+        #expect(outcome.cancelled.map(\.model) == ["primary"])
+        #expect(outcome.cancelled.first?.usage.estimated == true)
+        #expect((outcome.cancelled.first?.usage.inputTokens ?? 0) > 1000)
     }
 
     @Test func partialTextComesOnlyFromTheStreamThatWon() async throws {
@@ -95,6 +100,8 @@ final class MockChatServer: URLProtocol {
                                                  backup: MockChatServer.route("backup"), hedgeDelay: 5)
         #expect(outcome.result.text == "B")
         #expect(outcome.totalSeconds < 2)
+        // A request that failed isn't billed.
+        #expect(outcome.cancelled.isEmpty)
     }
 
     @Test func slowBackupDoesNotBeatPrimaryThatAnswersFirst() async throws {

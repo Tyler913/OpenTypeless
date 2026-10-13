@@ -72,6 +72,10 @@ internal sealed class ProviderCard : UserControl
     private readonly Button _reset = new();
     private readonly Button _test = new();
     private readonly StackPanel _testResult = new() { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+    /// <summary>Shown while Credential Manager refuses the key, which then only lasts until the app quits.</summary>
+    private readonly TextBlock _keyError = Ui.Text(L("无法保存到 Windows 凭据管理器，应用退出后需要重新填写这个 Key",
+                                                     "Couldn't save to Windows Credential Manager; you'll need to enter this key again after the app quits"),
+                                                   12, foreground: Palette.Brush(Tint.Red), wrap: true);
     private bool _expanded;
     private bool _testing;
 
@@ -166,21 +170,31 @@ internal sealed class ProviderCard : UserControl
 
     private void BuildDetails()
     {
-        // API key
-        var key = new PasswordBox { PlaceholderText = _id.KeyPlaceholder(), Password = _settings.ApiKey(_id) };
-        key.PasswordChanged += (_, _) => _settings.SetApiKey(key.Password, _id);
+        // API key: the saved one, so OPENROUTER_API_KEY (used in its place when set) is never shown or saved here.
+        var key = new PasswordBox { PlaceholderText = _id.KeyPlaceholder(), Password = _settings.SavedApiKey(_id) };
+        key.PasswordChanged += (_, _) => ShowKeySaved(_settings.SetApiKey(key.Password, _id));
         var paste = new Button { Content = L("粘贴", "Paste") };
         paste.Click += async (_, _) =>
         {
             var content = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
             if (content.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text))
             {
-                var text = await content.GetTextAsync();
-                _settings.SetApiKey(text, _id);
-                key.Password = _settings.ApiKey(_id);
+                // PasswordChanged saves it (and shows whether that worked).
+                key.Password = (await content.GetTextAsync()).Trim();
             }
         };
-        _details.Children.Add(FieldRow("API Key", key, paste));
+        _details.Children.Add(FieldRow(L("API Key", "API Key"), key, paste));
+        if (_id == ProviderId.OpenRouter && AppSettings.OpenRouterKeyFromEnvironment != null)
+        {
+            var note = Ui.Text(L("正在使用环境变量 OPENROUTER_API_KEY 中的 Key；没有设置这个变量时才用这里保存的 Key",
+                                 "Using the key in the OPENROUTER_API_KEY environment variable; the key saved here is used when it isn't set"),
+                               12, foreground: Ui.Secondary, wrap: true);
+            note.Margin = new Thickness(104, 0, 0, 0);
+            _details.Children.Add(note);
+        }
+        _keyError.Margin = new Thickness(104, 0, 0, 0);
+        _keyError.Visibility = Visibility.Collapsed;
+        _details.Children.Add(_keyError);
 
         // Base URL
         var url = new TextBox
@@ -197,7 +211,7 @@ internal sealed class ProviderCard : UserControl
             _settings.SetBaseUrl(_id.DefaultBaseUrl(), _id);
             url.Text = _settings.BaseUrl(_id);
         };
-        _details.Children.Add(FieldRow("Base URL", url, _reset));
+        _details.Children.Add(FieldRow(L("接口地址", "Base URL"), url, _reset));
 
         // Link / hint, test result, test button
         var bottom = new Grid
@@ -241,6 +255,8 @@ internal sealed class ProviderCard : UserControl
         _details.Children.Add(bottom);
     }
 
+    private void ShowKeySaved(bool saved) => _keyError.Visibility = saved ? Visibility.Collapsed : Visibility.Visible;
+
     private static Grid FieldRow(string label, FrameworkElement field, Button button)
     {
         var grid = new Grid
@@ -248,13 +264,14 @@ internal sealed class ProviderCard : UserControl
             ColumnSpacing = 8,
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = new GridLength(72) },
+                new ColumnDefinition { Width = new GridLength(96) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 new ColumnDefinition { Width = GridLength.Auto },
             },
         };
         var text = Ui.Text(label, 12, FontWeights.Medium, Ui.Secondary);
         text.VerticalAlignment = VerticalAlignment.Center;
+        text.TextTrimming = TextTrimming.CharacterEllipsis;
         grid.Children.Add(text);
         Grid.SetColumn(field, 1);
         grid.Children.Add(field);

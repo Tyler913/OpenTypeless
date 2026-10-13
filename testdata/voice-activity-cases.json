@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared by the macOS (swift-testing) and Windows (xUnit) test suites, so both apps trim silence and notice pauses the same way. Positions are samples at 16 kHz (480 per 30 ms frame). Each case's audio is its segments in order: 'silence' is zeros; 'tone' is sample i of the segment = trunc(amplitude × sin(0.2 i)); 'noise' is trunc(amplitude × (2 s / 2^31 − 1)) with s = (1103515245 s + 12345) mod 2^31, s starting at 1 for each case.",
+  "_comment": "Shared by the macOS (swift-testing) and Windows (xUnit) test suites, so both apps trim silence, notice pauses and cut chunks the same way. Positions are samples at 16 kHz (480 per 30 ms frame). Each case's audio is its segments in order: 'silence' is zeros; 'tone' is sample i of the segment = trunc(amplitude × sin(0.2 i)); 'noise' is trunc(amplitude × (2 s / 2^31 − 1)) with s = (1103515245 s + 12345) mod 2^31, s starting at 1 for each case. In 'pauses', a speechAfter check with 'before' counts only the frames that end by then (the moment before the key is let go is left out). In 'chunks', 'cuts' are where the default chunker starts each chunk after the first, whether the audio arrives in blocks or in one go.",
   "trim": [
     {
       "name": "silence before and after is cut down to 0.3 s",
@@ -64,8 +64,8 @@
       ],
       "lastSpeechEnd": 32160,
       "speechAfter": [
-        { "sample": 32160, "includePartial": false, "expected": false },
-        { "sample": 20000, "includePartial": false, "expected": true }
+        { "sample": 32160, "expected": false },
+        { "sample": 20000, "expected": true }
       ]
     },
     {
@@ -76,26 +76,109 @@
         { "kind": "tone", "seconds": 0.5, "amplitude": 6000 }
       ],
       "lastSpeechEnd": 30240,
-      "speechAfter": [{ "sample": 22000, "includePartial": false, "expected": true }]
+      "speechAfter": [{ "sample": 22000, "expected": true }]
     },
     {
       "name": "nothing said yet",
       "segments": [{ "kind": "silence", "seconds": 1.0 }],
       "lastSpeechEnd": null,
-      "speechAfter": [{ "sample": 0, "includePartial": true, "expected": false }]
+      "speechAfter": [{ "sample": 0, "expected": false }]
     },
     {
-      "name": "a word in the last, unfinished frame counts only at the end of the recording",
+      "name": "the key's click in the last 150 ms before release isn't speech",
       "segments": [
         { "kind": "tone", "seconds": 1.0, "amplitude": 6000 },
-        { "kind": "silence", "seconds": 0.35 },
-        { "kind": "tone", "seconds": 0.01, "amplitude": 6000 }
+        { "kind": "silence", "seconds": 0.5 },
+        { "kind": "tone", "seconds": 0.03, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.06 }
       ],
-      "lastSpeechEnd": 16320,
+      "lastSpeechEnd": 24480,
       "speechAfter": [
-        { "sample": 21600, "includePartial": false, "expected": false },
-        { "sample": 21600, "includePartial": true, "expected": true }
+        { "sample": 21600, "expected": true },
+        { "sample": 21600, "before": 23200, "expected": false }
       ]
+    },
+    {
+      "name": "a word begun before the last 150 ms still counts",
+      "segments": [
+        { "kind": "tone", "seconds": 1.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.5 },
+        { "kind": "tone", "seconds": 0.3, "amplitude": 6000 }
+      ],
+      "lastSpeechEnd": 28800,
+      "speechAfter": [
+        { "sample": 21600, "before": 26400, "expected": true },
+        { "sample": 21600, "before": 24000, "expected": false }
+      ]
+    }
+  ],
+  "chunks": [
+    {
+      "name": "a pause once 8 s are pending is cut at, one before isn't",
+      "segments": [
+        { "kind": "tone", "seconds": 5.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.5 },
+        { "kind": "tone", "seconds": 4.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.6 },
+        { "kind": "tone", "seconds": 3.0, "amplitude": 6000 }
+      ],
+      "cuts": [154560]
+    },
+    {
+      "name": "a long pause that began before 8 s isn't cut at",
+      "segments": [
+        { "kind": "tone", "seconds": 7.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 3.0 },
+        { "kind": "tone", "seconds": 2.0, "amplitude": 6000 }
+      ],
+      "cuts": []
+    },
+    {
+      "name": "a gap shorter than 0.3 s isn't a pause",
+      "segments": [
+        { "kind": "tone", "seconds": 9.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.2 },
+        { "kind": "tone", "seconds": 3.0, "amplitude": 6000 }
+      ],
+      "cuts": []
+    },
+    {
+      "name": "a pause in a noisy room (about -46 dBFS) is still one",
+      "segments": [
+        { "kind": "tone", "seconds": 9.0, "amplitude": 6000 },
+        { "kind": "noise", "seconds": 0.6, "amplitude": 300 },
+        { "kind": "tone", "seconds": 2.0, "amplitude": 6000 }
+      ],
+      "cuts": [146400]
+    },
+    {
+      "name": "without a pause, cut at the quietest spot by 28 s, then at the next pause",
+      "segments": [
+        { "kind": "tone", "seconds": 20.0, "amplitude": 6000 },
+        { "kind": "tone", "seconds": 0.2, "amplitude": 1500 },
+        { "kind": "tone", "seconds": 12.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.5 },
+        { "kind": "tone", "seconds": 5.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.5 },
+        { "kind": "tone", "seconds": 1.0, "amplitude": 6000 }
+      ],
+      "cuts": [321280, 517600]
+    },
+    {
+      "name": "successive exact pauses reset frame tracking after each half-pause cut",
+      "segments": [
+        { "kind": "tone", "seconds": 9.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.3 },
+        { "kind": "tone", "seconds": 9.0, "amplitude": 6000 },
+        { "kind": "silence", "seconds": 0.3 },
+        { "kind": "tone", "seconds": 1.0, "amplitude": 6000 }
+      ],
+      "cuts": [146400, 295200]
+    },
+    {
+      "name": "silence past the pause threshold does not cut without preceding speech",
+      "segments": [{ "kind": "silence", "seconds": 12.0 }],
+      "cuts": []
     }
   ]
 }

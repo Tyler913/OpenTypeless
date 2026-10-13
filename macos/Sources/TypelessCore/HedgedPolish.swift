@@ -21,6 +21,16 @@ public struct HedgedPolishResult: Sendable {
     public let totalSeconds: Double
     /// The provider that answered, to price the answer.
     public var provider: ProviderID = .openrouter
+    /// The other route's request, when it was sent and then cancelled because this one answered first.
+    public var cancelled: [CancelledPolish] = []
+}
+
+/// A request the hedge sent and then cancelled because the other route answered first. Providers bill the prompt they
+/// had already read and any text they had sent, so its usage is estimated (marked so) and counted with the answer's.
+public struct CancelledPolish: Sendable {
+    public let model: String
+    public let provider: ProviderID
+    public let usage: RequestUsage
 }
 
 /// Hedged clean-up: the primary route starts alone; if it hasn't produced its first token after
@@ -46,6 +56,7 @@ public enum HedgedPolish {
         let (events, continuation) = AsyncStream<Event>.makeStream()
         let firstToken = FirstTokenLatch()
         let leader = Leader()
+        let streamed = StreamedText()
         var tasks: [Int: Task<Void, Never>] = [:]
 
         func launch(_ index: Int) {
@@ -56,6 +67,7 @@ public enum HedgedPolish {
                     let result = try await route.client.polish(
                         transcript: transcript, options: route.options,
                         onPartial: { text in
+                            streamed.set(index, text)
                             if firstToken.mark(index) { continuation.yield(.firstToken(index)) }
                             // Only the stream that answered first is passed on.
                             if leader.claim(index) { onPartial?(text) }
@@ -82,6 +94,8 @@ public enum HedgedPolish {
             var winner: Int?
             var firstTokenAt: Double?
             var failures: [Int: Error] = [:]
+            // Answers that came in after the other route had already won.
+            var late: [Int: APIClient.PolishResult] = [:]
             for await event in events {
                 switch event {
                 case .hedgeTimer:
@@ -93,11 +107,21 @@ public enum HedgedPolish {
                     timer.cancel()
                     for (other, task) in tasks where other != index { task.cancel() }
                 case let .finished(index, .success(result)):
-                    guard winner == nil || winner == index else { continue }
+                    guard winner == nil || winner == index else { late[index] = result; continue }
                     let now = ProcessInfo.processInfo.systemUptime - start
+                    // Every other request that was sent and didn't fail was cancelled when this one won.
+                    let cancelled = tasks.keys.sorted().filter { $0 != index && failures[$0] == nil }.map { other in
+                        let route = routes[other]
+                        return CancelledPolish(
+                            model: route.options.model, provider: route.client.endpoint.id,
+                            usage: late[other]?.usage ?? APIClient.estimatedUsage(
+                                messages: APIClient.polishMessages(transcript: transcript, options: route.options),
+                                output: streamed.text(other)))
+                    }
                     return HedgedPolishResult(result: result, model: routes[index].options.model,
                                               usedBackup: index != 0, firstTokenSeconds: firstTokenAt ?? now,
-                                              totalSeconds: now, provider: routes[index].client.endpoint.id)
+                                              totalSeconds: now, provider: routes[index].client.endpoint.id,
+                                              cancelled: cancelled)
                 case let .finished(index, .failure(error)):
                     // The chosen stream broke mid-way: its partial text is useless, so give up this round.
                     if winner == index { throw error }
@@ -133,6 +157,15 @@ private final class Leader: @unchecked Sendable {
             return index == candidate
         }
     }
+}
+
+/// Each route's text so far (written from the streaming callbacks), to estimate what a cancelled one used.
+private final class StreamedText: @unchecked Sendable {
+    private let lock = NSLock()
+    private var texts: [Int: String] = [:]
+
+    func set(_ index: Int, _ text: String) { lock.withLock { texts[index] = text } }
+    func text(_ index: Int) -> String { lock.withLock { texts[index] ?? "" } }
 }
 
 /// Reports each route's first token exactly once (called from the streaming callbacks).

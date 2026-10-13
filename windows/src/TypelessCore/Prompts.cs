@@ -148,6 +148,69 @@ public static class Prompts
         var outputCount = TextMetrics.CharacterCount(output);
         return outputCount > (int)(inputCount * 1.6) + 120;
     }
+
+    /// <summary>
+    /// Clean-up only removes what the speaker didn't mean to keep, and over a long transcript that is never most of it.
+    /// Keeping under 55% of the words of one of 150 or more (see <see cref="WordCount"/>) means the model summarised it:
+    /// real dictations of a minute or more came back with as little as a fifth of their words, rewritten into lists.
+    /// Shorter ones are exempt, since a sentence that is mostly fillers and a self-correction can rightly lose more than
+    /// half ("嗯我们周三，不对不对，是周四…": 0.6; the prompt's own meta-talk example: 0.43).
+    /// </summary>
+    public static bool DroppedTooMuch(string input, string output)
+    {
+        var words = WordCount.Count(input);
+        if (words < 150) return false;
+        // In whole numbers: 200 × 0.55 is 110.00000000000001 in floating point, which would reject exactly 55%.
+        return WordCount.Count(output) * 100 < words * 55;
+    }
+
+    /// <summary>
+    /// An answer, a translation or a refusal has little in common with the transcript, while a clean-up that only
+    /// deleted words, however many, is the transcript with gaps. So an output is rejected only when it is both far from
+    /// the transcript (similarity under 0.3, see <see cref="PolishMetrics"/>) and not explained by deletions: over 30% of
+    /// the shorter text changed beyond the difference in length. On the evaluation sets, the heaviest legitimate clean-ups
+    /// (a withdrawn list item, a run of fillers) go down to similarity 0.3 or below but change under 15% beyond deletions;
+    /// answers, refusals and translations are at 0–0.24 with 40–100% changed. Under 10 letters there's too little to judge.
+    /// </summary>
+    public static bool StrayedFromTranscript(string input, string output)
+    {
+        var x = PolishMetrics.Normalized(input);
+        var y = PolishMetrics.Normalized(output);
+        if (x.Count < 10) return false;
+        if (y.Count == 0) return true;
+        var distance = PolishMetrics.EditDistance(x, y);
+        var similarity = 1 - (double)distance / Math.Max(x.Count, y.Count);
+        var changed = (double)(distance - Math.Abs(x.Count - y.Count)) / Math.Min(x.Count, y.Count);
+        return similarity < 0.3 && changed > 0.3;
+    }
+
+    /// <summary>
+    /// Why <paramref name="output"/> can't be inserted as the clean-up of <paramref name="input"/> (which then goes in as
+    /// spoken), or null when it can.
+    /// </summary>
+    public static PolishFallback? Fallback(string input, string output, bool truncated)
+    {
+        if (truncated) return PolishFallback.Truncated;
+        if (LooksLikeAnAnswer(input, output)) return PolishFallback.Answered;
+        if (DroppedTooMuch(input, output)) return PolishFallback.Summarised;
+        if (StrayedFromTranscript(input, output)) return PolishFallback.Unrelated;
+        return null;
+    }
+}
+
+/// <summary>Why a transcript, or one part of a long one, was inserted as spoken instead of cleaned up.</summary>
+public enum PolishFallback
+{
+    /// <summary>No answer came back: an error, or a timeout.</summary>
+    Failed,
+    /// <summary>The answer was cut off.</summary>
+    Truncated,
+    /// <summary>Much longer than the transcript: the model answered the dictated prompt.</summary>
+    Answered,
+    /// <summary>Much shorter than a long transcript: the model summarised it.</summary>
+    Summarised,
+    /// <summary>Little in common with the transcript: a translation, an answer or a refusal.</summary>
+    Unrelated,
 }
 
 /// <summary>Swift's <c>String.count</c> counts grapheme clusters; match it so thresholds behave the same.</summary>

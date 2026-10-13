@@ -60,6 +60,10 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 @MainActor
 final class SettingsNavigation: ObservableObject {
     @Published var page: SettingsPage = .home
+    /// False while the settings window is closed. The window is kept when closed, and SwiftUI never tells the views in
+    /// it that they've gone, so the page is taken out instead: its onDisappear then stops the shortcut recorder, the
+    /// microphone test and its timers, as hiding the Windows settings window does.
+    @Published var isWindowOpen = true
 }
 
 /// The page area to the right of the sidebar.
@@ -77,6 +81,14 @@ struct SettingsDetailView: View {
     }
 
     @ViewBuilder private var content: some View {
+        if !navigation.isWindowOpen {
+            Color.clear
+        } else {
+            page
+        }
+    }
+
+    @ViewBuilder private var page: some View {
         switch navigation.page {
         case .home: HomePage(settings: settings, navigation: navigation)
         case .general: GeneralPage(settings: settings)
@@ -93,13 +105,14 @@ struct SettingsDetailView: View {
 struct SettingsSidebar: View {
     @ObservedObject var navigation: SettingsNavigation
     @ObservedObject var settings: AppSettings
+    @ObservedObject var permissions = PermissionsMonitor.shared
 
     private var version: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String).map { "v\($0)" } ?? "dev"
     }
 
     private var ready: Bool {
-        settings.isConfigured(settings.sttProvider) && Permissions.microphoneGranted && Permissions.accessibilityGranted
+        settings.isConfigured(settings.sttProvider) && permissions.microphoneGranted && permissions.accessibilityGranted
     }
 
     var body: some View {
@@ -172,7 +185,7 @@ struct PageScaffold<Content: View>: View {
 
 /// Opens / focuses the settings window.
 @MainActor
-final class SettingsWindowController {
+final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     let navigation = SettingsNavigation()
     private let controller: SessionController
@@ -183,12 +196,22 @@ final class SettingsWindowController {
 
     func show(page: SettingsPage? = nil) {
         if let page { navigation.page = page }
+        navigation.isWindowOpen = true
+        PermissionsMonitor.shared.setWatching(true, by: .settingsWindow)
         if window == nil {
-            window = Self.makeWindow(navigation: navigation, controller: controller)
-            window?.center()
+            let window = Self.makeWindow(navigation: navigation, controller: controller)
+            window.delegate = self
+            window.center()
+            self.window = window
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// The window stays around for next time, but its page goes (see `SettingsNavigation.isWindowOpen`).
+    func windowWillClose(_ notification: Notification) {
+        navigation.isWindowOpen = false
+        PermissionsMonitor.shared.setWatching(false, by: .settingsWindow)
     }
 
     /// An AppKit split view with a sidebar item: on macOS 26+ AppKit draws that sidebar as a floating

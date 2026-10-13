@@ -11,8 +11,9 @@ import TypelessCore
 /// While a call app runs Apple's voice processing, macOS hands other apps the built-in microphone's raw
 /// capsules: three channels, about 30 dB quieter than usual. AVAudioConverter turns three channels into one
 /// as pure silence, so those are averaged here first, and only then does `InputGain` lift the quiet signal back
-/// to a speech level the pipeline doesn't skip as silence. One- and two-channel inputs (every microphone outside a
-/// call) get no gain at all: their audio reaches the pipeline exactly as before.
+/// to a speech level the pipeline doesn't skip as silence. Two-channel inputs are averaged too (the converter would
+/// keep only the first channel, and an audio interface with the microphone on its second input would record
+/// silence), but they and one-channel inputs (every microphone outside a call) get no gain at all.
 final class AudioRecorder {
     /// Called on the audio thread, in order.
     var onSamples: (([Int16]) -> Void)?
@@ -24,13 +25,20 @@ final class AudioRecorder {
     var deviceUID: String?
     /// Lift the quiet multi-channel input of a call (off for the diagnostic probe's raw measurement).
     var appliesGain = true
+    /// The input the engine was pointed at: `deviceUID` when that was connected, nil when it runs on the system default
+    /// (nothing chosen, or the chosen one wasn't there).
+    private(set) var openedDeviceUID: String?
+    /// Running on the chosen input (or none was chosen), not on the default standing in for it.
+    var isOnChosenDevice: Bool { deviceUID == nil || openedDeviceUID == deviceUID }
 
     private var engine: AVAudioEngine?
     private var converter: AVAudioConverter?
-    /// Mono at the input's rate, when the input has more channels than the converter can mix down.
+    /// Mono at the input's rate, when the input has more than one channel (averaged here, see process).
     private var mixFormat: AVAudioFormat?
+    /// The input has more than two channels: a call's quiet raw capsules, which `gain` lifts.
+    private var liftsQuietInput = false
     private var configObserver: NSObjectProtocol?
-    /// What the pipeline takes: 16 kHz mono 16-bit, converted to directly from one- and two-channel inputs as always.
+    /// What the pipeline takes: 16 kHz mono 16-bit, converted to directly from one channel (or two, once averaged).
     private let int16Format = AVAudioFormat(
         commonFormat: .pcmFormatInt16,
         sampleRate: Double(AudioFormat.sampleRate),
@@ -44,7 +52,7 @@ final class AudioRecorder {
         channels: 1,
         interleaved: false
     )!
-    /// Audio thread only; used only while `mixFormat` is set.
+    /// Audio thread only; used only while `liftsQuietInput` is set.
     private var gain = InputGain()
     private var reportedGain = false
     /// The gain last reached on a multi-channel input: a later recording in the same call starts there, so its first
@@ -81,29 +89,35 @@ final class AudioRecorder {
         guard isRecording else { return }
         isRecording = false
         teardown()
+        openedDeviceUID = nil
     }
 
     private func startEngine() throws {
         let engine = AVAudioEngine()
         let input = engine.inputNode
+        openedDeviceUID = nil
         if let deviceUID, var deviceID = Microphones.deviceID(uid: deviceUID), let unit = input.audioUnit {
             // Point the engine's input unit at the chosen device before reading its format.
-            AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
-                                 &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size))
+            let status = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                                              &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size))
+            if status == noErr { openedDeviceUID = deviceUID }
         }
         let inputFormat = input.outputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else { throw RecorderError.noInput }
-        // One or two channels convert as they always have; more are averaged to mono first (see process).
-        let mixFormat = inputFormat.channelCount > 2
+        // One channel converts as it always has; more are averaged to mono first (see process), and only a call's three or
+        // more come out as float, for the gain.
+        let mixFormat = inputFormat.channelCount > 1
             ? AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: inputFormat.sampleRate, channels: 1, interleaved: false)
             : nil
-        guard let converter = AVAudioConverter(from: mixFormat ?? inputFormat, to: mixFormat == nil ? int16Format : floatFormat) else {
+        let liftsQuietInput = inputFormat.channelCount > 2
+        guard let converter = AVAudioConverter(from: mixFormat ?? inputFormat, to: liftsQuietInput ? floatFormat : int16Format) else {
             throw RecorderError.converter
         }
         self.converter = converter
         self.mixFormat = mixFormat
+        self.liftsQuietInput = liftsQuietInput
         inputChannels = inputFormat.channelCount
-        gain = InputGain(initialGain: mixFormat == nil ? 1 : AudioRecorder.learntGain)
+        gain = InputGain(initialGain: liftsQuietInput ? AudioRecorder.learntGain : 1)
         log.debug("capture started: \(inputFormat.channelCount, privacy: .public) ch at \(inputFormat.sampleRate, privacy: .public) Hz")
 
         input.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { [weak self] buffer, _ in
@@ -122,7 +136,7 @@ final class AudioRecorder {
     }
 
     private func teardown() {
-        if mixFormat != nil, gain.gain > 1 { AudioRecorder.learntGain = gain.gain }
+        if liftsQuietInput, gain.gain > 1 { AudioRecorder.learntGain = gain.gain }
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
         configObserver = nil
         engine?.inputNode.removeTap(onBus: 0)
@@ -130,6 +144,7 @@ final class AudioRecorder {
         engine = nil
         converter = nil
         mixFormat = nil
+        liftsQuietInput = false
     }
 
     private func handleConfigurationChange() {

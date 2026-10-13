@@ -15,7 +15,7 @@ Each case has an `input` and optional checks:
 - `mustNotContain`: none may appear (e.g. the value a self-correction replaced).
 - `anyOf`: a list of groups; each group needs at least one match.
 
-Every output is also checked for "looks like an answer" (much longer than the input) and truncation, and two metrics are reported per model:
+Every output is also checked for truncation and against the apps' own guards (`Prompts.fallback`), which insert the transcript as spoken instead of an output that is much longer than the input (an answer), keeps under 55% of the words of an input of 150 words or more (a summary), or has little in common with the input (an answer, translation or refusal). `testdata/polish-guard-cases.json` holds the heaviest legitimate clean-up of every case here, which the guards must let through. Two metrics are reported per model:
 
 - **English kept**: the share of English words in a mostly-Chinese input that survive in the output (fillers and `mustNotContain` words excluded). Translating "dark mode" to 深色模式 lowers it; recognition fixes such as "swift UI" → SwiftUI don't.
 - **Similarity**: 1 − normalised character edit distance between input and output, ignoring spacing and punctuation. Lower means heavier rewriting. It should drop for cases full of fillers and corrections and stay high otherwise.

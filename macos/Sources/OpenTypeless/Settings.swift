@@ -56,6 +56,7 @@ final class AppSettings: ObservableObject {
     /// Learned terms the user removed; never learned again (lowercased).
     private var forgottenTerms: Set<String>
 
+    /// The saved keys only: OPENROUTER_API_KEY overrides one in `apiKey(for:)` but never lands in here.
     @Published private(set) var apiKeys: [String: String]
     @Published private(set) var baseURLs: [String: String]
     /// Prices the user entered for models of providers other than OpenRouter (whose prices are live), by `ModelPrice.key`.
@@ -64,9 +65,9 @@ final class AppSettings: ObservableObject {
     @Published private(set) var openRouterHosts: [String: String]
 
     private init() {
-        // In CLI mode with OPENROUTER_API_KEY set, the saved keys aren't needed.
-        let cli = !(ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"] ?? "").isEmpty
-        apiKeys = cli ? [:] : Credentials.load()
+        // Loaded even when OPENROUTER_API_KEY is set: it only stands in for the OpenRouter key, and the app launched
+        // with it still needs the others (and must not save over them when one is edited).
+        apiKeys = Credentials.load()
         baseURLs = (UserDefaults.standard.dictionary(forKey: "baseURLs") as? [String: String]) ?? [:]
         learnedTerms = UserDefaults.standard.data(forKey: "learnedVocabulary")
             .flatMap { try? JSONDecoder().decode([LearnedTerm].self, from: $0) } ?? []
@@ -94,18 +95,29 @@ final class AppSettings: ObservableObject {
 
     // MARK: Providers
 
+    /// The key requests use: OPENROUTER_API_KEY, when set, in place of the saved OpenRouter key.
     func apiKey(for id: ProviderID) -> String {
-        if id == .openrouter, let env = ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"], !env.isEmpty {
-            return env
-        }
-        return apiKeys[id.rawValue] ?? ""
+        if id == .openrouter, let env = Self.openRouterKeyFromEnvironment { return env }
+        return savedAPIKey(for: id)
+    }
+
+    /// The key saved in Settings, which is what a key field shows and edits, so OPENROUTER_API_KEY is never saved.
+    func savedAPIKey(for id: ProviderID) -> String {
+        apiKeys[id.rawValue] ?? ""
+    }
+
+    static var openRouterKeyFromEnvironment: String? {
+        ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"].flatMap { $0.isEmpty ? nil : $0 }
     }
 
     func setAPIKey(_ key: String, for id: ProviderID) {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard apiKeys[id.rawValue, default: ""] != trimmed else { return }
-        apiKeys[id.rawValue] = trimmed.isEmpty ? nil : trimmed
-        Credentials.save(apiKeys)
+        // On top of what the file holds now, not only what was read at launch, so a key never read here isn't erased.
+        var keys = apiKeys.merging(Credentials.saved()) { current, _ in current }
+        keys[id.rawValue] = trimmed.isEmpty ? nil : trimmed
+        apiKeys = keys
+        Credentials.save(keys)
     }
 
     func baseURL(for id: ProviderID) -> String {
@@ -314,15 +326,30 @@ enum Credentials {
     private static let movedFromKeychainKey = "credentialsMovedFromKeychain"
 
     static func load() -> [String: String] {
-        if let data = try? Data(contentsOf: file) {
-            return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
+        var keys = saved()
+        // Earlier versions kept the keys in the keychain: read them there once (the last prompt) and move them. Only a
+        // read that worked, or found nothing, counts: after Deny, or with the keychain still locked at login, it's
+        // tried again next launch.
+        if !UserDefaults.standard.bool(forKey: movedFromKeychainKey), let legacy = LegacyKeychain.load() {
+            if !legacy.isEmpty {
+                keys = legacy.merging(keys) { _, saved in saved }
+                save(keys)
+            }
+            UserDefaults.standard.set(true, forKey: movedFromKeychainKey)
         }
-        // Earlier versions kept the keys in the keychain: read them there once (the last prompt) and move them.
-        guard !UserDefaults.standard.bool(forKey: movedFromKeychainKey) else { return [:] }
-        let keys = LegacyKeychain.load()
-        save(keys)
-        UserDefaults.standard.set(true, forKey: movedFromKeychainKey)
         return keys
+    }
+
+    /// What the file holds. One that can't be read is moved aside (see SafeFile), so the next save doesn't overwrite it.
+    static func saved() -> [String: String] {
+        let url = file
+        guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
+        protect(url)
+        if let data = try? Data(contentsOf: url), let keys = try? JSONDecoder().decode([String: String].self, from: data) {
+            return keys
+        }
+        SafeFile.moveAside(url)
+        return [:]
     }
 
     static func save(_ keys: [String: String]) {
@@ -331,6 +358,8 @@ enum Credentials {
             return
         }
         let url = file
+        // There but unreadable: replacing it would lose the keys this run couldn't read.
+        if FileManager.default.fileExists(atPath: url.path), (try? Data(contentsOf: url)) == nil { return }
         // Created owner-only (0600) from the start, then swapped in whole.
         let temporary = url.deletingLastPathComponent().appendingPathComponent(".credentials-\(UUID().uuidString)")
         guard FileManager.default.createFile(atPath: temporary.path, contents: data,
@@ -338,6 +367,17 @@ enum Credentials {
         if (try? FileManager.default.replaceItemAt(url, withItemAt: temporary)) == nil {
             try? FileManager.default.removeItem(at: temporary)
         }
+        protect(url)
+    }
+
+    /// Owner-only again, in case a copy or a restore loosened it, and left out of backups, which would carry the keys
+    /// off this Mac.
+    private static func protect(_ url: URL) {
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var url = url
+        try? url.setResourceValues(values)
     }
 }
 
@@ -346,18 +386,27 @@ enum Credentials {
 private enum LegacyKeychain {
     private static let service = "OpenTypeless"
 
-    static func load() -> [String: String] {
-        if let data = read("credentials"), let keys = try? JSONDecoder().decode([String: String].self, from: data) {
+    /// Nil when the keychain couldn't be read (the user clicked Deny, or it's locked); empty when there's nothing in it.
+    static func load() -> [String: String]? {
+        guard let credentials = read("credentials") else { return nil }
+        if case let .found(data) = credentials, let keys = try? JSONDecoder().decode([String: String].self, from: data) {
             return keys
         }
         // v0.1 stored a single OpenRouter key.
-        if let data = read("openrouter"), let key = String(data: data, encoding: .utf8), !key.isEmpty {
+        guard let openRouter = read("openrouter") else { return nil }
+        if case let .found(data) = openRouter, let key = String(data: data, encoding: .utf8), !key.isEmpty {
             return ["openrouter": key]
         }
         return [:]
     }
 
-    private static func read(_ account: String) -> Data? {
+    private enum Item {
+        case found(Data)
+        case missing
+    }
+
+    /// Nil when the keychain wouldn't say (any error other than "no such item").
+    private static func read(_ account: String) -> Item? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -366,8 +415,11 @@ private enum LegacyKeychain {
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else { return nil }
-        return item as? Data
+        switch SecItemCopyMatching(query as CFDictionary, &item) {
+        case errSecSuccess: return (item as? Data).map(Item.found) ?? .missing
+        case errSecItemNotFound: return .missing
+        default: return nil
+        }
     }
 }
 

@@ -14,6 +14,13 @@ if let index = CommandLine.arguments.firstIndex(of: "--transcribe-file"),
     dispatchMain()
 }
 
+// `OpenTypeless --polish-text <file>` runs only the clean-up, as the app does it, on a transcript saved as text.
+if let index = CommandLine.arguments.firstIndex(of: "--polish-text"), CommandLine.arguments.count > index + 1 {
+    let path = CommandLine.arguments[index + 1]
+    Task { exit(await CLI.polishText(path: path)) }
+    dispatchMain()
+}
+
 // `OpenTypeless --mic-probe [seconds]` records through each capture method in turn and reports what each heard.
 // Run it from Terminal while the microphone misbehaves (e.g. during a call).
 if let index = CommandLine.arguments.firstIndex(of: "--mic-probe") {

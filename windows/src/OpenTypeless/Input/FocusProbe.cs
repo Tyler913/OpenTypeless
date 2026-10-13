@@ -158,6 +158,15 @@ public static class FocusProbe
         return exe != null && TerminalExecutables.Contains(Path.GetFileNameWithoutExtension(exe), StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>Whether the foreground window is a terminal, where Ctrl+C interrupts the running program instead of copying.</summary>
+    public static bool ForegroundIsTerminal()
+    {
+        var foreground = Win32.GetForegroundWindow();
+        if (foreground == 0) return false;
+        Win32.GetWindowThreadProcessId(foreground, out var pid);
+        return IsTerminal(foreground, pid);
+    }
+
     private static int Int(IUIAutomationElement element, int property) =>
         element.GetCurrentPropertyValue(property, out var value) == 0 && value is int i ? i : 0;
 

@@ -17,6 +17,7 @@ from PIL import Image
 
 from check_gate import failures
 from check_snapshots import check, expected_files, PAGES
+import check_version
 from coverage_summary import dotnet_rows, swift_rows
 import dictation_audio
 import fake_provider
@@ -104,6 +105,34 @@ class GateChecks(unittest.TestCase):
         self.assertTrue(failures(self.needs))
 
 
+class VersionChecks(unittest.TestCase):
+    def test_both_apps_have_the_same_version(self):
+        macos, windows = check_version.versions()
+        self.assertRegex(macos or "", r"^\d+\.\d+\.\d+$")
+        self.assertEqual(check_version.problems(macos, windows), [])
+
+    def test_matching_tags_and_other_refs_pass(self):
+        for ref in ("", "refs/heads/main", "refs/pull/7/merge", "refs/tags/1.2.3", "refs/tags/v1.2.3", "refs/tags/V1.2.3"):
+            self.assertEqual(check_version.problems("1.2.3", "1.2.3", ref), [], ref)
+
+    def test_different_versions_wrong_tag_and_missing_version_fail(self):
+        self.assertTrue(check_version.problems("1.2.3", "1.2.4"))
+        self.assertTrue(check_version.problems("1.2.3", "1.2.3", "refs/tags/1.2.4"))
+        self.assertTrue(check_version.problems("1.2.3", "1.2.3", "refs/tags/v1.2.30"))
+        self.assertEqual(len(check_version.problems("1.2.3", "1.2.4", "refs/tags/1.2.3")), 2)
+        self.assertTrue(check_version.problems(None, "1.2.3"))
+        self.assertTrue(check_version.problems("1.2.3", None))
+
+    def test_reads_both_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "macos/scripts").mkdir(parents=True)
+            (root / "windows").mkdir()
+            (root / check_version.MACOS).write_text('#!/bin/zsh\nAPP_NAME="OpenTypeless"\nVERSION="2.0.1"\n')
+            (root / check_version.WINDOWS).write_text("<Project><PropertyGroup><Version>2.0.0</Version></PropertyGroup></Project>")
+            self.assertEqual(check_version.versions(root), ("2.0.1", "2.0.0"))
+
+
 class CoverageChecks(unittest.TestCase):
     def test_cobertura_merges_classes_without_counting_the_same_line_twice(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -134,7 +163,7 @@ class SnapshotProcessChecks(unittest.TestCase):
                 out = Path(directory) / "snapshots"
                 with patch.object(sys, "argv", ["run_snapshots.py", str(executable), str(out)]), \
                      patch.object(run_snapshots, "check", return_value=[]), \
-                     patch.object(run_snapshots.subprocess, "run", side_effect=[outcome] * 4), \
+                     patch.object(run_snapshots.subprocess, "run", side_effect=[outcome] * len(run_snapshots.LANGUAGES) * len(run_snapshots.THEMES)), \
                      patch("sys.stdout", new_callable=io.StringIO), \
                      patch.dict("os.environ", {"GITHUB_STEP_SUMMARY": ""}), self.assertRaises(SystemExit) as error:
                     run_snapshots.main()

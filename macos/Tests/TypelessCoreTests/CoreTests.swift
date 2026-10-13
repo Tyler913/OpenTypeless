@@ -24,6 +24,36 @@ struct WAVTests {
         XCTAssertEqual(WAV.decodeSamples(data), [1, 2, 3, 4, 5])
         XCTAssertEqual(data.readLE32(at: 4), UInt32(36 + 10))
     }
+
+    @Test func testUnfinalizedFileStillDecodes() throws {
+        // The app quit or crashed mid-recording: the header still says 0 bytes, but the samples are all there.
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = try WAVFileWriter(url: url)
+        defer { writer.close() }
+        writer.append([1, 2, 3])
+        writer.append([-4, 5])
+        let data = try Data(contentsOf: url)
+        XCTAssertEqual(data.readLE32(at: 40), 0)
+        XCTAssertEqual(WAV.decodeSamples(data), [1, 2, 3, -4, 5])
+        #expect(writer.failure == nil)
+    }
+
+    @Test func testUnknownOrOversizedDataSizeReadsToTheEnd() {
+        let samples: [Int16] = [7, -8, 9]
+        func patched(size: UInt32, extra: [UInt8] = []) -> Data {
+            var wav = WAV.encode(samples: samples)
+            wav.replaceSubrange(40..<44, with: Data(le: size))
+            wav.append(contentsOf: extra)
+            return wav
+        }
+        XCTAssertEqual(WAV.decodeSamples(patched(size: 0xFFFF_FFFF)), samples)
+        XCTAssertEqual(WAV.decodeSamples(patched(size: 1000)), samples)
+        // Whole samples only: half a sample at the end of a cut-off file is dropped.
+        XCTAssertEqual(WAV.decodeSamples(patched(size: 0, extra: [0x01])), samples)
+        // A size that fits is still trusted (whatever follows the chunk isn't audio).
+        XCTAssertEqual(WAV.decodeSamples(patched(size: 4, extra: [0x01, 0x02])), [7, -8])
+    }
 }
 
 struct ChunkerTests {
@@ -92,6 +122,17 @@ struct JoinerTests {
         XCTAssertEqual(TranscriptJoiner.join(["done.", " Next"]), "done. Next")
         XCTAssertEqual(TranscriptJoiner.join(["", "  a ", ""]), "a")
     }
+
+    @Test func testKoreanChunksGetASpace() {
+        // Korean puts spaces between words, so chunks don't run together like Chinese or Japanese ones do.
+        XCTAssertEqual(TranscriptJoiner.join(["안녕하세요", "반갑습니다"]), "안녕하세요 반갑습니다")
+        XCTAssertEqual(TranscriptJoiner.join(["오늘은", "OpenTypeless"]), "오늘은 OpenTypeless")
+        XCTAssertEqual(TranscriptJoiner.join(["今日は", "いい天気"]), "今日はいい天気")
+        XCTAssertEqual(TranscriptJoiner.join(["안녕하세요", "。"]), "안녕하세요。")
+        // Counting still treats Hangul as CJK.
+        #expect(TranscriptJoiner.isCJK("한"))
+        #expect(!TranscriptJoiner.joinsWithoutSpace("한"))
+    }
 }
 
 struct SSEParserTests {
@@ -104,6 +145,17 @@ struct SSEParserTests {
                        [.finished(reason: "length")])
         XCTAssertEqual(p.parse(line: "data: [DONE]"), [.done])
         if case .error = p.parse(line: #"data: {"error":{"message":"boom"}}"#).first {} else { XCTFail() }
+        // An integer code is the status to classify the error by; a string code isn't one.
+        XCTAssertEqual(p.parse(line: #"data: {"error":{"code":402,"message":"boom"}}"#), [.error("boom", status: 402)])
+        XCTAssertEqual(p.parse(line: #"data: {"error":{"code":"server_error","message":"boom"}}"#), [.error("boom")])
+    }
+
+    @Test func testTruncation() {
+        XCTAssertTrue(APIClient.isTruncated(finishReason: "length", receivedDone: true))
+        XCTAssertTrue(APIClient.isTruncated(finishReason: "content_filter", receivedDone: true))
+        XCTAssertTrue(APIClient.isTruncated(finishReason: nil, receivedDone: false))
+        XCTAssertFalse(APIClient.isTruncated(finishReason: nil, receivedDone: true))
+        XCTAssertFalse(APIClient.isTruncated(finishReason: "stop", receivedDone: false))
     }
 }
 
@@ -137,6 +189,30 @@ struct RetryTests {
             XCTFail()
         } catch {}
         XCTAssertEqual(calls, 1)
+    }
+
+    @Test func testTimeoutsCanBeLeftUnretried() async {
+        let policy = RetryPolicy(maxAttempts: 3, baseDelay: 0.01, retriesTimeouts: false)
+        var calls = 0
+        do {
+            _ = try await policy.run { _ -> Int in calls += 1; throw APIError.timeout(seconds: 10) }
+            XCTFail()
+        } catch {}
+        XCTAssertEqual(calls, 1)
+        calls = 0
+        let value = try? await policy.run { _ -> Int in
+            calls += 1
+            if calls < 2 { throw APIError.http(status: 503, message: "") }
+            return 7
+        }
+        XCTAssertEqual(value, 7)
+        XCTAssertEqual(calls, 2)
+    }
+
+    @Test func testPolishTimeoutScalesWithLength() {
+        XCTAssertTrue(abs(APIClient.polishTimeout(for: "好的收到") - 20.2) < 0.001)
+        XCTAssertTrue(abs(APIClient.polishTimeout(for: String(repeating: "字", count: 600)) - 50) < 0.001)
+        XCTAssertEqual(APIClient.polishTimeout(for: String(repeating: "字", count: 5000)), 120)
     }
 
     @Test func testTimeout() async {
@@ -185,4 +261,86 @@ func XCTAssertLessThanOrEqual<T: Comparable>(_ a: T, _ b: T, sourceLocation: Sou
 }
 func XCTFail(_ message: String = "", sourceLocation: SourceLocation = #_sourceLocation) {
     Issue.record(Comment(rawValue: message), sourceLocation: sourceLocation)
+}
+
+extension WAVTests {
+
+    @Test func unfinalizedDataAfterAnOddSizedMetadataChunk() {
+        for size: UInt32 in [0, .max, 1000] {
+            var data = WAV.encode(samples: [7, -8, .min, .max])
+            data.replaceSubrange(40..<44, with: Data(le: size))
+            // RIFF chunks with odd lengths have a pad byte; the data header is no longer at offset 36.
+            var metadata = Data("JUNK".utf8)
+            metadata.append(Data(le: UInt32(3)))
+            metadata.append(contentsOf: [1, 2, 3, 0])
+            data.insert(contentsOf: metadata, at: 36)
+            data.append(0x12) // a torn final sample is ignored
+            #expect(WAV.decodeSamples(data) == [7, -8, .min, .max])
+        }
+        #expect(WAV.decodeSamples(WAV.header(dataByteCount: 0)) == [])
+    }
+
+    @Test func writeAndFinalizeFailuresKeepTheFirstErrorAndSavedAudio() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = try WAVFileWriter(url: url)
+        defer { writer.close() }
+        writer.append([7, -8])
+        // Test-only fault injection: no production hook and no full disk required. Closing the underlying handle
+        // makes its throwing I/O fail while the writer still believes the recording is open.
+        let handle = try #require(Mirror(reflecting: writer).children.first { $0.label == "handle" }?.value as? FileHandle)
+        try handle.close()
+        writer.append([])
+        #expect(writer.failure == nil)
+        writer.append([9])
+        let first = try #require(writer.failure) as NSError
+        writer.append([10])
+        writer.finalize()
+        #expect((writer.failure as NSError?) == first)
+        let data = try Data(contentsOf: url)
+        #expect(data.readLE32(at: 40) == 0)
+        #expect(WAV.decodeSamples(data) == [7, -8])
+    }
+
+    @Test func finalizeFailureIsReportedEvenWithoutAnAppendFailure() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = try WAVFileWriter(url: url)
+        defer { writer.close() }
+        writer.append([1, 2])
+        let handle = try #require(Mirror(reflecting: writer).children.first { $0.label == "handle" }?.value as? FileHandle)
+        try handle.close()
+        writer.finalize()
+        #expect(writer.failure != nil)
+        #expect(try WAV.decodeSamples(Data(contentsOf: url)) == [1, 2])
+    }
+}
+
+extension JoinerTests {
+
+    @Test func koreanSpacingSurvivesEmptyChunksAndPunctuation() {
+        #expect(TranscriptJoiner.join([" 오늘은 ", "\n", "좋아요", ",", "정말", "!", "Next", "한국어", "123"]) == "오늘은 좋아요, 정말! Next 한국어 123")
+        // Decomposed and compatibility Jamo still need word spacing.
+        #expect(TranscriptJoiner.join(["한", "글"]) == "한 글")
+        #expect(TranscriptJoiner.join(["ㄱㄴ", "ㄷㄹ"]) == "ㄱㄴ ㄷㄹ")
+    }
+}
+
+extension ChunkerTests {
+
+    @Test func pauseRequiresItsLastSampleAndLayoutIsVersioned() throws {
+        #expect(Chunker.layout == 2) // saved chunkTexts from layout 1 must not be reused
+        let chunker = Chunker()
+        let speech = [Int16](repeating: 6000, count: 144_000) // 9 seconds, exactly 300 VAD frames
+        #expect(chunker.append(speech).isEmpty)
+        #expect(chunker.append([Int16](repeating: 0, count: 4_799)).isEmpty)
+        let ready = chunker.append([0]) // exactly ten whole quiet frames (0.3 s)
+        #expect(ready.count == 1)
+        let first = try #require(ready.first)
+        #expect(first.index == 0 && first.startSample == 0 && first.samples.count == 146_400)
+        let tail = try #require(chunker.finish())
+        #expect(tail.index == 1 && tail.startSample == 146_400 && tail.samples.count == 2_400)
+        #expect(first.samples + tail.samples == speech + [Int16](repeating: 0, count: 4_800))
+        #expect(chunker.finish() == nil)
+    }
 }

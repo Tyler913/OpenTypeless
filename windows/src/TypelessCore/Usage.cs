@@ -199,7 +199,8 @@ public sealed class PriceCatalog
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(30));
-            using var response = await client.GetAsync(url, timeout.Token).ConfigureAwait(false);
+            using var request = ApiClient.NewRequest(HttpMethod.Get, new Uri(url));
+            using var response = await client.SendAsync(request, timeout.Token).ConfigureAwait(false);
             var data = await response.Content.ReadAsByteArrayAsync(timeout.Token).ConfigureAwait(false);
             if (!ApiClient.IsSuccess(response.StatusCode)) throw ApiException.Http((int)response.StatusCode, ApiClient.ErrorMessage(data));
             foreach (var (id, price) in ParseModels(data)) models[id] = price;

@@ -1,12 +1,13 @@
 # Package managers
 
 Every published release can be installed with Homebrew on macOS and WinGet on Windows. The
-[Publish to package managers](../.github/workflows/publish.yml) workflow runs when a release is published (not a
-pre-release): it fills in the files here with the version and the SHA-256 GitHub published for each zip
-([render.py](render.py)), then
+[Publish to package managers](../.github/workflows/publish.yml) workflow runs when a release is published, or a
+pre-release is turned into a release (not for a pre-release): it fills in the files here with the version and the
+SHA-256 GitHub published for each zip ([render.py](render.py)), then
 
 - **Homebrew:** commits the cask to `Casks/opentypeless.rb` in [Tyler913/homebrew-tap](https://github.com/Tyler913/homebrew-tap). It installs the
-  release's `macOS-arm64` or `macOS-x64` zip, whichever fits the Mac.
+  release's `macOS-arm64` or `macOS-x64` zip, whichever fits the Mac. It never replaces the cask with an older
+  version, unless that one is the latest release.
 - **WinGet:** opens a pull request in [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) with the manifests for `TylerHong.OpenTypeless`,
   which run the release's installer (`windows-x64-setup.exe`, `windows-arm64-setup.exe`) silently, for the current user.
 
@@ -39,11 +40,17 @@ itself, and `brew upgrade --greedy` (or the next release's cask) catches up.
 
 The first submission adds a new package, so Microsoft's moderators review it by hand (usually a few days); later
 versions are checked automatically. Watch the pull request: a moderator may ask for a change, or the automated
-check may flag the unsigned exe for a closer look.
+check may flag the unsigned exe for a closer look. Until it's merged, releases submit nothing to WinGet (another
+version would open a second New-Package pull request), with a notice on the run; once it's merged, run the workflow
+for the latest release. A version whose pull request is already open isn't submitted again either.
+
+The workflow runs a fixed release of wingetcreate, checked against its SHA-256 (`WINGETCREATE_VERSION` and
+`WINGETCREATE_SHA256` in the workflow), and brings your winget-pkgs fork up to date before submitting.
 
 Then publish the release as usual, or run the workflow for a release that's already out
-(**Actions → Publish to package managers → Run workflow**, with its tag). Until a token is set, its part is skipped
-with a notice and nothing fails.
+(**Actions → Publish to package managers → Run workflow**, with its tag, and Homebrew, WinGet or both). Until a token
+is set, its part is skipped with a notice and nothing fails. Runs never overlap: a later one waits for the one in
+progress.
 
 ## Installing
 

@@ -161,7 +161,10 @@ enum PolishEval {
                 for s in c.mustContain ?? [] where !attempt.output.contains(s) { failures.append("missing “\(s)”") }
                 for s in c.mustNotContain ?? [] where attempt.output.contains(s) { failures.append("still has “\(s)”") }
                 for g in c.anyOf ?? [] where !g.contains(where: attempt.output.contains) { failures.append("none of \(g)") }
-                if Prompts.looksLikeAnAnswer(input: c.input, output: attempt.output) { failures.append("looks like an answer") }
+                // The app's own checks: it would insert the transcript as spoken instead of this output.
+                if !attempt.output.isEmpty, let fallback = Prompts.fallback(input: c.input, output: attempt.output, truncated: false) {
+                    failures.append("the app would reject it: \(fallback.rawValue)")
+                }
                 if attempt.truncated { failures.append("truncated") }
                 if attempt.error != nil { failures.append("request error; see private attempt") }
                 let ok = attempt.error == nil && !attempt.output.isEmpty

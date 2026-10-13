@@ -49,6 +49,29 @@ final class MockOpenRouter: URLProtocol {
     }
 }
 
+/// Sends nothing but OpenRouter's keep-alive comments, every 50 ms: a model that never starts answering.
+final class KeepAliveServer: URLProtocol {
+    private let lock = NSLock()
+    private var stopped = false
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() { lock.withLock { stopped = true } }
+
+    override func startLoading() {
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                                       headerFields: ["Content-Type": "text/event-stream"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        tick()
+    }
+
+    private func tick() {
+        guard !lock.withLock({ stopped }) else { return }
+        client?.urlProtocol(self, didLoad: Data(": OPENROUTER PROCESSING\n\n".utf8))
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) { [self] in tick() }
+    }
+}
+
 @Suite(.serialized) struct PipelineTests {
     private func speech(seconds: Double) -> [Int16] {
         let n = AudioFormat.sampleCount(forSeconds: seconds)
@@ -104,7 +127,9 @@ final class MockOpenRouter: URLProtocol {
     @Test func permanentFailureKeepsPartialText() async throws {
         let audio = speech(seconds: 40)
         let reference = Chunker()
-        let firstChunkSize = reference.append(audio).first!.samples.count
+        let cut = reference.append(audio)
+        let firstChunkSize = cut.first!.samples.count
+        let chunkCount = cut.count + (reference.finish() == nil ? 0 : 1)
         MockOpenRouter.handler = { _, body in
             let json = try! JSONSerialization.jsonObject(with: body) as! [String: Any]
             let data = (json["input_audio"] as! [String: String])["data"]!
@@ -122,7 +147,7 @@ final class MockOpenRouter: URLProtocol {
             Issue.record("expected failure")
         } catch let failure as PipelineFailure {
             #expect(failure.partialText == "第一段")
-            #expect(failure.failedChunks == [1])
+            #expect(chunkCount >= 2 && failure.failedChunks == Array(1..<chunkCount))
             #expect(pipeline.completedTranscripts() == [0: "第一段"])
         }
     }
@@ -289,11 +314,132 @@ extension PipelineTests {
         #expect(bodies.count == 2)
     }
 
+    @Test func cutOffAnswersAreTruncated() async throws {
+        let client = APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session())
+        func polish(_ sse: String) async throws -> APIClient.PolishResult {
+            MockOpenRouter.handler = { _, _ in (200, Data(sse.utf8)) }
+            return try await client.polish(transcript: "x", options: PolishOptions(model: "m"))
+        }
+        let content = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n"
+        let filtered = "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"content_filter\"}]}\n\ndata: [DONE]\n\n"
+        #expect(try await polish(content + filtered).truncated)
+        // The connection broke off: neither a finish reason nor [DONE].
+        #expect(try await polish(content).truncated)
+        #expect(try await polish(content + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n").truncated == false)
+        #expect(try await polish(content + "data: [DONE]\n\n").truncated == false)
+    }
+
+    @Test func streamErrorKeepsItsStatus() async {
+        let client = APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session())
+        MockOpenRouter.handler = { _, _ in
+            (200, Data("data: {\"error\":{\"code\":402,\"message\":\"Insufficient credits\"}}\n\n".utf8))
+        }
+        await #expect(throws: APIError.http(status: 402, message: "Insufficient credits")) {
+            try await client.polish(transcript: "x", options: PolishOptions(model: "m"))
+        }
+        MockOpenRouter.handler = { _, _ in (200, Data("data: {\"error\":{\"message\":\"boom\"}}\n\n".utf8)) }
+        await #expect(throws: APIError.http(status: 502, message: "boom")) {
+            try await client.polish(transcript: "x", options: PolishOptions(model: "m"))
+        }
+    }
+
+    @Test func transcriptionErrorBodyKeepsItsStatus() async {
+        var calls = 0
+        MockOpenRouter.handler = { _, _ in
+            MockOpenRouter.lock.withLock { calls += 1 }
+            return (200, Data(#"{"error":{"code":401,"message":"No auth credentials found"}}"#.utf8))
+        }
+        let client = APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session())
+        await #expect(throws: APIError.http(status: 401, message: "No auth credentials found")) {
+            try await client.transcribeWithRetry(samples: [1, 2, 3], options: .init(model: "m"),
+                                                 policy: RetryPolicy(maxAttempts: 3, baseDelay: 0.01))
+        }
+        // A 401 isn't retried, even inside a 200.
+        #expect(calls == 1)
+    }
+
+    @Test func keepAliveCommentsDontPostponeTheFirstTokenDeadline() async {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [KeepAliveServer.self]
+        let client = APIClient(endpoint: .openRouter(apiKey: "k"), session: URLSession(configuration: config))
+        let start = Date()
+        await #expect(throws: APIError.timeout(seconds: 0.3)) {
+            try await client.polish(transcript: "x", options: PolishOptions(model: "m"), firstTokenTimeout: 0.3)
+        }
+        #expect(Date().timeIntervalSince(start) < 3)
+    }
+
     @Test func localization() {
         UserDefaults.standard.set("en", forKey: AppLanguage.defaultsKey)
         #expect(L("中文", "English") == "English")
         UserDefaults.standard.set("zh", forKey: AppLanguage.defaultsKey)
         #expect(L("中文", "English") == "中文")
         UserDefaults.standard.removeObject(forKey: AppLanguage.defaultsKey)
+    }
+}
+
+/// The two responses differ only in whether the prelude contains a real content token. Both hold [DONE] back
+/// well past the first-token deadline, while staying inside the idle/total limits. No elapsed-time assertions.
+private final class FirstTokenServer: URLProtocol {
+    private let lock = NSLock()
+    private var stopped = false
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() { lock.withLock { stopped = true } }
+    override func startLoading() {
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                                       headerFields: ["Content-Type": "text/event-stream"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        let prelude = request.url?.host == "content.test"
+            ? "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n"
+            : "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning\":\"thinking\"}}],\"usage\":{\"prompt_tokens\":12}}\n\n"
+        client?.urlProtocol(self, didLoad: Data(prelude.utf8))
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [self] in
+            lock.withLock {
+                guard !stopped else { return }
+                client?.urlProtocol(self, didLoad: Data("data: [DONE]\n\n".utf8))
+                client?.urlProtocolDidFinishLoading(self)
+            }
+        }
+    }
+}
+
+extension PipelineTests {
+    @Test func onlyContentDisarmsTheFirstTokenDeadline() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [FirstTokenServer.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        func client(_ host: String) -> APIClient {
+            APIClient(endpoint: .init(id: .custom, baseURL: URL(string: "https://\(host)/v1")!, apiKey: "k"), session: session)
+        }
+        await #expect(throws: APIError.timeout(seconds: 1)) {
+            try await client("metadata.test").polish(transcript: "hello", options: .init(model: "m"),
+                                                     idleTimeout: 10, totalTimeout: 10, firstTokenTimeout: 1)
+        }
+        let partials = Recorded<String>()
+        let result = try await client("content.test").polish(transcript: "hello", options: .init(model: "m"),
+                                                            idleTimeout: 10, totalTimeout: 10, firstTokenTimeout: 1,
+                                                            onPartial: { partials.add($0) })
+        #expect(result.text == "hello" && !result.truncated)
+        #expect(partials.all == ["hello"])
+    }
+
+    @Test func usageDoesNotCompleteAStreamAndDoneStopsParsing() async throws {
+        let client = APIClient(endpoint: .openRouter(apiKey: "k"), session: MockOpenRouter.session())
+        let content = "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n"
+        let usage = "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3}}\n\n"
+        for ending in ["", "data: {\"choices\":[{\"finish_reason\":\"content_filter\"}]}\n\n"] {
+            MockOpenRouter.handler = { _, _ in (200, Data((content + ending + usage).utf8)) }
+            let result = try await client.polish(transcript: "original", options: .init(model: "m"))
+            #expect(result.text == "partial" && result.truncated)
+            #expect(result.usage?.inputTokens == 12 && result.usage?.outputTokens == 3)
+            #expect(Prompts.fallback(input: "original", output: result.text, truncated: result.truncated) == .truncated)
+        }
+        MockOpenRouter.handler = { _, _ in
+            (200, Data((content + usage + "data: [DONE]\n\ndata: {\"error\":{\"message\":\"too late\"}}\n\n").utf8))
+        }
+        let result = try await client.polish(transcript: "original", options: .init(model: "m"))
+        #expect(result.text == "partial" && !result.truncated)
     }
 }

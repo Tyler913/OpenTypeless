@@ -59,7 +59,7 @@ def plist(value):
 
 
 def section(stdout, title):
-    match = re.search(rf"^===== {title} \(\d+ chars\) =====\n(.*?)\n\n", stdout, re.S | re.M)
+    match = re.search(rf"^===== {title} \(\d+ chars[^)]*\) =====\n(.*?)\n\n", stdout, re.S | re.M)
     return match[1] if match else None
 
 

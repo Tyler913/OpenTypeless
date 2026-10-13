@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -35,6 +36,82 @@ public class MockServerCollection { }
 [Collection("MockServer")]
 public class PipelineTests
 {
+
+    [Fact]
+    public async Task OnlyContentDisarmsTheFirstTokenDeadline()
+    {
+        const string metadata = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning\":\"thinking\"}}],\"usage\":{\"prompt_tokens\":12}}\n\n";
+        using var metadataHttp = new HttpClient(new FirstTokenHandler(metadata));
+        var metadataClient = new ApiClient(ProviderEndpoint.OpenRouter("k"), metadataHttp);
+        var error = await Assert.ThrowsAsync<ApiException>(() => metadataClient.Polish("hello", new PolishOptions("m"),
+            idleTimeout: 10, totalTimeout: 10, firstTokenTimeout: 1));
+        Assert.Equal(ApiException.TimedOut(1), error);
+
+        const string content = "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n";
+        using var contentHttp = new HttpClient(new FirstTokenHandler(content));
+        var contentClient = new ApiClient(ProviderEndpoint.OpenRouter("k"), contentHttp);
+        var partials = new List<string>();
+        var result = await contentClient.Polish("hello", new PolishOptions("m"), idleTimeout: 10, totalTimeout: 10,
+                                               firstTokenTimeout: 1, onPartial: partials.Add);
+        Assert.Equal("hello", result.Text);
+        Assert.False(result.Truncated);
+        Assert.Equal(["hello"], partials);
+    }
+
+    // Both streams hold [DONE] back well past the first-token deadline and inside the other limits.
+    // No elapsed-time assertions; the timeout kind and completed content prove which timer applied.
+    private sealed class FirstTokenHandler(string prelude) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new FirstTokenStream(prelude)) });
+
+        private sealed class FirstTokenStream(string prelude) : Stream
+        {
+            private int _read;
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => throw new NotSupportedException();
+            public override long Position { get => 0; set => throw new NotSupportedException(); }
+            public override void Flush() { }
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                var read = _read++;
+                if (read > 1) return 0;
+                if (read == 1) await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                var bytes = Encoding.UTF8.GetBytes(read == 0 ? prelude : "data: [DONE]\n\n");
+                bytes.CopyTo(buffer);
+                return bytes.Length;
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UsageDoesNotCompleteAStreamAndDoneStopsParsing()
+    {
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
+        const string content = "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n";
+        const string usage = "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3}}\n\n";
+        foreach (var ending in new[] { "", "data: {\"choices\":[{\"finish_reason\":\"content_filter\"}]}\n\n" })
+        {
+            MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8(content + ending + usage));
+            var result = await client.Polish("original", new PolishOptions("m"));
+            Assert.Equal("partial", result.Text);
+            Assert.True(result.Truncated);
+            Assert.Equal(12, result.Usage!.InputTokens);
+            Assert.Equal(3, result.Usage.OutputTokens);
+            Assert.Equal(PolishFallback.Truncated, Prompts.Fallback("original", result.Text, result.Truncated));
+        }
+        MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8(content + usage + "data: [DONE]\n\ndata: {\"error\":{\"message\":\"too late\"}}\n\n"));
+        var complete = await client.Polish("original", new PolishOptions("m"));
+        Assert.Equal("partial", complete.Text);
+        Assert.False(complete.Truncated);
+    }
+
     private static short[] Speech(double seconds)
     {
         var n = AudioFormat.SampleCount(seconds);
@@ -112,7 +189,10 @@ public class PipelineTests
     public async Task PermanentFailureKeepsPartialText()
     {
         var audio = Speech(40);
-        var firstChunkSize = new Chunker().Append(audio).First().Samples.Length;
+        var reference = new Chunker();
+        var cut = reference.Append(audio);
+        var firstChunkSize = cut.First().Samples.Length;
+        var chunkCount = cut.Count + (reference.Finish() == null ? 0 : 1);
         MockOpenRouter.Handler = (_, body) =>
         {
             var (_, samples) = Audio(body);
@@ -125,7 +205,8 @@ public class PipelineTests
         pipeline.Append(audio);
         var failure = await Assert.ThrowsAsync<PipelineFailure>(() => pipeline.Finish());
         Assert.Equal("第一段", failure.PartialText);
-        Assert.Equal([1], failure.FailedChunks);
+        Assert.True(chunkCount >= 2);
+        Assert.Equal(Enumerable.Range(1, chunkCount - 1), failure.FailedChunks);
         Assert.Equal(new Dictionary<int, string> { [0] = "第一段" }, pipeline.CompletedTranscripts());
     }
 
@@ -177,8 +258,13 @@ public class PipelineTests
         var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
         var pipeline = new TranscriptionPipeline(client, new TranscriptionOptions("m"), preset: new Dictionary<int, string> { [0] = "第一段" });
         pipeline.Append(audio);
-        Assert.Equal("第一段第二段", await pipeline.Finish());
-        Assert.Single(sent);
+        var text = await pipeline.Finish();
+        // How the recording is cut (at pauses), so every chunk but the first is sent once.
+        var chunker = new Chunker();
+        var chunks = chunker.Append(audio).Count + (chunker.Finish() != null ? 1 : 0);
+        Assert.True(chunks > 1);
+        Assert.Equal(chunks - 1, sent.Count);
+        Assert.Equal("第一段" + string.Concat(Enumerable.Repeat("第二段", chunks - 1)), text);
     }
 
     [Fact]
@@ -340,13 +426,97 @@ public class PipelineTests
     }
 
     [Fact]
-    public async Task PolishIdleTimeoutIsRetryable()
+    public async Task PolishIdleTimeoutIsATimeout()
     {
-        // A stream that goes silent must end with a retryable error, not hang until the 240 s guard.
+        // A stream that goes silent must end with a timeout, not hang until the total cap.
         var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), new HttpClient(new StallingHandler()));
         var error = await Assert.ThrowsAsync<ApiException>(() => client.Polish("x", new PolishOptions("m"), idleTimeout: 0.2, totalTimeout: 5));
-        Assert.Equal(ApiErrorKind.Network, error.Kind);
-        Assert.True(error.IsRetryable);
+        Assert.Equal(ApiException.TimedOut(0.2), error);
+    }
+
+    [Fact]
+    public async Task KeepAliveCommentsDontPostponeTheFirstTokenDeadline()
+    {
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), new HttpClient(new KeepAliveHandler()));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var error = await Assert.ThrowsAsync<ApiException>(() => client.Polish("x", new PolishOptions("m"), firstTokenTimeout: 0.3));
+        Assert.Equal(ApiException.TimedOut(0.3), error);
+        Assert.True(clock.Elapsed.TotalSeconds < 3);
+    }
+
+    [Fact]
+    public async Task CutOffAnswersAreTruncated()
+    {
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
+        async Task<PolishResult> Polish(string sse)
+        {
+            MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8(sse));
+            return await client.Polish("x", new PolishOptions("m"));
+        }
+        const string content = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n";
+        Assert.True((await Polish(content + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"content_filter\"}]}\n\ndata: [DONE]\n\n")).Truncated);
+        // The connection broke off: neither a finish reason nor [DONE].
+        Assert.True((await Polish(content)).Truncated);
+        Assert.False((await Polish(content + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")).Truncated);
+        Assert.False((await Polish(content + "data: [DONE]\n\n")).Truncated);
+    }
+
+    [Fact]
+    public async Task StreamErrorKeepsItsStatus()
+    {
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
+        MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8("data: {\"error\":{\"code\":402,\"message\":\"Insufficient credits\"}}\n\n"));
+        var error = await Assert.ThrowsAsync<ApiException>(() => client.Polish("x", new PolishOptions("m")));
+        Assert.Equal(ApiException.Http(402, "Insufficient credits"), error);
+        MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8("data: {\"error\":{\"message\":\"boom\"}}\n\n"));
+        error = await Assert.ThrowsAsync<ApiException>(() => client.Polish("x", new PolishOptions("m")));
+        Assert.Equal(ApiException.Http(502, "boom"), error);
+    }
+
+    [Fact]
+    public async Task TranscriptionErrorBodyKeepsItsStatus()
+    {
+        var calls = 0;
+        MockOpenRouter.Handler = (_, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            return (200, MockOpenRouter.Utf8("""{"error":{"code":401,"message":"No auth credentials found"}}"""));
+        };
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
+        var error = await Assert.ThrowsAsync<ApiException>(() =>
+            client.TranscribeWithRetry([1, 2, 3], new TranscriptionOptions("m"), new RetryPolicy(MaxAttempts: 3, BaseDelay: 0.01)));
+        Assert.Equal(401, error.Status);
+        // A 401 isn't retried, even inside a 200.
+        Assert.Equal(1, calls);
+    }
+
+    /// <summary>Sends nothing but OpenRouter's keep-alive comments, every 50 ms: a model that never starts answering.</summary>
+    private sealed class KeepAliveHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new KeepAliveStream()) });
+
+        private sealed class KeepAliveStream : Stream
+        {
+            private static readonly byte[] Comment = Encoding.UTF8.GetBytes(": OPENROUTER PROCESSING\n\n");
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => throw new NotSupportedException();
+            public override long Position { get => 0; set => throw new NotSupportedException(); }
+            public override void Flush() { }
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                await Task.Delay(50, cancellationToken);
+                Comment.CopyTo(buffer);
+                return Comment.Length;
+            }
+        }
     }
 
     private sealed class StallingHandler : HttpMessageHandler
@@ -398,5 +568,102 @@ public class PipelineTests
         {
             TypelessCore.Localization.Preference = original;
         }
+    }
+}
+
+/// <summary>
+/// Requests ask for HTTP/2, as URLSession does on macOS, so hedged and retried requests share one connection; a plain
+/// http:// server still gets HTTP/1.1.
+/// </summary>
+[Collection("MockServer")]
+public class HttpVersionTests
+{
+    [Fact]
+    public async Task EveryProviderRequestAsksForHttp2()
+    {
+        var versions = new List<(string Path, Version Version, HttpVersionPolicy Policy)>();
+        MockOpenRouter.Delay = null;
+        MockOpenRouter.Handler = (request, _) =>
+        {
+            lock (MockOpenRouter.Lock) versions.Add((request.RequestUri!.AbsolutePath, request.Version, request.VersionPolicy));
+            return (200, MockOpenRouter.Utf8("""{"text":"ok","data":[{"id":"m","pricing":{"prompt":"0.000001","completion":"0.000002"}}]}"""));
+        };
+        var client = new ApiClient(ProviderEndpoint.OpenRouter("k"), MockOpenRouter.Client());
+        await client.Transcribe([0], new TranscriptionOptions("m"), 10);
+        await client.ListModels();
+        await client.ListHosts("a/b");
+        await client.VerifyCredentials();
+        await client.Preconnect();
+        await PriceCatalog.Fetch(http: MockOpenRouter.Client());
+        Assert.Equal(7, versions.Count);
+        Assert.All(versions, v =>
+        {
+            Assert.Equal(HttpVersion.Version20, v.Version);
+            Assert.Equal(HttpVersionPolicy.RequestVersionOrLower, v.Policy);
+        });
+    }
+
+    [Fact]
+    public async Task APlainHttpServerIsAskedOverHttp11()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        try
+        {
+            await AnswerOnce(listener);
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    private static async Task AnswerOnce(TcpListener listener)
+    {
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var served = Task.Run(async () =>
+        {
+            using var connection = await listener.AcceptTcpClientAsync();
+            var stream = connection.GetStream();
+            var received = new List<byte>();
+            var buffer = new byte[65536];
+            int headerEnd;
+            while ((headerEnd = IndexOf(received, "\r\n\r\n"u8.ToArray())) < 0)
+            {
+                var n = await stream.ReadAsync(buffer);
+                if (n == 0) throw new IOException("closed before the headers ended");
+                received.AddRange(buffer.AsSpan(0, n).ToArray());
+            }
+            var headers = Encoding.ASCII.GetString(received.ToArray(), 0, headerEnd);
+            var length = headers.Split("\r\n").Select(line => line.Split(':', 2))
+                .Where(parts => parts.Length == 2 && parts[0].Trim().Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+                .Select(parts => int.Parse(parts[1].Trim())).FirstOrDefault();
+            // The whole body before answering, so the client isn't cut off mid-upload.
+            while (received.Count < headerEnd + 4 + length)
+            {
+                var n = await stream.ReadAsync(buffer);
+                if (n == 0) break;
+                received.AddRange(buffer.AsSpan(0, n).ToArray());
+            }
+            const string body = """{"text":"local"}""";
+            var response = $"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{body}";
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(response));
+            return headers.Split("\r\n")[0];
+        });
+        // The app's own HTTP stack, against a local server without TLS (e.g. a self-hosted Whisper).
+        var client = new ApiClient(new ProviderEndpoint(ProviderId.Custom, new Uri($"http://127.0.0.1:{port}/v1"), ""));
+        Assert.Equal("local", await client.Transcribe(Wav.Encode([1, 2, 3]), new TranscriptionOptions("w"), 10));
+        Assert.Equal("POST /v1/audio/transcriptions HTTP/1.1", await served.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    private static int IndexOf(List<byte> data, byte[] pattern)
+    {
+        for (var i = 0; i + pattern.Length <= data.Count; i++)
+        {
+            var match = true;
+            for (var j = 0; j < pattern.Length && match; j++) match = data[i + j] == pattern[j];
+            if (match) return i;
+        }
+        return -1;
     }
 }

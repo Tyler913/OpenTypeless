@@ -7,8 +7,13 @@ import UniformTypeIdentifiers
 /// until the user adds one.
 struct AppsPage: View {
     @ObservedObject var settings: AppSettings
-    @State private var expanded: Set<String> = []
-    @State private var running: [RunningApp] = RunningApp.all()
+    @State private var expanded: Set<String>
+
+    init(settings: AppSettings) {
+        self.settings = settings
+        // The snapshots show the first sample profile opened.
+        _expanded = State(initialValue: UISnapshots.active ? Set(settings.appProfiles.prefix(1).map(\.id)) : [])
+    }
 
     var body: some View {
         PageScaffold(page: .apps) {
@@ -24,7 +29,7 @@ struct AppsPage: View {
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: 440)
-                        addMenu.padding(.top, 4)
+                        addButton.padding(.top, 4)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)
@@ -40,7 +45,7 @@ struct AppsPage: View {
                     }
                 }
                 HStack {
-                    addMenu
+                    addButton
                     Spacer()
                 }
             }
@@ -51,36 +56,37 @@ struct AppsPage: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 4)
         }
-        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didLaunchApplicationNotification)) { _ in
-            running = RunningApp.all()
-        }
-        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didTerminateApplicationNotification)) { _ in
-            running = RunningApp.all()
-        }
     }
 
-    /// The running apps that have no profile yet, and the Applications folder for any other.
-    private var addMenu: some View {
-        Menu {
-            let candidates = running.filter { app in !settings.appProfiles.contains { $0.matches(app.bundleID) } }
-            Section(L("正在运行的应用", "Running apps")) {
-                if candidates.isEmpty {
-                    Text(L("没有其他正在运行的应用", "No other running apps"))
-                }
-                ForEach(candidates) { app in
-                    Button {
-                        add(bundleID: app.bundleID, name: app.name)
-                    } label: {
-                        Label { Text(app.name) } icon: { Image(nsImage: app.icon) }
-                    }
-                }
+    /// Opens the Add menu. Nothing about running apps is read until then: not when the page is shown, nor while it's open.
+    private var addButton: some View {
+        Button { showAddMenu() } label: {
+            HStack(spacing: 6) {
+                Label(L("添加应用", "Add app"), systemImage: "plus")
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
             }
-            Divider()
-            Button(L("从「应用程序」文件夹选择…", "Choose from Applications…")) { chooseApplication() }
-        } label: {
-            Label(L("添加应用", "Add app"), systemImage: "plus")
         }
         .fixedSize()
+    }
+
+    /// The running apps that have no profile yet, read now (names only, which is quick), and the Applications folder for
+    /// any other. Their icons are looked up off the main thread and fill in as they come (see `AppIcons`).
+    private func showAddMenu() {
+        let candidates = RunningApp.list().filter { app in !settings.appProfiles.contains { $0.matches(app.bundleID) } }
+        let menu = NSMenu()
+        menu.addItem(.sectionHeader(title: L("正在运行的应用", "Running apps")))
+        if candidates.isEmpty {
+            menu.addItem(NSMenuItem(title: L("没有其他正在运行的应用", "No other running apps"), action: nil, keyEquivalent: ""))
+        }
+        for app in candidates {
+            let item = MenuAction.item(app.name) { add(bundleID: app.bundleID, name: app.name) }
+            item.image = AppIcons.placeholder
+            menu.addItem(item)
+            Task { if let icon = await AppIcons.icon(for: app.bundleID) { item.image = AppIcons.menuSized(icon) } }
+        }
+        menu.addItem(.separator())
+        menu.addItem(MenuAction.item(L("从「应用程序」文件夹选择…", "Choose from Applications…")) { chooseApplication() })
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
     private func add(bundleID: String, name: String) {
@@ -105,31 +111,74 @@ struct AppsPage: View {
 }
 
 /// An app in the Add menu: one with a Dock icon (not a background helper), other than OpenTypeless itself.
-private struct RunningApp: Identifiable {
+private struct RunningApp {
     let bundleID: String
     let name: String
-    let icon: NSImage
 
-    var id: String { bundleID }
-
-    static func all() -> [RunningApp] {
+    /// Read when the Add menu opens; a fixed pair for the UI snapshots, which never ask the system.
+    @MainActor static func list() -> [RunningApp] {
+        if UISnapshots.active {
+            return [RunningApp(bundleID: "com.apple.Notes", name: "Notes"), RunningApp(bundleID: "com.apple.Safari", name: "Safari")]
+        }
         var seen = Set<String>()
         return NSWorkspace.shared.runningApplications.compactMap { app -> RunningApp? in
             guard app.activationPolicy == .regular, let id = app.bundleIdentifier, id != Bundle.main.bundleIdentifier,
                   seen.insert(id).inserted else { return nil }
-            return RunningApp(bundleID: id, name: app.localizedName ?? id, icon: menuIcon(app.icon))
+            return RunningApp(bundleID: id, name: app.localizedName ?? id)
         }
         .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
+}
 
-    /// Menu-sized: a menu item shows its image at the image's own size.
-    private static func menuIcon(_ icon: NSImage?) -> NSImage {
-        let size = NSSize(width: 16, height: 16)
-        guard let icon else { return NSImage(size: size) }
-        return NSImage(size: size, flipped: false) { rect in
-            icon.draw(in: rect)
-            return true
-        }
+/// App icons by bundle ID, looked up off the main thread and once each: LaunchServices and the icon service can be slow
+/// to answer. None are looked up for the UI snapshots.
+@MainActor
+private enum AppIcons {
+    private static var cache: [String: NSImage] = [:]
+
+    /// Shown until an app's own icon is found, or when it has none.
+    static let placeholder = NSImage(systemSymbolName: "app", accessibilityDescription: nil) ?? NSImage(size: NSSize(width: 16, height: 16))
+
+    static func icon(for bundleID: String) async -> NSImage? {
+        if let cached = cache[bundleID] { return cached }
+        guard !UISnapshots.active else { return nil }
+        let found = await Task.detached(priority: .utility) {
+            IconBox(image: NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID).map { NSWorkspace.shared.icon(forFile: $0.path) })
+        }.value
+        if let image = found.image { cache[bundleID] = image }
+        return found.image
+    }
+
+    /// A copy at menu size: a menu item shows its image at the image's own size.
+    static func menuSized(_ icon: NSImage) -> NSImage {
+        let small = (icon.copy() as? NSImage) ?? icon
+        small.size = NSSize(width: 16, height: 16)
+        return small
+    }
+}
+
+/// Hands an icon back from the lookup: NSImage isn't Sendable, but this one is passed on, never shared.
+private struct IconBox: @unchecked Sendable {
+    let image: NSImage?
+}
+
+/// A menu item that runs a closure.
+private final class MenuAction: NSObject {
+    private let action: () -> Void
+
+    private init(_ action: @escaping () -> Void) {
+        self.action = action
+    }
+
+    @objc private func run() { action() }
+
+    static func item(_ title: String, action: @escaping () -> Void) -> NSMenuItem {
+        let handler = MenuAction(action)
+        let item = NSMenuItem(title: title, action: #selector(run), keyEquivalent: "")
+        item.target = handler
+        // The item keeps it: `target` is weak.
+        item.representedObject = handler
+        return item
     }
 }
 
@@ -231,9 +280,7 @@ private struct AppProfileCard: View {
                 .padding(.vertical, 10)
             }
         }
-        .task(id: profile.app) {
-            icon = NSWorkspace.shared.urlForApplication(withBundleIdentifier: profile.app).map { NSWorkspace.shared.icon(forFile: $0.path) }
-        }
+        .task(id: profile.app) { icon = await AppIcons.icon(for: profile.app) }
     }
 
     /// One setting of this profile, saved as it's changed.

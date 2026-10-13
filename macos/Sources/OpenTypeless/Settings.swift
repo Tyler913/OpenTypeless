@@ -247,7 +247,17 @@ final class AppSettings: ObservableObject {
         saveAppProfiles()
     }
 
+    /// Set for the UI snapshots: the profiles shown are samples, and nothing about them is saved.
+    private var appProfilesAreSamples = false
+
+    /// For the UI snapshots: shows these profiles in place of the saved ones, which stay as they are.
+    func showSampleAppProfiles(_ profiles: [AppProfile]) {
+        appProfilesAreSamples = true
+        appProfiles = profiles
+    }
+
     private func saveAppProfiles() {
+        guard !appProfilesAreSamples else { return }
         UserDefaults.standard.set(try? JSONEncoder().encode(appProfiles), forKey: "appProfiles")
     }
 

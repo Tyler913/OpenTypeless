@@ -18,8 +18,21 @@ namespace OpenTypeless.UI;
 /// </summary>
 public static class UISnapshots
 {
+    /// <summary>Set first thing in <see cref="Run"/>, before any page exists: pages show fixed samples instead of asking the system.</summary>
+    public static bool Active { get; private set; }
+
+    /// <summary>The profiles the Apps page shows in the snapshots, instead of the saved ones.</summary>
+    private static readonly AppProfile[] SampleAppProfiles =
+    [
+        new() { Id = "sample-slack", App = "slack.exe", Name = "Slack", PressEnter = true },
+        new() { Id = "sample-outlook", App = "olk.exe", Name = "Outlook", Instructions = "Use a more formal tone", Polish = true, Language = "en" },
+        new() { Id = "sample-terminal", App = "WindowsTerminal.exe", Name = "Terminal", Polish = false },
+    ];
+
     public static async Task Run(string directory)
     {
+        Active = true;
+        AppSettings.Shared.ShowSampleAppProfiles(SampleAppProfiles);
         var args = Environment.GetCommandLineArgs();
         Permissions.AssumeGranted = args.Contains("--demo");
         var lang = Array.IndexOf(args, "--lang") is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;

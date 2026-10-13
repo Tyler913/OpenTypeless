@@ -28,6 +28,8 @@ public sealed class AppsPage : PageBase
     public AppsPage(SettingsWindow window) : base(SettingsPage.Apps)
     {
         _window = window;
+        // The snapshots show the first sample profile opened. Nothing about running apps is read until Add is clicked.
+        if (UISnapshots.Active && _settings.AppProfiles.FirstOrDefault() is { } first) _expanded.Add(first.Id);
         Body.Children.Add(_content);
         var footer = Ui.Text(L("开始录音时在最前面的应用决定用哪个配置，松开按键前换到别的应用也不变。配置里设为「默认」的项目跟随你平时的设置。",
                                "The app in front when you start recording decides which profile is used, even if you switch apps before you finish. Whatever a profile leaves on Default follows your usual settings."),
@@ -160,9 +162,13 @@ public sealed class AppsPage : PageBase
             // An unpackaged app has to tell the picker which window it belongs to.
             WinRT.Interop.InitializeWithWindow.Initialize(picker, _window.Hwnd);
             var file = await picker.PickSingleFileAsync();
-            // Cancelled, or the page went away meanwhile.
-            if (file == null || XamlRoot == null) return;
-            Add(new RunningApp(file.Name, RunningApp.DisplayName(file.Path)));
+            if (file == null) return;
+            // Its version resource is read from disk: not on the UI thread.
+            var path = file.Path;
+            var name = await Task.Run(() => RunningApp.DisplayName(path));
+            // The page went away meanwhile.
+            if (XamlRoot == null) return;
+            Add(new RunningApp(file.Name, name));
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException or InvalidOperationException)
         {

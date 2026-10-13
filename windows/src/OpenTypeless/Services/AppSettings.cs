@@ -502,10 +502,26 @@ public sealed class AppSettings : INotifyPropertyChanged
     {
         get
         {
+            if (_sampleProfiles is { } samples) return samples.ToList();
             lock (_lock) return AppProfile.ListFromJson(_store["appProfiles"]);
         }
-        private set => SetNode("appProfiles", AppProfile.ListToJson(value));
+        private set
+        {
+            if (_sampleProfiles != null)
+            {
+                _sampleProfiles = value.ToList();
+                Raise(nameof(AppProfiles));
+                return;
+            }
+            SetNode("appProfiles", AppProfile.ListToJson(value));
+        }
     }
+
+    /// <summary>Set for the UI snapshots: these profiles are shown in place of the saved ones, and nothing about them is saved.</summary>
+    private List<AppProfile>? _sampleProfiles;
+
+    /// <summary>For the UI snapshots: shows these profiles in place of the saved ones, which stay as they are.</summary>
+    public void ShowSampleAppProfiles(IEnumerable<AppProfile> profiles) => _sampleProfiles = profiles.ToList();
 
     /// <summary>What a dictation runs with when no profile applies.</summary>
     public DictationSettings GlobalDictationSettings => new(PolishEnabled, PressEnterAfterInsert, SttLanguage, ExtraInstructions);

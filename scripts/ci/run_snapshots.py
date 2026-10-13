@@ -10,6 +10,9 @@ from check_snapshots import check, expected_files
 # German too: its long words are the first to show text that is cut off or doesn't fit.
 LANGUAGES = {"en": "English", "zh": "Chinese", "de": "German"}
 THEMES = ("light", "dark")
+# A scenario takes about 10 s. Six hung ones at this limit still end before the workflow step's 15 minutes, so the report
+# says which scenario and page hung instead of the step being killed silently.
+TIMEOUT = 120
 
 
 def main():
@@ -21,9 +24,15 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     errors = []
+    hung = False
     for language in LANGUAGES:
         for theme in THEMES:
             scenario = f"{language}-{theme}"
+            if hung:
+                # One hang means the rest hang the same way; the report comes sooner without them.
+                errors.append(f"{scenario}: not run after the hang above")
+                continue
+            print(f"{scenario}: rendering…", flush=True)
             directory = output / scenario
             # Never accept screenshots from a previous process/run as evidence of success.
             directory.mkdir()
@@ -33,12 +42,16 @@ def main():
                 try:
                     result = subprocess.run(
                         [str(executable), "--snapshot-ui", str(directory), "--lang", language, "--" + theme, "--demo"],
-                        env=env, stdout=log, stderr=subprocess.STDOUT, timeout=180, check=False,
+                        env=env, stdout=log, stderr=subprocess.STDOUT, timeout=TIMEOUT, check=False,
                     )
                     if result.returncode:
                         errors.append(f"{scenario}: app exited with {result.returncode}")
                 except subprocess.TimeoutExpired:
-                    errors.append(f"{scenario}: app exceeded 180 seconds")
+                    # The images written so far show which page it was on.
+                    done = sorted(directory.glob("*.png"), key=lambda path: path.stat().st_mtime)
+                    errors.append(f"{scenario}: app exceeded {TIMEOUT} seconds after {len(done)} images "
+                                  f"(last written: {done[-1].name if done else 'none'})")
+                    hung = True
             errors.extend(f"{scenario}: {error}" for error in check(directory, language))
     per_scenario = len(expected_files("en"))
     scenarios = len(LANGUAGES) * len(THEMES)

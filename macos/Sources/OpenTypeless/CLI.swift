@@ -1,4 +1,3 @@
-import AVFoundation
 import Foundation
 import TypelessCore
 
@@ -8,7 +7,8 @@ enum CLI {
         let url = URL(fileURLWithPath: path)
         let samples: [Int16]
         do {
-            samples = try loadAudio(url)
+            // The app's own reader: the audio track of audio and video files alike.
+            samples = try await AudioFileDecoder.load(url)
         } catch {
             log("❌ Can't read audio: \(error.localizedDescription)")
             return 1
@@ -145,46 +145,6 @@ enum CLI {
                          chunk.startTime, chunk.startTime + chunk.duration, chunk.duration,
                          20 * log10(max(cutRMS, 1e-6)), AudioLevel.isSilent(chunk.samples) ? " (silent)" : ""))
         }
-    }
-
-    /// Reads any audio file AVFoundation understands and converts it to 16 kHz mono Int16.
-    static func loadAudio(_ url: URL) throws -> [Int16] {
-        let file = try AVAudioFile(forReading: url)
-        let target = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(AudioFormat.sampleRate),
-                                   channels: 1, interleaved: true)!
-        guard let converter = AVAudioConverter(from: file.processingFormat, to: target) else {
-            throw NSError(domain: "CLI", code: 1, userInfo: [NSLocalizedDescriptionKey: "unsupported format"])
-        }
-        var result: [Int16] = []
-        let inputBuffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 8192)!
-        var reachedEnd = false
-        while true {
-            let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: 8192)!
-            var error: NSError?
-            let status = converter.convert(to: output, error: &error) { _, outStatus in
-                if reachedEnd { outStatus.pointee = .endOfStream; return nil }
-                do {
-                    try file.read(into: inputBuffer)
-                } catch {
-                    reachedEnd = true
-                    outStatus.pointee = .endOfStream
-                    return nil
-                }
-                if inputBuffer.frameLength == 0 {
-                    reachedEnd = true
-                    outStatus.pointee = .endOfStream
-                    return nil
-                }
-                outStatus.pointee = .haveData
-                return inputBuffer
-            }
-            if let error { throw error }
-            if output.frameLength > 0, let channel = output.int16ChannelData {
-                result.append(contentsOf: UnsafeBufferPointer(start: channel[0], count: Int(output.frameLength)))
-            }
-            if status == .endOfStream || status == .error { break }
-        }
-        return result
     }
 
     static func log(_ message: String) {

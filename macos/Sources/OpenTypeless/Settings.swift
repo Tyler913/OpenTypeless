@@ -49,6 +49,8 @@ final class AppSettings: ObservableObject {
     @AppStorage("showHomeAtLogin") var showHomeAtLogin: Bool = false
     /// The typing speed "time saved" on the Home page is measured against.
     @AppStorage("typingWordsPerMinute") var typingWordsPerMinute: Int = UsageTotals.defaultTypingWordsPerMinute
+    /// Clean up the transcript of a file transcribed from History (the switch in its import sheet), when clean-up is on.
+    @AppStorage("fileCleanUp") var fileCleanUp: Bool = true
 
     /// Learn vocabulary from the fixes the user makes to dictated text (see EditWatcher).
     @AppStorage("learnFromEdits") var learnFromEdits: Bool = true

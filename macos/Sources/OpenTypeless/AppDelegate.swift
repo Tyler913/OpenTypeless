@@ -100,9 +100,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Audio and video files opened with the app (Finder's Open With, or dropped on its icon): History offers to
+    /// transcribe them.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        settingsWindow.show(page: .history)
+        controller.files.offer(urls)
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
-        // Quitting mid-recording keeps what was said, retryable from History.
+        // Quitting mid-recording keeps what was said, retryable from History; so does a file being transcribed.
         controller.stopForQuit()
+        controller.files.stopForQuit()
         // And mustn't leave the speakers muted.
         OutputMute.restoreLeftover()
     }

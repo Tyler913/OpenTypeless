@@ -63,6 +63,8 @@ final class SessionController: ObservableObject {
     private var modelInfo: [String: APIClient.ModelInfo] = [:]
     /// False when retrying from the history window, or once the screen locked: the result goes to the clipboard instead.
     private var deliverByPaste = true
+    /// Audio and video files being transcribed into History, alongside (never instead of) dictating.
+    private(set) lazy var files = FileTranscriber(controller: self)
 
     init() {
         editWatcher.onCorrections = { [weak self] corrections, quiet in
@@ -409,8 +411,10 @@ final class SessionController: ObservableObject {
     /// How long each speech-to-text route takes, kept while the app runs, so the backup is asked when a chunk is late.
     private var latencies: [String: TranscriptionLatency] = [:]
 
-    private func makePipeline(endpoint: ProviderEndpoint, preset: [Int: String],
-                              onSpeculation: (@Sendable (String?) -> Void)? = nil) -> TranscriptionPipeline {
+    /// `forFile`: for a file being transcribed (see FileTranscriber), which sends fewer requests at once, has no
+    /// speculative tail, and keeps its own idea of how long requests take (its chunks are mostly long).
+    func makePipeline(endpoint: ProviderEndpoint, preset: [Int: String], forFile: Bool = false,
+                      onSpeculation: (@Sendable (String?) -> Void)? = nil) -> TranscriptionPipeline {
         let language = settings.sttLanguage.isEmpty ? nil : settings.sttLanguage
         let backup = settings.sttBackupEndpoint.map {
             (client: APIClient(endpoint: $0),
@@ -418,14 +422,16 @@ final class SessionController: ObservableObject {
                                                      vocabulary: settings.vocabularyList))
         }
         let key = ModelPrice.key(settings.sttProvider, settings.sttModel)
-        let latency = latencies[key] ?? TranscriptionLatency()
-        latencies[key] = latency
+        let latency = forFile ? TranscriptionLatency() : latencies[key] ?? TranscriptionLatency()
+        if !forFile { latencies[key] = latency }
         return TranscriptionPipeline(
             client: APIClient(endpoint: endpoint),
             options: .init(model: settings.sttModel, language: language, vocabulary: settings.vocabularyList),
             preset: preset,
             backup: backup,
             latency: latency,
+            maxConcurrentRequests: forFile ? FileTranscription.maxConcurrentRequests : 3,
+            speculate: !forFile,
             onSpeculation: onSpeculation
         )
     }
@@ -805,13 +811,16 @@ final class SessionController: ObservableObject {
 
     private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
 
-    private func polish(_ raw: String, onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
+    /// `concurrency`: how many parts of a long transcript are out at once (nil: all, as a dictation wants them).
+    func polish(_ raw: String, concurrency: Int? = nil,
+                onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
         let primary = route(endpoint, model: settings.polishModel)
         let backup = settings.polishBackupEndpoint.map { route($0, model: settings.polishBackupModel) }
-        return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup, onPartial: onPartial)
+        return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup, concurrency: concurrency,
+                                             onPartial: onPartial)
     }
 
     private func route(_ endpoint: ProviderEndpoint, model: String) -> PolishRoute {
@@ -829,8 +838,8 @@ final class SessionController: ObservableObject {
     /// Prices what this run's requests used (the speech-to-text of every chunk sent, and every clean-up answer, used or
     /// not, with the hedge's cancelled requests) and adds it, with the dictation's words once it's finished, to the Home
     /// page totals. `discarded`: clean-ups done ahead of time for a transcript the speaker then went on from.
-    private func account(_ record: inout DictationRecord, pipeline: TranscriptionPipeline, polished: SegmentedPolishResult?,
-                         discarded: [SegmentedPolishResult]) {
+    func account(_ record: inout DictationRecord, pipeline: TranscriptionPipeline, polished: SegmentedPolishResult?,
+                 discarded: [SegmentedPolishResult]) {
         let prices = PriceStore.shared
         let transcription = CostEstimator.transcriptions(pipeline.requestUsages(),
                                                          price: prices.price(settings.sttProvider, settings.sttModel),

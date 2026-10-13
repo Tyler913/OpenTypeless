@@ -28,10 +28,12 @@ final class UsageStore: ObservableObject {
     }
 
     /// Adds a finished dictation's words and speaking time once. Returns whether it was counted now, so the caller
-    /// saves the record's `counted` flag and a retry doesn't count it again.
+    /// saves the record's `counted` flag and a retry doesn't count it again. A transcribed file isn't counted: its
+    /// words weren't dictated, and an hour-long meeting would swamp the words and the time saved over typing. What it
+    /// cost is counted all the same (`record`).
     @discardableResult
     func countIfFinished(_ record: inout DictationRecord) -> Bool {
-        guard record.counted != true, record.status == .done || record.status == .polishFailed else { return false }
+        guard !record.isFile, record.counted != true, record.status == .done || record.status == .polishFailed else { return false }
         let words = WordCount.count(record.finalText)
         guard words > 0 else { return false }
         ledger.addDictation(on: CalendarDay(record.date), words: words, seconds: record.duration)

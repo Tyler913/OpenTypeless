@@ -110,9 +110,9 @@ public enum SegmentedPolish {
         return result
     }
 
-    /// The app's clean-up of `transcript`: each part hedged between the routes (see HedgedPolish) and asked a second
-    /// time after a transient failure, but not after a timeout. A second wait as long as the first would only hold the
-    /// dictation up; the part goes in as spoken instead.
+    /// The app's clean-up of `transcript` (or its translation, when the routes' options ask for one): each part hedged
+    /// between the routes (see HedgedPolish) and asked a second time after a transient failure, but not after a timeout.
+    /// A second wait as long as the first would only hold the dictation up; the part goes in as spoken instead.
     public static func run(
         transcript: String,
         primary: PolishRoute,
@@ -120,7 +120,7 @@ public enum SegmentedPolish {
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> SegmentedPolishResult {
         let policy = RetryPolicy(maxAttempts: 2, retriesTimeouts: false)
-        return try await run(transcript: transcript, polish: { part, partial in
+        return try await run(transcript: transcript, translation: primary.options.translation, polish: { part, partial in
             try await policy.run { _ in
                 try await HedgedPolish.run(transcript: part, primary: primary, backup: backup, onPartial: partial)
             }
@@ -128,10 +128,12 @@ public enum SegmentedPolish {
     }
 
     /// Cleans up the parts of `transcript` with `polish`, all at once, and puts each part's answer through
-    /// `Prompts.fallback`: a part whose answer is unusable, or that got none, goes in as spoken. Throws only when no part
-    /// got an answer (the first part's error), or when cancelled. `onPartial` gets the parts' text so far, joined.
+    /// `Prompts.fallback` (`Prompts.translationFallback` when it's a translation into `translation`): a part whose answer
+    /// is unusable, or that got none, goes in as spoken. Throws only when no part got an answer (the first part's
+    /// error), or when cancelled. `onPartial` gets the parts' text so far, joined.
     public static func run(
         transcript: String,
+        translation: TranslationTarget? = nil,
         polish: @escaping @Sendable (String, (@Sendable (String) -> Void)?) async throws -> HedgedPolishResult,
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> SegmentedPolishResult {
@@ -157,7 +159,12 @@ public enum SegmentedPolish {
         for (text, outcome) in zip(texts, outcomes) {
             switch outcome {
             case let .success(answer)?:
-                let fallback = Prompts.fallback(input: text, output: answer.result.text, truncated: answer.result.truncated)
+                let output = answer.result.text, truncated = answer.result.truncated
+                let fallback = if let translation {
+                    Prompts.translationFallback(input: text, output: output, truncated: truncated, target: translation)
+                } else {
+                    Prompts.fallback(input: text, output: output, truncated: truncated)
+                }
                 results.append(.init(transcript: text, answer: answer, fallback: fallback, error: nil))
             case let .failure(error)?:
                 let apiError = APIError.from(error)

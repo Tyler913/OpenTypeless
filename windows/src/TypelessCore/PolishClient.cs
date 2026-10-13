@@ -19,7 +19,9 @@ public sealed record PolishOptions(
     /// The OpenRouter host (an endpoint tag such as "groq" or "deepinfra/fp8") the user wants this model served by;
     /// null lets OpenRouter pick the fastest.
     /// </summary>
-    string? Host = null);
+    string? Host = null,
+    /// <summary>Translate into this language instead of cleaning up (see <see cref="Prompts.TranslateSystemPrompt"/>).</summary>
+    TranslationTarget? Translation = null);
 
 public static class ReasoningConfig
 {
@@ -124,12 +126,23 @@ public sealed partial class ApiClient
         return routing;
     }
 
-    /// <summary>The system prompt and the user message a clean-up of <paramref name="transcript"/> sends.</summary>
-    internal static string[] PolishMessages(string transcript, PolishOptions options) =>
-    [
-        options.SystemPromptOverride ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard),
-        Prompts.PolishUserMessage(transcript),
-    ];
+    /// <summary>The system prompt and the user message a clean-up (or translation) of <paramref name="transcript"/> sends.</summary>
+    internal static string[] PolishMessages(string transcript, PolishOptions options)
+    {
+        if (options.Translation is { } target)
+        {
+            return
+            [
+                options.SystemPromptOverride ?? Prompts.TranslateSystemPrompt(target, options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard),
+                Prompts.TranslateUserMessage(transcript, target),
+            ];
+        }
+        return
+        [
+            options.SystemPromptOverride ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard),
+            Prompts.PolishUserMessage(transcript),
+        ];
+    }
 
     /// <summary>
     /// Builds the chat request body. Optional tuning parameters are only sent where they're known to
@@ -275,7 +288,7 @@ public sealed partial class ApiClient
                         }
                         if (receivedDone) break;
                     }
-                    var cleaned = Prompts.SanitizePolishOutput(text.ToString());
+                    var cleaned = Prompts.SanitizePolishOutput(text.ToString(), Prompts.Reminder(options.Translation));
                     if (cleaned.Length == 0) throw ApiException.BadResponse(L("模型返回了空内容", "the model returned nothing"));
                     if (usage is null || (usage.InputTokens == null && usage.OutputTokens == null && usage.Cost == null))
                     {

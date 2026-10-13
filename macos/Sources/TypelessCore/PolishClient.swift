@@ -13,9 +13,12 @@ public struct PolishOptions: Sendable {
     /// The OpenRouter host (an endpoint tag such as "groq" or "deepinfra/fp8") the user wants this model served by;
     /// nil lets OpenRouter pick the fastest.
     public var host: String?
+    /// Translate into this language instead of cleaning up (see `Prompts.translateSystemPrompt`).
+    public var translation: TranslationTarget?
 
     public init(model: String, vocabulary: [String] = [], misheard: [Correction] = [], extraInstructions: String = "",
-                modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil) {
+                modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil,
+                translation: TranslationTarget? = nil) {
         self.model = model
         self.vocabulary = vocabulary
         self.misheard = misheard
@@ -23,6 +26,7 @@ public struct PolishOptions: Sendable {
         self.modelInfo = modelInfo
         self.systemPromptOverride = systemPromptOverride
         self.host = host
+        self.translation = translation
     }
 }
 
@@ -110,11 +114,17 @@ extension APIClient {
         return routing
     }
 
-    /// The system prompt and the user message a clean-up of `transcript` sends.
+    /// The system prompt and the user message a clean-up (or translation) of `transcript` sends.
     static func polishMessages(transcript: String, options: PolishOptions) -> [String] {
-        [options.systemPromptOverride ?? Prompts.polishSystemPrompt(
-            vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions),
-         Prompts.polishUserMessage(transcript: transcript)]
+        if let target = options.translation {
+            return [options.systemPromptOverride ?? Prompts.translateSystemPrompt(
+                        target: target, vocabulary: options.vocabulary, misheard: options.misheard,
+                        extraInstructions: options.extraInstructions),
+                    Prompts.translateUserMessage(transcript: transcript, target: target)]
+        }
+        return [options.systemPromptOverride ?? Prompts.polishSystemPrompt(
+                    vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions),
+                Prompts.polishUserMessage(transcript: transcript)]
     }
 
     /// Builds the chat request body. Optional tuning parameters are only sent where they're known to
@@ -199,6 +209,7 @@ extension APIClient {
         let body = polishBody(transcript: transcript, options: options, includeOptional: includeOptional)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let messages = (body["messages"] as? [[String: String]] ?? []).compactMap { $0["content"] }
+        let reminder = Prompts.reminder(translation: options.translation)
         let session = self.session
         let answering = OnceFlag()
 
@@ -207,7 +218,8 @@ extension APIClient {
                 group.addTask {
                     do {
                         return try await Self.readPolishStream(session: session, request: request, messages: messages,
-                                                               answering: answering, onPartial: onPartial)
+                                                               reminder: reminder, answering: answering,
+                                                               onPartial: onPartial)
                     } catch let error as URLError where error.code == .timedOut {
                         // No byte for the idle timeout.
                         throw APIError.timeout(seconds: limits.idle)
@@ -228,7 +240,7 @@ extension APIClient {
     }
 
     private static func readPolishStream(
-        session: URLSession, request: URLRequest, messages: [String], answering: OnceFlag,
+        session: URLSession, request: URLRequest, messages: [String], reminder: String, answering: OnceFlag,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> PolishResult {
         let (bytes, response) = try await session.bytes(for: request)
@@ -264,7 +276,7 @@ extension APIClient {
                 }
             }
         }
-        let cleaned = Prompts.sanitizePolishOutput(text)
+        let cleaned = Prompts.sanitizePolishOutput(text, reminder: reminder)
         guard !cleaned.isEmpty else { throw APIError.badResponse(L("模型返回了空内容", "the model returned nothing")) }
         if usage == nil || (usage?.inputTokens == nil && usage?.outputTokens == nil && usage?.cost == nil) {
             usage = APIClient.estimatedUsage(messages: messages, output: text)

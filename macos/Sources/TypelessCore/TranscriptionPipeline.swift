@@ -97,7 +97,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     private let latency: TranscriptionLatency
     private let policy: RetryPolicy
     private let observer: ChunkObserver?
-    private let semaphore = AsyncSemaphore(3)
+    private let semaphore: AsyncSemaphore
     private let trimSilence: Bool
     private let speculate: Bool
     private let onSpeculation: (@Sendable (String?) -> Void)?
@@ -175,6 +175,8 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     }
 
     /// `preset` lets a retry reuse transcripts that already succeeded (keyed by chunk index).
+    /// `maxConcurrentRequests`: how many chunks are transcribed at once (a file being transcribed asks for fewer than a
+    /// dictation, see `FileTranscription`).
     /// `trimSilence` sends each chunk without the silence before and after its speech (see `AudioChunk.trimmed`).
     /// `speculate` transcribes the pending audio ahead of time whenever the speaker pauses (see above).
     /// `onSpeculation` is called, on a background thread, with the whole transcript the recording would give if it ended
@@ -189,6 +191,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         preset: [Int: String] = [:],
         backup: (client: APIClient, options: APIClient.TranscriptionOptions)? = nil,
         latency: TranscriptionLatency = TranscriptionLatency(),
+        maxConcurrentRequests: Int = 3,
         trimSilence: Bool = true,
         speculate: Bool = true,
         onSpeculation: (@Sendable (String?) -> Void)? = nil,
@@ -203,6 +206,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         self.latency = latency
         self.policy = policy
         self.observer = observer
+        self.semaphore = AsyncSemaphore(max(1, maxConcurrentRequests))
         self.chunker = Chunker(config: chunkConfig)
         for (index, text) in preset { results[index] = .done(text) }
     }
@@ -293,6 +297,16 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         }
     }
 
+    /// How many of the chunks so far have their answer (or needed none, or were reused from `preset`), and how many are
+    /// handed out and still waiting for one. Unlike `transcriptionProgress` it's there before `finish`: a long recording
+    /// read from a file is handed over a block at a time, held back while enough chunks are out (see FileTranscription).
+    public func chunkCounts() -> (finished: Int, outstanding: Int) {
+        lock.withLock {
+            let finished = results.values.filter(\.isFinished).count
+            return (finished, results.count - finished)
+        }
+    }
+
     /// What the requests so far used, one entry per successful request.
     public func requestUsages() -> [RequestUsage] {
         lock.withLock { usages }
@@ -317,12 +331,12 @@ public final class TranscriptionPipeline: @unchecked Sendable {
 
     private func schedule(_ chunk: AudioChunk) {
         lock.lock()
-        chunks[chunk.index] = chunk
         if case .done = results[chunk.index] {
             lock.unlock()
             observer?(chunk.index, results[chunk.index]!)
             return
         }
+        chunks[chunk.index] = chunk
         lock.unlock()
         restart(chunk.index)
     }
@@ -332,6 +346,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         guard let chunk = chunks[index] else { lock.unlock(); return }
         if AudioLevel.isSilent(chunk.samples) || chunk.duration < 0.3 || isOnlyThePauseBeforeRelease(chunk) {
             results[index] = .skippedSilence
+            chunks[index] = nil
             lock.unlock()
             observer?(index, .skippedSilence)
             return
@@ -352,6 +367,9 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     private func record(_ index: Int, _ outcome: Outcome) {
         lock.withLock {
             results[index] = outcome.state
+            // Only a failed chunk is sent again (in `finish`'s last round): the audio of the others can go, which keeps an
+            // hour-long file from being held in memory as it's transcribed.
+            if case .failed = outcome.state {} else { chunks[index] = nil }
             if outcome.permanent { permanentFailures.insert(index) } else { permanentFailures.remove(index) }
             if case .done = outcome.state { answeredByBackup[index] = outcome.backup } else { answeredByBackup[index] = nil }
         }

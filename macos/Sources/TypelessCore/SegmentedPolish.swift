@@ -112,40 +112,51 @@ public enum SegmentedPolish {
 
     /// The app's clean-up of `transcript`: each part hedged between the routes (see HedgedPolish) and asked a second
     /// time after a transient failure, but not after a timeout. A second wait as long as the first would only hold the
-    /// dictation up; the part goes in as spoken instead.
+    /// dictation up; the part goes in as spoken instead. `concurrency` caps how many parts are out at once (nil: all of
+    /// them, which is what a dictation wants; the transcript of an hour-long file has dozens).
     public static func run(
         transcript: String,
         primary: PolishRoute,
         backup: PolishRoute?,
+        concurrency: Int? = nil,
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> SegmentedPolishResult {
         let policy = RetryPolicy(maxAttempts: 2, retriesTimeouts: false)
-        return try await run(transcript: transcript, polish: { part, partial in
+        return try await run(transcript: transcript, concurrency: concurrency, polish: { part, partial in
             try await policy.run { _ in
                 try await HedgedPolish.run(transcript: part, primary: primary, backup: backup, onPartial: partial)
             }
         }, onPartial: onPartial)
     }
 
-    /// Cleans up the parts of `transcript` with `polish`, all at once, and puts each part's answer through
-    /// `Prompts.fallback`: a part whose answer is unusable, or that got none, goes in as spoken. Throws only when no part
-    /// got an answer (the first part's error), or when cancelled. `onPartial` gets the parts' text so far, joined.
+    /// Cleans up the parts of `transcript` with `polish`, all at once (or `concurrency` at a time), and puts each part's
+    /// answer through `Prompts.fallback`: a part whose answer is unusable, or that got none, goes in as spoken. Throws
+    /// only when no part got an answer (the first part's error), or when cancelled. `onPartial` gets the parts' text so
+    /// far, joined.
     public static func run(
         transcript: String,
+        concurrency: Int? = nil,
         polish: @escaping @Sendable (String, (@Sendable (String) -> Void)?) async throws -> HedgedPolishResult,
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> SegmentedPolishResult {
         let texts = Self.parts(of: transcript)
         let start = ProcessInfo.processInfo.systemUptime
         let progress = PartialProgress(count: texts.count, onChange: onPartial)
+        let gate = concurrency.map { AsyncSemaphore(max(1, $0)) }
         let outcomes = await withTaskGroup(of: (Int, Result<HedgedPolishResult, Error>).self) { group in
             for (index, text) in texts.enumerated() {
                 group.addTask {
+                    await gate?.wait()
+                    let outcome: Result<HedgedPolishResult, Error>
                     do {
-                        return (index, .success(try await polish(text, { progress.update(index, $0) })))
+                        // One that waited its turn past a cancellation doesn't start at all.
+                        if gate != nil { try Task.checkCancellation() }
+                        outcome = .success(try await polish(text, { progress.update(index, $0) }))
                     } catch {
-                        return (index, .failure(error))
+                        outcome = .failure(error)
                     }
+                    await gate?.signal()
+                    return (index, outcome)
                 }
             }
             var collected = [Result<HedgedPolishResult, Error>?](repeating: nil, count: texts.count)

@@ -3508,5 +3508,185 @@
     "ru": "В раскладках вроде немецкой или французской Ctrl + Alt с буквой — это AltGr, который вводит символы вроде @ и €, так что это сочетание их заблокирует. Если вы их набираете, выберите другое сочетание.",
     "fr": "Sur les dispositions de clavier comme l’allemand ou le français, Ctrl + Alt avec une lettre équivaut à AltGr, qui sert à taper @ ou €, donc ce raccourci les bloquerait. Si vous les tapez, choisissez un autre raccourci.",
     "de": "Bei Tastaturlayouts wie Deutsch oder Französisch ist Ctrl + Alt mit einem Buchstaben AltGr, das Zeichen wie @ und € tippt – dieses Kürzel würde sie blockieren. Wenn du sie tippst, wähle ein anderes Kürzel."
+  },
+  "Translation": {
+    "ja": "翻訳",
+    "ko": "번역",
+    "es": "Traducción",
+    "pt": "Tradução",
+    "ru": "Перевод",
+    "fr": "Traduction",
+    "de": "Übersetzung"
+  },
+  "Translation mode": {
+    "ja": "翻訳モード",
+    "ko": "번역 모드",
+    "es": "Modo de traducción",
+    "pt": "Modo de tradução",
+    "ru": "Режим перевода",
+    "fr": "Mode traduction",
+    "de": "Übersetzungsmodus"
+  },
+  "Hold the dictation shortcut and press {0} too: that dictation goes in translated": {
+    "ja": "音声入力のショートカットを押したまま {0} も押すと、その音声入力は翻訳されて挿入されます",
+    "ko": "받아쓰기 단축키를 누른 채 {0}도 누르면 그 받아쓰기는 번역되어 삽입됩니다",
+    "es": "Mantén pulsado el atajo de dictado y pulsa también {0}: ese dictado se inserta traducido",
+    "pt": "Mantenha o atalho de ditado pressionado e pressione também {0}: esse ditado é inserido traduzido",
+    "ru": "Удерживая сочетание клавиш для диктовки, нажмите ещё {0}: эта диктовка будет вставлена в переводе",
+    "fr": "Maintenez le raccourci de dictée et appuyez aussi sur {0} : cette dictée est insérée traduite",
+    "de": "Halte das Diktier-Tastenkürzel und drücke zusätzlich {0}: Dieses Diktat wird übersetzt eingefügt"
+  },
+  "Translate into": {
+    "ja": "翻訳先",
+    "ko": "번역할 언어",
+    "es": "Traducir al",
+    "pt": "Traduzir para",
+    "ru": "Переводить на",
+    "fr": "Traduire en",
+    "de": "Übersetzen in"
+  },
+  "Other…": {
+    "ja": "その他…",
+    "ko": "기타…",
+    "es": "Otro…",
+    "pt": "Outro…",
+    "ru": "Другой…",
+    "fr": "Autre…",
+    "de": "Andere…"
+  },
+  "By its name: Italiano, 繁體中文, Tiếng Việt…": {
+    "ja": "言語名で入力：Italiano、繁體中文、Tiếng Việt…",
+    "ko": "언어 이름으로 입력: Italiano, 繁體中文, Tiếng Việt…",
+    "es": "Por su nombre: Italiano, 繁體中文, Tiếng Việt…",
+    "pt": "Pelo nome: Italiano, 繁體中文, Tiếng Việt…",
+    "ru": "Названием языка: Italiano, 繁體中文, Tiếng Việt…",
+    "fr": "Par son nom : Italiano, 繁體中文, Tiếng Việt…",
+    "de": "Mit ihrem Namen: Italiano, 繁體中文, Tiếng Việt…"
+  },
+  "Switch key": {
+    "ja": "切り替えキー",
+    "ko": "전환 키",
+    "es": "Tecla de cambio",
+    "pt": "Tecla de troca",
+    "ru": "Клавиша переключения",
+    "fr": "Touche de bascule",
+    "de": "Umschalttaste"
+  },
+  "Pressed while you hold the dictation shortcut (either side)": {
+    "ja": "音声入力のショートカットを押している間に押します（左右どちらでも可）",
+    "ko": "받아쓰기 단축키를 누르고 있는 동안 누릅니다(왼쪽, 오른쪽 모두 가능)",
+    "es": "Se pulsa mientras mantienes el atajo de dictado (cualquiera de los dos lados)",
+    "pt": "Pressionada enquanto você segura o atalho de ditado (qualquer um dos lados)",
+    "ru": "Нажимается, пока вы удерживаете сочетание для диктовки (любая из двух)",
+    "fr": "À presser pendant que vous maintenez le raccourci de dictée (l’une ou l’autre)",
+    "de": "Wird gedrückt, während du das Diktier-Tastenkürzel hältst (linke oder rechte)"
+  },
+  "Speak in any language; what goes in is the translation. It takes one model request, as quick as a clean-up. When the translation can't be used, the cleaned-up original goes in instead.": {
+    "ja": "どの言語で話してもかまいません。挿入されるのは翻訳です。モデルへのリクエストは 1 回だけなので、整形と同じくらい速く仕上がります。翻訳が使えないときは、代わりに整形した原文が挿入されます。",
+    "ko": "어떤 언어로 말해도 됩니다. 삽입되는 것은 번역입니다. 모델 요청은 한 번뿐이라 다듬기만큼 빠릅니다. 번역을 쓸 수 없을 때는 다듬은 원문이 대신 삽입됩니다.",
+    "es": "Habla en cualquier idioma; lo que se inserta es la traducción. Basta con una petición al modelo, tan rápida como una limpieza. Si la traducción no se puede usar, se inserta en su lugar el original limpio.",
+    "pt": "Fale em qualquer idioma; o que é inserido é a tradução. Basta uma requisição ao modelo, tão rápida quanto uma limpeza. Quando a tradução não pode ser usada, o original limpo é inserido no lugar.",
+    "ru": "Говорите на любом языке — вставляется перевод. Нужен всего один запрос к модели, так же быстро, как очистка. Если перевод не годится, вместо него вставляется очищенный оригинал.",
+    "fr": "Parlez dans n’importe quelle langue : c’est la traduction qui est insérée. Une seule requête au modèle suffit, aussi rapide qu’un nettoyage. Si la traduction est inutilisable, c’est l’original nettoyé qui est inséré.",
+    "de": "Sprich in jeder beliebigen Sprache – eingefügt wird die Übersetzung. Sie braucht nur eine Modellanfrage und ist so schnell wie eine Bereinigung. Ist die Übersetzung unbrauchbar, wird stattdessen das bereinigte Original eingefügt."
+  },
+  "Hold + {0}: translate": {
+    "ja": "押したまま + {0}：翻訳",
+    "ko": "누른 채 + {0}: 번역",
+    "es": "Mantén + {0}: traducir",
+    "pt": "Segure + {0}: traduzir",
+    "ru": "Удерживать + {0}: перевод",
+    "fr": "Maintenir + {0} : traduire",
+    "de": "Halten + {0}: übersetzen"
+  },
+  "Inserted translated into {0} (set up under Vocabulary & Style)": {
+    "ja": "{0} に翻訳して挿入（「語彙とスタイル」で設定）",
+    "ko": "{0}(으)로 번역해 삽입(「어휘 및 스타일」에서 설정)",
+    "es": "Se inserta traducido al {0} (se configura en Vocabulario y estilo)",
+    "pt": "Inserido traduzido para {0} (configure em Vocabulário e estilo)",
+    "ru": "Вставляется в переводе на {0} (настраивается в разделе «Словарь и стиль»)",
+    "fr": "Inséré traduit en {0} (à régler dans Vocabulaire et style)",
+    "de": "Wird übersetzt in {0} eingefügt (einzurichten unter Vokabular & Stil)"
+  },
+  "Translation → {0}": {
+    "ja": "翻訳 → {0}",
+    "ko": "번역 → {0}",
+    "es": "Traducción → {0}",
+    "pt": "Tradução → {0}",
+    "ru": "Перевод → {0}",
+    "fr": "Traduction → {0}",
+    "de": "Übersetzung → {0}"
+  },
+  "Couldn't translate: {0}": {
+    "ja": "翻訳できませんでした：{0}",
+    "ko": "번역하지 못했습니다: {0}",
+    "es": "No se pudo traducir: {0}",
+    "pt": "Não foi possível traduzir: {0}",
+    "ru": "Не удалось перевести: {0}",
+    "fr": "Traduction impossible : {0}",
+    "de": "Übersetzung nicht möglich: {0}"
+  },
+  "Couldn't translate — inserted the clean-up": {
+    "ja": "翻訳できなかったため、整形した原文を挿入しました",
+    "ko": "번역하지 못해 다듬은 원문을 삽입함",
+    "es": "No se pudo traducir: se insertó el texto limpio",
+    "pt": "Não foi possível traduzir — o texto limpo foi inserido",
+    "ru": "Не удалось перевести — вставлен очищенный текст",
+    "fr": "Traduction impossible — le texte nettoyé a été inséré",
+    "de": "Übersetzung nicht möglich – der bereinigte Text wurde eingefügt"
+  },
+  "Couldn't translate — inserted as spoken": {
+    "ja": "翻訳できなかったため、話したままの文を挿入しました",
+    "ko": "번역하지 못해 말한 그대로 삽입함",
+    "es": "No se pudo traducir: se insertó tal como se dijo",
+    "pt": "Não foi possível traduzir — inserido como foi falado",
+    "ru": "Не удалось перевести — вставлено как сказано",
+    "fr": "Traduction impossible — inséré tel que dicté",
+    "de": "Übersetzung nicht möglich – so eingefügt, wie gesprochen"
+  },
+  "the translation was cut off": {
+    "ja": "翻訳が途中で切れました",
+    "ko": "번역이 중간에 끊겼습니다",
+    "es": "la traducción quedó cortada",
+    "pt": "a tradução foi cortada",
+    "ru": "перевод оборвался",
+    "fr": "la traduction a été coupée",
+    "de": "die Übersetzung brach ab"
+  },
+  "the model answered instead of translating": {
+    "ja": "モデルが翻訳せずに内容に答えました",
+    "ko": "모델이 번역하지 않고 내용에 답했습니다",
+    "es": "el modelo respondió en lugar de traducir",
+    "pt": "o modelo respondeu em vez de traduzir",
+    "ru": "модель ответила вместо перевода",
+    "fr": "le modèle a répondu au lieu de traduire",
+    "de": "das Modell hat geantwortet, statt zu übersetzen"
+  },
+  "the translation left too much out": {
+    "ja": "翻訳で抜け落ちた内容が多すぎます",
+    "ko": "번역에서 빠진 내용이 너무 많습니다",
+    "es": "la traducción omitió demasiado",
+    "pt": "a tradução deixou de fora conteúdo demais",
+    "ru": "в переводе пропущено слишком много",
+    "fr": "la traduction omettait trop de choses",
+    "de": "die Übersetzung ließ zu viel weg"
+  },
+  "it didn't come back in the target language": {
+    "ja": "結果が翻訳先の言語ではありませんでした",
+    "ko": "결과가 번역할 언어로 나오지 않았습니다",
+    "es": "no volvió en el idioma de destino",
+    "pt": "não voltou no idioma de destino",
+    "ru": "результат пришёл не на нужном языке",
+    "fr": "le résultat n’était pas dans la langue cible",
+    "de": "es kam nicht in der Zielsprache zurück"
+  },
+  "no usable translation came back": {
+    "ja": "使える翻訳が返ってきませんでした",
+    "ko": "쓸 수 있는 번역이 돌아오지 않았습니다",
+    "es": "no llegó ninguna traducción utilizable",
+    "pt": "nenhuma tradução utilizável voltou",
+    "ru": "пригодного перевода не пришло",
+    "fr": "aucune traduction utilisable n’est revenue",
+    "de": "es kam keine brauchbare Übersetzung zurück"
   }
 }

@@ -101,6 +101,8 @@ public static class Glyphs
     public const string Speech = "\uE720";
     public const string ReturnKey = "\uE751";
     public const string Mute = "\uE74F";
+    public const string Export = "\uEDE1";
+    public const string Import = "\uE8B5";
 }
 
 public static class Ui

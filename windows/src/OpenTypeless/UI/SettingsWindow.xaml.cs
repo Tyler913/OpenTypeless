@@ -122,8 +122,8 @@ public sealed partial class SettingsWindow : Window
             SettingsPage.Shortcut => new ShortcutPage(this),
             SettingsPage.Providers => new ProvidersPage(),
             SettingsPage.Models => new ModelsPage(this, _controller),
-            SettingsPage.Style => new StylePage(),
-            _ => new HistoryPage(_controller),
+            SettingsPage.Style => new StylePage(this),
+            _ => new HistoryPage(this, _controller),
         };
     }
 

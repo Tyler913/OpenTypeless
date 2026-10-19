@@ -16,18 +16,23 @@ namespace OpenTypeless.UI;
 
 /// <summary>
 /// Every dictation, newest first and grouped by day, with search; the selected one's text, details and actions on
-/// the right. How long recordings are kept sits in the toolbar.
+/// the right. How long recordings are kept, and exporting what the list shows, sit in the toolbar.
 /// </summary>
 public sealed class HistoryPage : PageBase
 {
     private readonly HistoryStore _history = HistoryStore.Shared;
     private readonly AppSettings _settings = AppSettings.Shared;
+    private readonly SettingsWindow _window;
     private readonly SessionController _controller;
+    /// <summary>Just the icon, with "Export" as its tooltip: the toolbar has no room for a label next to the retention picker.</summary>
+    private readonly DropDownButton _export = new();
+    private readonly FontIcon _exportIcon = Ui.Icon(Glyphs.Export, 14);
+    private bool _exporting;
     private readonly AutoSuggestBox _search = new()
     {
         PlaceholderText = L("搜索听写内容", "Search dictations"),
         QueryIcon = new SymbolIcon(Symbol.Find),
-        Width = 260,
+        MinWidth = 120,
     };
     private readonly TextBlock _storage = Ui.Text("", 12, foreground: Ui.Secondary);
     private readonly ContentControl _content = new()
@@ -57,8 +62,9 @@ public sealed class HistoryPage : PageBase
     /// <summary>What the detail was built from, so it's only rebuilt when that changes.</summary>
     private (DictationRecord? Record, bool HasAudio, bool Idle)? _shownDetail;
 
-    public HistoryPage(SessionController controller) : base(SettingsPage.History, scrolls: false)
+    public HistoryPage(SettingsWindow window, SessionController controller) : base(SettingsPage.History, scrolls: false)
     {
+        _window = window;
         _controller = controller;
         _list = new ListView
         {
@@ -142,10 +148,13 @@ public sealed class HistoryPage : PageBase
                 storage,
                 new TextBlock { Text = L("保留录音", "Keep recordings"), VerticalAlignment = VerticalAlignment.Center },
                 picker,
+                ExportButton(),
             },
         };
         var toolbar = new Grid { ColumnSpacing = 12 };
-        toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // The search box gives way when the window is narrow or the labels are long, up to 260 wide otherwise (like the
+        // macOS toolbar), rather than pushing Export off the edge.
+        toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(4, GridUnitType.Star), MaxWidth = 260 });
         toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         toolbar.Children.Add(_search);
@@ -153,6 +162,76 @@ public sealed class HistoryPage : PageBase
         toolbar.Children.Add(trailing);
         RefreshStorage();
         return toolbar;
+    }
+
+    /// <summary>Exports what the list shows: everything, or what the search found.</summary>
+    private DropDownButton ExportButton()
+    {
+        _export.Content = _exportIcon;
+        Ui.Label(_export, L("导出", "Export"));
+        var flyout = new MenuFlyout();
+        // Filled as it opens, with the list as it is then.
+        flyout.Opening += (_, _) =>
+        {
+            var records = Filtered;
+            flyout.Items.Clear();
+            flyout.Items.Add(new MenuFlyoutItem { Text = ExportTitle(records.Count, searching: records.Count != _history.Records.Count), IsEnabled = false });
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            (HistoryExport.Format Format, string Text)[] choices =
+            [
+                (HistoryExport.Format.Csv, L("CSV（可用 Excel 打开）…", "CSV (opens in Excel)…")),
+                (HistoryExport.Format.Json, "JSON…"),
+                (HistoryExport.Format.Markdown, "Markdown…"),
+            ];
+            foreach (var (format, text) in choices)
+            {
+                var item = new MenuFlyoutItem { Text = text };
+                item.Click += async (_, _) => await Export(records, format);
+                flyout.Items.Add(item);
+            }
+        };
+        _export.Flyout = flyout;
+        return _export;
+    }
+
+    private static string ExportTitle(int count, bool searching)
+    {
+        var n = UsageFormat.Count(count);
+        if (searching)
+        {
+            return count == 1 ? L("导出搜索到的 1 条听写", "Export the 1 matching dictation") : L($"导出搜索到的 {n} 条听写", $"Export the {n} matching dictations");
+        }
+        return count == 1 ? L("导出 1 条听写", "Export 1 dictation") : L($"导出全部 {n} 条听写", $"Export all {n} dictations");
+    }
+
+    private async Task Export(List<DictationRecord> records, HistoryExport.Format format)
+    {
+        if (_exporting) return;
+        // What the list showed when Export was chosen, even if a dictation arrives while the save dialog is open.
+        var entries = records.Select(r => r.ExportEntry()).ToList();
+        _exporting = true;
+        _export.IsEnabled = false;
+        bool saved;
+        try
+        {
+            var typeLabel = format switch
+            {
+                HistoryExport.Format.Csv => "CSV (UTF-8)",
+                HistoryExport.Format.Json => "JSON",
+                _ => "Markdown",
+            };
+            saved = await Exports.Save(this, _window.Hwnd, Exports.FileName(L("OpenTypeless 历史记录", "OpenTypeless History"), DateTimeOffset.Now),
+                                       typeLabel, format.FileExtension(), () => HistoryExport.Data(entries, format), L("导出失败", "Couldn't export"));
+        }
+        finally
+        {
+            _exporting = false;
+            _export.IsEnabled = Filtered.Count > 0;
+        }
+        if (!saved) return;
+        _exportIcon.Glyph = Glyphs.CheckMark;
+        await Task.Delay(1500);
+        _exportIcon.Glyph = Glyphs.Export;
     }
 
     /// <summary>Recomputes the space history takes (off the UI thread).</summary>
@@ -198,6 +277,7 @@ public sealed class HistoryPage : PageBase
         }
         var records = Filtered;
         _listCard.Child = records.Count == 0 ? _noMatches : (UIElement)_list;
+        _export.IsEnabled = records.Count > 0 && !_exporting;
         _syncing = true;
         _entries = new ObservableCollection<Entry>(Entries(records));
         _list.ItemsSource = _entries;
@@ -216,6 +296,7 @@ public sealed class HistoryPage : PageBase
         }
         var records = Filtered;
         _listCard.Child = records.Count == 0 ? _noMatches : (UIElement)_list;
+        _export.IsEnabled = records.Count > 0 && !_exporting;
         _syncing = true;
         Sync(_entries, Entries(records));
         _syncing = false;
@@ -224,6 +305,7 @@ public sealed class HistoryPage : PageBase
 
     private void ShowEmpty()
     {
+        _export.IsEnabled = false;
         _shownDetail = null;
         _detailHost.Content = null;
         _syncing = true;
@@ -532,9 +614,21 @@ public sealed class HistoryPage : PageBase
             ToolTipService.SetToolTip(retry, L("完成后复制到剪贴板", "Copies the result to the clipboard"));
             retry.Click += (_, _) => _controller.Retry(record, paste: false);
             leading.Children.Add(retry);
-            var folder = new Button { Content = Ui.Icon(Glyphs.Folder, 14) };
+            // Showing it in File Explorer on a click, saving a copy from the arrow, as on macOS.
+            var folderIcon = Ui.Icon(Glyphs.Folder, 14);
+            var folder = new SplitButton { Content = folderIcon };
             Ui.Label(folder, L("在文件资源管理器中显示录音", "Show recording in File Explorer"));
-            folder.Click += (_, _) => Process.Start("explorer.exe", $"/select,\"{record.AudioPath}\"");
+            folder.Click += (_, _) => RevealRecording(record);
+            var reveal = new MenuFlyoutItem { Text = L("在文件资源管理器中显示录音", "Show recording in File Explorer") };
+            reveal.Click += (_, _) => RevealRecording(record);
+            var save = new MenuFlyoutItem
+            {
+                Text = L("将录音另存为…", "Save recording…"),
+                // Still being written while it records; a copy then would stop part way.
+                IsEnabled = record.Status is not (DictationStatus.Recording or DictationStatus.Processing),
+            };
+            save.Click += async (_, _) => await SaveRecording(record, folderIcon);
+            folder.Flyout = new MenuFlyout { Items = { reveal, save } };
             leading.Children.Add(folder);
         }
         buttons.Children.Add(leading);
@@ -569,6 +663,19 @@ public sealed class HistoryPage : PageBase
         Grid.SetRow(buttons, 4);
         layout.Children.Add(buttons);
         return Card.Make(layout);
+    }
+
+    private static void RevealRecording(DictationRecord record) => Process.Start("explorer.exe", $"/select,\"{record.AudioPath}\"");
+
+    /// <summary>Copies the recording (16 kHz mono WAV) to where the user chooses.</summary>
+    private async Task SaveRecording(DictationRecord record, FontIcon icon)
+    {
+        var saved = await Exports.Copy(this, _window.Hwnd, Exports.FileName("OpenTypeless", record.Date, time: true), "WAV", "wav",
+                                       record.AudioPath, L("无法保存录音", "Couldn't save the recording"));
+        if (!saved) return;
+        icon.Glyph = Glyphs.CheckMark;
+        await Task.Delay(1500);
+        icon.Glyph = Glyphs.Folder;
     }
 
     private async Task<bool> ConfirmDelete(DictationRecord record)

@@ -144,8 +144,8 @@ public enum InsertionJoiner {
 
     /// Before the cursor, the sentence is still going: the last thing there (spaces aside) is a word or a comma.
     private static func isMidSentence(_ mark: Unicode.Scalar) -> Bool {
-        let kind = kind(mark, after: nil)
-        return kind == .word || kind == .cjk || [",", ";", "，", "、", "；"].contains(mark)
+        let markKind = kind(mark, after: nil)
+        return markKind == .word || markKind == .cjk || [",", ";", "，", "、", "；"].contains(mark)
     }
 
     /// The text after the cursor carries on the sentence the dictation goes into: it starts (spaces aside) with a
@@ -153,8 +153,8 @@ public enum InsertionJoiner {
     private static func runsOn(_ after: [Unicode.Scalar], midSentence: Bool) -> Bool {
         guard let next = after.first(where: { kind($0, after: nil) != .space }) else { return false }
         if next.properties.generalCategory == .lowercaseLetter { return true }
-        let kind = kind(next, after: nil)
-        return midSentence && (kind == .word || kind == .cjk)
+        let nextKind = kind(next, after: nil)
+        return midSentence && (nextKind == .word || nextKind == .cjk)
     }
 
     /// Abbreviations whose full stop stays when they end the text.

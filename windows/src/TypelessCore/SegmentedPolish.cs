@@ -122,28 +122,35 @@ public static class SegmentedPolish
     /// <see cref="HedgedPolish"/>) and asked a second time after a transient failure, but not after a timeout. A second wait
     /// as long as the first would only hold the dictation up; the part goes in as spoken instead.
     /// </summary>
+    /// <param name="concurrency">
+    /// How many parts are out at once (null: all of them, which is what a dictation wants; the transcript of an hour-long
+    /// file has dozens).
+    /// </param>
     public static Task<SegmentedPolishResult> Run(string transcript, PolishRoute primary, PolishRoute? backup,
-                                                  Action<string>? onPartial = null, CancellationToken cancellationToken = default)
+                                                  Action<string>? onPartial = null, CancellationToken cancellationToken = default,
+                                                  int? concurrency = null)
     {
         var policy = new RetryPolicy(MaxAttempts: 2, RetriesTimeouts: false);
         return Run(transcript, (part, partial, token) => policy.Run(
                        (_, ct) => HedgedPolish.Run(part, primary, backup, cancellationToken: ct, onPartial: partial), cancellationToken: token),
-                   onPartial, cancellationToken);
+                   onPartial, cancellationToken, concurrency);
     }
 
     /// <summary>
-    /// Cleans up the parts of <paramref name="transcript"/> with <paramref name="polish"/>, all at once, and puts each part's
-    /// answer through <see cref="Prompts.Fallback"/>: a part whose answer is unusable, or that got none, goes in as spoken.
-    /// Throws only when no part got an answer (the first part's error), or when cancelled. <paramref name="onPartial"/>
-    /// gets the parts' text so far, joined.
+    /// Cleans up the parts of <paramref name="transcript"/> with <paramref name="polish"/>, all at once (or
+    /// <paramref name="concurrency"/> at a time), and puts each part's answer through <see cref="Prompts.Fallback"/>: a part
+    /// whose answer is unusable, or that got none, goes in as spoken. Throws only when no part got an answer (the first
+    /// part's error), or when cancelled. <paramref name="onPartial"/> gets the parts' text so far, joined.
     /// </summary>
     public static async Task<SegmentedPolishResult> Run(string transcript,
                                                         Func<string, Action<string>?, CancellationToken, Task<HedgedPolishResult>> polish,
-                                                        Action<string>? onPartial = null, CancellationToken cancellationToken = default)
+                                                        Action<string>? onPartial = null, CancellationToken cancellationToken = default,
+                                                        int? concurrency = null)
     {
         var texts = Parts(transcript);
         var clock = Stopwatch.StartNew();
         var progress = new PartialProgress(texts.Count, onPartial);
+        var gate = concurrency is { } limit ? new SemaphoreSlim(Math.Max(1, limit)) : null;
         var outcomes = await Task.WhenAll(texts.Select((text, index) => Attempt(text, index))).ConfigureAwait(false);
         if (cancellationToken.IsCancellationRequested) throw ApiException.Cancelled();
         var results = new List<SegmentedPolishResult.Part>();
@@ -169,6 +176,18 @@ public static class SegmentedPolish
 
         async Task<(HedgedPolishResult? Answer, Exception? Error)> Attempt(string text, int index)
         {
+            if (gate != null)
+            {
+                // One that waited its turn past a cancellation doesn't start at all.
+                try
+                {
+                    await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return (null, ApiException.Cancelled());
+                }
+            }
             try
             {
                 return (await polish(text, partial => progress.Update(index, partial), cancellationToken).ConfigureAwait(false), null);
@@ -176,6 +195,10 @@ public static class SegmentedPolish
             catch (Exception error)
             {
                 return (null, error);
+            }
+            finally
+            {
+                gate?.Release();
             }
         }
     }

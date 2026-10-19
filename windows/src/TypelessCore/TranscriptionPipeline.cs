@@ -51,7 +51,7 @@ public sealed class TranscriptionPipeline
     private readonly TranscriptionLatency _latency;
     private readonly RetryPolicy _policy;
     private readonly Action<int, ChunkState>? _observer;
-    private readonly SemaphoreSlim _semaphore = new(3);
+    private readonly SemaphoreSlim _semaphore;
     private readonly bool _trimSilence;
     private readonly bool _speculate;
     private readonly Action<string?>? _onSpeculation;
@@ -145,6 +145,10 @@ public sealed class TranscriptionPipeline
     }
 
     /// <param name="preset">Lets a retry reuse transcripts that already succeeded (keyed by chunk index).</param>
+    /// <param name="maxConcurrentRequests">
+    /// How many chunks are transcribed at once (a file being transcribed asks for fewer than a dictation, see
+    /// <see cref="FileTranscription"/>).
+    /// </param>
     /// <param name="trimSilence">Sends each chunk without the silence before and after its speech (see <see cref="AudioChunk.Trimmed"/>).</param>
     /// <param name="speculate">Transcribes the pending audio ahead of time whenever the speaker pauses (see the class summary).</param>
     /// <param name="onSpeculation">
@@ -157,8 +161,9 @@ public sealed class TranscriptionPipeline
                                  RetryPolicy? policy = null, IReadOnlyDictionary<int, string>? preset = null,
                                  Action<int, ChunkState>? observer = null, TranscriptionRoute? backup = null,
                                  TranscriptionLatency? latency = null, bool trimSilence = true, bool speculate = true,
-                                 Action<string?>? onSpeculation = null)
+                                 Action<string?>? onSpeculation = null, int maxConcurrentRequests = 3)
     {
+        _semaphore = new SemaphoreSlim(Math.Max(1, maxConcurrentRequests));
         _trimSilence = trimSilence;
         _speculate = speculate;
         _onSpeculation = onSpeculation;
@@ -278,6 +283,21 @@ public sealed class TranscriptionPipeline
         }
     }
 
+    /// <summary>
+    /// How many of the chunks so far have their answer (or needed none, or were reused from the preset), and how many are
+    /// handed out and still waiting for one. Unlike <see cref="TranscriptionProgress"/> it's there before
+    /// <see cref="Finish"/>: a long recording read from a file is handed over a block at a time, held back while enough
+    /// chunks are out (see <see cref="FileTranscription"/>).
+    /// </summary>
+    public (int Finished, int Outstanding) ChunkCounts()
+    {
+        lock (_lock)
+        {
+            var finished = _results.Values.Count(r => r.IsFinished);
+            return (finished, _results.Count - finished);
+        }
+    }
+
     /// <summary>What the requests so far used, one entry per successful request.</summary>
     public List<RequestUsage> Usages()
     {
@@ -314,8 +334,8 @@ public sealed class TranscriptionPipeline
         ChunkState? preset = null;
         lock (_lock)
         {
-            _chunks[chunk.Index] = chunk;
             if (_results.TryGetValue(chunk.Index, out var existing) && existing is ChunkState.Done) preset = existing;
+            else _chunks[chunk.Index] = chunk;
         }
         if (preset != null)
         {
@@ -336,6 +356,7 @@ public sealed class TranscriptionPipeline
         if (AudioLevel.IsSilent(chunk.Samples) || chunk.Duration < 0.3 || IsOnlyThePauseBeforeRelease(chunk))
         {
             _results[index] = new ChunkState.SkippedSilence();
+            _chunks.Remove(index);
             Monitor.Exit(_lock);
             _observer?.Invoke(index, new ChunkState.SkippedSilence());
             return;
@@ -374,6 +395,9 @@ public sealed class TranscriptionPipeline
         lock (_lock)
         {
             _results[index] = outcome.State;
+            // Only a failed chunk is sent again (in Finish's last round): the audio of the others can go, which keeps an
+            // hour-long file from being held in memory as it's transcribed.
+            if (outcome.State is not ChunkState.Failed) _chunks.Remove(index);
             if (outcome.Permanent) _permanentFailures.Add(index); else _permanentFailures.Remove(index);
             if (outcome.State is ChunkState.Done) _answeredByBackup[index] = outcome.Backup; else _answeredByBackup.Remove(index);
         }

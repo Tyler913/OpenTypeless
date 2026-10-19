@@ -1,10 +1,13 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Runtime.InteropServices;
 
 namespace OpenTypeless.Native;
 
 /// <summary>
-/// The slice of the UI Automation client API the edit watcher needs: the focused element, whether it's still
-/// the same element, and its text. Calls go into the other app's process, so make them off the UI thread.
+/// The slice of the UI Automation client API the edit watcher and the paste need: the focused element, whether it's still
+/// the same element, its text, and the text around its cursor. Calls go into the other app's process, so make them off
+/// the UI thread.
 /// </summary>
 internal static class UIAutomation
 {
@@ -78,6 +81,86 @@ internal static class UIAutomation
         return null;
     }
 
+    private const int TextPatternRangeEndpoint_Start = 0, TextPatternRangeEndpoint_End = 1, TextUnit_Character = 0;
+    /// <summary>A read around the cursor this long or longer returned more than was asked for.</summary>
+    private const int ReadLimit = 64;
+
+    /// <summary>The text either side of the cursor in a field, and the element and selection it was read at.</summary>
+    public sealed record CursorContext(string Before, string After, IUIAutomationElement Element, IUIAutomationTextRange Selection);
+
+    /// <summary>
+    /// What's just before and after the cursor (or the selection) in the focused element, from its Text pattern: up to
+    /// <paramref name="before"/> and <paramref name="after"/> characters, "" at the start or end of the field. Null
+    /// unless the element says it isn't a password field and has one selection, and both reads add up.
+    /// </summary>
+    public static CursorContext? TextAroundCursor(int before, int after)
+    {
+        try
+        {
+            if (FocusedElement() is not { } element || IsPasswordField(element) != false || Selection(element) is not { } selection) return null;
+            if (selection.Clone(out var head) != 0 || head == null
+                || head.MoveEndpointByRange(TextPatternRangeEndpoint_End, selection, TextPatternRangeEndpoint_Start) != 0
+                || head.MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, -before, out var back) != 0
+                || head.GetText(ReadLimit, out var beforeText) != 0 || !Plausible(beforeText, back, before))
+            {
+                return null;
+            }
+            if (selection.Clone(out var tail) != 0 || tail == null
+                || tail.MoveEndpointByRange(TextPatternRangeEndpoint_Start, selection, TextPatternRangeEndpoint_End) != 0
+                || tail.MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, after, out var onward) != 0
+                || tail.GetText(ReadLimit, out var afterText) != 0 || !Plausible(afterText, onward, after))
+            {
+                return null;
+            }
+            return new CursorContext(beforeText, afterText, element, selection);
+        }
+        catch (Exception e) when (e is COMException or InvalidCastException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Whether the cursor is still where <paramref name="context"/> was read: the same focused element, with the same selection.</summary>
+    public static bool CursorStillAt(CursorContext context)
+    {
+        try
+        {
+            return FocusedElement() is { } element && SameElement(element, context.Element)
+                && Selection(element) is { } selection && selection.Compare(context.Selection, out var same) == 0 && same != 0;
+        }
+        catch (Exception e) when (e is COMException or InvalidCastException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Whether the element is a password field; null when it didn't say.</summary>
+    private static bool? IsPasswordField(IUIAutomationElement element) =>
+        element.GetCurrentPropertyValue(UIA_IsPasswordPropertyId, out var value) == 0 && value is bool password ? password : null;
+
+    /// <summary>The element's one selection (or degenerate range at the cursor), from its Text pattern.</summary>
+    private static IUIAutomationTextRange? Selection(IUIAutomationElement element) =>
+        element.GetCurrentPropertyValue(UIA_IsTextPatternAvailablePropertyId, out var hasText) == 0 && hasText is true
+        && element.GetCurrentPattern(UIA_TextPatternId, out var pattern) == 0 && pattern is IUIAutomationTextPattern textPattern
+        && textPattern.GetSelection(out var ranges) == 0 && ranges != null
+        && ranges.GetLength(out var count) == 0 && count == 1
+        && ranges.GetElement(0, out var selection) == 0
+            ? selection
+            : null;
+
+    /// <summary>
+    /// Whether a read next to the cursor is what was asked for: the endpoint moved no further than asked, the text isn't
+    /// cut off by the read limit, and it's as many characters as the endpoint moved (counted as UTF-16 units or as
+    /// graphemes). A provider without a character unit moves by words or lines instead, which this rejects.
+    /// </summary>
+    private static bool Plausible([NotNullWhen(true)] string? text, int moved, int asked)
+    {
+        if (text == null || text.Length >= ReadLimit) return false;
+        var count = Math.Abs(moved);
+        if (count > asked) return false;
+        return count == 0 ? text.Length == 0 : new StringInfo(text).LengthInTextElements <= count && count <= text.Length;
+    }
+
     // Only the vtable slots before the methods we call need to exist; they are never invoked.
     [ComImport, Guid("30cbe57d-d9d0-452a-ab13-7ac5ac4825ee"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     internal interface IUIAutomation
@@ -114,16 +197,23 @@ internal static class UIAutomation
     {
         void RangeFromPoint();
         void RangeFromChild();
-        void GetSelection();
+        [PreserveSig] int GetSelection(out IUIAutomationTextRangeArray? ranges);
         void GetVisibleRanges();
         [PreserveSig] int GetDocumentRange(out IUIAutomationTextRange? range);
+    }
+
+    [ComImport, Guid("ce4ae76a-e717-4c98-81ea-47371d028eb6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IUIAutomationTextRangeArray
+    {
+        [PreserveSig] int GetLength(out int length);
+        [PreserveSig] int GetElement(int index, out IUIAutomationTextRange? element);
     }
 
     [ComImport, Guid("a543cc6a-f4ae-494b-8239-c814481187a8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     internal interface IUIAutomationTextRange
     {
-        void Clone();
-        void Compare();
+        [PreserveSig] int Clone(out IUIAutomationTextRange? clone);
+        [PreserveSig] int Compare(IUIAutomationTextRange range, out int areSame);
         void CompareEndpoints();
         void ExpandToEnclosingUnit();
         void FindAttribute();
@@ -132,6 +222,9 @@ internal static class UIAutomation
         void GetBoundingRectangles();
         void GetEnclosingElement();
         [PreserveSig] int GetText(int maxLength, [MarshalAs(UnmanagedType.BStr)] out string? text);
+        void Move();
+        [PreserveSig] int MoveEndpointByUnit(int endpoint, int unit, int count, out int moved);
+        [PreserveSig] int MoveEndpointByRange(int sourceEndpoint, IUIAutomationTextRange range, int targetEndpoint);
     }
 }
 

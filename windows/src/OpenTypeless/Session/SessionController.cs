@@ -799,7 +799,8 @@ public sealed class SessionController
     /// Pastes at the cursor unless focus is clearly not a text input, or has moved to another window since the
     /// recording stopped. Whether the paste actually landed is detected from the target app reading the clipboard: if
     /// it did, the user's previous clipboard is restored; if not, the text stays on the clipboard and the HUD says so.
-    /// Returns how it went, for History (see <see cref="DictationTiming.Delivery"/>).
+    /// Returns how it went, for History (see <see cref="DictationTiming.Delivery"/>). A paste is fitted to the text
+    /// around the cursor first (see <see cref="FitToCursor"/>); what's left on the clipboard is the text as cleaned up.
     ///
     /// Esc (or the screen locking) can come at any point while the text goes in: the paste and the Enter are only sent
     /// while the dictation is still current, and a cancelled one leaves the session and the HUD to what replaced it.
@@ -808,6 +809,8 @@ public sealed class SessionController
     {
         if (_deliverByPaste) await TextInserter.LeaveMenuMode();
         var target = _deliverByPaste ? await FocusProbe.FocusedTarget() : FocusProbe.Target.NotEditable;
+        // Read before the checks below, so a cancel or a switch of window while it's read still counts.
+        var fit = _deliverByPaste && target != FocusProbe.Target.NotEditable && !FocusMoved ? await FitToCursor(text) : null;
         if (!IsCurrent(generation, token))
         {
             Note("deliver → nothing, the dictation was cancelled meanwhile");
@@ -820,8 +823,22 @@ public sealed class SessionController
             Finish(notice is { } n ? new HudPhase.Error(n) : new HudPhase.Copied(), 1.6);
             return "copied";
         }
-        var outcome = await TextInserter.Insert(text, _settings.RestoreClipboard,
-                                                () => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved);
+        // The fitted text goes in only while the cursor is still where it was read; otherwise the text as cleaned up does.
+        var fits = fit != null;
+        Func<Task<bool>>? stillFits = null;
+        if (fit is { } fitted)
+        {
+            stillFits = async () =>
+            {
+                fits = await FocusProbe.CursorStillAt(fitted.Context);
+                if (!fits) Note("fitted text not used: the cursor moved, or couldn't be checked");
+                return fits;
+            };
+        }
+        var outcome = await TextInserter.Insert(fit?.Text ?? text, _settings.RestoreClipboard,
+                                                () => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved,
+                                                fallback: text, stillFits: stillFits);
+        var inserted = fit is { } used && fits ? used.Text : text;
         if (!IsCurrent(generation, token))
         {
             Note($"deliver → {outcome}, but the dictation was cancelled meanwhile");
@@ -848,7 +865,7 @@ public sealed class SessionController
                     Reset();
                     Hud.FinishWorking();
                 }
-                if (_settings.LearnFromEdits && !sent) _editWatcher.Watch(text);
+                if (_settings.LearnFromEdits && !sent) _editWatcher.Watch(inserted);
                 return "pasted";
             case TextInserter.Outcome.Skipped:
                 // The screen locked or another window came to the front just as Ctrl+V was due.
@@ -859,6 +876,20 @@ public sealed class SessionController
                 Finish(new HudPhase.Copied(), 1.6);
                 return "failed";
         }
+    }
+
+    /// <summary>
+    /// The text with its spacing and capitalisation fitted to the text around the cursor (see InsertionJoiner), and where
+    /// that was read; null when fitting is off, the field can't be read, or nothing needs changing. History keeps the
+    /// cleaned text: this is only how it goes in.
+    /// </summary>
+    private async Task<(string Text, UIAutomation.CursorContext Context)?> FitToCursor(string text)
+    {
+        if (!_settings.FitToSurroundingText || await FocusProbe.TextAroundCursor() is not { } context) return null;
+        var result = InsertionJoiner.Fit(text, context.Before, context.After, _settings.VocabularyList, SpellChecker.IsCommonWord);
+        if (result.Changes.Count == 0) return null;
+        Note($"fitted to the text around the cursor: {string.Join(", ", result.Changes)}");
+        return (result.Text, context);
     }
 
     private async Task<SegmentedPolishResult> Polish(string raw, Action<string>? onPartial, CancellationToken token)

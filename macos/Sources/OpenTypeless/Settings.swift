@@ -33,6 +33,9 @@ final class AppSettings: ObservableObject {
     @AppStorage("restoreClipboard") var restoreClipboard: Bool = true
     /// Press Return once the text is pasted, so a chat message or AI prompt is sent without touching the keyboard.
     @AppStorage("pressEnterAfterInsert") var pressEnterAfterInsert: Bool = false
+    /// Fit the spacing and capitalisation of pasted text to the text around the cursor (see InsertionJoiner). Safe on by
+    /// default: a field that can't be read gets the text as it is.
+    @AppStorage("fitToSurroundingText") var fitToSurroundingText: Bool = true
     /// Mute the speakers while recording (see OutputMute).
     @AppStorage("muteWhileRecording") var muteWhileRecording: Bool = false
     @AppStorage("maxRecordingMinutes") var maxRecordingMinutes: Int = 20

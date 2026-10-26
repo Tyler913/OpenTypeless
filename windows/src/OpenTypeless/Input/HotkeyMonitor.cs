@@ -249,21 +249,24 @@ public sealed class HotkeyMonitor
         var repeat = _held.Note(vk, down, info.time);
 
         if (Recorder is { } recorder) return recorder(new KeyEvent(vk, down, injected));
-        if (_isSuspended) return false;
 
         // A key whose press was swallowed (an action's shortcut, a mode chord) stays swallowed until it's let go, its
         // auto-repeats and key-up alike, whatever is held with it by then: letting go of Shift while Shift + F5 is still
-        // down mustn't turn F5's repeats into the F5 that starts a dictation.
-        if (_swallowedKeys.Contains(vk))
+        // down mustn't turn F5's repeats into the F5 that starts a dictation. Suspended or not: the focused app mustn't
+        // get half a key press because Settings changed meanwhile. (The key-combination hotkey's own release, while it's
+        // down, is read below.)
+        var hotkey = _hotkey;
+        var hotkeyHeld = _isDown && !hotkey.IsModifierOnly && vk == hotkey.KeyCode;
+        if (_swallowedKeys.Contains(vk) && !hotkeyHeld)
         {
             if (up) return _swallowedKeys.Remove(vk);
             if (repeat) return true;
             // A new press: the last one's key-up went by while a shortcut was being recorded (or the hook was off).
             _swallowedKeys.Remove(vk);
         }
+        if (_isSuspended) return false;
 
         var time = HotkeyPress.TickTime(info.time, Environment.TickCount64);
-        var hotkey = _hotkey;
         if (hotkey.IsModifierOnly)
         {
             if (vk == hotkey.KeyCode)
@@ -334,6 +337,8 @@ public sealed class HotkeyMonitor
                 if (!_isDown)
                 {
                     _isDown = true;
+                    // Also swallowed: its key-up, should the hotkey change or recording a new one start first.
+                    _swallowedKeys.Add(vk);
                     HotkeyLog.Debug($"{hotkey.DisplayName} down");
                     if ((hotkey.Modifiers & (HotkeyModifiers.Alt | HotkeyModifiers.Win)) != 0) SendMenuMask();
                     Fire(OnPress, time);
@@ -343,6 +348,7 @@ public sealed class HotkeyMonitor
             if (up && _isDown)
             {
                 _isDown = false;
+                _swallowedKeys.Remove(vk);
                 HotkeyLog.Debug($"{hotkey.DisplayName} up");
                 Fire(OnRelease, time);
                 return true;
@@ -351,14 +357,13 @@ public sealed class HotkeyMonitor
         }
         if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
         if (!down) return false;
-        if (_isDown && !injected && ModeChordKeys.Contains(vk) && info.scanCode != AltGrControlScanCode)
+        // A new press only: the repeats of one that went through before the hotkey (Shift held, then ⌥Space) go through
+        // too, or the focused app would see it go down and never come up. A swallowed one's repeats went above.
+        if (_isDown && !injected && !repeat && ModeChordKeys.Contains(vk) && info.scanCode != AltGrControlScanCode)
         {
             // Other keys are left alone while a key-combination hotkey is held, as they always were, but a chord counts.
-            if (!repeat)
-            {
-                HotkeyLog.Debug($"chord key (vk {vk}) with {hotkey.DisplayName}");
-                Fire(OnOtherKey, vk, time);
-            }
+            HotkeyLog.Debug($"chord key (vk {vk}) with {hotkey.DisplayName}");
+            Fire(OnOtherKey, vk, time);
             return Swallow(vk);
         }
         return HandleAction(vk, repeat);

@@ -221,6 +221,12 @@ final class HotkeyMonitor {
     private var escapeSwallowed = false
     /// Keys whose key-down was swallowed as an action's shortcut or a mode chord: their auto-repeats and key-up go too.
     private var swallowedKeys: Set<Int64> = []
+    /// Modifiers whose press was swallowed as a mode chord: their release goes too, and until then they're taken out of
+    /// the flags of every event let through, mouse events included (see `SuppressedModifiers`).
+    private var suppressedModifiers = SuppressedModifiers()
+    /// Mouse events go through this tap only while a modifier is suppressed, to have their flags cleared of it: there's
+    /// nothing to do with them otherwise, and a tap on every mouse move would be the main thread's to keep up with.
+    private var mouseTap: CFMachPort?
 
     /// Starts the tap, retrying every 2 s until Accessibility permission is granted.
     func start() {
@@ -242,10 +248,10 @@ final class HotkeyMonitor {
             options: .defaultTap,
             eventsOfInterest: mask,
             callback: { _, type, event, refcon in
-                if let refcon,
-                   Unmanaged<HotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue().handle(type: type, event: event) {
-                    return nil
-                }
+                guard let refcon else { return Unmanaged.passUnretained(event) }
+                let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
+                if monitor.handle(type: type, event: event) { return nil }
+                monitor.stripSuppressedModifiers(from: event, type: type)
                 return Unmanaged.passUnretained(event)
             },
             userInfo: refcon
@@ -255,8 +261,53 @@ final class HotkeyMonitor {
         source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
+        installMouseTap()
         isRunning = true
         return true
+    }
+
+    /// The tap that clears suppressed modifiers from mouse events (a ⇧-click extends a selection, ⇧-scrolling goes
+    /// sideways), off until a modifier is suppressed. Without it (not created), only the key events' flags are cleared.
+    private func installMouseTap() {
+        let types: [CGEventType] = [.leftMouseDown, .leftMouseUp, .leftMouseDragged, .rightMouseDown, .rightMouseUp,
+                                    .rightMouseDragged, .otherMouseDown, .otherMouseUp, .otherMouseDragged, .mouseMoved,
+                                    .scrollWheel]
+        let mask = types.reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: mask,
+            callback: { _, type, event, refcon in
+                if let refcon {
+                    Unmanaged<HotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
+                        .stripSuppressedModifiers(from: event, type: type)
+                }
+                return Unmanaged.passUnretained(event)
+            },
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else { return }
+        mouseTap = tap
+        CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0), .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: false)
+    }
+
+    /// Clears the suppressed modifiers from an event let through; turns the mouse tap back on when macOS turned it off
+    /// while one is still suppressed.
+    private func stripSuppressedModifiers(from event: CGEvent, type: CGEventType) {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            updateMouseTap()
+            return
+        }
+        guard !suppressedModifiers.isEmpty else { return }
+        event.flags = CGEventFlags(rawValue: suppressedModifiers.strip(event.flags.rawValue))
+    }
+
+    /// The mouse tap is on exactly while a modifier is suppressed.
+    private func updateMouseTap() {
+        guard let mouseTap else { return }
+        let wanted = !suppressedModifiers.isEmpty
+        if CGEvent.tapIsEnabled(tap: mouseTap) != wanted { CGEvent.tapEnable(tap: mouseTap, enable: wanted) }
     }
 
     /// Returns true when the event should be swallowed.
@@ -272,6 +323,9 @@ final class HotkeyMonitor {
         // to the same keys, and leave the bookkeeping of the user's own keys alone.
         if event.getIntegerValueField(.eventSourceUserData) == TextInserter.eventSignature { return false }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        // First of all: whatever changed since a press was swallowed (a shortcut being recorded, the hotkey or the mode
+        // chords changed in Settings), the rest of it is swallowed too, or the focused app gets half a key press.
+        if let swallowed = restOfSwallowedPress(type: type, keyCode: keyCode, event: event) { return swallowed }
         if isSuspended {
             if type == .flagsChanged, keyCode == hotkey.keyCode {
                 HotkeyLog.debug("ignored \(Hotkey.modifierName(keyCode)) — recording a new shortcut")
@@ -300,6 +354,8 @@ final class HotkeyMonitor {
                 if flags == wanted || isDown {
                     if !isDown, event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
                         isDown = true
+                        // Also swallowed: its key-up, should the hotkey change or recording a new one start first.
+                        swallowedKeys.insert(keyCode)
                         HotkeyLog.debug("\(hotkey.displayName) down · \(HotkeyLog.describe(event))")
                         fire(onPress, at: Self.time(of: event))
                     }
@@ -307,11 +363,10 @@ final class HotkeyMonitor {
                 }
             }
             let repeated = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-            if repeated, swallowedKeys.contains(keyCode) { return true }
             // A new press: a key-up missed meanwhile (while recording a shortcut, say) mustn't swallow this one's.
             if !repeated { swallowedKeys.remove(keyCode) }
             if keyCode == 53 { // Escape
-                if repeated { return escapeSwallowed }
+                if repeated { return false } // one swallowed went above
                 fire(onEscape)
                 escapeSwallowed = swallowsEscape
                 return escapeSwallowed
@@ -350,15 +405,11 @@ final class HotkeyMonitor {
         case .keyUp:
             if !hotkey.isModifierOnly, keyCode == hotkey.keyCode, isDown {
                 isDown = false
+                swallowedKeys.remove(keyCode)
                 HotkeyLog.debug("\(hotkey.displayName) up")
                 fire(onRelease, at: Self.time(of: event))
                 return true
             }
-            if keyCode == 53, escapeSwallowed {
-                escapeSwallowed = false
-                return true
-            }
-            if swallowedKeys.remove(keyCode) != nil { return true }
             return false
 
         default:
@@ -366,26 +417,55 @@ final class HotkeyMonitor {
         }
     }
 
+    /// The auto-repeats and release of a key whose press was swallowed, and the release of a suppressed modifier: true
+    /// (swallowed). nil for any other event, including a new press of a suppressed modifier, whose last release went by
+    /// while the tap was off: it's no longer suppressed, and is read as any press.
+    private func restOfSwallowedPress(type: CGEventType, keyCode: Int64, event: CGEvent) -> Bool? {
+        switch type {
+        case .flagsChanged:
+            guard suppressedModifiers.contains(keyCode) else { return nil }
+            suppressedModifiers.remove(keyCode)
+            updateMouseTap()
+            return Hotkey(keyCode: keyCode, isModifierOnly: true).isHeld(in: event.flags) ? nil : true
+        case .keyDown:
+            guard event.getIntegerValueField(.keyboardEventAutorepeat) != 0 else { return nil }
+            if keyCode == 53, escapeSwallowed { return true }
+            return swallowedKeys.contains(keyCode) ? true : nil
+        case .keyUp:
+            if keyCode == 53, escapeSwallowed {
+                escapeSwallowed = false
+                return true
+            }
+            // The key-combination hotkey's own release is read below.
+            if !hotkey.isModifierOnly, keyCode == hotkey.keyCode, isDown { return nil }
+            return swallowedKeys.remove(keyCode) != nil ? true : nil
+        default:
+            return nil
+        }
+    }
+
     /// A modifier registered as a mode chord (Shift, for translation) went down or up. Pressed while the hotkey is held,
     /// it switches the recording's mode, and its press and release are kept from the focused app, where Shift on its own
-    /// would switch a Chinese or Japanese input method between its own letters and English. Otherwise it's an ordinary
-    /// modifier. Its own side's flag says which way it went (see `Hotkey.isHeld`).
+    /// would switch a Chinese or Japanese input method between its own letters and English; until it's let go, it's
+    /// suppressed from the flags of everything else (see `suppressedModifiers`). Otherwise it's an ordinary modifier. Its
+    /// own side's flag says which way it went (see `Hotkey.isHeld`); a suppressed one's release was read above.
     private func handleModifierChord(_ keyCode: Int64, event: CGEvent) -> Bool {
-        guard Hotkey(keyCode: keyCode, isModifierOnly: true).isHeld(in: event.flags) else {
-            return swallowedKeys.remove(keyCode) != nil
-        }
-        // A new press: a release missed meanwhile (while recording a shortcut, say) mustn't keep this one from counting.
-        swallowedKeys.remove(keyCode)
-        guard isDown else { return false }
+        guard isDown, Hotkey(keyCode: keyCode, isModifierOnly: true).isHeld(in: event.flags) else { return false }
         HotkeyLog.debug("chord key (code \(keyCode)) with \(hotkey.displayName) · \(HotkeyLog.describe(event))")
         fire(onOtherKey, key: keyCode, at: Self.time(of: event))
-        swallowedKeys.insert(keyCode)
+        suppressedModifiers.insert(keyCode)
+        updateMouseTap()
         return true
     }
 
     /// While the tap was off its events were lost, the hotkey's release among them: a hotkey still marked down that no
-    /// longer is gets its release now, or the recording would go on as if the key were held.
+    /// longer is gets its release now, or the recording would go on as if the key were held. Swallowed presses let go of
+    /// meanwhile are forgotten, and a suppressed modifier no longer held is no longer cleared from what goes through.
     private func resyncAfterOutage() {
+        suppressedModifiers.keepHeld(in: CGEventSource.flagsState(.hidSystemState).rawValue)
+        updateMouseTap()
+        swallowedKeys = swallowedKeys.filter { CGEventSource.keyState(.hidSystemState, key: CGKeyCode($0)) }
+        if escapeSwallowed, !CGEventSource.keyState(.hidSystemState, key: 53) { escapeSwallowed = false }
         guard isDown, !isSuspended else { return }
         let held = hotkey.isModifierOnly
             ? hotkey.isHeld(in: CGEventSource.flagsState(.hidSystemState))

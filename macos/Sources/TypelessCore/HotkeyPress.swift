@@ -71,3 +71,62 @@ public struct ModeChords<Mode: Equatable & Sendable>: Sendable {
         return !handsFree && HotkeyPress.isCombo(pressedAt: pressedAt, otherKeyAt: time) ? .cancel : .ignore
     }
 }
+
+/// Modifier keys whose press was kept from the focused app (a mode chord: Shift pressed with the hotkey, for
+/// translation), until their release. macOS tells apps which modifiers are down by the flags every key and mouse event
+/// carries, not only by the modifiers' own events, so the flags of everything let through meanwhile are cleared of
+/// them: otherwise the hotkey's own release would carry Shift to the app, which then never sees Shift go up, and takes
+/// it for stuck. Flags are raw `CGEventFlags`, with the device-dependent bits of each side (NX_DEVICELSHIFTKEYMASK…).
+/// macOS only: Windows keeps a swallowed key out of the key state itself.
+public struct SuppressedModifiers: Equatable, Sendable {
+    /// keyCode → its own side's bit, the other side's, and the flag both share.
+    static let sides: [Int64: (own: UInt64, other: UInt64, shared: UInt64)] = [
+        56: (0x02, 0x04, 0x20000), 60: (0x04, 0x02, 0x20000), // left / right ⇧
+        59: (0x01, 0x2000, 0x40000), 62: (0x2000, 0x01, 0x40000), // left / right ⌃
+        58: (0x20, 0x40, 0x80000), 61: (0x40, 0x20, 0x80000), // left / right ⌥
+        55: (0x08, 0x10, 0x100000), 54: (0x10, 0x08, 0x100000), // left / right ⌘
+    ]
+
+    public private(set) var keys: Set<Int64> = []
+
+    public init() {}
+
+    public var isEmpty: Bool { keys.isEmpty }
+
+    public func contains(_ keyCode: Int64) -> Bool { keys.contains(keyCode) }
+
+    /// Only the four modifiers with sides can be kept (Fn, Caps Lock… are never chords).
+    public mutating func insert(_ keyCode: Int64) {
+        guard Self.sides[keyCode] != nil else { return }
+        keys.insert(keyCode)
+    }
+
+    public mutating func remove(_ keyCode: Int64) {
+        keys.remove(keyCode)
+    }
+
+    /// `flags` without the kept keys: each one's own side's bit, and the flag the two sides share unless the other side
+    /// is down too (and was let through). Flags with neither side's bit came from software that set them itself, and
+    /// keep the shared flag.
+    public func strip(_ flags: UInt64) -> UInt64 {
+        var stripped = flags
+        for key in keys {
+            guard let side = Self.sides[key] else { continue }
+            stripped &= ~side.own
+        }
+        for key in keys {
+            guard let side = Self.sides[key], flags & side.own != 0, stripped & side.other == 0 else { continue }
+            stripped &= ~side.shared
+        }
+        return stripped
+    }
+
+    /// Lets go of the kept keys no longer down in `flags` (the keys' state now, after events were lost): their release
+    /// went by unseen. A side is down by its own bit, or by the shared flag alone when neither side's bit is there.
+    public mutating func keepHeld(in flags: UInt64) {
+        keys = keys.filter { key in
+            guard let side = Self.sides[key], flags & side.shared != 0 else { return false }
+            return flags & side.own != 0 || flags & (side.own | side.other) == 0
+        }
+    }
+}

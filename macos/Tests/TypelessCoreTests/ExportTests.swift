@@ -16,7 +16,7 @@ import Testing
         Date(timeIntervalSince1970: (unix as! NSNumber).doubleValue)
     }
 
-    private static func entries(_ items: [[String: Any]]) -> [HistoryExport.Entry] {
+    private static func exportEntries(_ items: [[String: Any]]) -> [HistoryExport.Entry] {
         items.map { item in
             HistoryExport.Entry(date: date(item["unix"]), utcOffsetMinutes: item["offsetMinutes"] as! Int,
                                 duration: (item["duration"] as! NSNumber).doubleValue, status: item["status"] as! String,
@@ -27,7 +27,7 @@ import Testing
 
     @Test func historyFormatsMatchSharedCases() throws {
         let history = try Self.cases()["history"] as! [String: Any]
-        let entries = Self.entries(history["entries"] as! [[String: Any]])
+        let entries = Self.exportEntries(history["entries"] as! [[String: Any]])
         #expect(HistoryExport.csv(entries) == history["csv"] as! String)
         #expect(HistoryExport.json(entries) == history["json"] as! String)
         #expect(HistoryExport.markdown(entries) == history["markdown"] as! String)

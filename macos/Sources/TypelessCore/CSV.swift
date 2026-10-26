@@ -14,7 +14,7 @@ public enum CSV {
     /// uses more of those than commas (Excel in German, French or Russian saves "CSV" with semicolons).
     public static func rows(_ text: String) -> [[String]] {
         let scalars = Array(text.unicodeScalars)
-        let separator = self.separator(scalars)
+        let separator = mostUsedSeparator(scalars)
         var rows: [[String]] = []
         var row: [String] = []
         var field = String.UnicodeScalarView()
@@ -55,7 +55,7 @@ public enum CSV {
     }
 
     /// The separator the first line uses most, outside quotes: comma, semicolon or tab (comma when it has none).
-    private static func separator(_ scalars: [Unicode.Scalar]) -> Unicode.Scalar {
+    private static func mostUsedSeparator(_ scalars: [Unicode.Scalar]) -> Unicode.Scalar {
         var counts: [Unicode.Scalar: Int] = [",": 0, ";": 0, "\t": 0]
         var quoted = false
         for scalar in scalars {

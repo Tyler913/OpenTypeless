@@ -50,11 +50,11 @@ public enum VocabularyTransfer {
     /// The terms in a CSV: the first column of each row (the others, like the export's misheard forms, aren't terms),
     /// after a header row.
     public static func terms(fromCSV text: String) -> [String] {
-        var rows = CSV.rows(text)
-        if let first = rows.first?.first, headers.contains(first.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) {
-            rows.removeFirst()
+        var table = CSV.rows(text)
+        if let first = table.first?.first, headers.contains(first.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) {
+            table.removeFirst()
         }
-        return rows.flatMap { split($0.first ?? "") }
+        return table.flatMap { split($0.first ?? "") }
     }
 
     /// The terms in a text file: a term per line, or separated by commas the way the vocabulary field takes them.

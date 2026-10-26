@@ -17,6 +17,17 @@ internal sealed class SampleCounter
     public double Seconds => AudioFormat.Seconds((int)Interlocked.Read(ref _count));
 }
 
+/// <summary>
+/// Whether a clean-up request carried the text around the cursor (set as the requests go out, on any thread; read on the
+/// UI thread), for History.
+/// </summary>
+internal sealed class ContextSent
+{
+    private volatile bool _value;
+    public void Mark() => _value = true;
+    public bool IsSet => _value;
+}
+
 /// <summary>Orchestrates one dictation: hotkey → record → chunked STT → polish → paste. UI-thread only.</summary>
 public sealed class SessionController
 {
@@ -95,6 +106,13 @@ public sealed class SessionController
     /// names by (see <see cref="CursorContext"/>); null when that's off or there was none. Never saved.
     /// </summary>
     private string? _cursorContext;
+    /// <summary>That read, while it's still under way.</summary>
+    private CursorContextRead? _cursorRead;
+    /// <summary>
+    /// Whether this dictation's clean-up requests carried that text, for History. A new one for each dictation: work still
+    /// out for an earlier one holds on to its own.
+    /// </summary>
+    private ContextSent _contextSent = new();
 
     public SessionController()
     {
@@ -218,6 +236,8 @@ public sealed class SessionController
     {
         // A warm microphone doesn't stay on behind the lock screen either; see SystemUnlocked.
         _isLocked = true;
+        // Nor is the text around the cursor read on: what it would find now isn't the speaker's.
+        StopCursorContextRead();
         switch (State)
         {
             case SessionState.Recording:
@@ -262,6 +282,7 @@ public sealed class SessionController
         _history.Update(record);
         Note($"cancelled after {record.Duration:0.0}s — kept in History");
         var discarded = TakeDiscardedPolishes();
+        var sent = _contextSent;
         Reset();
         Hud.Show(new HudPhase.Error(L("已取消，录音在历史记录中保留 24 小时", "Cancelled — kept in History for 24 hours")), 2.5);
         _keptInBackground.Add(record.Id);
@@ -285,13 +306,13 @@ public sealed class SessionController
             if (!_keptInBackground.Remove(record.Id))
             {
                 // Retried from History meanwhile: that run owns the record now. Only what this one spent is counted.
-                Account(record, pipeline, null, discarded);
+                Account(record, pipeline, null, discarded, sent);
                 return;
             }
             if (_history.Records.All(r => r.Id != record.Id)) return; // deleted meanwhile
             record.RawText = raw;
             record.ChunkTexts = pipeline.CompletedTranscripts();
-            Account(record, pipeline, null, discarded);
+            Account(record, pipeline, null, discarded, sent);
             _history.Update(record);
         }
     }
@@ -406,7 +427,7 @@ public sealed class SessionController
         Hud.Show(new HudPhase.Recording());
         PlaySound(Sounds.Kind.Start);
         // Read now, while the field holds only what the speaker typed: the dictation goes in at the end.
-        if (_settings.PolishEnabled && _settings.UseCursorContext) _ = ReadCursorContext(record.Id);
+        if (_settings.PolishEnabled && _settings.UseCursorContext) StartCursorContextRead();
         // After the start sound, which muting would cut off.
         if (_settings.MuteWhileRecording) _outputMute.Mute(TimeSpan.FromMilliseconds(_settings.PlaySounds ? 300 : 0));
 
@@ -425,16 +446,36 @@ public sealed class SessionController
     }
 
     /// <summary>
-    /// Reads the text around the cursor in the window in front, off the UI thread, for the dictation
-    /// <paramref name="recordId"/>. Whatever isn't in by the time the clean-up starts isn't waited for.
+    /// Starts reading the text around the cursor in the window in front, off the UI thread. What comes back is taken only
+    /// while the read is still this dictation's: not stopped by its end, by the session locking, or by the clean-up taking
+    /// what was in by then. Nothing waits for it.
     /// </summary>
-    private async Task ReadCursorContext(string recordId)
+    private void StartCursorContextRead()
     {
-        var context = await CursorContextReader.Read();
-        if (_record?.Id != recordId || State == SessionState.Idle) return;
-        _cursorContext = context;
-        // Its length only: the text stays out of the log.
-        Note(context is null ? "no text around the cursor" : $"text around the cursor: {context.Length} characters");
+        if (CursorContextReader.Begin() is not { } read) return;
+        _cursorRead = read;
+        var generation = _generation;
+        _ = Take();
+
+        async Task Take()
+        {
+            var context = await CursorContextReader.Read(read).ConfigureAwait(false);
+            _dispatcher.TryEnqueue(() =>
+            {
+                if (_cursorRead != read || _generation != generation || _isLocked || read.IsCancelled) return;
+                _cursorRead = null;
+                _cursorContext = context;
+                // Its length only: the text stays out of the log.
+                Note(context is null ? "no text around the cursor" : $"text around the cursor: {context.Length} characters");
+            });
+        }
+    }
+
+    /// <summary>Stops the read of the text around the cursor: whatever it finds is dropped.</summary>
+    private void StopCursorContextRead()
+    {
+        _cursorRead?.Cancel();
+        _cursorRead = null;
     }
 
     /// <summary>
@@ -568,6 +609,7 @@ public sealed class SessionController
 
     private async Task Process(DictationRecord record, TranscriptionPipeline pipeline, int generation, CancellationToken token)
     {
+        var sent = _contextSent;
         var started = Stopwatch.StartNew();
         // Moves the bar as the speech-to-text chunks still out come back.
         var progress = Hud.Model.Progress;
@@ -594,12 +636,12 @@ public sealed class SessionController
             if (raw.Trim().Length == 0)
             {
                 record.Status = DictationStatus.Done;
-                Account(record, pipeline, null, TakeDiscardedPolishes());
+                Account(record, pipeline, null, TakeDiscardedPolishes(), sent);
                 _history.Update(record);
                 Finish(new HudPhase.Error(L("没有识别到语音", "No speech detected")), 2);
                 return;
             }
-            await PolishAndDeliver(record, pipeline, generation, token);
+            await PolishAndDeliver(record, pipeline, generation, token, sent);
         }
         catch (PipelineFailure failure)
         {
@@ -608,7 +650,7 @@ public sealed class SessionController
             record.RawText = failure.PartialText;
             record.Status = DictationStatus.Failed;
             record.Error = failure.Message;
-            Account(record, pipeline, null, TakeDiscardedPolishes());
+            Account(record, pipeline, null, TakeDiscardedPolishes(), sent);
             _history.Update(record);
             LastError = failure.Message;
             Finish(new HudPhase.Error(L("转写失败，可在托盘菜单重试", "Failed — retry from the tray menu")), 4);
@@ -618,7 +660,7 @@ public sealed class SessionController
             if (ApiException.From(error).IsCancelled || !IsCurrent(generation, token)) return;
             record.Status = DictationStatus.Failed;
             record.Error = error.Message;
-            Account(record, pipeline, null, TakeDiscardedPolishes());
+            Account(record, pipeline, null, TakeDiscardedPolishes(), sent);
             _history.Update(record);
             LastError = error.Message;
             Finish(new HudPhase.Error(error.Message), 5);
@@ -638,7 +680,8 @@ public sealed class SessionController
         }
     }
 
-    private async Task PolishAndDeliver(DictationRecord record, TranscriptionPipeline pipeline, int generation, CancellationToken token)
+    private async Task PolishAndDeliver(DictationRecord record, TranscriptionPipeline pipeline, int generation, CancellationToken token,
+                                        ContextSent sent)
     {
         var begun = Stopwatch.StartNew();
         var text = record.RawText;
@@ -652,6 +695,8 @@ public sealed class SessionController
             Task<SegmentedPolishResult> polishing;
             var ahead = 0.0;
             CancellationTokenRegistration adopted = default;
+            // What came in by now is what goes: a read still out is dropped, so no later request differs from this one.
+            StopCursorContextRead();
             var context = _cursorContext;
             // One that already failed (while recording) gets a fresh attempt instead, and so does one started before the
             // text around the cursor was in.
@@ -670,10 +715,8 @@ public sealed class SessionController
             else
             {
                 DropSpeculativePolish();
-                polishing = Polish(record.RawText, context, OnPolishPartial(record.RawText), token);
+                polishing = Polish(record.RawText, context, sent, OnPolishPartial(record.RawText), token);
             }
-            // That it was sent, for History; the text itself is never kept.
-            if (context != null && record.Timing is { } sent) sent.UsedContext = true;
             // Saved while the clean-up runs, so the transcript survives a crash.
             _history.Update(record);
             try
@@ -740,7 +783,7 @@ public sealed class SessionController
         // it stays, now with its clean-up.
         if (token.IsCancellationRequested) record.Status = DictationStatus.Cancelled;
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
-        Account(record, pipeline, polished, discarded);
+        Account(record, pipeline, polished, discarded, sent);
         _history.Update(record);
     }
 
@@ -782,7 +825,7 @@ public sealed class SessionController
         var cancel = new CancellationTokenSource();
         var partials = new PartialRelay();
         var context = _cursorContext;
-        var task = Polish(raw, context, partials.Send, cancel.Token);
+        var task = Polish(raw, context, _contextSent, partials.Send, cancel.Token);
         // A dropped clean-up's failure (usually its cancellation) is expected; observe it so it isn't reported.
         _ = task.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         _speculativePolish = new SpeculativePolish(raw, context, Stopwatch.StartNew(), task, cancel, partials);
@@ -887,18 +930,20 @@ public sealed class SessionController
     }
 
     /// <param name="context">The text around the cursor, which goes with every request (both routes, every part).</param>
-    private async Task<SegmentedPolishResult> Polish(string raw, string? context, Action<string>? onPartial, CancellationToken token)
+    /// <param name="sent">Told when one of them goes out, for the dictation the clean-up is for.</param>
+    private async Task<SegmentedPolishResult> Polish(string raw, string? context, ContextSent sent, Action<string>? onPartial,
+                                                     CancellationToken token)
     {
         if (_settings.PolishEndpoint is not { } endpoint || !_settings.IsConfigured(_settings.PolishProvider))
         {
             throw ApiException.MissingApiKey(_settings.PolishProvider.DisplayName());
         }
-        var primary = Route(endpoint, _settings.PolishModel, context);
-        var backup = _settings.PolishBackupEndpoint is { } backupEndpoint ? Route(backupEndpoint, _settings.PolishBackupModel, context) : null;
+        var primary = Route(endpoint, _settings.PolishModel, context, sent);
+        var backup = _settings.PolishBackupEndpoint is { } backupEndpoint ? Route(backupEndpoint, _settings.PolishBackupModel, context, sent) : null;
         return await SegmentedPolish.Run(raw, primary, backup, onPartial, token);
     }
 
-    private PolishRoute Route(ProviderEndpoint endpoint, string model, string? context)
+    private PolishRoute Route(ProviderEndpoint endpoint, string model, string? context, ContextSent sent)
     {
         model = model.Trim();
         return new PolishRoute(new ApiClient(endpoint), new PolishOptions(
@@ -908,7 +953,8 @@ public sealed class SessionController
             endpoint.Id == ProviderId.OpenRouter ? _modelInfo.GetValueOrDefault(model) : null,
             Misheard: _settings.MisheardHints,
             Host: endpoint.Id == ProviderId.OpenRouter ? _settings.OpenRouterHost(model) : null,
-            Context: context));
+            Context: context,
+            OnContextSent: sent.Mark));
     }
 
     /// <summary>
@@ -917,9 +963,11 @@ public sealed class SessionController
     /// page totals.
     /// </summary>
     /// <param name="discarded">Clean-ups done ahead of time for a transcript the speaker then went on from.</param>
+    /// <param name="sent">Whether this run's requests carried the text around the cursor, which History notes (never the text).</param>
     private void Account(DictationRecord record, TranscriptionPipeline pipeline, SegmentedPolishResult? polished,
-                         IReadOnlyList<SegmentedPolishResult> discarded)
+                         IReadOnlyList<SegmentedPolishResult> discarded, ContextSent sent)
     {
+        NoteContext(record, sent);
         var prices = PriceStore.Shared;
         var (transcription, unpriced) = CostEstimator.Transcriptions(
             pipeline.Usages(), prices.Price(_settings.SttProvider, _settings.SttModel), _settings.SttProvider == ProviderId.OpenRouter);
@@ -945,6 +993,14 @@ public sealed class SessionController
         if (transcription + cleanup > 0) record.Cost = (record.Cost ?? 0) + transcription + cleanup;
         Note($"cost: transcription ${transcription:0.######}, clean-up ${cleanup:0.######}, unpriced requests {unpriced}");
         UsageStore.Shared.Record(record, transcription, cleanup, unpriced);
+    }
+
+    /// <summary>Notes in History that a clean-up request of this run carried the text around the cursor; the text isn't kept.</summary>
+    private static void NoteContext(DictationRecord record, ContextSent sent)
+    {
+        if (!sent.IsSet) return;
+        record.Timing ??= new DictationTiming();
+        record.Timing.UsedContext = true;
     }
 
     // MARK: - Retry / cancel
@@ -1020,6 +1076,7 @@ public sealed class SessionController
                 }
             }
             record.Status = DictationStatus.Cancelled;
+            NoteContext(record, _contextSent);
             _history.Update(record);
         }
         Reset();
@@ -1081,7 +1138,9 @@ public sealed class SessionController
         _pasteTarget = 0;
         _handsFree = false;
         _processing = null;
+        StopCursorContextRead();
         _cursorContext = null;
+        _contextSent = new ContextSent();
     }
 
     // MARK: - Misc

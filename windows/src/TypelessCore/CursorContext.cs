@@ -7,9 +7,10 @@ namespace TypelessCore;
 /// The text around the cursor in the field being dictated into, which the clean-up gets as a spelling reference: the
 /// names and terms a reply is about (a colleague's name in the thread, a product, a code identifier) are already on
 /// screen, and they're what speech recognition gets wrong most. The app reads it once, as recording starts, through UI
-/// Automation (Accessibility on macOS), never from a password field and only when the speaker switched it on. It's sent
-/// with the transcript and never kept. Like Wispr Flow's nearby text; Superwhisper and VoiceInk read the screen instead (a
-/// screenshot and OCR), which needs screen recording permission and reads far more than the field.
+/// Automation (Accessibility on macOS), only from a field that says it's editable and not a password field, and only when
+/// the speaker switched it on. It's sent with the transcript and never kept. Like Wispr Flow's nearby text; Superwhisper
+/// and VoiceInk read the screen instead (a screenshot and OCR), which needs screen recording permission and reads far more
+/// than the field.
 /// </summary>
 public static class CursorContext
 {
@@ -20,7 +21,23 @@ public static class CursorContext
     public const int Limit = 1_500;
 
     /// <summary>
-    /// The excerpt of a field's text that goes to the clean-up. <paramref name="selection"/> is where the cursor or the
+    /// Which parts of a field were read only in part, at a length the app chose rather than at the start or end of the
+    /// field. Such a read can end in the middle of a character (half an emoji, a family emoji without its last member).
+    /// </summary>
+    [Flags]
+    public enum Cut
+    {
+        None = 0,
+        /// <summary>The text before the selection doesn't reach back to the start of the field.</summary>
+        Before = 1,
+        /// <summary>The selection was read only up to a length.</summary>
+        Selection = 2,
+        /// <summary>The text after the selection doesn't reach the end of the field.</summary>
+        After = 4,
+    }
+
+    /// <summary>
+    /// The excerpt of a field's whole text that goes to the clean-up. <paramref name="selection"/> is where the cursor or the
     /// selection is, in UTF-16 offsets (as UI Automation and Accessibility count them), clamped to the text and rounded
     /// down to whole characters; null when the field doesn't say, and then the cursor is taken to be at the end, where it
     /// is when replying.
@@ -39,11 +56,31 @@ public static class CursorContext
     /// split evenly (what one side doesn't need goes to the other), with every run of spaces or blank lines squeezed to
     /// one. A word cut in two at either edge is dropped, so a name is never shown half spelled (Chinese and Japanese,
     /// written without spaces, are cut anywhere), and so is a character a read cut through the middle of (U+FFFD, or half
-    /// a surrogate pair). Characters are whole: an emoji or a CJK character is never split. Null when nothing but
-    /// whitespace is left.
+    /// a surrogate pair). Characters are whole: an emoji or a CJK character is never split.
+    ///
+    /// Where a part was read only in part (<paramref name="cut"/>), its cut end can be anywhere, even inside a character:
+    /// the read's last character may be the first two of a family emoji's three people, which looks whole. So it's trimmed
+    /// back past the first space or punctuation mark from that end (see <see cref="IsBoundary"/>), beyond which the text
+    /// reads as in the whole field, and all of it goes when there's none. A selection read in part isn't followed by the
+    /// text after it, which isn't what comes after its first part. Null when nothing but whitespace is left.
     /// </summary>
-    public static string? Excerpt(string before, string selected, string after, int limit = Limit)
+    public static string? Excerpt(string before, string selected, string after, int limit = Limit, Cut cut = Cut.None)
     {
+        if (cut.HasFlag(Cut.Before))
+        {
+            var parts = Elements(before);
+            var boundary = parts.FindIndex(IsBoundary);
+            before = boundary < 0 ? "" : string.Concat(parts.Skip(boundary + 1));
+        }
+        if (cut.HasFlag(Cut.Selection))
+        {
+            selected = BeforeLastBoundary(selected);
+            after = "";
+        }
+        else if (cut.HasFlag(Cut.After))
+        {
+            after = BeforeLastBoundary(after);
+        }
         var selection = Elements(Squeezed(selected));
         if (selection.Count > Math.Max(0, limit)) selection.RemoveRange(Math.Max(0, limit), selection.Count - Math.Max(0, limit));
         var head = Elements(Squeezed(before));
@@ -60,6 +97,23 @@ public static class CursorContext
         // Squeezed again where the parts meet: a space on both sides of the cursor is still one.
         var text = Trimmed(Squeezed(string.Concat(head) + string.Concat(selection) + string.Concat(tail)));
         return text.Length == 0 ? null : text;
+    }
+
+    /// <summary>
+    /// A character a part read only in part is trimmed back to: a single code point that is a space, a line break or a
+    /// punctuation mark. Nothing joins onto either side of one to make a character of it, so the text on its far side from
+    /// the cut is split into characters as it is in the whole field.
+    /// </summary>
+    internal static bool IsBoundary(string element) =>
+        Rune.TryGetRuneAt(element, 0, out var rune) && rune.Utf16SequenceLength == element.Length
+        && (Rune.IsWhiteSpace(rune) || Rune.IsPunctuation(rune));
+
+    /// <summary>The text up to its last <see cref="IsBoundary"/> character, or "" when it has none.</summary>
+    private static string BeforeLastBoundary(string text)
+    {
+        var parts = Elements(text);
+        var boundary = parts.FindLastIndex(IsBoundary);
+        return boundary < 0 ? "" : string.Concat(parts.Take(boundary));
     }
 
     /// <summary>
@@ -86,7 +140,7 @@ public static class CursorContext
     }
 
     /// <summary>Line breaks, as Swift's <c>Character.isNewline</c> counts them.</summary>
-    private static bool IsNewline(char c) => c is '\n' or '\r' or '\v' or '\f' or '\u0085' or ' ' or ' ';
+    private static bool IsNewline(char c) => c is '\n' or '\r' or '\v' or '\f' or '\u0085' or '\u2028' or '\u2029';
 
     /// <summary>Drops the word a cut went through at the start of <paramref name="head"/>: up to its first space, or all of it.</summary>
     private static void DropCutWordAtStart(List<string> head, string previous)
@@ -119,7 +173,7 @@ public static class CursorContext
     /// <summary>Trims whitespace, U+FFFD and half surrogate pairs from both ends.</summary>
     private static string Trimmed(string text)
     {
-        static bool Trims(char c) => char.IsWhiteSpace(c) || c == '�' || char.IsSurrogate(c);
+        static bool Trims(char c) => char.IsWhiteSpace(c) || c == '\uFFFD' || char.IsSurrogate(c);
         int start = 0, end = text.Length;
         // A whole surrogate pair (an emoji) at an edge stays: only a half one is trimmed.
         while (start < end && Trims(text[start]) && !(char.IsHighSurrogate(text[start]) && start + 1 < end && char.IsLowSurrogate(text[start + 1]))) start++;

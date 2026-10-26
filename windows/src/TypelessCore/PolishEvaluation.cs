@@ -103,7 +103,9 @@ public sealed record EvaluationPlan(
     [property: JsonPropertyName("bodyJSON")] string BodyJson,
     [property: JsonPropertyName("upperBoundUSD")] double UpperBoundUsd,
     [property: JsonPropertyName("inputTokenBound")] int InputTokenBound,
-    [property: JsonPropertyName("outputTokenBound")] int OutputTokenBound);
+    [property: JsonPropertyName("outputTokenBound")] int OutputTokenBound,
+    /// <summary>The request carries text around the cursor, so its output is cleaned of that as the app's is.</summary>
+    [property: JsonPropertyName("sentContext")][property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool SentContext = false);
 
 public sealed partial class ApiClient
 {
@@ -135,7 +137,7 @@ public sealed partial class ApiClient
         var outputBound = (int)body["max_tokens"]!;
         var upper = (inputBound * promptPrice + outputBound * completionPrice) * 1.2;
         var json = JsonSerializer.Serialize(SortKeys(body), BodyJson);
-        return new EvaluationPlan(options.Model, json, upper, inputBound, outputBound);
+        return new EvaluationPlan(options.Model, json, upper, inputBound, outputBound, Prompts.ContextBlock(options.Context) != null);
     }
 
     private static JsonNode? SortKeys(JsonNode? node) => node switch
@@ -182,7 +184,7 @@ public sealed partial class ApiClient
             }
             if (!result.ReceivedDone && result.Error == null) result.Error = "stream ended without DONE";
             if (result.FinishReason == null && result.Error == null) result.Error = "missing finish_reason";
-            result.Output = Prompts.SanitizePolishOutput(result.RawOutput);
+            result.Output = Prompts.SanitizePolishOutput(result.RawOutput, plan.SentContext);
             if (result.Output.Length == 0 && result.Error == null) result.Error = "empty output";
         }
         catch (Exception error)
@@ -397,36 +399,103 @@ public static class PolishMetrics
         return previous[m];
     }
 
-    /// <summary>Five letters in a row of a normalised text.</summary>
-    internal const int GramLength = 5;
+    /// <summary>Four letters in a row of a normalised text.</summary>
+    internal const int GramLength = 4;
 
-    /// <summary>Every run of five letters, by where it starts.</summary>
-    internal static List<(int, int, int, int, int)> Grams(int[] text)
+    /// <summary>Every run of four letters, by where it starts.</summary>
+    internal static List<(int, int, int, int)> Grams(int[] text)
     {
-        var grams = new List<(int, int, int, int, int)>();
-        for (var i = 0; i + GramLength <= text.Length; i++) grams.Add((text[i], text[i + 1], text[i + 2], text[i + 3], text[i + 4]));
+        var grams = new List<(int, int, int, int)>();
+        for (var i = 0; i + GramLength <= text.Length; i++) grams.Add((text[i], text[i + 1], text[i + 2], text[i + 3]));
         return grams;
     }
 
     /// <summary>
-    /// Whether <paramref name="gram"/> is in <paramref name="text"/> in order, with at most <paramref name="gap"/> letters
-    /// left out in between: the clean-up removed a filler or two there.
+    /// One place where <c>y</c> differs from <c>x</c>: the letters of <c>y</c> there (positions <c>Start</c> up to
+    /// <c>End</c>), and how many of <c>x</c>'s it replaces.
     /// </summary>
-    internal static bool Occurs((int, int, int, int, int) gram, int[] text, int gap)
+    internal readonly record struct Edit(int Start, int End, int Replaced);
+
+    /// <summary>
+    /// Where <paramref name="y"/> differs from <paramref name="x"/>, by an edit-distance alignment of the two: each run of
+    /// changes between letters they share. Null for texts too long to align here (over <paramref name="maxCells"/> pairs
+    /// of letters, a table that size in bytes).
+    /// </summary>
+    internal static List<Edit>? Edits(int[] x, int[] y, long maxCells = 8_000_000)
     {
-        int[] letters = [gram.Item1, gram.Item2, gram.Item3, gram.Item4, gram.Item5];
-        for (var start = 0; start < text.Length; start++)
+        var start = 0;
+        while (start < x.Length && start < y.Length && x[start] == y[start]) start++;
+        var end = 0;
+        while (end < x.Length - start && end < y.Length - start && x[x.Length - 1 - end] == y[y.Length - 1 - end]) end++;
+        int n = x.Length - start - end, m = y.Length - start - end;
+        if ((long)n * m > maxCells) return null;
+        // How each cell was reached: 0 the same letter, 1 another letter in its place, 2 a letter of x left out, 3 a letter
+        // of y added. Ties go in that order, as on macOS.
+        var moves = new byte[(n + 1) * (m + 1)];
+        var previous = Enumerable.Range(0, m + 1).ToArray();
+        var current = new int[m + 1];
+        for (var i = 1; i <= n; i++)
         {
-            if (text[start] != letters[0]) continue;
-            var matched = 1;
-            var end = Math.Min(text.Length, start + letters.Length + gap);
-            for (var index = start + 1; index < end && matched < letters.Length; index++)
+            current[0] = i;
+            for (var j = 1; j <= m; j++)
             {
-                if (text[index] == letters[matched]) matched++;
+                var same = x[start + i - 1] == y[start + j - 1];
+                int diagonal = previous[j - 1] + (same ? 0 : 1), leftOut = previous[j] + 1, added = current[j - 1] + 1;
+                if (diagonal <= leftOut && diagonal <= added)
+                {
+                    current[j] = diagonal;
+                    moves[i * (m + 1) + j] = same ? (byte)0 : (byte)1;
+                }
+                else if (leftOut <= added)
+                {
+                    current[j] = leftOut;
+                    moves[i * (m + 1) + j] = 2;
+                }
+                else
+                {
+                    current[j] = added;
+                    moves[i * (m + 1) + j] = 3;
+                }
             }
-            if (matched == letters.Length) return true;
+            (previous, current) = (current, previous);
         }
-        return false;
+        // Back from the end; a run of changes ends at the next shared letter.
+        var runs = new List<Edit>();
+        int row = n, column = m;
+        int? runEnd = null;
+        var replaced = 0;
+        while (row > 0 || column > 0)
+        {
+            int move = row == 0 ? 3 : column == 0 ? 2 : moves[row * (m + 1) + column];
+            if (move == 0)
+            {
+                if (runEnd is { } runStop) runs.Add(new Edit(start + column, start + runStop, replaced));
+                runEnd = null;
+                replaced = 0;
+                row--;
+                column--;
+                continue;
+            }
+            runEnd ??= column;
+            switch (move)
+            {
+                case 1:
+                    row--;
+                    column--;
+                    replaced++;
+                    break;
+                case 2:
+                    row--;
+                    replaced++;
+                    break;
+                default:
+                    column--;
+                    break;
+            }
+        }
+        if (runEnd is { } last) runs.Add(new Edit(start, start + last, replaced));
+        runs.Reverse();
+        return runs;
     }
 
     /// <summary><see cref="Normalized"/>, as Unicode scalar values.</summary>

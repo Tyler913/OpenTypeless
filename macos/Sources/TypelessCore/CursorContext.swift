@@ -3,17 +3,31 @@ import Foundation
 /// The text around the cursor in the field being dictated into, which the clean-up gets as a spelling reference: the
 /// names and terms a reply is about (a colleague's name in the thread, a product, a code identifier) are already on
 /// screen, and they're what speech recognition gets wrong most. The app reads it once, as recording starts, through
-/// Accessibility (UI Automation on Windows), never from a password field and only when the speaker switched it on. It's
-/// sent with the transcript and never kept. Like Wispr Flow's nearby text; Superwhisper and VoiceInk read the screen
-/// instead (a screenshot and OCR), which needs screen recording permission and reads far more than the field.
+/// Accessibility (UI Automation on Windows), only from a field that says it's editable and not a password field, and only
+/// when the speaker switched it on. It's sent with the transcript and never kept. Like Wispr Flow's nearby text;
+/// Superwhisper and VoiceInk read the screen instead (a screenshot and OCR), which needs screen recording permission and
+/// reads far more than the field.
 public enum CursorContext {
     /// At most this many characters go to the clean-up: the message being replied to, or the paragraph being written,
     /// with room on either side of the cursor, for a few hundred tokens.
     public static let limit = 1_500
 
-    /// The excerpt of a field's text that goes to the clean-up. `selection` is where the cursor or the selection is, in
-    /// UTF-16 offsets (as Accessibility and UI Automation count them), clamped to the text and rounded down to whole
-    /// characters; nil when the field doesn't say, and then the cursor is taken to be at the end, where it is when
+    /// Which parts of a field were read only in part, at a length the app chose rather than at the start or end of the
+    /// field. Such a read can end in the middle of a character (half an emoji, a family emoji without its last member).
+    public struct Cut: OptionSet, Sendable {
+        public let rawValue: Int
+        public init(rawValue: Int) { self.rawValue = rawValue }
+        /// The text before the selection doesn't reach back to the start of the field.
+        public static let before = Cut(rawValue: 1)
+        /// The selection was read only up to a length.
+        public static let selection = Cut(rawValue: 2)
+        /// The text after the selection doesn't reach the end of the field.
+        public static let after = Cut(rawValue: 4)
+    }
+
+    /// The excerpt of a field's whole text that goes to the clean-up. `selection` is where the cursor or the selection
+    /// is, in UTF-16 offsets (as Accessibility and UI Automation count them), clamped to the text and rounded down to
+    /// whole characters; nil when the field doesn't say, and then the cursor is taken to be at the end, where it is when
     /// replying.
     public static func excerpt(text: String, selection: (location: Int, length: Int)?, limit: Int = limit) -> String? {
         let count = text.utf16.count
@@ -29,10 +43,28 @@ public enum CursorContext {
     /// (what one side doesn't need goes to the other), with every run of spaces or blank lines squeezed to one. A word
     /// cut in two at either edge is dropped, so a name is never shown half spelled (Chinese and Japanese, written without
     /// spaces, are cut anywhere), and so is a character a read cut through the middle of (U+FFFD). Characters are whole:
-    /// an emoji or a CJK character is never split. Nil when nothing but whitespace is left.
-    public static func excerpt(before: String, selected: String, after: String, limit: Int = limit) -> String? {
-        let selected = String(squeezed(selected).prefix(max(0, limit)))
-        let before = squeezed(before), after = squeezed(after)
+    /// an emoji or a CJK character is never split.
+    ///
+    /// Where a part was read only in part (`cut`), its cut end can be anywhere, even inside a character: the read's last
+    /// character may be the first two of a family emoji's three people, which looks whole. So it's trimmed back past the
+    /// first space or punctuation mark from that end (see `isBoundary`), beyond which the text reads as in the whole field,
+    /// and all of it goes when there's none. A selection read in part isn't followed by the text after it, which isn't
+    /// what comes after its first part. Nil when nothing but whitespace is left.
+    public static func excerpt(before: String, selected: String, after: String, cut: Cut = [],
+                               limit: Int = limit) -> String? {
+        var before = before, selected = selected, after = after
+        if cut.contains(.before) {
+            before = before.firstIndex(where: isBoundary).map { String(before[before.index(after: $0)...]) } ?? ""
+        }
+        if cut.contains(.selection) {
+            selected = selected.lastIndex(where: isBoundary).map { String(selected[..<$0]) } ?? ""
+            after = ""
+        } else if cut.contains(.after) {
+            after = after.lastIndex(where: isBoundary).map { String(after[..<$0]) } ?? ""
+        }
+        selected = String(squeezed(selected).prefix(max(0, limit)))
+        before = squeezed(before)
+        after = squeezed(after)
         let room = max(0, limit - selected.count)
         let beforeCount = min(before.count, max(room / 2, room - after.count))
         let afterCount = min(after.count, room - beforeCount)
@@ -46,6 +78,13 @@ public enum CursorContext {
     }
 
     private static let trimmed = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{FFFD}"))
+
+    /// A character a part read only in part is trimmed back to: a single code point that is a space, a line break or a
+    /// punctuation mark. Nothing joins onto either side of one to make a character of it, so the text on its far side from
+    /// the cut is split into characters as it is in the whole field.
+    static func isBoundary(_ character: Character) -> Bool {
+        character.unicodeScalars.count == 1 && (character.isWhitespace || character.isPunctuation)
+    }
 
     /// Each run of whitespace as one line break when it has one, otherwise as one space: indentation and blank lines
     /// would only use up the room.

@@ -9,12 +9,32 @@ public enum CSV {
         return "\"" + text.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 
+    /// A field of a file a spreadsheet will open. One starting with = + - @, a tab or a carriage return gets an
+    /// apostrophe in front, so Excel or Numbers shows it as the text it is rather than running it as a formula (OWASP's
+    /// advice against CSV injection); `unprotected` takes the apostrophe off again when such a file is imported. Text
+    /// that already starts with apostrophes before one of those gets one more, so it comes back as it was.
+    public static func spreadsheetField(_ text: String) -> String {
+        field(needsApostrophe(text) ? "'" + text : text)
+    }
+
+    /// A field as it was before `spreadsheetField` protected it.
+    public static func unprotected(_ field: String) -> String {
+        guard field.unicodeScalars.first == "'", needsApostrophe(field) else { return field }
+        return String(field.unicodeScalars.dropFirst())
+    }
+
+    private static func needsApostrophe(_ text: String) -> Bool {
+        guard let first = text.unicodeScalars.first(where: { $0 != "'" }) else { return false }
+        return first == "=" || first == "+" || first == "-" || first == "@" || first == "\t" || first == "\r"
+    }
+
     /// The rows of a file. Lenient about what spreadsheets write: CRLF, LF or CR line ends, a stray quote inside a field
     /// kept as it is, an unclosed quote running to the end, and a semicolon or tab as the separator when the first line
-    /// uses more of those than commas (Excel in German, French or Russian saves "CSV" with semicolons).
-    public static func rows(_ text: String) -> [[String]] {
+    /// uses more of those than commas (Excel in German, French or Russian saves "CSV" with semicolons), unless a
+    /// `separator` is given.
+    public static func rows(_ text: String, separator given: Unicode.Scalar? = nil) -> [[String]] {
         let scalars = Array(text.unicodeScalars)
-        let separator = mostUsedSeparator(scalars)
+        let separator = given ?? mostUsedSeparator(scalars)
         var rows: [[String]] = []
         var row: [String] = []
         var field = String.UnicodeScalarView()

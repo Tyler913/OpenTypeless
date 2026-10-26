@@ -86,7 +86,7 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     /// This dictation as History exports it. A record keeps no time zone, so its time is written in this Mac's, with the
     /// offset that zone had on that date.
     var exportEntry: HistoryExport.Entry {
-        HistoryExport.Entry(date: date, utcOffsetMinutes: TimeZone.current.secondsFromGMT(for: date) / 60, duration: duration,
+        HistoryExport.Entry(date: date, utcOffsetMinutes: HistoryExport.utcOffsetMinutes(at: date, in: .current), duration: duration,
                             status: status.rawValue, finalText: finalText, rawText: rawText, cost: cost)
     }
 }

@@ -250,22 +250,19 @@ final class AppSettings: ObservableObject {
         saveLearnedTerms()
     }
 
-    /// Adds imported terms to the vocabulary, skipping ones already in it (ignoring case). Importing is the user asking
-    /// for these terms, so one they once removed from the learned terms may be learned again too. Returns the terms added.
+    /// Adds an imported file's new terms to the vocabulary, leaving out ones already in it (ignoring case) and ones
+    /// `VocabularyTransfer.plan` keeps out of every clean-up request. Importing is the user asking for these terms, so
+    /// one they once removed from the learned terms may be learned again too. Returns what it did.
     @discardableResult
-    func importVocabulary(_ terms: [String]) -> [String] {
-        let added = VocabularyTransfer.newTerms(terms, existing: vocabularyList)
-        if !added.isEmpty {
-            let current = vocabulary.trimmingCharacters(in: .whitespacesAndNewlines)
-            let joined = added.joined(separator: ", ")
-            vocabulary = current.isEmpty ? joined : current + ", " + joined
-        }
-        let keys = Set(terms.map { $0.lowercased() })
-        if !forgottenTerms.isDisjoint(with: keys) {
-            forgottenTerms.subtract(keys)
+    func importVocabulary(_ terms: [String]) -> VocabularyTransfer.ImportPlan {
+        let plan = VocabularyTransfer.plan(terms, existing: vocabularyList)
+        if !plan.added.isEmpty { vocabulary = VocabularyTransfer.merged(vocabulary, adding: plan.added) }
+        let kept = Set(vocabularyList.map { $0.lowercased() }).intersection(terms.map { $0.lowercased() })
+        if !forgottenTerms.isDisjoint(with: kept) {
+            forgottenTerms.subtract(kept)
             UserDefaults.standard.set(Array(forgottenTerms), forKey: "forgottenVocabulary")
         }
-        return added
+        return plan
     }
 
     /// The vocabulary as it's exported: each term with how recognition misheard it, when it was learned from a fix.

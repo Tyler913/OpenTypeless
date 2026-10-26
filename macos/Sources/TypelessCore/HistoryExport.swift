@@ -58,13 +58,13 @@ public enum HistoryExport {
     }
 
     /// RFC 4180: a header, then a line per dictation, CRLF line ends, fields quoted when they hold a comma, a quote or a
-    /// line break.
+    /// line break, and ones a spreadsheet would take for a formula behind an apostrophe.
     public static func csv(_ entries: [Entry]) -> String {
         var out = fields.joined(separator: ",") + "\r\n"
         for entry in entries {
             let row = [timestamp(entry.date, utcOffsetMinutes: entry.utcOffsetMinutes), seconds(entry.duration), entry.status,
                        entry.finalText, entry.rawText, entry.cost.map(usd) ?? "", String(WordCount.count(entry.finalText))]
-            out += row.map(CSV.field).joined(separator: ",") + "\r\n"
+            out += row.map(CSV.spreadsheetField).joined(separator: ",") + "\r\n"
         }
         return out
     }
@@ -83,7 +83,8 @@ public enum HistoryExport {
     }
 
     /// A heading for each day and each dictation's time under it, then its text, a paragraph per line. Dictations
-    /// without text are left out: there's nothing to read.
+    /// without text are left out: there's nothing to read. Dictations stay in History's order, so when they were made in
+    /// different time zones a day's heading can come again after another day's.
     public static func markdown(_ entries: [Entry]) -> String {
         var blocks: [String] = []
         var currentDay: String?
@@ -94,6 +95,7 @@ public enum HistoryExport {
                 .components(separatedBy: "\n")
                 .map(trimmingTrailingSpaces)
                 .filter { !$0.isEmpty }
+                .map(markdownLine)
             guard !paragraphs.isEmpty else { continue }
             let stamp = timestamp(entry.date, utcOffsetMinutes: entry.utcOffsetMinutes)
             // "2026-10-12T14:32:05+08:00": the local day, then the hour and minute.
@@ -110,11 +112,18 @@ public enum HistoryExport {
 
     // MARK: Values
 
+    /// The offset from UTC, in minutes, that a time zone had at that moment: the one a dictation's time is exported with.
+    public static func utcOffsetMinutes(at date: Date, in timeZone: TimeZone) -> Int {
+        timeZone.secondsFromGMT(for: date) / 60
+    }
+
     /// ISO 8601 in the local time it was made, with its offset: "2026-10-12T14:32:05+08:00" (whole seconds, cut down).
     static func timestamp(_ date: Date, utcOffsetMinutes: Int) -> String {
         // Every time zone is within 14 hours of UTC (and the Windows app's dates can't go further).
         let utcOffsetMinutes = min(max(utcOffsetMinutes, -14 * 60), 14 * 60)
-        let local = Int64(floor(date.timeIntervalSince1970)) + Int64(utcOffsetMinutes) * 60
+        // The local time held within the years 1 to 9999, which is all a Windows date can show, so a damaged record
+        // writes the same on both and can't crash the export.
+        let local = Int64(bounded(floor(date.timeIntervalSince1970) + Double(utcOffsetMinutes * 60), -62_135_596_800, 253_402_300_799))
         let days = local >= 0 ? local / 86_400 : (local - 86_399) / 86_400
         let second = local - days * 86_400
         // Days since 1970-01-01 to a Gregorian date (Howard Hinnant's civil_from_days).
@@ -133,15 +142,16 @@ public enum HistoryExport {
             + (utcOffsetMinutes < 0 ? "-" : "+") + pad(Int64(offset / 60), 2) + ":" + pad(Int64(offset % 60), 2)
     }
 
-    /// Seconds to a tenth, halves rounded up: "42.3".
+    /// Seconds to a tenth, halves rounded up: "42.3". Held under a trillion, like the cost, so a damaged record can't
+    /// crash the export.
     static func seconds(_ duration: Double) -> String {
-        let tenths = Int64(((duration.isFinite ? max(0, duration) : 0) * 10).rounded())
+        let tenths = Int64((bounded(duration, 0, 1e12) * 10).rounded())
         return "\(tenths / 10).\(tenths % 10)"
     }
 
     /// USD to a millionth, halves rounded up: "0.000508", "1.200000".
     static func usd(_ cost: Double) -> String {
-        let millionths = Int64(((cost.isFinite ? max(0, cost) : 0) * 1_000_000).rounded())
+        let millionths = Int64((bounded(cost, 0, 1e12) * 1_000_000).rounded())
         return "\(millionths / 1_000_000)." + pad(millionths % 1_000_000, 6)
     }
 
@@ -163,6 +173,22 @@ public enum HistoryExport {
             }
         }
         return out + "\""
+    }
+
+    /// The value within low...high; low when it isn't a number.
+    private static func bounded(_ value: Double, _ low: Double, _ high: Double) -> Double {
+        value.isFinite ? min(max(value, low), high) : low
+    }
+
+    /// A backslash in front of a line that would start a heading, a code fence or an HTML block (which runs on past
+    /// the line, swallowing the dictations after it), so it reads as the words it is.
+    static func markdownLine(_ line: String) -> String {
+        let scalars = line.unicodeScalars
+        let indent = scalars.prefix(while: { $0 == " " || $0 == "\t" })
+        let rest = scalars.dropFirst(indent.count)
+        guard rest.first == "#" || rest.first == "<" || rest.starts(with: "```".unicodeScalars) || rest.starts(with: "~~~".unicodeScalars)
+        else { return line }
+        return String(indent) + "\\" + String(rest)
     }
 
     private static func trimmingTrailingSpaces(_ line: String) -> String {

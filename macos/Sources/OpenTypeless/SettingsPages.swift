@@ -1119,7 +1119,7 @@ struct StylePage: View {
 
     private struct VocabularyImport {
         let terms: [String]
-        let added: [String]
+        let plan: VocabularyTransfer.ImportPlan
     }
 
     private struct Notice {
@@ -1162,13 +1162,13 @@ struct StylePage: View {
                     .frame(height: 150)
             }
         }
-        .alert(pendingImport.map { Self.importTitle($0.added.count) } ?? "",
+        .alert(pendingImport.map { Self.importTitle($0.plan.added.count) } ?? "",
                isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } }),
                presenting: pendingImport) { pending in
             Button(L("导入", "Import")) { settings.importVocabulary(pending.terms) }
             Button(L("取消", "Cancel"), role: .cancel) {}
         } message: { pending in
-            Text(Self.importSummary(pending))
+            Text(Self.importSummary(pending.plan))
         }
     }
 
@@ -1179,7 +1179,8 @@ struct StylePage: View {
             Button { importVocabulary() } label: {
                 Label(L("导入…", "Import…"), systemImage: "square.and.arrow.down")
             }
-            .help(L("从 CSV 或文本文件添加词汇，已有的词不会重复添加", "Add terms from a CSV or text file; ones you already have aren't added twice"))
+            .help(L("从 CSV（第一列）或文本文件添加词汇，已有的词不会重复添加。导出的 CSV 里的误听写法仅供参考，不会导入。",
+                    "Add terms from a CSV (its first column) or text file; ones you already have aren't added twice. The misheard forms in an exported CSV are for reference and aren't imported."))
             Menu {
                 Button(L("CSV（含学到的误听写法）…", "CSV (with how learned terms were misheard)…")) { exportVocabulary(csv: true) }
                 Button(L("纯文本（每行一个词）…", "Plain text (one term per line)…")) { exportVocabulary(csv: false) }
@@ -1203,27 +1204,31 @@ struct StylePage: View {
 
     /// Reads the file, then asks before adding what's new to the vocabulary.
     private func importVocabulary() {
-        Exports.chooseFile(types: [.commaSeparatedText, .tabSeparatedText, .plainText]) { url in
+        Exports.chooseFile(types: VocabularyTransfer.importExtensions.compactMap { UTType(filenameExtension: $0) }) { url in
             Task {
                 switch await Exports.readVocabulary(url) {
                 case let .failure(error):
                     notice = Notice(title: L("无法导入", "Couldn't import"), message: error.message)
                 case let .success(terms):
-                    let added = VocabularyTransfer.newTerms(terms, existing: settings.vocabularyList)
+                    let plan = VocabularyTransfer.plan(terms, existing: settings.vocabularyList)
                     if terms.isEmpty {
                         notice = Notice(title: L("文件里没有词", "No terms in this file"),
                                         message: L("每行一个词，或用逗号分隔；CSV 文件取第一列。",
                                                    "Put one term per line or separate them with commas; from a CSV file, the first column is used."))
-                    } else if added.isEmpty {
+                    } else if plan.added.isEmpty {
                         // Nothing to add, but importing still means the user wants these terms (see importVocabulary).
                         settings.importVocabulary(terms)
-                        let count = Self.distinctCount(terms)
-                        notice = Notice(title: L("没有新词可导入", "Nothing new to import"),
-                                        message: count == 1
-                                            ? L("文件里的词已经在词汇表里了。", "The term in the file is already in your vocabulary.")
-                                            : L("文件里的 \(count) 个词都已经在词汇表里了。", "All \(count) terms in the file are already in your vocabulary."))
+                        let message: String
+                        if plan.tooLong + plan.overLimit > 0 {
+                            message = Self.importSummary(plan)
+                        } else if plan.known == 1 {
+                            message = L("文件里的词已经在词汇表里了。", "The term in the file is already in your vocabulary.")
+                        } else {
+                            message = L("文件里的 \(plan.known) 个词都已经在词汇表里了。", "All \(plan.known) terms in the file are already in your vocabulary.")
+                        }
+                        notice = Notice(title: L("没有新词可导入", "Nothing new to import"), message: message)
                     } else {
-                        pendingImport = VocabularyImport(terms: terms, added: added)
+                        pendingImport = VocabularyImport(terms: terms, plan: plan)
                     }
                 }
             }
@@ -1250,20 +1255,29 @@ struct StylePage: View {
         count == 1 ? L("导入 1 个新词？", "Import 1 new term?") : L("导入 \(count) 个新词？", "Import \(count) new terms?")
     }
 
-    /// The first few new terms, and how many of the file's terms are already in the vocabulary.
-    private static func importSummary(_ pending: VocabularyImport) -> String {
-        var summary = pending.added.prefix(10).joined(separator: L("、", ", ")) + (pending.added.count > 10 ? "…" : "")
-        let known = distinctCount(pending.terms) - pending.added.count
-        if known > 0 {
-            summary += "\n\n" + (known == 1 ? L("另有 1 个已经在词汇表里。", "1 more is already in your vocabulary.")
-                                            : L("另有 \(known) 个已经在词汇表里。", "\(known) more are already in your vocabulary."))
+    /// The first few new terms, what's left out and why, and how many of the file's terms are already in the vocabulary.
+    private static func importSummary(_ plan: VocabularyTransfer.ImportPlan) -> String {
+        var parts: [String] = []
+        if !plan.added.isEmpty {
+            parts.append(plan.added.prefix(10).joined(separator: L("、", ", ")) + (plan.added.count > 10 ? "…" : ""))
         }
-        return summary
-    }
-
-    /// Terms counted once however often the file repeats them, compared the way the vocabulary is.
-    private static func distinctCount(_ terms: [String]) -> Int {
-        Set(terms.map { $0.lowercased() }).count
+        let length = VocabularyTransfer.maxTermLength, limit = VocabularyTransfer.maxTerms
+        if plan.tooLong == 1 {
+            parts.append(L("有 1 个条目超过 \(length) 个字符，没有导入。", "1 entry longer than \(length) characters is left out."))
+        } else if plan.tooLong > 1 {
+            parts.append(L("有 \(plan.tooLong) 个条目超过 \(length) 个字符，没有导入。", "\(plan.tooLong) entries longer than \(length) characters are left out."))
+        }
+        if plan.overLimit == 1 {
+            parts.append(L("词汇表最多 \(limit) 个词，另有 1 个没有导入。", "The vocabulary holds up to \(limit) terms, so 1 more is left out."))
+        } else if plan.overLimit > 1 {
+            parts.append(L("词汇表最多 \(limit) 个词，另有 \(plan.overLimit) 个没有导入。", "The vocabulary holds up to \(limit) terms, so \(plan.overLimit) more are left out."))
+        }
+        if plan.known == 1 {
+            parts.append(L("另有 1 个已经在词汇表里。", "1 more is already in your vocabulary."))
+        } else if plan.known > 1 {
+            parts.append(L("另有 \(plan.known) 个已经在词汇表里。", "\(plan.known) more are already in your vocabulary."))
+        }
+        return parts.joined(separator: "\n\n")
     }
 }
 

@@ -3509,14 +3509,50 @@
     "fr": "Importer…",
     "de": "Importieren …"
   },
-  "Add terms from a CSV or text file; ones you already have aren't added twice": {
-    "ja": "CSV またはテキストファイルから語彙を追加します。すでにある語は重複して追加されません",
-    "ko": "CSV 또는 텍스트 파일에서 어휘를 추가합니다. 이미 있는 단어는 중복으로 추가되지 않습니다",
-    "es": "Añade términos desde un archivo CSV o de texto; los que ya tienes no se repiten",
-    "pt": "Adiciona termos de um arquivo CSV ou de texto; os que você já tem não são repetidos",
-    "ru": "Добавить слова из файла CSV или текстового файла; уже имеющиеся не повторяются",
-    "fr": "Ajoute des termes depuis un fichier CSV ou texte ; ceux que vous avez déjà ne sont pas ajoutés deux fois",
-    "de": "Begriffe aus einer CSV- oder Textdatei hinzufügen; vorhandene werden nicht doppelt hinzugefügt"
+  "Add terms from a CSV (its first column) or text file; ones you already have aren't added twice. The misheard forms in an exported CSV are for reference and aren't imported.": {
+    "ja": "CSV（1 列目）またはテキストファイルから語彙を追加します。すでにある語は重複して追加されません。書き出した CSV の聞き間違いの形は参考用で、読み込まれません。",
+    "ko": "CSV(첫 번째 열) 또는 텍스트 파일에서 어휘를 추가합니다. 이미 있는 단어는 중복으로 추가되지 않습니다. 내보낸 CSV의 잘못 인식된 형태는 참고용이며 가져오지 않습니다.",
+    "es": "Añade términos desde un archivo CSV (su primera columna) o de texto; los que ya tienes no se repiten. Las formas mal oídas de un CSV exportado son solo de referencia y no se importan.",
+    "pt": "Adiciona termos de um arquivo CSV (a primeira coluna) ou de texto; os que você já tem não são repetidos. As formas mal ouvidas de um CSV exportado são só para referência e não são importadas.",
+    "ru": "Добавить слова из файла CSV (первый столбец) или текстового файла; уже имеющиеся не повторяются. Варианты неверного распознавания в экспортированном CSV даны для справки и не импортируются.",
+    "fr": "Ajoute des termes depuis un fichier CSV (sa première colonne) ou texte ; ceux que vous avez déjà ne sont pas ajoutés deux fois. Les formes mal entendues d’un CSV exporté sont données à titre indicatif et ne sont pas importées.",
+    "de": "Begriffe aus einer CSV-Datei (ihrer ersten Spalte) oder Textdatei hinzufügen; vorhandene werden nicht doppelt hinzugefügt. Die falsch erkannten Formen in einer exportierten CSV dienen nur zur Information und werden nicht importiert."
+  },
+  "1 entry longer than {0} characters is left out.": {
+    "ja": "{0} 文字を超える 1 件は読み込まれません。",
+    "ko": "{0}자를 넘는 항목 1개는 가져오지 않습니다.",
+    "es": "Se omite 1 entrada de más de {0} caracteres.",
+    "pt": "1 entrada com mais de {0} caracteres fica de fora.",
+    "ru": "1 запись длиннее {0} символов не импортируется.",
+    "fr": "1 entrée de plus de {0} caractères est laissée de côté.",
+    "de": "1 Eintrag mit mehr als {0} Zeichen wird ausgelassen."
+  },
+  "{0} entries longer than {1} characters are left out.": {
+    "ja": "{1} 文字を超える {0} 件は読み込まれません。",
+    "ko": "{1}자를 넘는 항목 {0}개는 가져오지 않습니다.",
+    "es": "Se omiten {0} entradas de más de {1} caracteres.",
+    "pt": "{0} entradas com mais de {1} caracteres ficam de fora.",
+    "ru": "Записи длиннее {1} символов ({0}) не импортируются.",
+    "fr": "{0} entrées de plus de {1} caractères sont laissées de côté.",
+    "de": "{0} Einträge mit mehr als {1} Zeichen werden ausgelassen."
+  },
+  "The vocabulary holds up to {0} terms, so 1 more is left out.": {
+    "ja": "語彙は最大 {0} 語までのため、ほか 1 語は読み込まれません。",
+    "ko": "어휘는 최대 {0}개까지라서 1개는 더 가져오지 않습니다.",
+    "es": "El vocabulario admite hasta {0} términos, así que se omite 1 más.",
+    "pt": "O vocabulário comporta até {0} termos, então mais 1 fica de fora.",
+    "ru": "Словарь вмещает до {0} слов, поэтому ещё 1 не импортируется.",
+    "fr": "Le vocabulaire contient au plus {0} termes, 1 de plus est donc laissé de côté.",
+    "de": "Das Vokabular fasst bis zu {0} Begriffe, daher wird 1 weiterer ausgelassen."
+  },
+  "The vocabulary holds up to {0} terms, so {1} more are left out.": {
+    "ja": "語彙は最大 {0} 語までのため、ほか {1} 語は読み込まれません。",
+    "ko": "어휘는 최대 {0}개까지라서 {1}개는 더 가져오지 않습니다.",
+    "es": "El vocabulario admite hasta {0} términos, así que se omiten {1} más.",
+    "pt": "O vocabulário comporta até {0} termos, então mais {1} ficam de fora.",
+    "ru": "Словарь вмещает до {0} слов, поэтому ещё {1} не импортируются.",
+    "fr": "Le vocabulaire contient au plus {0} termes, {1} de plus sont donc laissés de côté.",
+    "de": "Das Vokabular fasst bis zu {0} Begriffe, daher werden {1} weitere ausgelassen."
   },
   "CSV (with how learned terms were misheard)…": {
     "ja": "CSV（学習した語の聞き間違いも含む）…",

@@ -49,6 +49,29 @@ import Testing
         for item in values["usd"] as! [[String: Any]] {
             #expect(HistoryExport.usd((item["value"] as! NSNumber).doubleValue) == item["expected"] as! String, "\(item)")
         }
+        for item in values["offsets"] as! [[String: Any]] {
+            let zone = try #require(TimeZone(identifier: item["zone"] as! String))
+            #expect(HistoryExport.utcOffsetMinutes(at: Self.date(item["unix"]), in: zone) == item["expected"] as! Int, "\(item)")
+        }
+        for item in values["markdownLines"] as! [[String: Any]] {
+            #expect(HistoryExport.markdownLine(item["line"] as! String) == item["expected"] as! String, "\(item)")
+        }
+        for item in values["spreadsheetFields"] as! [[String: Any]] {
+            let text = item["text"] as! String
+            #expect(CSV.spreadsheetField(text) == item["expected"] as! String, "\(item)")
+            // And back: what an import reads is what was written.
+            #expect(CSV.rows(CSV.spreadsheetField(text) + "\r\n", separator: ",").first.map { CSV.unprotected($0[0]) } ?? "" == text, "\(item)")
+        }
+    }
+
+    /// A damaged record (a date or a number no dictation has) is written within bounds rather than crashing the export.
+    @Test func damagedValuesDontCrash() {
+        #expect(HistoryExport.timestamp(Date(timeIntervalSince1970: 1e300), utcOffsetMinutes: 480) == "9999-12-31T23:59:59+08:00")
+        #expect(HistoryExport.timestamp(Date(timeIntervalSince1970: -1e300), utcOffsetMinutes: 0) == "0001-01-01T00:00:00+00:00")
+        #expect(HistoryExport.timestamp(Date(timeIntervalSince1970: .nan), utcOffsetMinutes: 0) == "0001-01-01T00:00:00+00:00")
+        #expect(HistoryExport.timestamp(Date(timeIntervalSince1970: 0), utcOffsetMinutes: 100_000) == "1970-01-01T14:00:00+14:00")
+        #expect(HistoryExport.seconds(.greatestFiniteMagnitude) == "1000000000000.0")
+        #expect(HistoryExport.usd(-.infinity) == "0.000000")
     }
 
     @Test func emptyExports() {
@@ -83,13 +106,22 @@ import Testing
     @Test func vocabularyImportsMatchSharedCases() throws {
         let vocabulary = try Self.cases()["vocabulary"] as! [String: Any]
         for item in vocabulary["imports"] as! [[String: Any]] {
-            let input = item["input"] as! String
-            let terms = item["kind"] as! String == "csv" ? VocabularyTransfer.terms(fromCSV: input) : VocabularyTransfer.terms(fromText: input)
-            #expect(terms == item["terms"] as! [String], "\(input)")
+            // A file's bytes (Excel's UTF-16 "Unicode Text", say), or its text.
+            let input = try (item["base64"] as? String).map { try #require(VocabularyTransfer.decode(Data(base64Encoded: $0)!)) }
+                ?? item["input"] as! String
+            #expect(VocabularyTransfer.terms(in: input, fileExtension: item["kind"] as! String) == item["terms"] as! [String], "\(input)")
         }
-        for item in vocabulary["merges"] as! [[String: Any]] {
-            #expect(VocabularyTransfer.newTerms(item["imported"] as! [String], existing: item["existing"] as! [String])
-                    == item["added"] as! [String], "\(item)")
+        #expect(VocabularyTransfer.maxTermLength == vocabulary["maxTermLength"] as! Int)
+        #expect(VocabularyTransfer.maxTerms == vocabulary["maxTerms"] as! Int)
+        for item in vocabulary["plans"] as! [[String: Any]] {
+            let imported = item["imported"] as! [String], existing = item["existing"] as! [String]
+            let plan = VocabularyTransfer.plan(imported, existing: existing, limit: item["limit"] as? Int ?? VocabularyTransfer.maxTerms)
+            #expect(plan == VocabularyTransfer.ImportPlan(added: item["added"] as! [String], known: item["known"] as! Int,
+                                                          tooLong: item["tooLong"] as! Int, overLimit: item["overLimit"] as! Int), "\(item)")
+        }
+        for item in vocabulary["merged"] as! [[String: Any]] {
+            #expect(VocabularyTransfer.merged(item["vocabulary"] as! String, adding: item["adding"] as! [String])
+                    == item["expected"] as! String, "\(item)")
         }
         for item in vocabulary["decode"] as! [[String: Any]] {
             let data = Data(base64Encoded: item["base64"] as! String)!
@@ -98,11 +130,22 @@ import Testing
     }
 
     @Test func exportedVocabularyImportsBack() {
-        let terms = [VocabularyTransfer.Term(term: "Typeless", heardAs: ["TypeList"]), VocabularyTransfer.Term(term: "李明")]
+        let terms = [VocabularyTransfer.Term(term: "Typeless", heardAs: ["TypeList"]), VocabularyTransfer.Term(term: "李明"),
+                     VocabularyTransfer.Term(term: "-ish", heardAs: ["=ish"])]
         let csv = VocabularyTransfer.decode(VocabularyTransfer.data(terms, csv: true))!
-        #expect(VocabularyTransfer.terms(fromCSV: csv) == ["Typeless", "李明"])
+        #expect(VocabularyTransfer.terms(in: csv, fileExtension: "csv") == ["Typeless", "李明", "-ish"])
         let text = VocabularyTransfer.decode(VocabularyTransfer.data(terms, csv: false))!
-        #expect(VocabularyTransfer.terms(fromText: text) == ["Typeless", "李明"])
+        #expect(VocabularyTransfer.terms(in: text, fileExtension: "txt") == ["Typeless", "李明", "-ish"])
+    }
+
+    /// However big the file, an import never takes the vocabulary past its limit, so clean-up requests stay small.
+    @Test func importStopsAtTheLimit() {
+        let existing = (1...990).map { "term\($0)" }
+        let imported = (1...5000).map { "new\($0)" }
+        let plan = VocabularyTransfer.plan(imported, existing: existing)
+        #expect(plan.added == (1...10).map { "new\($0)" })
+        #expect(plan.overLimit == 4990)
+        #expect(VocabularyTransfer.plan(["one more"], existing: (1...1200).map { "t\($0)" }).overLimit == 1)
     }
 
     @Test func csvRowsAreParsedLikeRFC4180() {

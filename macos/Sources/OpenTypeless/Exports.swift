@@ -37,13 +37,13 @@ enum Exports {
         }
     }
 
-    /// "OpenTypeless History 2026-10-12.csv", "OpenTypeless 2026-10-12 14.32.05.wav": the name the save dialog suggests
-    /// (dots in the time, since Finder shows a colon as a slash and Windows refuses one).
+    /// "OpenTypeless History 2026-10-12.csv", "OpenTypeless 2026-10-12 14-32-05.wav": the name the save dialog suggests
+    /// (dashes in the time, as on Windows: Finder shows a colon as a slash and Windows refuses one).
     static func fileName(_ stem: String, date: Date? = nil, time: Bool = false, extension fileExtension: String) -> String {
         guard let date else { return stem + "." + fileExtension }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = time ? "yyyy-MM-dd HH.mm.ss" : "yyyy-MM-dd"
+        formatter.dateFormat = time ? "yyyy-MM-dd HH-mm-ss" : "yyyy-MM-dd"
         return stem + " " + formatter.string(from: date) + "." + fileExtension
     }
 
@@ -95,8 +95,7 @@ enum Exports {
                     return .failure(VocabularyFileError(message: L("这个文件不是 UTF-8 文本。请另存为 UTF-8 格式（Excel 里选择“CSV UTF-8”）后再导入。",
                                                                    "This file isn't UTF-8 text. Save it as UTF-8 (in Excel, choose “CSV UTF-8”) and import it again.")))
                 }
-                let csv = ["csv", "tsv"].contains(url.pathExtension.lowercased())
-                return .success(csv ? VocabularyTransfer.terms(fromCSV: text) : VocabularyTransfer.terms(fromText: text))
+                return .success(VocabularyTransfer.terms(in: text, fileExtension: url.pathExtension))
             } catch {
                 Self.log.error("can't read \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 return .failure(VocabularyFileError(message: Self.message(for: error)))

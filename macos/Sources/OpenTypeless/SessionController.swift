@@ -665,6 +665,8 @@ final class SessionController: ObservableObject {
         var polished: SegmentedPolishResult?
         // A translation that couldn't be used, set aside for the clean-up: billed all the same.
         var setAside: SegmentedPolishResult?
+        // The translation's (and clean-up's) answers as they come in, counted even if Esc then stops the clean-up.
+        let ledger = PolishLedger()
         // The text going in is a translation: the user's edits to it say nothing about what speech recognition misheard.
         var translated = false
         let translation = record.translation
@@ -706,7 +708,8 @@ final class SessionController: ObservableObject {
                         }
                     }
                     let outcome = try await withTaskCancellationHandler {
-                        try await TranslatedPolish.run(translate: { try await polishing.value }, cleanUp: cleanUp)
+                        try await TranslatedPolish.run(translate: { try await polishing.value }, cleanUp: cleanUp,
+                                                       ledger: ledger)
                     } onCancel: {
                         polishing.cancel()
                     }
@@ -762,7 +765,16 @@ final class SessionController: ObservableObject {
                     }
                 }
             } catch {
-                if APIError.from(error) == .cancelled { return }
+                if APIError.from(error) == .cancelled {
+                    // Esc while the clean-up ran after a translation that couldn't be used: nothing goes in, but that
+                    // translation was billed. (`cancel` has kept the record as cancelled; so it stays, now with its cost.)
+                    let billed = ledger.all
+                    guard !billed.isEmpty else { return }
+                    record.status = .cancelled
+                    account(&record, pipeline: pipeline, polished: nil, discarded: billed)
+                    history.update(record)
+                    return
+                }
                 notice = L("整理失败，已插入原文", "Clean-up failed — inserted raw text")
                 record.error = error.localizedDescription
                 record.status = .polishFailed

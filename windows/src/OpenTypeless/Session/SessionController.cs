@@ -722,6 +722,8 @@ public sealed class SessionController
         SegmentedPolishResult? polished = null;
         // A translation that couldn't be used, set aside for the clean-up: billed all the same.
         SegmentedPolishResult? setAside = null;
+        // The translation's (and clean-up's) answers as they come in, counted even if Esc then stops the clean-up.
+        var ledger = new PolishLedger();
         // The text going in is a translation: the user's edits to it say nothing about what speech recognition misheard.
         var translated = false;
         var translation = record.Translation;
@@ -761,7 +763,7 @@ public sealed class SessionController
                     var raw = record.RawText;
                     var onPartial = OnPolishPartial(raw);
                     Func<Task<SegmentedPolishResult>>? cleanUp = _settings.PolishEnabled ? () => Polish(raw, null, onPartial, token) : null;
-                    var outcome = await TranslatedPolish.Run(() => polishing, cleanUp, token);
+                    var outcome = await TranslatedPolish.Run(() => polishing, cleanUp, token, ledger);
                     if (outcome.Translated && outcome.Translation is { } translatedResult)
                     {
                         polished = translatedResult;
@@ -827,7 +829,17 @@ public sealed class SessionController
             }
             catch (Exception error)
             {
-                if (ApiException.From(error).IsCancelled) return;
+                if (ApiException.From(error).IsCancelled)
+                {
+                    // Esc while the clean-up ran after a translation that couldn't be used: nothing goes in, but that
+                    // translation was billed. (Cancel has kept the record as cancelled; so it stays, now with its cost.)
+                    var billed = ledger.All;
+                    if (billed.Count == 0) return;
+                    record.Status = DictationStatus.Cancelled;
+                    Account(record, pipeline, null, billed);
+                    _history.Update(record);
+                    return;
+                }
                 notice = L("整理失败，已插入原文", "Clean-up failed — inserted raw text");
                 record.Error = error.Message;
                 record.Status = DictationStatus.PolishFailed;

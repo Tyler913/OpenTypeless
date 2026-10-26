@@ -15,13 +15,32 @@ public static class Csv
         text.IndexOfAny(Special) < 0 ? text : "\"" + text.Replace("\"", "\"\"") + "\"";
 
     /// <summary>
+    /// A field of a file a spreadsheet will open. One starting with = + - @, a tab or a carriage return gets an
+    /// apostrophe in front, so Excel shows it as the text it is rather than running it as a formula (OWASP's advice
+    /// against CSV injection); <see cref="Unprotected"/> takes the apostrophe off again when such a file is imported.
+    /// Text that already starts with apostrophes before one of those gets one more, so it comes back as it was.
+    /// </summary>
+    public static string SpreadsheetField(string text) => Field(NeedsApostrophe(text) ? "'" + text : text);
+
+    /// <summary>A field as it was before <see cref="SpreadsheetField"/> protected it.</summary>
+    public static string Unprotected(string field) =>
+        field.Length > 0 && field[0] == '\'' && NeedsApostrophe(field) ? field[1..] : field;
+
+    private static bool NeedsApostrophe(string text)
+    {
+        var rest = text.TrimStart('\'');
+        return rest.Length > 0 && rest[0] is '=' or '+' or '-' or '@' or '\t' or '\r';
+    }
+
+    /// <summary>
     /// The rows of a file. Lenient about what spreadsheets write: CRLF, LF or CR line ends, a stray quote inside a field
     /// kept as it is, an unclosed quote running to the end, and a semicolon or tab as the separator when the first line
-    /// uses more of those than commas (Excel in German, French or Russian saves "CSV" with semicolons).
+    /// uses more of those than commas (Excel in German, French or Russian saves "CSV" with semicolons), unless a
+    /// <paramref name="separator"/> is given.
     /// </summary>
-    public static List<List<string>> Rows(string text)
+    public static List<List<string>> Rows(string text, char? separator = null)
     {
-        var separator = Separator(text);
+        var used = separator ?? Separator(text);
         var rows = new List<List<string>>();
         var row = new List<string>();
         var field = new StringBuilder();
@@ -50,7 +69,7 @@ public static class Csv
             {
                 quoted = true;
             }
-            else if (c == separator)
+            else if (c == used)
             {
                 row.Add(field.ToString());
                 field.Clear();

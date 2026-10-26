@@ -86,7 +86,8 @@ public sealed class StylePage : PageBase
                 Children = { Ui.Icon(Glyphs.Import, 13), Ui.Text(L("导入…", "Import…"), 13) },
             },
         };
-        ToolTipService.SetToolTip(import, L("从 CSV 或文本文件添加词汇，已有的词不会重复添加", "Add terms from a CSV or text file; ones you already have aren't added twice"));
+        ToolTipService.SetToolTip(import, L("从 CSV（第一列）或文本文件添加词汇，已有的词不会重复添加。导出的 CSV 里的误听写法仅供参考，不会导入。",
+                                            "Add terms from a CSV (its first column) or text file; ones you already have aren't added twice. The misheard forms in an exported CSV are for reference and aren't imported."));
         import.Click += async (_, _) => await ImportVocabulary();
 
         var asCsv = new MenuFlyoutItem { Text = L("CSV（含学到的误听写法）…", "CSV (with how learned terms were misheard)…") };
@@ -107,7 +108,7 @@ public sealed class StylePage : PageBase
     /// <summary>Reads the file, then asks before adding what's new to the vocabulary.</summary>
     private async Task ImportVocabulary()
     {
-        var path = await Exports.ChooseFile(this, _window.Hwnd, "csv", "txt", "tsv");
+        var path = await Exports.ChooseFile(this, _window.Hwnd, VocabularyTransfer.ImportExtensions);
         if (path == null) return;
         var (terms, failure) = await Exports.ReadVocabulary(path);
         if (terms == null)
@@ -122,37 +123,54 @@ public sealed class StylePage : PageBase
                                        "Put one term per line or separate them with commas; from a CSV file, the first column is used."));
             return;
         }
-        var added = VocabularyTransfer.NewTerms(terms, _settings.VocabularyList);
-        if (added.Count == 0)
+        var plan = VocabularyTransfer.Plan(terms, _settings.VocabularyList);
+        if (plan.Added.Count == 0)
         {
             // Nothing to add, but importing still means the user wants these terms (see AppSettings.ImportVocabulary).
             _settings.ImportVocabulary(terms);
-            var count = DistinctCount(terms);
-            await Exports.ShowDialog(XamlRoot, L("没有新词可导入", "Nothing new to import"),
-                                     count == 1
-                                         ? L("文件里的词已经在词汇表里了。", "The term in the file is already in your vocabulary.")
-                                         : L($"文件里的 {count} 个词都已经在词汇表里了。", $"All {count} terms in the file are already in your vocabulary."));
+            var message = plan.TooLong + plan.OverLimit > 0 ? ImportSummary(plan)
+                : plan.Known == 1 ? L("文件里的词已经在词汇表里了。", "The term in the file is already in your vocabulary.")
+                : L($"文件里的 {plan.Known} 个词都已经在词汇表里了。", $"All {plan.Known} terms in the file are already in your vocabulary.");
+            await Exports.ShowDialog(XamlRoot, L("没有新词可导入", "Nothing new to import"), message);
             return;
         }
-        var title = added.Count == 1 ? L("导入 1 个新词？", "Import 1 new term?") : L($"导入 {added.Count} 个新词？", $"Import {added.Count} new terms?");
-        if (await Exports.ShowDialog(XamlRoot, title, ImportSummary(terms, added), primary: L("导入", "Import"))) _settings.ImportVocabulary(terms);
+        var count = plan.Added.Count;
+        var title = count == 1 ? L("导入 1 个新词？", "Import 1 new term?") : L($"导入 {count} 个新词？", $"Import {count} new terms?");
+        if (await Exports.ShowDialog(XamlRoot, title, ImportSummary(plan), primary: L("导入", "Import"))) _settings.ImportVocabulary(terms);
     }
 
-    /// <summary>The first few new terms, and how many of the file's terms are already in the vocabulary.</summary>
-    private static string ImportSummary(List<string> terms, List<string> added)
+    /// <summary>The first few new terms, what's left out and why, and how many of the file's terms are already in the vocabulary.</summary>
+    private static string ImportSummary(VocabularyTransfer.ImportPlan plan)
     {
-        var summary = string.Join(L("、", ", "), added.Take(10)) + (added.Count > 10 ? "…" : "");
-        var known = DistinctCount(terms) - added.Count;
-        if (known > 0)
+        var parts = new List<string>();
+        if (plan.Added.Count > 0) parts.Add(string.Join(L("、", ", "), plan.Added.Take(10)) + (plan.Added.Count > 10 ? "…" : ""));
+        const int length = VocabularyTransfer.MaxTermLength, limit = VocabularyTransfer.MaxTerms;
+        if (plan.TooLong == 1)
         {
-            summary += "\n\n" + (known == 1 ? L("另有 1 个已经在词汇表里。", "1 more is already in your vocabulary.")
-                                            : L($"另有 {known} 个已经在词汇表里。", $"{known} more are already in your vocabulary."));
+            parts.Add(L($"有 1 个条目超过 {length} 个字符，没有导入。", $"1 entry longer than {length} characters is left out."));
         }
-        return summary;
+        else if (plan.TooLong > 1)
+        {
+            parts.Add(L($"有 {plan.TooLong} 个条目超过 {length} 个字符，没有导入。", $"{plan.TooLong} entries longer than {length} characters are left out."));
+        }
+        if (plan.OverLimit == 1)
+        {
+            parts.Add(L($"词汇表最多 {limit} 个词，另有 1 个没有导入。", $"The vocabulary holds up to {limit} terms, so 1 more is left out."));
+        }
+        else if (plan.OverLimit > 1)
+        {
+            parts.Add(L($"词汇表最多 {limit} 个词，另有 {plan.OverLimit} 个没有导入。", $"The vocabulary holds up to {limit} terms, so {plan.OverLimit} more are left out."));
+        }
+        if (plan.Known == 1)
+        {
+            parts.Add(L("另有 1 个已经在词汇表里。", "1 more is already in your vocabulary."));
+        }
+        else if (plan.Known > 1)
+        {
+            parts.Add(L($"另有 {plan.Known} 个已经在词汇表里。", $"{plan.Known} more are already in your vocabulary."));
+        }
+        return string.Join("\n\n", parts);
     }
-
-    /// <summary>Terms counted once however often the file repeats them, compared the way the vocabulary is.</summary>
-    private static int DistinctCount(List<string> terms) => terms.Select(t => t.ToLowerInvariant()).Distinct().Count();
 
     private async Task ExportVocabulary(bool csv)
     {

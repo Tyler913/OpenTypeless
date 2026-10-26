@@ -25,6 +25,60 @@ public static class SafeFile
     }
 
     /// <summary>
+    /// Writes a file the user chose (an export): to a temporary file next to it, flushed to disk, then moved into place,
+    /// so a failure never leaves half a file there. The temporary file is gone either way. Throws what the file system
+    /// throws.
+    /// </summary>
+    public static void WriteAllBytes(string path, byte[] bytes)
+    {
+        var temporary = UniqueTemporaryPath(path);
+        try
+        {
+            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                stream.Write(bytes, 0, bytes.Length);
+                stream.Flush(flushToDisk: true);
+            }
+            File.Move(temporary, path, overwrite: true);
+        }
+        catch
+        {
+            Discard(temporary);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Copies a file (a recording) to where the user chose: next to it first, then moved into place, so a copy that fails
+    /// half way (the disk filling up) doesn't leave a broken file where the user will look for it. Throws what the file
+    /// system throws.
+    /// </summary>
+    public static void Copy(string source, string path)
+    {
+        var temporary = UniqueTemporaryPath(path);
+        try
+        {
+            File.Copy(source, temporary, overwrite: false);
+            File.Move(temporary, path, overwrite: true);
+        }
+        catch
+        {
+            Discard(temporary);
+            throw;
+        }
+    }
+
+    /// <summary>A hidden-looking name next to the file that no other write uses: <c>.name.csv.1a2b3c4d.tmp</c>.</summary>
+    private static string UniqueTemporaryPath(string path) =>
+        Path.Combine(Path.GetDirectoryName(path) ?? ".", "." + Path.GetFileName(path) + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp");
+
+    private static void Discard(string path)
+    {
+        try { File.Delete(path); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>
     /// Reads the file, trying again a few times when it's in use or access is refused for a moment, then throws the
     /// last error. A missing file throws at once.
     /// </summary>

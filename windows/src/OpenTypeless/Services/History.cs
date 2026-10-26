@@ -67,7 +67,7 @@ public sealed class DictationRecord
     /// offset that zone had on that date.
     /// </summary>
     public HistoryExport.Entry ExportEntry() =>
-        new(Date, (int)TimeZoneInfo.Local.GetUtcOffset(Date).TotalMinutes, Duration, Status.RawValue(), FinalText, RawText, Cost);
+        new(Date, HistoryExport.UtcOffsetMinutes(Date, TimeZoneInfo.Local), Duration, Status.RawValue(), FinalText, RawText, Cost);
 
     /// <summary>Records have value semantics (a struct on macOS): the store and the session each keep their own copy.</summary>
     public DictationRecord Copy()

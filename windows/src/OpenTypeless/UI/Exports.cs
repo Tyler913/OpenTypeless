@@ -22,7 +22,8 @@ public static class Exports
 
     /// <summary>"OpenTypeless History 2026-10-12", "OpenTypeless 2026-10-12 14-32-05": the name the save dialog suggests.</summary>
     /// <remarks>
-    /// No dots in the time: the save dialog would take ".05" for the extension and not add the chosen one.
+    /// Dashes in the time, as on macOS: Windows refuses a colon, and with dots the save dialog would take ".05" for the
+    /// extension and not add the chosen one.
     /// </remarks>
     public static string FileName(string stem, DateTimeOffset? date = null, bool time = false) =>
         date is { } d ? stem + " " + d.ToLocalTime().ToString(time ? "yyyy-MM-dd HH-mm-ss" : "yyyy-MM-dd", CultureInfo.InvariantCulture) : stem;
@@ -33,12 +34,12 @@ public static class Exports
     /// </summary>
     public static Task<bool> Save(FrameworkElement owner, nint hwnd, string suggestedName, string typeLabel, string extension,
                                   Func<byte[]> contents, string failureTitle) =>
-        WriteTo(owner, hwnd, suggestedName, typeLabel, extension, path => WriteAtomically(path, contents()), failureTitle);
+        WriteTo(owner, hwnd, suggestedName, typeLabel, extension, path => SafeFile.WriteAllBytes(path, contents()), failureTitle);
 
     /// <summary>Asks where to save a copy of a file (a recording), then copies it there off the UI thread. True when it was saved.</summary>
     public static Task<bool> Copy(FrameworkElement owner, nint hwnd, string suggestedName, string typeLabel, string extension,
                                   string source, string failureTitle) =>
-        WriteTo(owner, hwnd, suggestedName, typeLabel, extension, path => CopyAtomically(source, path), failureTitle);
+        WriteTo(owner, hwnd, suggestedName, typeLabel, extension, path => SafeFile.Copy(source, path), failureTitle);
 
     private static async Task<bool> WriteTo(FrameworkElement owner, nint hwnd, string suggestedName, string typeLabel, string extension,
                                             Action<string> write, string failureTitle)
@@ -50,10 +51,12 @@ public static class Exports
             await Task.Run(() => write(path));
             return true;
         }
-        catch (Exception e) when (IsFileError(e))
+        catch (Exception e)
         {
-            AppLog.Debug("export", $"can't write {path}: {e.Message}");
-            await ShowDialog(owner.XamlRoot, failureTitle, Message(e));
+            // Any failure, not only a file error (making the file's contents, say): one that reached the button's async
+            // click handler would close the app.
+            AppLog.Debug("export", $"can't write {path}: {e.GetType().Name}: {e.Message}");
+            await ShowDialog(owner.XamlRoot, failureTitle, IsFileError(e) ? Message(e) : e.Message);
             return false;
         }
     }
@@ -130,62 +133,14 @@ public static class Exports
                 return (null, L("这个文件不是 UTF-8 文本。请另存为 UTF-8 格式（Excel 里选择“CSV UTF-8”）后再导入。",
                                 "This file isn't UTF-8 text. Save it as UTF-8 (in Excel, choose “CSV UTF-8”) and import it again."));
             }
-            var csv = Path.GetExtension(path).ToLowerInvariant() is ".csv" or ".tsv";
-            return (csv ? VocabularyTransfer.TermsFromCsv(text) : VocabularyTransfer.TermsFromText(text), null);
+            return (VocabularyTransfer.TermsFromFile(text, Path.GetExtension(path).TrimStart('.')), null);
         }
-        catch (Exception e) when (IsFileError(e))
+        catch (Exception e)
         {
-            AppLog.Debug("export", $"can't read {path}: {e.Message}");
-            return (null, Message(e));
+            // Any failure, not only a file error: one that reached the button's async click handler would close the app.
+            AppLog.Debug("export", $"can't read {path}: {e.GetType().Name}: {e.Message}");
+            return (null, IsFileError(e) ? Message(e) : e.Message);
         }
-    }
-
-    /// <summary>Writes to a temporary file next to the destination, flushed to disk, then moves it into place.</summary>
-    internal static void WriteAtomically(string path, byte[] bytes)
-    {
-        var temporary = TemporaryPath(path);
-        try
-        {
-            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                stream.Write(bytes, 0, bytes.Length);
-                stream.Flush(flushToDisk: true);
-            }
-            File.Move(temporary, path, overwrite: true);
-        }
-        catch
-        {
-            Discard(temporary);
-            throw;
-        }
-    }
-
-    /// <summary>
-    /// Copies next to the destination first, then moves the copy into place, so one that fails half way (the disk filling
-    /// up) doesn't leave a broken file where the user will look for it.
-    /// </summary>
-    internal static void CopyAtomically(string source, string path)
-    {
-        var temporary = TemporaryPath(path);
-        try
-        {
-            File.Copy(source, temporary, overwrite: false);
-            File.Move(temporary, path, overwrite: true);
-        }
-        catch
-        {
-            Discard(temporary);
-            throw;
-        }
-    }
-
-    private static string TemporaryPath(string path) =>
-        Path.Combine(Path.GetDirectoryName(path) ?? ".", "." + Path.GetFileName(path) + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp");
-
-    private static void Discard(string path)
-    {
-        try { File.Delete(path); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     private static bool IsFileError(Exception e) =>

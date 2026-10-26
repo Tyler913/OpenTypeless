@@ -587,22 +587,19 @@ public sealed class AppSettings : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Adds imported terms to the vocabulary, skipping ones already in it (ignoring case). Importing is the user asking
-    /// for these terms, so one they once removed from the learned terms may be learned again too. Returns the terms added.
+    /// Adds an imported file's new terms to the vocabulary, leaving out ones already in it (ignoring case) and ones
+    /// <see cref="VocabularyTransfer.Plan"/> keeps out of every clean-up request. Importing is the user asking for these
+    /// terms, so one they once removed from the learned terms may be learned again too. Returns what it did.
     /// </summary>
-    public List<string> ImportVocabulary(IReadOnlyCollection<string> terms)
+    public VocabularyTransfer.ImportPlan ImportVocabulary(IReadOnlyCollection<string> terms)
     {
-        var added = VocabularyTransfer.NewTerms(terms, VocabularyList);
-        if (added.Count > 0)
-        {
-            var current = Vocabulary.Trim();
-            var joined = string.Join(", ", added);
-            Vocabulary = current.Length == 0 ? joined : current + ", " + joined;
-        }
-        var keys = terms.Select(t => t.ToLowerInvariant()).ToHashSet();
+        var plan = VocabularyTransfer.Plan(terms, VocabularyList);
+        if (plan.Added.Count > 0) Vocabulary = VocabularyTransfer.Merged(Vocabulary, plan.Added);
+        var kept = VocabularyList.Select(t => t.ToLowerInvariant()).ToHashSet();
+        kept.IntersectWith(terms.Select(t => t.ToLowerInvariant()));
         var forgotten = ForgottenTerms;
-        if (forgotten.Any(keys.Contains)) ForgottenTerms = forgotten.Where(t => !keys.Contains(t)).ToList();
-        return added;
+        if (forgotten.Any(kept.Contains)) ForgottenTerms = forgotten.Where(t => !kept.Contains(t)).ToList();
+        return plan;
     }
 
     /// <summary>The vocabulary as it's exported: each term with how recognition misheard it, when it was learned from a fix.</summary>

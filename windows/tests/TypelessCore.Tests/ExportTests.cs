@@ -21,6 +21,21 @@ public class ExportTests
 
     private static byte[] Utf8(string text) => Encoding.UTF8.GetBytes(text);
 
+    private static List<string> Strings(JsonNode? array) => array!.AsArray().Select(t => (string)t!).ToList();
+
+    /// <summary>The fixture names IANA zones; Windows without ICU knows only its own names.</summary>
+    private static TimeZoneInfo Zone(JsonNode item)
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById((string)item["zone"]!);
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById((string)item["windowsZone"]!);
+        }
+    }
+
     private static byte[] WithByteOrderMark(string text) => new byte[] { 0xEF, 0xBB, 0xBF }.Concat(Utf8(text)).ToArray();
 
     [Fact]
@@ -56,6 +71,32 @@ public class ExportTests
         {
             Assert.Equal((string)item!["expected"]!, HistoryExport.Usd((double)item["value"]!));
         }
+        foreach (var item in values["offsets"]!.AsArray())
+        {
+            Assert.Equal((int)item!["expected"]!, HistoryExport.UtcOffsetMinutes(Date(item["unix"]), Zone(item)));
+        }
+        foreach (var item in values["markdownLines"]!.AsArray())
+        {
+            Assert.Equal((string)item!["expected"]!, HistoryExport.MarkdownLine((string)item["line"]!));
+        }
+        foreach (var item in values["spreadsheetFields"]!.AsArray())
+        {
+            var text = (string)item!["text"]!;
+            Assert.Equal((string)item["expected"]!, Csv.SpreadsheetField(text));
+            // And back: what an import reads is what was written.
+            Assert.Equal(text, Csv.Unprotected(Csv.Rows(Csv.SpreadsheetField(text) + "\r\n", ',')[0][0]));
+        }
+    }
+
+    /// <summary>A date at either end of what Windows can store is written within bounds rather than throwing.</summary>
+    [Fact]
+    public void ExtremeValuesDontThrow()
+    {
+        Assert.Equal("9999-12-31T23:59:59+08:00", HistoryExport.Timestamp(DateTimeOffset.MaxValue, 480));
+        Assert.Equal("0001-01-01T00:00:00-05:00", HistoryExport.Timestamp(DateTimeOffset.MinValue, -300));
+        Assert.Equal("1970-01-01T14:00:00+14:00", HistoryExport.Timestamp(DateTimeOffset.UnixEpoch, 100_000));
+        Assert.Equal("1000000000000.0", HistoryExport.Seconds(double.MaxValue));
+        Assert.Equal("0.000000", HistoryExport.Usd(double.NegativeInfinity));
     }
 
     [Fact]
@@ -101,15 +142,24 @@ public class ExportTests
         var vocabulary = Cases()["vocabulary"]!;
         foreach (var item in vocabulary["imports"]!.AsArray())
         {
-            var input = (string)item!["input"]!;
-            var terms = (string)item["kind"]! == "csv" ? VocabularyTransfer.TermsFromCsv(input) : VocabularyTransfer.TermsFromText(input);
-            Assert.Equal(item["terms"]!.AsArray().Select(t => (string)t!).ToList(), terms);
+            // A file's bytes (Excel's UTF-16 "Unicode Text", say), or its text.
+            var input = item!["base64"] is { } base64 ? VocabularyTransfer.Decode(Convert.FromBase64String((string)base64!))! : (string)item["input"]!;
+            Assert.Equal(Strings(item["terms"]), VocabularyTransfer.TermsFromFile(input, (string)item["kind"]!));
         }
-        foreach (var item in vocabulary["merges"]!.AsArray())
+        Assert.Equal((int)vocabulary["maxTermLength"]!, VocabularyTransfer.MaxTermLength);
+        Assert.Equal((int)vocabulary["maxTerms"]!, VocabularyTransfer.MaxTerms);
+        foreach (var item in vocabulary["plans"]!.AsArray())
         {
-            var added = VocabularyTransfer.NewTerms(item!["imported"]!.AsArray().Select(t => (string)t!),
-                                                    item["existing"]!.AsArray().Select(t => (string)t!));
-            Assert.Equal(item["added"]!.AsArray().Select(t => (string)t!).ToList(), added);
+            var limit = item!["limit"] is { } given ? (int)given : VocabularyTransfer.MaxTerms;
+            var plan = VocabularyTransfer.Plan(Strings(item["imported"]), Strings(item["existing"]), limit);
+            Assert.Equal(Strings(item["added"]), plan.Added);
+            Assert.Equal((int)item["known"]!, plan.Known);
+            Assert.Equal((int)item["tooLong"]!, plan.TooLong);
+            Assert.Equal((int)item["overLimit"]!, plan.OverLimit);
+        }
+        foreach (var item in vocabulary["merged"]!.AsArray())
+        {
+            Assert.Equal((string)item!["expected"]!, VocabularyTransfer.Merged((string)item["vocabulary"]!, Strings(item["adding"])));
         }
         foreach (var item in vocabulary["decode"]!.AsArray())
         {
@@ -120,11 +170,57 @@ public class ExportTests
     [Fact]
     public void ExportedVocabularyImportsBack()
     {
-        List<VocabularyTransfer.Term> terms = [new("Typeless", ["TypeList"]), new("李明", [])];
+        List<VocabularyTransfer.Term> terms = [new("Typeless", ["TypeList"]), new("李明", []), new("-ish", ["=ish"])];
         var csv = VocabularyTransfer.Decode(VocabularyTransfer.Data(terms, csv: true))!;
-        Assert.Equal(["Typeless", "李明"], VocabularyTransfer.TermsFromCsv(csv));
+        Assert.Equal(["Typeless", "李明", "-ish"], VocabularyTransfer.TermsFromFile(csv, "csv"));
         var text = VocabularyTransfer.Decode(VocabularyTransfer.Data(terms, csv: false))!;
-        Assert.Equal(["Typeless", "李明"], VocabularyTransfer.TermsFromText(text));
+        Assert.Equal(["Typeless", "李明", "-ish"], VocabularyTransfer.TermsFromFile(text, "txt"));
+    }
+
+    /// <summary>However big the file, an import never takes the vocabulary past its limit, so clean-up requests stay small.</summary>
+    [Fact]
+    public void ImportStopsAtTheLimit()
+    {
+        var existing = Enumerable.Range(1, 990).Select(n => $"term{n}").ToList();
+        var imported = Enumerable.Range(1, 5000).Select(n => $"new{n}").ToList();
+        var plan = VocabularyTransfer.Plan(imported, existing);
+        Assert.Equal(Enumerable.Range(1, 10).Select(n => $"new{n}").ToList(), plan.Added);
+        Assert.Equal(4990, plan.OverLimit);
+        Assert.Equal(1, VocabularyTransfer.Plan(["one more"], Enumerable.Range(1, 1200).Select(n => $"t{n}").ToList()).OverLimit);
+    }
+
+    /// <summary>A save that fails part way leaves neither half a file nor its temporary file behind.</summary>
+    [Fact]
+    public void FailedSavesLeaveNoTemporaryFile()
+    {
+        var folder = Directory.CreateTempSubdirectory("opentypeless-export-").FullName;
+        try
+        {
+            // A folder where the file should go: the final move fails after the temporary file was written.
+            var taken = Path.Combine(folder, "taken.csv");
+            Directory.CreateDirectory(taken);
+            Assert.ThrowsAny<Exception>(() => SafeFile.WriteAllBytes(taken, [1, 2, 3]));
+            var source = Path.Combine(folder, "audio.wav");
+            File.WriteAllBytes(source, [4, 5, 6]);
+            Assert.ThrowsAny<Exception>(() => SafeFile.Copy(source, taken));
+            Assert.ThrowsAny<Exception>(() => SafeFile.Copy(Path.Combine(folder, "missing.wav"), Path.Combine(folder, "copy.wav")));
+            Assert.Equal(["audio.wav", "taken.csv"], Directory.EnumerateFileSystemEntries(folder).Select(path => Path.GetFileName(path)).Order().ToList());
+
+            // And one that works replaces what was there, again with nothing left over.
+            var saved = Path.Combine(folder, "saved.csv");
+            File.WriteAllBytes(saved, [9, 9, 9, 9]);
+            SafeFile.WriteAllBytes(saved, [1, 2]);
+            Assert.Equal(new byte[] { 1, 2 }, File.ReadAllBytes(saved));
+            var copy = Path.Combine(folder, "copy.wav");
+            SafeFile.Copy(source, copy);
+            Assert.Equal(new byte[] { 4, 5, 6 }, File.ReadAllBytes(copy));
+            Assert.Equal(["audio.wav", "copy.wav", "saved.csv", "taken.csv"],
+                         Directory.EnumerateFileSystemEntries(folder).Select(path => Path.GetFileName(path)).Order().ToList());
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 
     [Fact]

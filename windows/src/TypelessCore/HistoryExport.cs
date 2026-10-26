@@ -44,7 +44,7 @@ public static class HistoryExport
 
     /// <summary>
     /// RFC 4180: a header, then a line per dictation, CRLF line ends, fields quoted when they hold a comma, a quote or a
-    /// line break.
+    /// line break, and ones a spreadsheet would take for a formula behind an apostrophe.
     /// </summary>
     public static string ToCsv(IReadOnlyList<Entry> entries)
     {
@@ -56,7 +56,7 @@ public static class HistoryExport
                 Timestamp(entry.Date, entry.UtcOffsetMinutes), Seconds(entry.Duration), entry.Status, entry.FinalText,
                 entry.RawText, entry.Cost is { } cost ? Usd(cost) : "", Words(entry),
             ];
-            builder.Append(string.Join(",", row.Select(Csv.Field))).Append("\r\n");
+            builder.Append(string.Join(",", row.Select(Csv.SpreadsheetField))).Append("\r\n");
         }
         return builder.ToString();
     }
@@ -79,7 +79,8 @@ public static class HistoryExport
 
     /// <summary>
     /// A heading for each day and each dictation's time under it, then its text, a paragraph per line. Dictations
-    /// without text are left out: there's nothing to read.
+    /// without text are left out: there's nothing to read. Dictations stay in History's order, so when they were made in
+    /// different time zones a day's heading can come again after another day's.
     /// </summary>
     public static string ToMarkdown(IReadOnlyList<Entry> entries)
     {
@@ -90,6 +91,7 @@ public static class HistoryExport
             var paragraphs = entry.FinalText.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n')
                 .Select(line => line.TrimEnd(' ', '\t'))
                 .Where(line => line.Length > 0)
+                .Select(MarkdownLine)
                 .ToList();
             if (paragraphs.Count == 0) continue;
             var stamp = Timestamp(entry.Date, entry.UtcOffsetMinutes);
@@ -108,29 +110,37 @@ public static class HistoryExport
 
     // MARK: Values
 
+    /// <summary>The offset from UTC, in minutes, that a time zone had at that moment: the one a dictation's time is exported with.</summary>
+    public static int UtcOffsetMinutes(DateTimeOffset date, TimeZoneInfo zone) => (int)zone.GetUtcOffset(date).TotalMinutes;
+
     /// <summary>ISO 8601 in the local time it was made, with its offset: "2026-10-12T14:32:05+08:00" (whole seconds, cut down).</summary>
     internal static string Timestamp(DateTimeOffset date, int utcOffsetMinutes)
     {
-        // DateTimeOffset takes offsets up to 14 hours, which every time zone is within.
+        // Every time zone is within 14 hours of UTC.
         var minutes = Math.Clamp(utcOffsetMinutes, -14 * 60, 14 * 60);
-        var local = DateTimeOffset.FromUnixTimeSeconds(date.ToUnixTimeSeconds()).ToOffset(TimeSpan.FromMinutes(minutes));
+        // The local time held within the years 1 to 9999 a DateTimeOffset can show (a date near either end would
+        // otherwise throw once the offset is added), the same as macOS.
+        var local = DateTimeOffset.FromUnixTimeSeconds(Math.Clamp(date.ToUnixTimeSeconds() + minutes * 60L, MinUnixSeconds, MaxUnixSeconds));
         var offset = Math.Abs(minutes);
         return local.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture)
                + (minutes < 0 ? "-" : "+")
                + (offset / 60).ToString("00", CultureInfo.InvariantCulture) + ":" + (offset % 60).ToString("00", CultureInfo.InvariantCulture);
     }
 
-    /// <summary>Seconds to a tenth, halves rounded up: "42.3".</summary>
+    /// <summary>
+    /// Seconds to a tenth, halves rounded up: "42.3". Held under a trillion, like the cost, so a damaged record writes
+    /// the same as on macOS.
+    /// </summary>
     internal static string Seconds(double duration)
     {
-        var tenths = (long)Math.Round((double.IsFinite(duration) ? Math.Max(0, duration) : 0) * 10, MidpointRounding.AwayFromZero);
+        var tenths = (long)Math.Round(Bounded(duration, 0, 1e12) * 10, MidpointRounding.AwayFromZero);
         return (tenths / 10).ToString(CultureInfo.InvariantCulture) + "." + (tenths % 10).ToString(CultureInfo.InvariantCulture);
     }
 
     /// <summary>USD to a millionth, halves rounded up: "0.000508", "1.200000".</summary>
     internal static string Usd(double cost)
     {
-        var millionths = (long)Math.Round((double.IsFinite(cost) ? Math.Max(0, cost) : 0) * 1_000_000, MidpointRounding.AwayFromZero);
+        var millionths = (long)Math.Round(Bounded(cost, 0, 1e12) * 1_000_000, MidpointRounding.AwayFromZero);
         return (millionths / 1_000_000).ToString(CultureInfo.InvariantCulture) + "." + (millionths % 1_000_000).ToString("000000", CultureInfo.InvariantCulture);
     }
 
@@ -155,6 +165,28 @@ public static class HistoryExport
         }
         return builder.Append('"').ToString();
     }
+
+    /// <summary>
+    /// A backslash in front of a line that would start a heading, a code fence or an HTML block (which runs on past the
+    /// line, swallowing the dictations after it), so it reads as the words it is.
+    /// </summary>
+    internal static string MarkdownLine(string line)
+    {
+        var indent = 0;
+        while (indent < line.Length && line[indent] is ' ' or '\t') indent++;
+        var rest = line[indent..];
+        if (rest.StartsWith('#') || rest.StartsWith('<') || rest.StartsWith("```", StringComparison.Ordinal) || rest.StartsWith("~~~", StringComparison.Ordinal))
+        {
+            return line[..indent] + "\\" + rest;
+        }
+        return line;
+    }
+
+    /// <summary>The value within low…high; low when it isn't a number.</summary>
+    private static double Bounded(double value, double low, double high) => double.IsFinite(value) ? Math.Clamp(value, low, high) : low;
+
+    private const long MinUnixSeconds = -62_135_596_800;
+    private const long MaxUnixSeconds = 253_402_300_799;
 
     private static string Words(Entry entry) => WordCount.Count(entry.FinalText).ToString(CultureInfo.InvariantCulture);
 }

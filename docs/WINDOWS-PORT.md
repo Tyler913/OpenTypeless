@@ -89,7 +89,9 @@ failure handling. Only the system-integration layer and the look differ.
   + Shift with the default hotkey, as in Typeless. A chord is checked before modifiers are set aside as making no combo,
   needs a fresh key-down (not the repeat of a key held since before the hotkey) and never counts AltGr's made-up Left
   Ctrl. Its key-down and key-up are swallowed, so Shift doesn't switch a Chinese or Japanese IME and Alt + Shift doesn't
-  switch the layout.
+  switch the layout. The rest of a swallowed press (the key-combination hotkey's included) stays swallowed while a new
+  hotkey is being recorded, too. A swallowed key never reaches the key state, so there are no flags to clear afterwards
+  as on macOS.
 
 ## Deliberate platform differences
 

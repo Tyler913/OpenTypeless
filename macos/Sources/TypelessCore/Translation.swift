@@ -138,100 +138,206 @@ public enum WritingScript: Sendable, Equatable {
     case japanese
 }
 
-/// How much of a text is written in a script, counting words the way `WordCount` does: a Han character or a kana is one,
-/// a run of letters of one script another (so "SwiftUI" counts as much as "写"). Digits, punctuation and symbols don't
-/// count: numbers are kept as they are in every language.
+/// How much of a translation is written in its target language's script, counting words the way `WordCount` does: a Han
+/// character or a kana is one word, a run of letters or digits another ("e-mail", "foo_bar" and "3.5" once each, so
+/// "SwiftUI" counts as much as "写"). Numbers don't count: they're kept as they are in every language. Nor do names, code
+/// and terms kept from the transcript as they were, since a translation keeps them by design ("Contact 欧阳娜娜.",
+/// "用 React、TypeScript 和 Vite。"); what's left of the other scripts is text that wasn't translated.
 public enum ScriptShare {
-    /// Under this many words there's too little to tell ("OK", "好的").
+    /// Under this many words there's too little to tell ("OK", "好的", "Contact 欧阳娜娜.").
     public static let minimumWords = 4
-    /// The share of words in the target's script under which a translation is taken to have come back in another
-    /// language. Names, code and technical terms are kept as they are, so a Chinese translation of a message full of
-    /// them can be half Latin ("用 SwiftUI 写一个 macOS app，调用 OpenRouter 的 API…": 0.56), while a translation that
-    /// didn't happen is at 0–0.3.
+    /// The share of the words in the target's script among those not kept as names, under which a translation is taken
+    /// to have come back in another language: a translation that didn't happen is at 0–0.3, a real one near 1.
     public static let minimumShare = 0.5
+    /// And among all the words, names included: a text that is almost all names and terms kept as they were, with no
+    /// target-language text around them, wasn't translated either. A real one full of terms keeps a third
+    /// ("用 React、TypeScript、Vite 和 Tailwind。": 2 of 6).
+    public static let minimumTargetShare = 0.2
+    /// A run of Han characters or kana up to this long, found as it is in the transcript, is a name kept as it was
+    /// (a Chinese name is two to four characters: "张伟", "欧阳娜娜"); a longer one is a phrase left untranslated, and
+    /// once a translation has one, its short runs are taken for more of the same ("Please fix the 验证码不显示 bug on
+    /// the 登录页面").
+    static let nameLength = 4
 
-    struct Counts {
-        var latin = 0, cyrillic = 0, hangul = 0, han = 0, kana = 0, other = 0
-        var total: Int { latin + cyrillic + hangul + han + kana + other }
+    enum Kind: Equatable { case latin, cyrillic, hangul, other }
 
-        func of(_ script: WritingScript) -> Int {
-            switch script {
-            case .latin: return latin
-            case .cyrillic: return cyrillic
-            case .hangul: return hangul
-            case .han: return han
-            case .japanese: return han + kana
-            }
-        }
+    /// A word as `WordCount` counts it: a run of letters or digits, or a run of Han characters and kana (each a word).
+    struct Token: Equatable {
+        let text: String
+        /// A run of Han characters and kana.
+        let isCJK: Bool
+        /// A run of letters or digits: the script of its first letter; nil for a number.
+        let kind: Kind?
+
+        /// How many words `WordCount` counts in it.
+        var words: Int { isCJK ? text.unicodeScalars.count : 1 }
     }
 
-    private enum Kind { case latin, cyrillic, hangul, han, kana, other }
+    /// `text` cut into words with `WordCount`'s rules, joiners and all.
+    static func tokens(_ text: String) -> [Token] {
+        let scalars = Array(text.unicodeScalars)
+        var tokens: [Token] = []
+        var word = String.UnicodeScalarView()
+        var run = String.UnicodeScalarView()
+        func endWord() {
+            guard !word.isEmpty else { return }
+            tokens.append(Token(text: String(word), isCJK: false, kind: kind(of: word)))
+            word = String.UnicodeScalarView()
+        }
+        func endRun() {
+            guard !run.isEmpty else { return }
+            tokens.append(Token(text: String(run), isCJK: true, kind: nil))
+            run = String.UnicodeScalarView()
+        }
+        for (i, scalar) in scalars.enumerated() {
+            if WordCount.isCJKWordCharacter(scalar.value) {
+                endWord()
+                run.append(scalar)
+            } else if WordCount.isWordCharacter(scalar) {
+                endRun()
+                word.append(scalar)
+            } else if !word.isEmpty, WordCount.isJoiner(scalar), i + 1 < scalars.count,
+                      WordCount.isWordCharacter(scalars[i + 1]), !WordCount.isCJKWordCharacter(scalars[i + 1].value) {
+                word.append(scalar)
+            } else {
+                endWord()
+                endRun()
+            }
+        }
+        endWord()
+        endRun()
+        return tokens
+    }
 
-    static func counts(_ text: String) -> Counts {
-        var counts = Counts()
-        var run: Kind?
-        for scalar in text.unicodeScalars {
-            let value = scalar.value
-            let kind: Kind
-            switch value {
-            case 0x4E00...0x9FFF, 0x3400...0x4DBF, 0x20000...0x3134F, 0xF900...0xFAFF:
-                counts.han += 1
-                run = nil
-                continue
-            case 0x3040...0x309F, 0x30A0...0x30FF, 0x31F0...0x31FF, 0xFF66...0xFF9F:
-                counts.kana += 1
-                run = nil
-                continue
-            case 0x41...0x5A, 0x61...0x7A, 0xC0...0xD6, 0xD8...0xF6, 0xF8...0x24F, 0x1E00...0x1EFF:
-                kind = .latin
-            case 0x400...0x52F:
-                kind = .cyrillic
-            case 0xAC00...0xD7AF, 0x1100...0x11FF, 0x3130...0x318F:
-                kind = .hangul
+    /// The script of a word's first letter; nil when it has none (a number).
+    private static func kind(of word: String.UnicodeScalarView) -> Kind? {
+        for scalar in word {
+            switch scalar.value {
+            case 0x41...0x5A, 0x61...0x7A, 0xC0...0xD6, 0xD8...0xF6, 0xF8...0x24F, 0x1E00...0x1EFF: return .latin
+            case 0x400...0x52F: return .cyrillic
+            case 0xAC00...0xD7AF, 0x1100...0x11FF, 0x3130...0x318F: return .hangul
             default:
                 switch scalar.properties.generalCategory {
-                case .nonspacingMark, .spacingMark, .enclosingMark:
-                    // An accent written as its own character stays with its letter.
-                    continue
-                case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .modifierLetter, .otherLetter:
-                    kind = .other
-                default:
-                    run = nil
-                    continue
+                case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .modifierLetter, .otherLetter: return .other
+                default: continue
                 }
             }
-            guard kind != run else { continue }
-            run = kind
-            switch kind {
-            case .latin: counts.latin += 1
-            case .cyrillic: counts.cyrillic += 1
-            case .hangul: counts.hangul += 1
-            case .han, .kana: break
-            case .other: counts.other += 1
+        }
+        return nil
+    }
+
+    private static func isKana(_ scalar: Unicode.Scalar) -> Bool { (0x3040...0x30FF).contains(scalar.value) }
+
+    /// A word kept from the transcript that reads as a name, code or a term rather than ordinary text left untranslated:
+    /// it has a capital letter, a digit or a joiner ("SwiftUI", "GPT6", "e-mail", "foo_bar"), or its script has no
+    /// capitals (Korean). "the" and "report" don't.
+    static func looksLikeName(_ word: String) -> Bool {
+        var cased = false
+        for scalar in word.unicodeScalars {
+            switch scalar.properties.generalCategory {
+            case .uppercaseLetter, .titlecaseLetter, .decimalNumber, .letterNumber, .otherNumber: return true
+            case .lowercaseLetter: cased = true
+            default: if WordCount.isJoiner(scalar) { return true }
             }
         }
-        return counts
+        return !cased
     }
 
-    /// The share of `text`'s words written in `script` (1 when it has none).
+    /// The share of `text`'s words written in `script` (1 when it has none), names included.
     public static func share(of script: WritingScript, in text: String) -> Double {
-        let counts = counts(text)
-        return counts.total == 0 ? 1 : Double(counts.of(script)) / Double(counts.total)
+        var inScript = 0, total = 0
+        for token in tokens(text) {
+            if token.isCJK {
+                for scalar in token.text.unicodeScalars {
+                    total += 1
+                    if script == .japanese || (script == .han && !isKana(scalar)) { inScript += 1 }
+                }
+            } else if let kind = token.kind {
+                total += 1
+                if matches(kind, script) { inScript += 1 }
+            }
+        }
+        return total == 0 ? 1 : Double(inScript) / Double(total)
     }
 
-    /// Whether `text` is mostly written in `script`, or too short to tell. Han characters are shared by Chinese and
-    /// Japanese, so once a text has ten Han characters or kana, kana tell them apart: every Japanese sentence has some (at
-    /// least one character in ten), Chinese none.
-    public static func isMostly(_ text: String, in script: WritingScript) -> Bool {
-        let counts = counts(text)
-        guard counts.total >= minimumWords else { return true }
-        guard Double(counts.of(script)) >= Double(counts.total) * minimumShare else { return false }
-        let cjk = counts.han + counts.kana
+    private static func matches(_ kind: Kind, _ script: WritingScript) -> Bool {
+        switch (kind, script) {
+        case (.latin, .latin), (.cyrillic, .cyrillic), (.hangul, .hangul): return true
+        default: return false
+        }
+    }
+
+    /// Whether `text`, a translation of `transcript`, is mostly written in `script`, or too short to tell. Words of other
+    /// scripts found in the transcript or the speaker's vocabulary are names kept as they were (see `looksLikeName`,
+    /// `nameLength`), and only count against the translation when they're nearly all of it (`minimumTargetShare`).
+    ///
+    /// Han characters are shared by Chinese and Japanese, so once a text has ten Han characters or kana, kana tell them
+    /// apart: every Japanese sentence has some (at least one character in ten), Chinese none.
+    public static func isMostly(_ text: String, in script: WritingScript, transcript: String = "",
+                                vocabulary: [String] = []) -> Bool {
+        let spoken = Set(tokens(transcript).filter { !$0.isCJK }.map { $0.text.lowercased() })
+        let terms = vocabulary.flatMap { tokens($0) }
+        let termWords = Set(terms.filter { !$0.isCJK }.map { $0.text.lowercased() })
+        let termRuns = Set(terms.filter(\.isCJK).map(\.text))
+        var target = 0, untranslated = 0, kept = 0, han = 0, kana = 0
+        // Short runs of another script's Han characters or kana found in the transcript: names, unless the translation
+        // also left a phrase of that script untranslated.
+        var names = 0, nameCharacters = 0, leftAPhrase = false
+        for token in tokens(text) {
+            if token.isCJK {
+                var foreign = 0
+                for scalar in token.text.unicodeScalars {
+                    if isKana(scalar) { kana += 1 } else { han += 1 }
+                    if script == .japanese || (script == .han && !isKana(scalar)) { target += 1 } else { foreign += 1 }
+                }
+                guard foreign > 0 else { continue }
+                if termRuns.contains(token.text) {
+                    kept += 1
+                } else if token.text.unicodeScalars.count <= nameLength, transcript.contains(token.text) {
+                    names += 1
+                    nameCharacters += foreign
+                } else {
+                    untranslated += foreign
+                    leftAPhrase = true
+                }
+            } else if let kind = token.kind {
+                let word = token.text.lowercased()
+                if matches(kind, script) {
+                    target += 1
+                } else if termWords.contains(word) || (spoken.contains(word) && looksLikeName(token.text)) {
+                    kept += 1
+                } else {
+                    untranslated += 1
+                }
+            }
+        }
+        if leftAPhrase { untranslated += nameCharacters } else { kept += names }
+        let total = target + untranslated + kept
+        guard total >= minimumWords else { return true }
+        guard Double(target) >= Double(target + untranslated) * minimumShare,
+              Double(target) >= Double(total) * minimumTargetShare else { return false }
+        let cjk = han + kana
         guard cjk >= 10 else { return true }
         switch script {
-        case .japanese: return counts.kana * 10 >= cjk
-        case .han: return counts.kana * 10 < cjk
+        case .japanese: return kana * 10 >= cjk
+        case .han: return kana * 10 < cjk
         default: return true
+        }
+    }
+
+    /// A text's length in words that compare across writing systems: a Han character or a hiragana counts half a word
+    /// (Chinese and Japanese take about two for an English word), a run of katakana one (it's a loanword, however long:
+    /// "ローカリゼーション" for "localization"), any other word one.
+    public static func length(_ text: String) -> Double {
+        tokens(text).reduce(0) { total, token in
+            guard token.isCJK else { return total + 1 }
+            var length = 0.0, inKatakana = false
+            for scalar in token.text.unicodeScalars {
+                let katakana = (0x30A0...0x30FF).contains(scalar.value)
+                if katakana, !inKatakana { length += 1 } else if !katakana { length += 0.5 }
+                inKatakana = katakana
+            }
+            return total + length
         }
     }
 }
@@ -263,14 +369,19 @@ public struct TranslatedPolishResult: Sendable {
 public enum TranslatedPolish {
     /// Runs `translate`; when its result can't be used as it is (see `TranslatedPolishResult.translated`) or it fails,
     /// runs `cleanUp` instead (nil: clean-up is off, and the transcript goes in as spoken). Throws only when cancelled.
+    /// Every answer that comes back goes into `ledger` as soon as it's in, so a translation set aside for the clean-up
+    /// is still counted when the dictation is cancelled while the clean-up runs.
     public static func run(
         translate: @Sendable () async throws -> SegmentedPolishResult,
-        cleanUp: (@Sendable () async throws -> SegmentedPolishResult)?
+        cleanUp: (@Sendable () async throws -> SegmentedPolishResult)?,
+        ledger: PolishLedger? = nil
     ) async throws -> TranslatedPolishResult {
         var translation: SegmentedPolishResult?
         var translationError: APIError?
         do {
-            translation = try await translate()
+            let result = try await translate()
+            ledger?.add(result)
+            translation = result
         } catch {
             let apiError = APIError.from(error)
             if apiError == .cancelled { throw apiError }
@@ -286,6 +397,7 @@ public enum TranslatedPolish {
         }
         do {
             let cleaned = try await cleanUp()
+            ledger?.add(cleaned)
             return TranslatedPolishResult(translation: translation, translationError: translationError, cleanUp: cleaned,
                                           cleanUpError: nil)
         } catch {
@@ -295,4 +407,20 @@ public enum TranslatedPolish {
                                           cleanUpError: apiError)
         }
     }
+}
+
+/// The clean-up and translation answers one dictation got, kept as they come in. What they cost is counted from here,
+/// also when the dictation is cancelled before its text goes in: a translation set aside for the clean-up was billed
+/// all the same. Owned by one run of the processing, so a later dictation never counts it.
+public final class PolishLedger: @unchecked Sendable {
+    private let lock = NSLock()
+    private var results: [SegmentedPolishResult] = []
+
+    public init() {}
+
+    public func add(_ result: SegmentedPolishResult) {
+        lock.withLock { results.append(result) }
+    }
+
+    public var all: [SegmentedPolishResult] { lock.withLock { results } }
 }

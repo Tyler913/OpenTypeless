@@ -195,36 +195,41 @@ public static class Prompts
     internal static string Reminder(TranslationTarget? translation) => translation is null ? PolishReminder : TranslateReminder(translation);
 
     /// <summary>
-    /// A translation changes the text's length with the language: a Chinese character is about an English word, while a
-    /// katakana loanword takes several characters ("ログインページ" for "login page"). Counted in words (see
-    /// <see cref="WordCount"/>), a translation stays within about twice its transcript either way, plus the speech it
-    /// drops; four times and 40 words more only comes from an answer.
+    /// A translation changes the text's length with the writing system, so lengths are compared in words that compare
+    /// across them (see <see cref="ScriptShare.Length"/>: a Han character or hiragana is half a word, a katakana loanword
+    /// one). So counted, a faithful translation between any of the listed languages comes to a half to one and a half
+    /// times its transcript, less the fillers it drops (testdata/translate-guard-cases.json: 0.4–1.33, technical English
+    /// into katakana included); four times and 40 words more only comes from an answer.
     /// </summary>
-    public static bool TranslationLooksLikeAnAnswer(string input, string output) => WordCount.Count(output) > WordCount.Count(input) * 4 + 40;
+    public static bool TranslationLooksLikeAnAnswer(string input, string output) => ScriptShare.Length(output) > ScriptShare.Length(input) * 4 + 40;
 
     /// <summary>
-    /// The translation of a long transcript keeping under a quarter of its words left most of it out. (A clean-up keeps
-    /// 55%, see <see cref="DroppedTooMuch"/>; a translation from Chinese into Korean can rightly come to 40%.)
+    /// The translation of a long transcript (75 words or more, counted as in <see cref="TranslationLooksLikeAnAnswer"/>:
+    /// about half a minute of speech) keeping under a quarter of its length left most of it out. A clean-up keeps 55% (see
+    /// <see cref="DroppedTooMuch"/>); a translation can rightly come to 0.4, in a shorter-written language and without the
+    /// fillers.
     /// </summary>
     public static bool TranslationDroppedTooMuch(string input, string output)
     {
-        var words = WordCount.Count(input);
-        if (words < 150) return false;
-        return WordCount.Count(output) < words * 0.25;
+        var words = ScriptShare.Length(input);
+        if (words < 75) return false;
+        return ScriptShare.Length(output) < words * 0.25;
     }
 
     /// <summary>
     /// Why <paramref name="output"/> can't be inserted as the translation of <paramref name="input"/> into
     /// <paramref name="target"/>, or null when it can. The clean-up's guards would reject every translation (it has little
     /// in common with the transcript, by design), so a translation is checked for being cut off, much longer than it
-    /// should be, much shorter, and written in the target's script.
+    /// should be, much shorter, and written in the target's script, names and terms kept from the transcript or the
+    /// <paramref name="vocabulary"/> aside (see <see cref="ScriptShare.IsMostly"/>).
     /// </summary>
-    public static PolishFallback? TranslationFallback(string input, string output, bool truncated, TranslationTarget target)
+    public static PolishFallback? TranslationFallback(string input, string output, bool truncated, TranslationTarget target,
+                                                      IReadOnlyList<string>? vocabulary = null)
     {
         if (truncated) return PolishFallback.Truncated;
         if (TranslationLooksLikeAnAnswer(input, output)) return PolishFallback.Answered;
         if (TranslationDroppedTooMuch(input, output)) return PolishFallback.Summarised;
-        if (target.Script is { } script && !ScriptShare.IsMostly(output, script)) return PolishFallback.Untranslated;
+        if (target.Script is { } script && !ScriptShare.IsMostly(output, script, input, vocabulary)) return PolishFallback.Untranslated;
         return null;
     }
 

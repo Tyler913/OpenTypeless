@@ -51,13 +51,13 @@ public static class WordCount
             or >= 0x3040 and <= 0x309F           // Hiragana
             or >= 0x30A0 and <= 0x30FF;          // Katakana
 
-    private static bool IsWordCharacter(int scalar) => Rune.GetUnicodeCategory(new Rune(scalar)) is
+    internal static bool IsWordCharacter(int scalar) => Rune.GetUnicodeCategory(new Rune(scalar)) is
         UnicodeCategory.UppercaseLetter or UnicodeCategory.LowercaseLetter or UnicodeCategory.TitlecaseLetter
         or UnicodeCategory.ModifierLetter or UnicodeCategory.OtherLetter
         or UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark
         or UnicodeCategory.DecimalDigitNumber or UnicodeCategory.LetterNumber or UnicodeCategory.OtherNumber;
 
-    private static bool IsJoiner(int scalar) => scalar is '\'' or '’' or '-' or '.' or ',' or '_';
+    internal static bool IsJoiner(int scalar) => scalar is '\'' or '’' or '-' or '.' or ',' or '_';
 }
 
 /// <summary>One day's dictation: what was said, how long it took to say, and what it cost.</summary>

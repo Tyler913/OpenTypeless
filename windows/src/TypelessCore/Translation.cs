@@ -190,127 +190,264 @@ public enum WritingScript
 }
 
 /// <summary>
-/// How much of a text is written in a script, counting words the way <see cref="WordCount"/> does: a Han character or a
-/// kana is one, a run of letters of one script another (so "SwiftUI" counts as much as "写"). Digits, punctuation and
-/// symbols don't count: numbers are kept as they are in every language.
+/// How much of a translation is written in its target language's script, counting words the way
+/// <see cref="WordCount"/> does: a Han character or a kana is one word, a run of letters or digits another ("e-mail",
+/// "foo_bar" and "3.5" once each, so "SwiftUI" counts as much as "写"). Numbers don't count: they're kept as they are in
+/// every language. Nor do names, code and terms kept from the transcript as they were, since a translation keeps them by
+/// design ("Contact 欧阳娜娜.", "用 React、TypeScript 和 Vite。"); what's left of the other scripts is text that wasn't
+/// translated.
 /// </summary>
 public static class ScriptShare
 {
-    /// <summary>Under this many words there's too little to tell ("OK", "好的").</summary>
+    /// <summary>Under this many words there's too little to tell ("OK", "好的", "Contact 欧阳娜娜.").</summary>
     public const int MinimumWords = 4;
 
     /// <summary>
-    /// The share of words in the target's script under which a translation is taken to have come back in another
-    /// language. Names, code and technical terms are kept as they are, so a Chinese translation of a message full of them
-    /// can be half Latin ("用 SwiftUI 写一个 macOS app，调用 OpenRouter 的 API…": 0.56), while a translation that didn't
-    /// happen is at 0–0.3.
+    /// The share of the words in the target's script among those not kept as names, under which a translation is taken
+    /// to have come back in another language: a translation that didn't happen is at 0–0.3, a real one near 1.
     /// </summary>
     public const double MinimumShare = 0.5;
 
-    internal struct Counts
-    {
-        public int Latin, Cyrillic, Hangul, Han, Kana, Other;
-        public readonly int Total => Latin + Cyrillic + Hangul + Han + Kana + Other;
+    /// <summary>
+    /// And among all the words, names included: a text that is almost all names and terms kept as they were, with no
+    /// target-language text around them, wasn't translated either. A real one full of terms keeps a third
+    /// ("用 React、TypeScript、Vite 和 Tailwind。": 2 of 6).
+    /// </summary>
+    public const double MinimumTargetShare = 0.2;
 
-        public readonly int Of(WritingScript script) => script switch
-        {
-            WritingScript.Latin => Latin,
-            WritingScript.Cyrillic => Cyrillic,
-            WritingScript.Hangul => Hangul,
-            WritingScript.Han => Han,
-            _ => Han + Kana,
-        };
+    /// <summary>
+    /// A run of Han characters or kana up to this long, found as it is in the transcript, is a name kept as it was
+    /// (a Chinese name is two to four characters: "张伟", "欧阳娜娜"); a longer one is a phrase left untranslated, and
+    /// once a translation has one, its short runs are taken for more of the same ("Please fix the 验证码不显示 bug on
+    /// the 登录页面").
+    /// </summary>
+    internal const int NameLength = 4;
+
+    internal enum Kind { Latin, Cyrillic, Hangul, Other }
+
+    /// <summary>A word as <see cref="WordCount"/> counts it: a run of letters or digits, or a run of Han characters and kana (each a word).</summary>
+    /// <param name="IsCjk">A run of Han characters and kana.</param>
+    /// <param name="LetterKind">A run of letters or digits: the script of its first letter; null for a number.</param>
+    internal sealed record Token(string Text, bool IsCjk, Kind? LetterKind)
+    {
+        /// <summary>How many words <see cref="WordCount"/> counts in it.</summary>
+        public int Words => IsCjk ? Text.EnumerateRunes().Count() : 1;
     }
 
-    private enum Kind { Latin, Cyrillic, Hangul, Other }
-
-    internal static Counts Count(string text)
+    /// <summary><paramref name="text"/> cut into words with <see cref="WordCount"/>'s rules, joiners and all.</summary>
+    internal static List<Token> Tokens(string text)
     {
-        var counts = new Counts();
-        Kind? run = null;
-        foreach (var rune in text.EnumerateRunes())
+        var runes = text.EnumerateRunes().Select(r => r.Value).ToArray();
+        var tokens = new List<Token>();
+        var word = new StringBuilder();
+        var run = new StringBuilder();
+        void EndWord()
         {
-            var value = rune.Value;
-            Kind kind;
-            if (value is >= 0x4E00 and <= 0x9FFF or >= 0x3400 and <= 0x4DBF or >= 0x20000 and <= 0x3134F or >= 0xF900 and <= 0xFAFF)
+            if (word.Length == 0) return;
+            tokens.Add(new Token(word.ToString(), false, KindOf(word.ToString())));
+            word.Clear();
+        }
+        void EndRun()
+        {
+            if (run.Length == 0) return;
+            tokens.Add(new Token(run.ToString(), true, null));
+            run.Clear();
+        }
+        for (var i = 0; i < runes.Length; i++)
+        {
+            var scalar = runes[i];
+            if (WordCount.IsCjkWordCharacter(scalar))
             {
-                counts.Han++;
-                run = null;
-                continue;
+                EndWord();
+                run.Append(char.ConvertFromUtf32(scalar));
             }
-            if (value is >= 0x3040 and <= 0x309F or >= 0x30A0 and <= 0x30FF or >= 0x31F0 and <= 0x31FF or >= 0xFF66 and <= 0xFF9F)
+            else if (WordCount.IsWordCharacter(scalar))
             {
-                counts.Kana++;
-                run = null;
-                continue;
+                EndRun();
+                word.Append(char.ConvertFromUtf32(scalar));
             }
-            if (value is >= 0x41 and <= 0x5A or >= 0x61 and <= 0x7A or >= 0xC0 and <= 0xD6 or >= 0xD8 and <= 0xF6 or >= 0xF8 and <= 0x24F
-                or >= 0x1E00 and <= 0x1EFF)
+            else if (word.Length > 0 && WordCount.IsJoiner(scalar) && i + 1 < runes.Length && WordCount.IsWordCharacter(runes[i + 1])
+                     && !WordCount.IsCjkWordCharacter(runes[i + 1]))
             {
-                kind = Kind.Latin;
-            }
-            else if (value is >= 0x400 and <= 0x52F)
-            {
-                kind = Kind.Cyrillic;
-            }
-            else if (value is >= 0xAC00 and <= 0xD7AF or >= 0x1100 and <= 0x11FF or >= 0x3130 and <= 0x318F)
-            {
-                kind = Kind.Hangul;
+                word.Append(char.ConvertFromUtf32(scalar));
             }
             else
             {
-                switch (Rune.GetUnicodeCategory(rune))
-                {
-                    case UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark:
-                        // An accent written as its own character stays with its letter.
-                        continue;
-                    case UnicodeCategory.UppercaseLetter or UnicodeCategory.LowercaseLetter or UnicodeCategory.TitlecaseLetter
-                        or UnicodeCategory.ModifierLetter or UnicodeCategory.OtherLetter:
-                        kind = Kind.Other;
-                        break;
-                    default:
-                        run = null;
-                        continue;
-                }
-            }
-            if (kind == run) continue;
-            run = kind;
-            switch (kind)
-            {
-                case Kind.Latin: counts.Latin++; break;
-                case Kind.Cyrillic: counts.Cyrillic++; break;
-                case Kind.Hangul: counts.Hangul++; break;
-                default: counts.Other++; break;
+                EndWord();
+                EndRun();
             }
         }
-        return counts;
+        EndWord();
+        EndRun();
+        return tokens;
     }
 
-    /// <summary>The share of <paramref name="text"/>'s words written in <paramref name="script"/> (1 when it has none).</summary>
+    /// <summary>The script of a word's first letter; null when it has none (a number).</summary>
+    private static Kind? KindOf(string word)
+    {
+        foreach (var rune in word.EnumerateRunes())
+        {
+            var value = rune.Value;
+            if (value is >= 0x41 and <= 0x5A or >= 0x61 and <= 0x7A or >= 0xC0 and <= 0xD6 or >= 0xD8 and <= 0xF6 or >= 0xF8 and <= 0x24F
+                or >= 0x1E00 and <= 0x1EFF) return Kind.Latin;
+            if (value is >= 0x400 and <= 0x52F) return Kind.Cyrillic;
+            if (value is >= 0xAC00 and <= 0xD7AF or >= 0x1100 and <= 0x11FF or >= 0x3130 and <= 0x318F) return Kind.Hangul;
+            if (Rune.GetUnicodeCategory(rune) is UnicodeCategory.UppercaseLetter or UnicodeCategory.LowercaseLetter
+                or UnicodeCategory.TitlecaseLetter or UnicodeCategory.ModifierLetter or UnicodeCategory.OtherLetter) return Kind.Other;
+        }
+        return null;
+    }
+
+    private static bool IsKana(int scalar) => scalar is >= 0x3040 and <= 0x30FF;
+
+    /// <summary>
+    /// A word kept from the transcript that reads as a name, code or a term rather than ordinary text left untranslated:
+    /// it has a capital letter, a digit or a joiner ("SwiftUI", "GPT6", "e-mail", "foo_bar"), or its script has no
+    /// capitals (Korean). "the" and "report" don't.
+    /// </summary>
+    internal static bool LooksLikeName(string word)
+    {
+        var cased = false;
+        foreach (var rune in word.EnumerateRunes())
+        {
+            switch (Rune.GetUnicodeCategory(rune))
+            {
+                case UnicodeCategory.UppercaseLetter or UnicodeCategory.TitlecaseLetter or UnicodeCategory.DecimalDigitNumber
+                    or UnicodeCategory.LetterNumber or UnicodeCategory.OtherNumber:
+                    return true;
+                case UnicodeCategory.LowercaseLetter:
+                    cased = true;
+                    break;
+                default:
+                    if (WordCount.IsJoiner(rune.Value)) return true;
+                    break;
+            }
+        }
+        return !cased;
+    }
+
+    private static bool Matches(Kind kind, WritingScript script) =>
+        (kind, script) is (Kind.Latin, WritingScript.Latin) or (Kind.Cyrillic, WritingScript.Cyrillic) or (Kind.Hangul, WritingScript.Hangul);
+
+    private static bool InScript(int scalar, WritingScript script) =>
+        script == WritingScript.Japanese || (script == WritingScript.Han && !IsKana(scalar));
+
+    /// <summary>The share of <paramref name="text"/>'s words written in <paramref name="script"/> (1 when it has none), names included.</summary>
     public static double Share(WritingScript script, string text)
     {
-        var counts = Count(text);
-        return counts.Total == 0 ? 1 : (double)counts.Of(script) / counts.Total;
+        int inScript = 0, total = 0;
+        foreach (var token in Tokens(text))
+        {
+            if (token.IsCjk)
+            {
+                foreach (var rune in token.Text.EnumerateRunes())
+                {
+                    total++;
+                    if (InScript(rune.Value, script)) inScript++;
+                }
+            }
+            else if (token.LetterKind is { } kind)
+            {
+                total++;
+                if (Matches(kind, script)) inScript++;
+            }
+        }
+        return total == 0 ? 1 : (double)inScript / total;
     }
 
     /// <summary>
-    /// Whether <paramref name="text"/> is mostly written in <paramref name="script"/>, or too short to tell. Han characters
-    /// are shared by Chinese and Japanese, so once a text has ten Han characters or kana, kana tell them apart: every
-    /// Japanese sentence has some (at least one character in ten), Chinese none.
+    /// Whether <paramref name="text"/>, a translation of <paramref name="transcript"/>, is mostly written in
+    /// <paramref name="script"/>, or too short to tell. Words of other scripts found in the transcript or the speaker's
+    /// vocabulary are names kept as they were (see <see cref="LooksLikeName"/>, <see cref="NameLength"/>), and only count
+    /// against the translation when they're nearly all of it (<see cref="MinimumTargetShare"/>).
+    ///
+    /// Han characters are shared by Chinese and Japanese, so once a text has ten Han characters or kana, kana tell them
+    /// apart: every Japanese sentence has some (at least one character in ten), Chinese none.
     /// </summary>
-    public static bool IsMostly(string text, WritingScript script)
+    public static bool IsMostly(string text, WritingScript script, string transcript = "", IReadOnlyList<string>? vocabulary = null)
     {
-        var counts = Count(text);
-        if (counts.Total < MinimumWords) return true;
-        if (counts.Of(script) < counts.Total * MinimumShare) return false;
-        var cjk = counts.Han + counts.Kana;
+        var spoken = Tokens(transcript).Where(t => !t.IsCjk).Select(t => t.Text.ToLowerInvariant()).ToHashSet();
+        var terms = (vocabulary ?? Array.Empty<string>()).SelectMany(term => Tokens(term)).ToList();
+        var termWords = terms.Where(t => !t.IsCjk).Select(t => t.Text.ToLowerInvariant()).ToHashSet();
+        var termRuns = terms.Where(t => t.IsCjk).Select(t => t.Text).ToHashSet();
+        int target = 0, untranslated = 0, kept = 0, han = 0, kana = 0;
+        // Short runs of another script's Han characters or kana found in the transcript: names, unless the translation
+        // also left a phrase of that script untranslated.
+        int names = 0, nameCharacters = 0;
+        var leftAPhrase = false;
+        foreach (var token in Tokens(text))
+        {
+            if (token.IsCjk)
+            {
+                var foreign = 0;
+                foreach (var rune in token.Text.EnumerateRunes())
+                {
+                    if (IsKana(rune.Value)) kana++; else han++;
+                    if (InScript(rune.Value, script)) target++; else foreign++;
+                }
+                if (foreign == 0) continue;
+                if (termRuns.Contains(token.Text))
+                {
+                    kept++;
+                }
+                else if (token.Words <= NameLength && transcript.Contains(token.Text, StringComparison.Ordinal))
+                {
+                    names++;
+                    nameCharacters += foreign;
+                }
+                else
+                {
+                    untranslated += foreign;
+                    leftAPhrase = true;
+                }
+            }
+            else if (token.LetterKind is { } kind)
+            {
+                var word = token.Text.ToLowerInvariant();
+                if (Matches(kind, script)) target++;
+                else if (termWords.Contains(word) || (spoken.Contains(word) && LooksLikeName(token.Text))) kept++;
+                else untranslated++;
+            }
+        }
+        if (leftAPhrase) untranslated += nameCharacters; else kept += names;
+        var total = target + untranslated + kept;
+        if (total < MinimumWords) return true;
+        if (target < (target + untranslated) * MinimumShare || target < total * MinimumTargetShare) return false;
+        var cjk = han + kana;
         if (cjk < 10) return true;
         return script switch
         {
-            WritingScript.Japanese => counts.Kana * 10 >= cjk,
-            WritingScript.Han => counts.Kana * 10 < cjk,
+            WritingScript.Japanese => kana * 10 >= cjk,
+            WritingScript.Han => kana * 10 < cjk,
             _ => true,
         };
+    }
+
+    /// <summary>
+    /// A text's length in words that compare across writing systems: a Han character or a hiragana counts half a word
+    /// (Chinese and Japanese take about two for an English word), a run of katakana one (it's a loanword, however long:
+    /// "ローカリゼーション" for "localization"), any other word one.
+    /// </summary>
+    public static double Length(string text)
+    {
+        var total = 0.0;
+        foreach (var token in Tokens(text))
+        {
+            if (!token.IsCjk)
+            {
+                total++;
+                continue;
+            }
+            var inKatakana = false;
+            foreach (var rune in token.Text.EnumerateRunes())
+            {
+                var katakana = rune.Value is >= 0x30A0 and <= 0x30FF;
+                if (katakana && !inKatakana) total++;
+                else if (!katakana) total += 0.5;
+                inKatakana = katakana;
+            }
+        }
+        return total;
     }
 }
 
@@ -342,16 +479,19 @@ public static class TranslatedPolish
     /// <summary>
     /// Runs <paramref name="translate"/>; when its result can't be used as it is (see
     /// <see cref="TranslatedPolishResult.Translated"/>) or it fails, runs <paramref name="cleanUp"/> instead (null: clean-up
-    /// is off, and the transcript goes in as spoken). Throws only when cancelled.
+    /// is off, and the transcript goes in as spoken). Throws only when cancelled. Every answer that comes back goes into
+    /// <paramref name="ledger"/> as soon as it's in, so a translation set aside for the clean-up is still counted when the
+    /// dictation is cancelled while the clean-up runs.
     /// </summary>
     public static async Task<TranslatedPolishResult> Run(Func<Task<SegmentedPolishResult>> translate, Func<Task<SegmentedPolishResult>>? cleanUp,
-                                                         CancellationToken cancellationToken = default)
+                                                         CancellationToken cancellationToken = default, PolishLedger? ledger = null)
     {
         SegmentedPolishResult? translation = null;
         ApiException? translationError = null;
         try
         {
             translation = await translate().ConfigureAwait(false);
+            ledger?.Add(translation);
         }
         catch (Exception error)
         {
@@ -364,13 +504,38 @@ public static class TranslatedPolish
         if (cleanUp is null) return new TranslatedPolishResult(translation, translationError, null, null);
         try
         {
-            return new TranslatedPolishResult(translation, translationError, await cleanUp().ConfigureAwait(false), null);
+            var cleaned = await cleanUp().ConfigureAwait(false);
+            ledger?.Add(cleaned);
+            return new TranslatedPolishResult(translation, translationError, cleaned, null);
         }
         catch (Exception error)
         {
             var apiError = ApiException.From(error);
             if (apiError.IsCancelled) throw apiError;
             return new TranslatedPolishResult(translation, translationError, null, apiError);
+        }
+    }
+}
+
+/// <summary>
+/// The clean-up and translation answers one dictation got, kept as they come in. What they cost is counted from here,
+/// also when the dictation is cancelled before its text goes in: a translation set aside for the clean-up was billed all
+/// the same. Owned by one run of the processing, so a later dictation never counts it. Thread-safe.
+/// </summary>
+public sealed class PolishLedger
+{
+    private readonly List<SegmentedPolishResult> _results = new();
+
+    public void Add(SegmentedPolishResult result)
+    {
+        lock (_results) _results.Add(result);
+    }
+
+    public IReadOnlyList<SegmentedPolishResult> All
+    {
+        get
+        {
+            lock (_results) return _results.ToList();
         }
     }
 }

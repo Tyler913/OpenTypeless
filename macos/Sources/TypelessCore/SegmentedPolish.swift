@@ -120,7 +120,8 @@ public enum SegmentedPolish {
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> SegmentedPolishResult {
         let policy = RetryPolicy(maxAttempts: 2, retriesTimeouts: false)
-        return try await run(transcript: transcript, translation: primary.options.translation, polish: { part, partial in
+        return try await run(transcript: transcript, translation: primary.options.translation,
+                             vocabulary: primary.options.vocabulary, polish: { part, partial in
             try await policy.run { _ in
                 try await HedgedPolish.run(transcript: part, primary: primary, backup: backup, onPartial: partial)
             }
@@ -130,10 +131,12 @@ public enum SegmentedPolish {
     /// Cleans up the parts of `transcript` with `polish`, all at once, and puts each part's answer through
     /// `Prompts.fallback` (`Prompts.translationFallback` when it's a translation into `translation`): a part whose answer
     /// is unusable, or that got none, goes in as spoken. Throws only when no part got an answer (the first part's
-    /// error), or when cancelled. `onPartial` gets the parts' text so far, joined.
+    /// error), or when cancelled. `onPartial` gets the parts' text so far, joined. `vocabulary`: the speaker's terms,
+    /// which a translation keeps as they are.
     public static func run(
         transcript: String,
         translation: TranslationTarget? = nil,
+        vocabulary: [String] = [],
         polish: @escaping @Sendable (String, (@Sendable (String) -> Void)?) async throws -> HedgedPolishResult,
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> SegmentedPolishResult {
@@ -161,7 +164,8 @@ public enum SegmentedPolish {
             case let .success(answer)?:
                 let output = answer.result.text, truncated = answer.result.truncated
                 let fallback = if let translation {
-                    Prompts.translationFallback(input: text, output: output, truncated: truncated, target: translation)
+                    Prompts.translationFallback(input: text, output: output, truncated: truncated, target: translation,
+                                                vocabulary: vocabulary)
                 } else {
                     Prompts.fallback(input: text, output: output, truncated: truncated)
                 }

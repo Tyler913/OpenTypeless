@@ -129,7 +129,7 @@ public static class SegmentedPolish
         var policy = new RetryPolicy(MaxAttempts: 2, RetriesTimeouts: false);
         return Run(transcript, (part, partial, token) => policy.Run(
                        (_, ct) => HedgedPolish.Run(part, primary, backup, cancellationToken: ct, onPartial: partial), cancellationToken: token),
-                   onPartial, cancellationToken, primary.Options.Translation);
+                   onPartial, cancellationToken, primary.Options.Translation, primary.Options.Vocabulary);
     }
 
     /// <summary>
@@ -137,12 +137,12 @@ public static class SegmentedPolish
     /// answer through <see cref="Prompts.Fallback"/> (<see cref="Prompts.TranslationFallback"/> when it's a translation into
     /// <paramref name="translation"/>): a part whose answer is unusable, or that got none, goes in as spoken. Throws only
     /// when no part got an answer (the first part's error), or when cancelled. <paramref name="onPartial"/> gets the parts'
-    /// text so far, joined.
+    /// text so far, joined. <paramref name="vocabulary"/>: the speaker's terms, which a translation keeps as they are.
     /// </summary>
     public static async Task<SegmentedPolishResult> Run(string transcript,
                                                         Func<string, Action<string>?, CancellationToken, Task<HedgedPolishResult>> polish,
                                                         Action<string>? onPartial = null, CancellationToken cancellationToken = default,
-                                                        TranslationTarget? translation = null)
+                                                        TranslationTarget? translation = null, IReadOnlyList<string>? vocabulary = null)
     {
         var texts = Parts(transcript);
         var clock = Stopwatch.StartNew();
@@ -157,7 +157,7 @@ public static class SegmentedPolish
             {
                 var fallback = translation is null
                     ? Prompts.Fallback(texts[i], answer.Result.Text, answer.Result.Truncated)
-                    : Prompts.TranslationFallback(texts[i], answer.Result.Text, answer.Result.Truncated, translation);
+                    : Prompts.TranslationFallback(texts[i], answer.Result.Text, answer.Result.Truncated, translation, vocabulary);
                 results.Add(new SegmentedPolishResult.Part(texts[i], answer, fallback, null));
             }
             else

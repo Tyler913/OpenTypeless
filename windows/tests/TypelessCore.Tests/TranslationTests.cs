@@ -23,7 +23,8 @@ public class TranslationTests
         {
             var target = TranslationTarget.From((string)node!["target"]!)!;
             var expected = (string?)node["expect"];
-            var actual = Prompts.TranslationFallback((string)node["input"]!, (string)node["output"]!, truncated: false, target)
+            var vocabulary = node["vocabulary"]?.AsArray().Select(term => (string)term!).ToList();
+            var actual = Prompts.TranslationFallback((string)node["input"]!, (string)node["output"]!, truncated: false, target, vocabulary)
                 ?.ToString().ToLowerInvariant();
             Assert.True(expected == actual, $"{node["id"]}: expected {expected ?? "null"}, got {actual ?? "null"}");
         }
@@ -65,6 +66,14 @@ public class TranslationTests
         Assert.False(Prompts.TranslationLooksLikeAnAnswer("check the login page", "ログインページをもう一度確認してください"));
         // A short transcript isn't judged for what it drops; a long one kept to a few words was summarised.
         Assert.False(Prompts.TranslationDroppedTooMuch("嗯嗯那个就是说呃好的收到", "OK."));
+        // Lengths compare across writing systems: a katakana loanword is one word however long, a Han character or a
+        // hiragana half of one, so English into katakana-heavy Japanese keeps about its length.
+        Assert.Equal(1.0, ScriptShare.Length("ローカリゼーション"));
+        Assert.Equal(5.5, ScriptShare.Length("スケーラビリティを確認してください"));
+        const string terms = "Check localization, serialization, deserialization, instrumentation, orchestration, documentation and scalability.";
+        const string japanese = "ローカリゼーション、シリアライゼーション、デシリアライゼーション、インストルメンテーション、オーケストレーション、ドキュメンテーション、スケーラビリティを確認してください。";
+        Assert.True(WordCount.Count(japanese) > WordCount.Count(terms) * 4 + 40); // what the guard counted before
+        Assert.False(Prompts.TranslationLooksLikeAnAnswer(terms, japanese));
     }
 
     [Fact]
@@ -72,12 +81,59 @@ public class TranslationTests
     {
         // A Han character weighs as much as a whole Latin word, so terms kept in a Chinese translation don't outweigh it.
         Assert.Equal(4.0 / 7.0, ScriptShare.Share(WritingScript.Han, "用 SwiftUI 写一个 macOS app"), 9);
-        Assert.Equal(4.0 / 6.0, ScriptShare.Share(WritingScript.Latin, "Tell 张伟 at 3 p.m."), 9);
+        // "p.m." is one word, as WordCount reads it; numbers don't count.
+        Assert.Equal(3.0 / 5.0, ScriptShare.Share(WritingScript.Latin, "Tell 张伟 at 3 p.m."), 9);
         Assert.Equal(1.0, ScriptShare.Share(WritingScript.Cyrillic, "Встреча в 15:00"));
         Assert.Equal(1.0, ScriptShare.Share(WritingScript.Hangul, "123 — !")); // nothing to count
         // Accents written as their own character stay with their letter.
         Assert.Equal(1.0, ScriptShare.Share(WritingScript.Latin, "porta\u0301til"));
         Assert.True(ScriptShare.IsMostly("好的", WritingScript.Latin)); // too short to tell
+    }
+
+    /// <summary>The guard cuts text into words exactly as WordCount counts them: joiners and all.</summary>
+    [Fact]
+    public void WordsAreWordCountsWords()
+    {
+        foreach (var text in new[] { "用 e-mail 和 foo_bar。", "Tell 张伟 at 3 p.m.", "don't stop: version 3.5 for 1,000 users",
+                                     "iPhone用户说 OK", "목요일 오후 3시에 회의", "ローカリゼーションを確認してください" })
+        {
+            Assert.True(ScriptShare.Tokens(text).Sum(t => t.Words) == WordCount.Count(text), text);
+        }
+        Assert.Equal(new[] { "用", "e-mail", "和", "foo_bar" }, ScriptShare.Tokens("用 e-mail 和 foo_bar。").Select(t => t.Text));
+        // Lengths that compare across writing systems: a Han character is half a word.
+        Assert.Equal(2.0, ScriptShare.Length("用 SwiftUI 写"));
+        Assert.Equal(4.0, ScriptShare.Length("Check the login page"));
+    }
+
+    /// <summary>
+    /// Names, code and terms kept from the transcript (or the vocabulary) as they were don't count against the target
+    /// script, unless there's next to no target-language text around them.
+    /// </summary>
+    [Fact]
+    public void NamesKeptDontCountAgainstTheTranslation()
+    {
+        Assert.True(ScriptShare.LooksLikeName("TypeScript") && ScriptShare.LooksLikeName("e-mail")
+                    && ScriptShare.LooksLikeName("GPT6") && ScriptShare.LooksLikeName("목요일"));
+        Assert.False(ScriptShare.LooksLikeName("report"));
+        const string transcript = "Use React, TypeScript, Vite and Tailwind.";
+        Assert.True(ScriptShare.IsMostly("用 React、TypeScript、Vite 和 Tailwind。", WritingScript.Han, transcript));
+        // Without the transcript, the same words are English left in the text.
+        Assert.False(ScriptShare.IsMostly("用 React、TypeScript、Vite 和 Tailwind。", WritingScript.Han));
+        // Nothing but terms around one word of Chinese.
+        Assert.False(ScriptShare.IsMostly("用 React、TypeScript、Vite、Tailwind、ESLint、Prettier。", WritingScript.Han,
+                                          "Use React, TypeScript, Vite, Tailwind, ESLint, Prettier."));
+        // Lowercase terms count as kept only from the speaker's vocabulary.
+        const string tools = "用 cursor、windsurf、zed、helix 和 vim 写。";
+        const string spoken = "write it with cursor, windsurf, zed, helix and vim";
+        Assert.False(ScriptShare.IsMostly(tools, WritingScript.Han, spoken));
+        Assert.True(ScriptShare.IsMostly(tools, WritingScript.Han, spoken, ["cursor", "windsurf", "zed", "helix", "vim"]));
+        // A Chinese name is a short run found as it is in the transcript; a long one is a phrase left untranslated.
+        Assert.True(ScriptShare.IsMostly("Please contact 欧阳娜娜 tomorrow.", WritingScript.Latin, "明天联系欧阳娜娜"));
+        Assert.False(ScriptShare.IsMostly("Please 明天联系一下欧阳娜娜问她报告.", WritingScript.Latin, "明天联系一下欧阳娜娜问她报告"));
+        // Once a phrase was left untranslated, the short runs beside it are more of the same, not names.
+        const string bug = "帮我修一下登录页面上验证码不显示的那个 bug";
+        Assert.True(ScriptShare.IsMostly("Please fix the bug on the 登录页面 today", WritingScript.Latin, bug));
+        Assert.False(ScriptShare.IsMostly("Please fix the 验证码不显示 bug on the 登录页面", WritingScript.Latin, bug));
     }
 
     [Fact]
@@ -232,6 +288,25 @@ public class TranslationTests
         Assert.True(second.IsCancelled);
     }
 
+    /// <summary>
+    /// Every answer goes into the ledger as it comes in: a translation set aside for the clean-up is counted even when
+    /// the dictation is cancelled while the clean-up runs.
+    /// </summary>
+    [Fact]
+    public async Task AnswersAreCountedAsTheyComeIn()
+    {
+        var ledger = new PolishLedger();
+        await Assert.ThrowsAsync<ApiException>(() =>
+            TranslatedPolish.Run(() => Task.FromResult(Result(["你好。"], [PolishFallback.Untranslated])), () => throw ApiException.Cancelled(),
+                                 ledger: ledger));
+        Assert.Equal(new[] { "你好。" }, ledger.All.SelectMany(r => r.Answers).Select(a => a.Result.Text));
+
+        var both = new PolishLedger();
+        await TranslatedPolish.Run(() => Task.FromResult(Result(["你好。"], [PolishFallback.Untranslated])),
+                                   () => Task.FromResult(Result(["你好！"], [null])), ledger: both);
+        Assert.Equal(new[] { "你好。", "你好！" }, both.All.SelectMany(r => r.Answers).Select(a => a.Result.Text));
+    }
+
     /// <summary>SegmentedPolish checks a translation with the translation's guards: the clean-up's would reject it as unrelated.</summary>
     [Fact]
     public async Task SegmentedPolishChecksATranslationAsOne()
@@ -239,6 +314,9 @@ public class TranslationTests
         const string transcript = "嗯我们周三下午三点开会，不对不对，是周四，然后记得带电脑";
         const string english = "We're meeting on Thursday at 3 p.m. Remember to bring your laptop.";
         Assert.Equal(PolishFallback.Unrelated, Prompts.Fallback(transcript, english, truncated: false));
+        // Without a translation, the clean-up's guards decide, vocabulary or not: ordinary dictation is checked as before.
+        var cleanedUp = await SegmentedPolish.Run(transcript, (_, _, _) => Task.FromResult(Answer(english)), vocabulary: ["Thursday"]);
+        Assert.Equal(new PolishFallback?[] { PolishFallback.Unrelated }, cleanedUp.Parts.Select(p => p.Fallback));
         var target = new TranslationTarget(TranslationLanguage.English);
         var translated = await SegmentedPolish.Run(transcript, (_, _, _) => Task.FromResult(Answer(english)), translation: target);
         Assert.Empty(translated.Fallbacks);

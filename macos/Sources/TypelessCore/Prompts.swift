@@ -189,31 +189,35 @@ public enum Prompts {
         translation.map { translateReminder(target: $0) } ?? polishReminder
     }
 
-    /// A translation changes the text's length with the language: a Chinese character is about an English word, while
-    /// a katakana loanword takes several characters ("ログインページ" for "login page"). Counted in words (see
-    /// WordCount), a translation stays within about twice its transcript either way, plus the speech it drops; four
-    /// times and 40 words more only comes from an answer.
+    /// A translation changes the text's length with the writing system, so lengths are compared in words that compare
+    /// across them (see `ScriptShare.length`: a Han character or hiragana is half a word, a katakana loanword one). So
+    /// counted, a faithful translation between any of the listed languages comes to a half to one and a half times its
+    /// transcript, less the fillers it drops (testdata/translate-guard-cases.json: 0.4–1.33, technical English into
+    /// katakana included); four times and 40 words more only comes from an answer.
     public static func translationLooksLikeAnAnswer(input: String, output: String) -> Bool {
-        WordCount.count(output) > WordCount.count(input) * 4 + 40
+        ScriptShare.length(output) > ScriptShare.length(input) * 4 + 40
     }
 
-    /// The translation of a long transcript keeping under a quarter of its words left most of it out. (A clean-up keeps
-    /// 55%, see `droppedTooMuch`; a translation from Chinese into Korean can rightly come to 40%.)
+    /// The translation of a long transcript (75 words or more, counted as in `translationLooksLikeAnAnswer`: about half a
+    /// minute of speech) keeping under a quarter of its length left most of it out. A clean-up keeps 55% (see
+    /// `droppedTooMuch`); a translation can rightly come to 0.4, in a shorter-written language and without the fillers.
     public static func translationDroppedTooMuch(input: String, output: String) -> Bool {
-        let words = WordCount.count(input)
-        guard words >= 150 else { return false }
-        return Double(WordCount.count(output)) < Double(words) * 0.25
+        let words = ScriptShare.length(input)
+        guard words >= 75 else { return false }
+        return ScriptShare.length(output) < words * 0.25
     }
 
     /// Why `output` can't be inserted as the translation of `input` into `target`, or nil when it can. The clean-up's
     /// guards would reject every translation (it has little in common with the transcript, by design), so a translation
-    /// is checked for being cut off, much longer than it should be, much shorter, and written in the target's script.
-    public static func translationFallback(input: String, output: String, truncated: Bool,
-                                           target: TranslationTarget) -> PolishFallback? {
+    /// is checked for being cut off, much longer than it should be, much shorter, and written in the target's script,
+    /// names and terms kept from the transcript or the `vocabulary` aside (see `ScriptShare.isMostly`).
+    public static func translationFallback(input: String, output: String, truncated: Bool, target: TranslationTarget,
+                                           vocabulary: [String] = []) -> PolishFallback? {
         if truncated { return .truncated }
         if translationLooksLikeAnAnswer(input: input, output: output) { return .answered }
         if translationDroppedTooMuch(input: input, output: output) { return .summarised }
-        if let script = target.script, !ScriptShare.isMostly(output, in: script) { return .untranslated }
+        if let script = target.script,
+           !ScriptShare.isMostly(output, in: script, transcript: input, vocabulary: vocabulary) { return .untranslated }
         return nil
     }
 

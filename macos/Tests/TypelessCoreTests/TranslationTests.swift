@@ -10,6 +10,7 @@ import Testing
         let target: String
         let input: String
         let output: String
+        let vocabulary: [String]?
         let expect: String?
     }
 
@@ -31,8 +32,8 @@ import Testing
         #expect(cases.count >= 15)
         for c in cases {
             let target = try #require(TranslationTarget(c.target))
-            #expect(Prompts.translationFallback(input: c.input, output: c.output, truncated: false, target: target)?.rawValue
-                    == c.expect, "\(c.id)")
+            #expect(Prompts.translationFallback(input: c.input, output: c.output, truncated: false, target: target,
+                                                vocabulary: c.vocabulary ?? [])?.rawValue == c.expect, "\(c.id)")
         }
     }
 
@@ -66,17 +67,66 @@ import Testing
                                                       output: "ログインページをもう一度確認してください"))
         // A short transcript isn't judged for what it drops; a long one kept to a few words was summarised.
         #expect(!Prompts.translationDroppedTooMuch(input: "嗯嗯那个就是说呃好的收到", output: "OK."))
+        // Lengths compare across writing systems: a katakana loanword is one word however long, a Han character or a
+        // hiragana half of one, so English into katakana-heavy Japanese keeps about its length.
+        #expect(ScriptShare.length("ローカリゼーション") == 1)
+        #expect(ScriptShare.length("スケーラビリティを確認してください") == 5.5)
+        let terms = "Check localization, serialization, deserialization, instrumentation, orchestration, documentation and scalability."
+        let japanese = "ローカリゼーション、シリアライゼーション、デシリアライゼーション、インストルメンテーション、オーケストレーション、ドキュメンテーション、スケーラビリティを確認してください。"
+        #expect(WordCount.count(japanese) > WordCount.count(terms) * 4 + 40) // what the guard counted before
+        #expect(!Prompts.translationLooksLikeAnAnswer(input: terms, output: japanese))
     }
 
     @Test func scriptShareCountsWordsNotLetters() {
         // A Han character weighs as much as a whole Latin word, so terms kept in a Chinese translation don't outweigh it.
         #expect(ScriptShare.share(of: .han, in: "用 SwiftUI 写一个 macOS app") == 4.0 / 7.0)
-        #expect(ScriptShare.share(of: .latin, in: "Tell 张伟 at 3 p.m.") == 4.0 / 6.0)
+        // "p.m." is one word, as WordCount reads it; numbers don't count.
+        #expect(ScriptShare.share(of: .latin, in: "Tell 张伟 at 3 p.m.") == 3.0 / 5.0)
         #expect(ScriptShare.share(of: .cyrillic, in: "Встреча в 15:00") == 1)
         #expect(ScriptShare.share(of: .hangul, in: "123 — !") == 1) // nothing to count
         // Accents written as their own character stay with their letter.
         #expect(ScriptShare.share(of: .latin, in: "porta\u{301}til") == 1)
         #expect(ScriptShare.isMostly("好的", in: .latin)) // too short to tell
+    }
+
+    /// The guard cuts text into words exactly as WordCount counts them: joiners and all.
+    @Test func wordsAreWordCountsWords() {
+        for text in ["用 e-mail 和 foo_bar。", "Tell 张伟 at 3 p.m.", "don't stop: version 3.5 for 1,000 users",
+                     "iPhone用户说 OK", "목요일 오후 3시에 회의", "ローカリゼーションを確認してください"] {
+            #expect(ScriptShare.tokens(text).reduce(0) { $0 + $1.words } == WordCount.count(text), "\(text)")
+        }
+        #expect(ScriptShare.tokens("用 e-mail 和 foo_bar。").map(\.text) == ["用", "e-mail", "和", "foo_bar"])
+        // Lengths that compare across writing systems: a Han character or kana is half a word.
+        #expect(ScriptShare.length("用 SwiftUI 写") == 2)
+        #expect(ScriptShare.length("Check the login page") == 4)
+    }
+
+    /// Names, code and terms kept from the transcript (or the vocabulary) as they were don't count against the target
+    /// script, unless there's next to no target-language text around them.
+    @Test func namesKeptDontCountAgainstTheTranslation() {
+        #expect(ScriptShare.looksLikeName("TypeScript") && ScriptShare.looksLikeName("e-mail")
+                && ScriptShare.looksLikeName("GPT6") && ScriptShare.looksLikeName("목요일"))
+        #expect(!ScriptShare.looksLikeName("report"))
+        let transcript = "Use React, TypeScript, Vite and Tailwind."
+        #expect(ScriptShare.isMostly("用 React、TypeScript、Vite 和 Tailwind。", in: .han, transcript: transcript))
+        // Without the transcript, the same words are English left in the text.
+        #expect(!ScriptShare.isMostly("用 React、TypeScript、Vite 和 Tailwind。", in: .han))
+        // Nothing but terms around one word of Chinese.
+        #expect(!ScriptShare.isMostly("用 React、TypeScript、Vite、Tailwind、ESLint、Prettier。", in: .han,
+                                      transcript: "Use React, TypeScript, Vite, Tailwind, ESLint, Prettier."))
+        // Lowercase terms count as kept only from the speaker's vocabulary.
+        let tools = "用 cursor、windsurf、zed、helix 和 vim 写。"
+        let spoken = "write it with cursor, windsurf, zed, helix and vim"
+        #expect(!ScriptShare.isMostly(tools, in: .han, transcript: spoken))
+        #expect(ScriptShare.isMostly(tools, in: .han, transcript: spoken,
+                                     vocabulary: ["cursor", "windsurf", "zed", "helix", "vim"]))
+        // A Chinese name is a short run found as it is in the transcript; a long one is a phrase left untranslated.
+        #expect(ScriptShare.isMostly("Please contact 欧阳娜娜 tomorrow.", in: .latin, transcript: "明天联系欧阳娜娜"))
+        #expect(!ScriptShare.isMostly("Please 明天联系一下欧阳娜娜问她报告.", in: .latin, transcript: "明天联系一下欧阳娜娜问她报告"))
+        // Once a phrase was left untranslated, the short runs beside it are more of the same, not names.
+        let bug = "帮我修一下登录页面上验证码不显示的那个 bug"
+        #expect(ScriptShare.isMostly("Please fix the bug on the 登录页面 today", in: .latin, transcript: bug))
+        #expect(!ScriptShare.isMostly("Please fix the 验证码不显示 bug on the 登录页面", in: .latin, transcript: bug))
     }
 
     @Test func promptConstruction() {
@@ -217,11 +267,31 @@ import Testing
         }
     }
 
+    /// Every answer goes into the ledger as it comes in: a translation set aside for the clean-up is counted even when
+    /// the dictation is cancelled while the clean-up runs.
+    @Test func answersAreCountedAsTheyComeIn() async throws {
+        let ledger = PolishLedger()
+        await #expect(throws: APIError.cancelled) {
+            try await TranslatedPolish.run(translate: { result(["你好。"], fallbacks: [.untranslated]) },
+                                           cleanUp: { throw APIError.cancelled }, ledger: ledger)
+        }
+        #expect(ledger.all.flatMap(\.answers).map(\.result.text) == ["你好。"])
+
+        let both = PolishLedger()
+        _ = try await TranslatedPolish.run(translate: { result(["你好。"], fallbacks: [.untranslated]) },
+                                           cleanUp: { result(["你好！"], fallbacks: [nil]) }, ledger: both)
+        #expect(both.all.flatMap(\.answers).map(\.result.text) == ["你好。", "你好！"])
+    }
+
     /// SegmentedPolish checks a translation with the translation's guards: the clean-up's would reject it as unrelated.
     @Test func segmentedPolishChecksATranslationAsOne() async throws {
         let transcript = "嗯我们周三下午三点开会，不对不对，是周四，然后记得带电脑"
         let english = "We're meeting on Thursday at 3 p.m. Remember to bring your laptop."
         #expect(Prompts.fallback(input: transcript, output: english, truncated: false) == .unrelated)
+        // Without a translation, the clean-up's guards decide, vocabulary or not: ordinary dictation is checked as before.
+        let cleanedUp = try await SegmentedPolish.run(transcript: transcript, vocabulary: ["Thursday"],
+                                                      polish: { _, _ in answer(english) })
+        #expect(cleanedUp.parts.map(\.fallback) == [.unrelated])
         let translated = try await SegmentedPolish.run(transcript: transcript, translation: TranslationTarget(.english),
                                                        polish: { _, _ in answer(english) })
         #expect(translated.fallbacks.isEmpty)

@@ -39,7 +39,7 @@ public enum WordCount {
         }
     }
 
-    private static func isWordCharacter(_ scalar: Unicode.Scalar) -> Bool {
+    static func isWordCharacter(_ scalar: Unicode.Scalar) -> Bool {
         switch scalar.properties.generalCategory {
         case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .modifierLetter, .otherLetter,
              .nonspacingMark, .spacingMark, .enclosingMark,
@@ -50,7 +50,7 @@ public enum WordCount {
         }
     }
 
-    private static func isJoiner(_ scalar: Unicode.Scalar) -> Bool {
+    static func isJoiner(_ scalar: Unicode.Scalar) -> Bool {
         ["'", "\u{2019}", "-", ".", ",", "_"].contains(scalar)
     }
 }

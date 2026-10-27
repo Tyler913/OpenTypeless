@@ -22,9 +22,10 @@ public enum SelectionCommand {
     /// a longer one takes long to stream back, and a rewrite cut off half way can't go over the user's text.
     public static let maxCharacters = 6000
 
-    /// What an edit of a selection saves as its `mode` in History (see `TranslationTarget.recordMode`). Its instruction is
-    /// saved as the transcript and its result as the clean-up; the selection itself isn't saved, only its length: it can
-    /// be anything the user had open (a contract, a private message), and History keeps entries for days.
+    /// What an edit of a selection saves as its `mode` in History (see `TranslationTarget.recordMode`). Only its
+    /// instruction is saved, as the transcript, and the selection's length: neither the selection nor the rewrite (or the
+    /// answer about it), which can be anything the user had open (a contract, a private message), while History keeps
+    /// entries for days.
     public static let recordMode = "command"
 
     /// Whether a History record's `mode` is an edit of a selection.
@@ -42,11 +43,17 @@ public enum SelectionCommand {
         case answer(String)
     }
 
-    /// The model's output read as a rewrite, or, when it starts with `answerMarker`, as an answer.
-    public static func reply(_ output: String) -> Reply {
+    /// The model's output read as a rewrite, or, when it starts with `answerMarker`, as an answer — unless `selection`
+    /// starts with the marker itself: its rewrite does too.
+    public static func reply(_ output: String, selection: String = "") -> Reply {
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.prefix(answerMarker.count).uppercased() == answerMarker else { return .rewrite(trimmed) }
+        guard startsWithMarker(trimmed), !startsWithMarker(selection.trimmingCharacters(in: .whitespacesAndNewlines))
+        else { return .rewrite(trimmed) }
         return .answer(String(trimmed.dropFirst(answerMarker.count)).trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private static func startsWithMarker(_ text: String) -> Bool {
+        text.prefix(answerMarker.count).uppercased() == answerMarker
     }
 
     /// Whether `rewrite` is the selection as it was (white space and line endings aside): the model found nothing to
@@ -56,10 +63,14 @@ public enum SelectionCommand {
     }
 
     /// `rewrite` with the white space the selection started and ended with (a selection of whole lines ends in a line
-    /// break; one of an indented line starts with its indent), which models leave out, so the text around it stays as it was.
+    /// break; one of an indented line starts with its indent), which models leave out, so the text around it stays as it
+    /// was; and with the selection's line endings ("\r\n" in a Windows document).
     public static func replacement(for selection: String, rewrite: String) -> String {
-        let body = rewrite.trimmingCharacters(in: .whitespacesAndNewlines)
+        var body = rewrite.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty else { return rewrite }
+        if selection.contains("\r\n") {
+            body = body.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\n", with: "\r\n")
+        }
         let leading = selection.prefix { $0.isWhitespace }
         let rest = selection.dropFirst(leading.count)
         let trailing = rest.reversed().prefix { $0.isWhitespace }
@@ -85,15 +96,19 @@ public enum SelectionCommand {
         case notEditable
     }
 
-    /// Whether a rewrite can be pasted over the selection: only into the same window, still showing the same selection
-    /// where that can be read again (only when it was read from Accessibility / UI Automation in the first place: other
-    /// ways of reading it press keys, and the clipboard and the accessibility tree may disagree on line breaks), and
-    /// into something that takes text. `selectionNow`: the selection read again from Accessibility, nil when it can't be.
+    /// Whether a rewrite can be pasted over the selection: only into the same window (and tab, by its title), still
+    /// showing the same selection, and into something that takes text. The selection is read again where it was read
+    /// from Accessibility / UI Automation in the first place (other ways of reading it press keys, and the clipboard and
+    /// the accessibility tree may disagree on line breaks); where it isn't, any click or key that reached an app since
+    /// it was read (`inputSinceRead`) may have moved it, in the same field, and nothing is pasted over it.
+    /// `selectionNow`: the selection read again from Accessibility, nil when it can't be.
     public static func delivery(canPaste: Bool, sameWindow: Bool, original: String, source: SelectionSource,
-                                selectionNow: String?, editable: Bool) -> Delivery {
+                                selectionNow: String?, inputSinceRead: Bool, editable: Bool) -> Delivery {
         guard canPaste else { return .clipboard(.locked) }
         guard sameWindow else { return .clipboard(.movedAway) }
-        if source == .accessibility, let selectionNow, normalized(selectionNow) != normalized(original) {
+        if source == .accessibility, let selectionNow {
+            if normalized(selectionNow) != normalized(original) { return .clipboard(.selectionChanged) }
+        } else if inputSinceRead {
             return .clipboard(.selectionChanged)
         }
         return editable ? .paste : .clipboard(.notEditable)
@@ -177,7 +192,7 @@ public enum SelectionApp: Equatable, Sendable {
     /// interrupts the program running there instead of copying.
     case terminal
     /// A code editor whose copy shortcut (and Edit ▸ Copy) copies the whole line when nothing is selected (VS Code,
-    /// Cursor, JetBrains IDEs, Sublime Text, Zed): there only a selection Accessibility reports counts, or a line the
+    /// Cursor, JetBrains IDEs, Sublime Text, Zed, Nova, Pulsar; on Windows Visual Studio and Notepad++ too): there only a selection Accessibility reports counts, or a line the
     /// user never selected would be rewritten.
     case lineCopyEditor
 
@@ -192,7 +207,8 @@ public enum SelectionApp: Equatable, Sendable {
     static let macLineCopyEditors: Set<String> = [
         "com.microsoft.VSCode", "com.microsoft.VSCodeInsiders", "com.vscodium", "com.visualstudio.code.oss",
         "com.todesktop.230313mzl4w4u92", "com.exafunction.windsurf", "com.google.android.studio",
-        "dev.zed.Zed", "dev.zed.Zed-Preview",
+        "dev.zed.Zed", "dev.zed.Zed-Preview", "com.panic.Nova", "dev.pulsar-edit.pulsar", "com.github.atom",
+        "org.kde.kate",
     ]
 
     /// The macOS app with this bundle identifier. Every JetBrains IDE and Sublime Text version shares its prefix.

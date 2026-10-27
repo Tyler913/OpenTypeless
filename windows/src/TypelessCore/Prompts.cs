@@ -339,9 +339,11 @@ public static class Prompts
     private static bool OpensCommandTag(string text, int start)
     {
         var i = start;
-        while (i < text.Length && char.IsWhiteSpace(text[i])) i++;
+        // White space, and invisible format characters (a zero-width space) a model reads past.
+        static bool IsGap(char c) => char.IsWhiteSpace(c) || char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.Format;
+        while (i < text.Length && IsGap(text[i])) i++;
         if (i < text.Length && text[i] == '/') i++;
-        while (i < text.Length && char.IsWhiteSpace(text[i])) i++;
+        while (i < text.Length && IsGap(text[i])) i++;
         foreach (var name in new[] { "selection", "instruction" })
         {
             var end = i + name.Length;
@@ -355,20 +357,27 @@ public static class Prompts
     /// <summary>How a line a model puts before the text starts ("Here's the more formal version:", "以下是修改后的内容：").</summary>
     internal static readonly string[] CommandPreambles = ["here is", "here's", "here are", "sure", "certainly", "of course", "okay", "以下是",
                                                           "下面是", "这是", "好的", "当然"];
-    /// <summary>How a paragraph a model adds after the text starts ("Note: I kept the names.", "（注：…）").</summary>
-    internal static readonly string[] CommandNotes = ["note:", "notes:", "note that", "(note", "i changed", "i've ", "i have ", "changes:",
-                                                      "changes made", "注：", "注:", "（注", "注意：", "说明：", "修改说明"];
+    /// <summary>What such a line talks about: the edit itself. "Here's the plan:" or "以下是清单：" is the text's own first line.</summary>
+    internal static readonly string[] CommandPreambleSubjects = ["version", "text", "translation", "rewrite", "rewritten", "revised", "edited",
+                                                                 "corrected", "updated", "result", "修改", "改写", "翻译", "版本", "文本", "结果"];
+    /// <summary>How a paragraph a model adds after the text starts: a note labelled as one ("Note: I kept the names.", "（注：…）").</summary>
+    internal static readonly string[] CommandNotes = ["note:", "notes:", "(note:", "changes:", "changes made:", "注：", "注:", "（注：", "(注：",
+                                                      "注意：", "说明：", "修改说明"];
     /// <summary>Quotes a model sometimes puts around the whole text.</summary>
     internal static readonly (char Open, char Close)[] CommandQuotes = [('"', '"'), ('“', '”'), ('「', '」'), ('\'', '\'')];
+    /// <summary>Words of an instruction that asks for quotes or a code block, which then stay.</summary>
+    internal static readonly string[] CommandWrappingWords = ["quote", "quotation", "code", "fence", "backtick", "block", "markdown", "引号",
+                                                              "代码", "引用", "反引号", "括起来"];
 
     /// <summary>
     /// Takes out what a model sometimes wraps an edit in despite instructions: the reminder, the selection's tags, a code
-    /// fence or quotes around the whole of it, a preamble line before it and a note after it — each only when the selection
-    /// didn't have it itself, so a selection that starts "Here is the plan:" or ends with a note keeps them. Unlike a
+    /// fence or quotes around the whole of it (unless the instruction asked for them), a preamble line about the edit
+    /// before it and a labelled note after it — each only when the selection didn't have one itself (in any language: a
+    /// translation translates it), so a selection that starts "Here is the plan:" or ends with a note keeps them. Unlike a
     /// clean-up's, tags inside the text stay: the selection may well be a prompt with tags of its own. An answer to a
     /// question (see <see cref="SelectionCommand.AnswerMarker"/>) is left as it came.
     /// </summary>
-    public static string SanitizeCommandOutput(string text, string selection)
+    public static string SanitizeCommandOutput(string text, string selection, string instruction = "")
     {
         // Lines are only told apart by "\n" from here on (the macOS app's too).
         var s = text.Replace("\r\n", "\n").Replace(CommandReminder, "").Trim();
@@ -377,11 +386,13 @@ public static class Prompts
             s = s[11..^12].Trim();
         }
         // The look-alikes that kept the selection's own tags from closing its block (see CommandBlock), unless the
-        // selection had look-alikes of its own: then there's no telling them apart.
-        if (!selection.Contains(EscapedTagOpener)) s = ReplacingTagOpeners(s, EscapedTagOpener, '<');
+        // selection had look-alike tags of its own: then there's no telling them apart.
+        if (ReplacingTagOpeners(selection, EscapedTagOpener, '<') == selection) s = ReplacingTagOpeners(s, EscapedTagOpener, '<');
         var original = selection.Replace("\r\n", "\n").Trim();
-        if (SelectionCommand.ReplyOf(s) is SelectionCommand.Reply.Answer) return s;
-        if (!original.StartsWith("```", StringComparison.Ordinal) && s.StartsWith("```", StringComparison.Ordinal))
+        if (SelectionCommand.ReplyOf(s, original) is SelectionCommand.Reply.Answer) return s;
+        var asked = instruction.ToLowerInvariant();
+        var wrappingAsked = CommandWrappingWords.Any(word => asked.Contains(word, StringComparison.Ordinal));
+        if (!wrappingAsked && !original.StartsWith("```", StringComparison.Ordinal) && s.StartsWith("```", StringComparison.Ordinal))
         {
             var lines = s.Split('\n').ToList();
             if (lines.Count > 1 && lines[^1].Trim(' ', '\t') == "```")
@@ -395,7 +406,7 @@ public static class Prompts
         s = WithoutNote(s, original);
         foreach (var (open, close) in CommandQuotes)
         {
-            if (s.Length < 2 || s[0] != open || s[^1] != close || (original.Length > 0 && original[0] == open)) continue;
+            if (wrappingAsked || s.Length < 2 || s[0] != open || s[^1] != close || (original.Length > 0 && original[0] == open)) continue;
             var inner = s[1..^1];
             // Only one pair: "a" and "b" isn't quoted as a whole.
             if (inner.Contains(open) || inner.Contains(close)) continue;
@@ -407,52 +418,67 @@ public static class Prompts
 
     /// <summary>
     /// <paramref name="text"/> without a first line that only introduces it: short, ending in a colon, starting like a
-    /// preamble the selection doesn't start with, and with text after it.
+    /// preamble and talking about the edit ("Here is the revised text:"), with text after it — unless the selection's own
+    /// first line ends in a colon or starts like a preamble too.
     /// </summary>
     internal static string WithoutPreamble(string text, string selection)
     {
         var newline = text.IndexOf('\n');
         if (newline < 0) return text;
-        var first = text[..newline].Trim(' ', '\t');
+        var first = text[..newline].Trim(' ', '\t').ToLowerInvariant();
         var rest = text[(newline + 1)..].Trim();
-        if (rest.Length == 0 || TextMetrics.CharacterCount(first) > 100 || !(first.EndsWith(':') || first.EndsWith('：'))) return text;
-        var lower = first.ToLowerInvariant();
-        var opener = CommandPreambles.FirstOrDefault(p => lower.StartsWith(p, StringComparison.Ordinal));
-        if (opener == null || selection.ToLowerInvariant().StartsWith(opener, StringComparison.Ordinal)) return text;
+        var selectionFirst = selection.Split('\n')[0].Trim(' ', '\t').ToLowerInvariant();
+        if (rest.Length == 0 || TextMetrics.CharacterCount(first) > 100 || !EndsInColon(first)
+            || !CommandPreambles.Any(p => first.StartsWith(p, StringComparison.Ordinal))
+            || !CommandPreambleSubjects.Any(subject => first.Contains(subject, StringComparison.Ordinal))
+            || EndsInColon(selectionFirst) || CommandPreambles.Any(p => selectionFirst.StartsWith(p, StringComparison.Ordinal)))
+        {
+            return text;
+        }
         return rest;
     }
 
-    /// <summary><paramref name="text"/> without a last paragraph that is a note about the edit, when the selection has no such note itself.</summary>
+    private static bool EndsInColon(string line) => line.EndsWith(':') || line.EndsWith('：');
+
+    /// <summary>
+    /// <paramref name="text"/> without a last paragraph that is a labelled note about the edit, when the selection has no
+    /// such note itself (in any language).
+    /// </summary>
     internal static string WithoutNote(string text, string selection)
     {
         var gap = text.LastIndexOf("\n\n", StringComparison.Ordinal);
         if (gap < 0) return text;
         var last = text[(gap + 2)..].Trim().ToLowerInvariant();
         var body = text[..gap].Trim();
-        var opener = CommandNotes.FirstOrDefault(n => last.StartsWith(n, StringComparison.Ordinal));
-        if (body.Length == 0 || opener == null || selection.ToLowerInvariant().Contains(opener, StringComparison.Ordinal)) return text;
+        var original = selection.ToLowerInvariant();
+        if (body.Length == 0 || !CommandNotes.Any(n => last.StartsWith(n, StringComparison.Ordinal))
+            || CommandNotes.Any(n => original.Contains(n, StringComparison.Ordinal)))
+        {
+            return text;
+        }
         return body;
     }
 
-    /// <summary>
-    /// How a refusal, or a question back, starts: never the text that replaces a selection, unless the selection starts that
-    /// way itself.
-    /// </summary>
+    /// <summary>How a refusal, or a question back, starts.</summary>
     internal static readonly string[] CommandRefusals = ["i'm sorry", "i’m sorry", "i am sorry", "sorry, ", "i can't", "i can’t", "i cannot",
                                                          "i won't", "i’m unable", "i'm unable", "i am unable", "as an ai", "could you clarify",
                                                          "please provide", "抱歉", "很抱歉", "对不起", "我无法", "我不能", "请提供"];
+    /// <summary>What a refusal talks about: the request. "Sorry, I can't come" is a message, not a refusal.</summary>
+    internal static readonly string[] CommandRefusalSubjects = ["help", "assist", "request", "comply", "fulfill", "provide", "clarify",
+                                                                "instruction", "that", "this", "帮", "请求", "完成", "提供", "指令", "协助", "这个"];
 
     /// <summary>
     /// Why an edit of <paramref name="selection"/> can't be used, or null when it can. Only a complete answer goes over the
     /// user's text: a cut-off rewrite would silently lose the rest of it, an empty one all of it, and a refusal or a
-    /// question back ("I'm sorry, but…", "Could you clarify…") would replace it with talk. None of the clean-up's other
-    /// guards apply: a rewrite differs from the instruction by design, and "shorten it" or "translate it" may change its
-    /// length a lot.
+    /// question back ("I'm sorry, but I can't help with that", "Could you clarify…") would replace it with talk — unless
+    /// the selection apologises or refuses itself somewhere (in any language: a translation of "抱歉，我来不了" starts
+    /// "Sorry"). None of the clean-up's other guards apply: a rewrite differs from the instruction by design, and "shorten
+    /// it" or "translate it" may change its length a lot.
     /// </summary>
     public static PolishFallback? CommandFallback(string output, string selection, bool truncated)
     {
         if (truncated) return PolishFallback.Truncated;
-        switch (SelectionCommand.ReplyOf(output))
+        switch (SelectionCommand.ReplyOf(output, selection))
         {
             case SelectionCommand.Reply.Answer answer:
                 return answer.Text.Trim().Length == 0 ? PolishFallback.Failed : null;
@@ -460,8 +486,10 @@ public static class Prompts
                 var trimmed = rewrite.Text.Trim();
                 if (trimmed.Length == 0) return PolishFallback.Failed;
                 var start = trimmed.ToLowerInvariant();
-                var original = selection.Trim().ToLowerInvariant();
-                if (CommandRefusals.Any(r => start.StartsWith(r, StringComparison.Ordinal) && !original.StartsWith(r, StringComparison.Ordinal)))
+                var original = selection.ToLowerInvariant();
+                if (CommandRefusals.Any(r => start.StartsWith(r, StringComparison.Ordinal))
+                    && CommandRefusalSubjects.Any(subject => start.Contains(subject, StringComparison.Ordinal))
+                    && !CommandRefusals.Any(r => original.Contains(r.Trim(' '), StringComparison.Ordinal)))
                 {
                     return PolishFallback.Answered;
                 }

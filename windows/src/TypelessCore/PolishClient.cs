@@ -317,7 +317,7 @@ public sealed partial class ApiClient
                     }
                     // An edit's answer is cleaned up as an edit's.
                     var cleaned = options.Selection is { } selection
-                        ? Prompts.SanitizeCommandOutput(text.ToString(), selection)
+                        ? Prompts.SanitizeCommandOutput(text.ToString(), selection, transcript)
                         : Prompts.SanitizePolishOutput(text.ToString(), Prompts.Reminder(options.Translation));
                     if (cleaned.Length == 0) throw ApiException.BadResponse(L("模型返回了空内容", "the model returned nothing"));
                     if (usage is null || (usage.InputTokens == null && usage.OutputTokens == null && usage.Cost == null))

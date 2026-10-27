@@ -25,6 +25,7 @@ import Testing
     private struct TextCase: Decodable {
         let id: String
         let selection: String?
+        let instruction: String?
         let text: String?
         let output: String?
         let expect: String
@@ -122,6 +123,10 @@ import Testing
         #expect(await read(accessibility: .text(long)) == .refused(.tooLong(SelectionCommand.maxCharacters + 1)))
         let atCap = String(repeating: "a", count: SelectionCommand.maxCharacters)
         #expect(await read(accessibility: .text(atCap)) == .selection(atCap, .accessibility))
+        // Counted in characters as they're seen, the same on Windows: a thumbs-up with a skin tone is one.
+        let emoji = String(repeating: "👍🏽", count: SelectionCommand.maxCharacters)
+        #expect(await read(accessibility: .text(emoji)) == .selection(emoji, .accessibility))
+        #expect(await read(accessibility: .text(emoji + "👍🏽")) == .refused(.tooLong(SelectionCommand.maxCharacters + 1)))
     }
 
     /// testdata/command-cases.json, shared with the Windows tests.
@@ -187,7 +192,8 @@ import Testing
         let cases = try Self.fixture().sanitize
         #expect(cases.count >= 15)
         for c in cases {
-            #expect(Prompts.sanitizeCommandOutput(c.output ?? "", selection: c.selection ?? "") == c.expect, "\(c.id)")
+            #expect(Prompts.sanitizeCommandOutput(c.output ?? "", selection: c.selection ?? "", instruction: c.instruction ?? "")
+                    == c.expect, "\(c.id)")
         }
     }
 
@@ -209,7 +215,7 @@ import Testing
         let cases = try Self.fixture().replies
         #expect(cases.count >= 10)
         for c in cases {
-            switch SelectionCommand.reply(c.output) {
+            switch SelectionCommand.reply(c.output, selection: c.selection) {
             case let .rewrite(text):
                 #expect(c.expectKind == "rewrite" && text == c.expectText, "\(c.id)")
             case let .answer(text):
@@ -237,7 +243,7 @@ import Testing
             guard lines.count >= 3, lines[0].hasPrefix("<selection>"), lines[1].hasPrefix("<instruction>") else { continue }
             let selection = String(lines[0].dropFirst(11).dropLast(12))
             let output = lines.dropFirst(2).joined(separator: "\n")
-            #expect(Prompts.sanitizeCommandOutput(output, selection: selection) == output, "\(lines[1])")
+            #expect(Prompts.sanitizeCommandOutput(output, selection: selection, instruction: lines[1]) == output, "\(lines[1])")
             #expect(Prompts.commandFallback(output: output, selection: selection, truncated: false) == nil, "\(lines[1])")
             if case .answer = SelectionCommand.reply(output) { answers += 1 }
             count += 1
@@ -271,18 +277,37 @@ import Testing
         #expect(SelectionCommand.chordKeys(command: .control, translation: .shift, excludingHotkey: 62) == [59])
     }
 
+    /// The command chord is a chord modifier like translation's: while its ⌃ is swallowed, Right ⌘ + ⌃ + Q (lock screen)
+    /// mustn't reach the app as ⌘Q (quit), nor ⌘⌃Space as ⌘Space.
+    @Test func keysPressedWithTheCommandChordAreKeptFromTheApp() {
+        let chords = SelectionCommand.chordKeys(command: .control, translation: .shift, excludingHotkey: 54)
+            .union(TranslationChord.shift.keyCodes(excludingHotkey: 54))
+        for key: Int64 in [12, 49] { // Q, Space
+            #expect(HotkeyPress.keepsFromApp(key, isRepeat: false, isModifier: false, chordKeys: chords,
+                                             chordModifierSwallowed: true))
+        }
+        // The chord's own keys (either side) are the chord, not a combination.
+        #expect(!HotkeyPress.keepsFromApp(59, isRepeat: false, isModifier: false, chordKeys: chords,
+                                          chordModifierSwallowed: true))
+        #expect(!HotkeyPress.keepsFromApp(62, isRepeat: false, isModifier: false, chordKeys: chords,
+                                          chordModifierSwallowed: true))
+    }
+
     @Test func theReplacementKeepsTheSelectionsEdges() {
         #expect(SelectionCommand.replacement(for: "hello world\n", rewrite: "Hello, world.") == "Hello, world.\n")
         #expect(SelectionCommand.replacement(for: "    return x\n\n", rewrite: "return y") == "    return y\n\n")
         #expect(SelectionCommand.replacement(for: "plain", rewrite: "  Plain.  ") == "Plain.")
         #expect(SelectionCommand.replacement(for: " x ", rewrite: "") == "")
+        // A Windows document's line endings.
+        #expect(SelectionCommand.replacement(for: "a\r\nb\r\n", rewrite: "A\nB") == "A\r\nB\r\n")
+        #expect(SelectionCommand.replacement(for: " \n ", rewrite: "x") == " \n x")
     }
 
     @Test func theResultOnlyGoesOverTheSameSelection() {
         func delivery(canPaste: Bool = true, sameWindow: Bool = true, source: SelectionSource = .accessibility,
-                      now: String? = "hello", editable: Bool = true) -> SelectionCommand.Delivery {
+                      now: String? = "hello", input: Bool = false, editable: Bool = true) -> SelectionCommand.Delivery {
             SelectionCommand.delivery(canPaste: canPaste, sameWindow: sameWindow, original: "hello", source: source,
-                                      selectionNow: now, editable: editable)
+                                      selectionNow: now, inputSinceRead: input, editable: editable)
         }
         #expect(delivery() == .paste)
         #expect(delivery(now: "hello\r\n") == .paste)
@@ -295,6 +320,14 @@ import Testing
         // Read by copying in the first place: Accessibility's answer now says nothing about it.
         #expect(delivery(source: .copyShortcut, now: "") == .paste)
         #expect(delivery(editable: false) == .clipboard(.notEditable))
+        #expect(delivery(now: "hello\u{00A0}") == .paste)
+        // Read again and the same: a click or key since changed nothing.
+        #expect(delivery(input: true) == .paste)
+        // Not read again (copied, or Accessibility can't tell now): any click or key since may have moved it.
+        #expect(delivery(source: .menuCopy, now: nil) == .paste)
+        #expect(delivery(source: .menuCopy, now: nil, input: true) == .clipboard(.selectionChanged))
+        #expect(delivery(source: .copyShortcut, now: "", input: true) == .clipboard(.selectionChanged))
+        #expect(delivery(now: nil, input: true) == .clipboard(.selectionChanged))
     }
 
     // MARK: Running it

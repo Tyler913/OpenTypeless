@@ -32,9 +32,10 @@ public static class SelectionCommand
     public const int MaxCharacters = 6000;
 
     /// <summary>
-    /// What an edit of a selection saves as its mode in History (see <see cref="TranslationTarget.RecordMode"/>). Its
-    /// instruction is saved as the transcript and its result as the clean-up; the selection itself isn't saved, only its
-    /// length: it can be anything the user had open (a contract, a private message), and History keeps entries for days.
+    /// What an edit of a selection saves as its mode in History (see <see cref="TranslationTarget.RecordMode"/>). Only
+    /// its instruction is saved, as the transcript, and the selection's length: neither the selection nor the rewrite (or the
+    /// answer about it), which can be anything the user had open (a contract, a private message), while History keeps
+    /// entries for days.
     /// </summary>
     public const string RecordMode = "command";
 
@@ -56,16 +57,19 @@ public static class SelectionCommand
         public sealed record Answer(string Text) : Reply;
     }
 
-    /// <summary>The model's output read as a rewrite, or, when it starts with <see cref="AnswerMarker"/>, as an answer.</summary>
-    public static Reply ReplyOf(string output)
+    /// <summary>
+    /// The model's output read as a rewrite, or, when it starts with <see cref="AnswerMarker"/>, as an answer — unless
+    /// <paramref name="selection"/> starts with the marker itself: its rewrite does too.
+    /// </summary>
+    public static Reply ReplyOf(string output, string selection = "")
     {
         var trimmed = output.Trim();
-        if (trimmed.Length < AnswerMarker.Length || trimmed[..AnswerMarker.Length].ToUpperInvariant() != AnswerMarker)
-        {
-            return new Reply.Rewrite(trimmed);
-        }
+        if (!StartsWithMarker(trimmed) || StartsWithMarker(selection.Trim())) return new Reply.Rewrite(trimmed);
         return new Reply.Answer(trimmed[AnswerMarker.Length..].Trim());
     }
+
+    private static bool StartsWithMarker(string text) =>
+        text.Length >= AnswerMarker.Length && text[..AnswerMarker.Length].ToUpperInvariant() == AnswerMarker;
 
     /// <summary>
     /// Whether <paramref name="rewrite"/> is the selection as it was (white space and line endings aside): the model found
@@ -76,12 +80,13 @@ public static class SelectionCommand
     /// <summary>
     /// <paramref name="rewrite"/> with the white space the selection started and ended with (a selection of whole lines
     /// ends in a line break; one of an indented line starts with its indent), which models leave out, so the text around
-    /// it stays as it was.
+    /// it stays as it was; and with the selection's line endings ("\r\n" in a Windows document).
     /// </summary>
     public static string Replacement(string selection, string rewrite)
     {
         var body = rewrite.Trim();
         if (body.Length == 0) return rewrite;
+        if (selection.Contains("\r\n", StringComparison.Ordinal)) body = body.Replace("\r\n", "\n").Replace("\n", "\r\n");
         var leading = 0;
         while (leading < selection.Length && char.IsWhiteSpace(selection[leading])) leading++;
         var trailing = 0;
@@ -111,17 +116,23 @@ public static class SelectionCommand
     }
 
     /// <summary>
-    /// Whether a rewrite can be pasted over the selection: only into the same window, still showing the same selection
-    /// where that can be read again (only when it was read from UI Automation in the first place: copying presses keys,
-    /// and the clipboard and UI Automation may disagree on line breaks), and into something that takes text.
-    /// <paramref name="selectionNow"/>: the selection read again from UI Automation, null when it can't be.
+    /// Whether a rewrite can be pasted over the selection: only into the same window (and tab, by its title), still
+    /// showing the same selection, and into something that takes text. The selection is read again where it was read from
+    /// UI Automation in the first place (copying presses keys, and the clipboard and UI Automation may disagree on line
+    /// breaks); where it isn't, any click or key that reached an app since it was read (<paramref name="inputSinceRead"/>)
+    /// may have moved it, in the same field, and nothing is pasted over it. <paramref name="selectionNow"/>: the selection
+    /// read again from UI Automation, null when it can't be.
     /// </summary>
     public static Delivery DeliveryOf(bool canPaste, bool sameWindow, string original, SelectionSource source,
-                                      string? selectionNow, bool editable)
+                                      string? selectionNow, bool inputSinceRead, bool editable)
     {
         if (!canPaste) return new Delivery.Clipboard(ClipboardReason.Locked);
         if (!sameWindow) return new Delivery.Clipboard(ClipboardReason.MovedAway);
-        if (source == SelectionSource.Accessibility && selectionNow != null && Normalized(selectionNow) != Normalized(original))
+        if (source == SelectionSource.Accessibility && selectionNow != null)
+        {
+            if (Normalized(selectionNow) != Normalized(original)) return new Delivery.Clipboard(ClipboardReason.SelectionChanged);
+        }
+        else if (inputSinceRead)
         {
             return new Delivery.Clipboard(ClipboardReason.SelectionChanged);
         }
@@ -212,7 +223,7 @@ public enum SelectionApp
     Terminal,
     /// <summary>
     /// A code editor whose copy shortcut copies the whole line when nothing is selected (VS Code, Cursor, JetBrains IDEs,
-    /// Sublime Text, Zed): there only a selection UI Automation reports counts, or a line the user never selected would be
+    /// Sublime Text, Zed, Visual Studio, Notepad++, Pulsar): there only a selection UI Automation reports counts, or a line the user never selected would be
     /// rewritten.
     /// </summary>
     LineCopyEditor,
@@ -225,6 +236,7 @@ public static class SelectionApps
     [
         "code", "code - insiders", "codium", "cursor", "windsurf", "zed", "sublime_text", "idea64", "idea", "studio64",
         "pycharm64", "webstorm64", "rider64", "clion64", "goland64", "phpstorm64", "rubymine64", "datagrip64", "fleet",
+        "devenv", "notepad++", "pulsar", "atom", "kate",
     ];
 
     /// <summary>

@@ -92,6 +92,10 @@ public class SelectionCommandTests
         Assert.Equal(new SelectionRead.Refused(new SelectionRefusal.TooLong(max + 1)), (await Read(Text(new string('字', max + 1)))).Read);
         var atCap = new string('a', max);
         Assert.Equal(new SelectionRead.Selection(atCap, SelectionSource.Accessibility), (await Read(Text(atCap))).Read);
+        // Counted in characters as they're seen, the same as on macOS: a thumbs-up with a skin tone is one.
+        var emoji = string.Concat(Enumerable.Repeat("👍🏽", max));
+        Assert.Equal(new SelectionRead.Selection(emoji, SelectionSource.Accessibility), (await Read(Text(emoji))).Read);
+        Assert.Equal(new SelectionRead.Refused(new SelectionRefusal.TooLong(max + 1)), (await Read(Text(emoji + "👍🏽"))).Read);
     }
 
     /// <summary>testdata/command-cases.json, shared with the macOS tests.</summary>
@@ -162,7 +166,7 @@ public class SelectionCommandTests
         Assert.True(cases.Count >= 15);
         foreach (var c in cases)
         {
-            var actual = Prompts.SanitizeCommandOutput((string)c!["output"]!, (string)c["selection"]!);
+            var actual = Prompts.SanitizeCommandOutput((string)c!["output"]!, (string)c["selection"]!, (string?)c["instruction"] ?? "");
             Assert.True((string)c["expect"]! == actual, $"{c["id"]}: got {actual}");
         }
     }
@@ -192,7 +196,7 @@ public class SelectionCommandTests
         {
             var id = (string)c!["id"]!;
             var output = (string)c["output"]!;
-            var (kind, text) = SelectionCommand.ReplyOf(output) switch
+            var (kind, text) = SelectionCommand.ReplyOf(output, (string)c["selection"]!) switch
             {
                 SelectionCommand.Reply.Answer a => ("answer", a.Text),
                 SelectionCommand.Reply.Rewrite r => ("rewrite", r.Text),
@@ -229,7 +233,7 @@ public class SelectionCommandTests
                 || !lines[1].StartsWith("<instruction>", StringComparison.Ordinal)) continue;
             var selection = lines[0][11..^12];
             var output = string.Join("\n", lines.Skip(2));
-            Assert.True(output == Prompts.SanitizeCommandOutput(output, selection), lines[1]);
+            Assert.True(output == Prompts.SanitizeCommandOutput(output, selection, lines[1]), lines[1]);
             Assert.True(Prompts.CommandFallback(output, selection, truncated: false) == null, lines[1]);
             if (SelectionCommand.ReplyOf(output) is SelectionCommand.Reply.Answer) answers++;
             count++;
@@ -245,6 +249,24 @@ public class SelectionCommandTests
         Assert.False(SelectionCommand.IsUnchanged("Hello there.", "Hello there!"));
     }
 
+    /// <summary>
+    /// The command chord is a chord modifier like translation's: while its Ctrl is swallowed, Win + Ctrl + Q mustn't reach
+    /// the app as Win + Q, nor Right Alt + Ctrl + Space as Right Alt + Space.
+    /// </summary>
+    [Fact]
+    public void KeysPressedWithTheCommandChordAreKeptFromTheApp()
+    {
+        var chords = new HashSet<int>(SelectionCommand.ChordKeys(TranslationChord.Control, TranslationChord.Shift, 0xA5));
+        chords.UnionWith(TranslationChord.Shift.KeyCodes(0xA5));
+        foreach (var key in new[] { 0x51, 0x20 }) // Q, Space
+        {
+            Assert.True(HotkeyPress.KeepsFromApp(key, repeat: false, isModifier: false, chords, chordModifierSwallowed: true));
+        }
+        // The chord's own keys (either side) are the chord, not a combination.
+        Assert.False(HotkeyPress.KeepsFromApp(0xA2, repeat: false, isModifier: false, chords, chordModifierSwallowed: true));
+        Assert.False(HotkeyPress.KeepsFromApp(0xA3, repeat: false, isModifier: false, chords, chordModifierSwallowed: true));
+    }
+
     [Fact]
     public void TheReplacementKeepsTheSelectionsEdges()
     {
@@ -253,14 +275,18 @@ public class SelectionCommandTests
         Assert.Equal("Plain.", SelectionCommand.Replacement("plain", "  Plain.  "));
         Assert.Equal("", SelectionCommand.Replacement(" x ", ""));
         Assert.Equal("  Fixed.\r\n", SelectionCommand.Replacement("  fixed\r\n", "Fixed."));
+        // A Windows document's line endings.
+        Assert.Equal("A\r\nB\r\n", SelectionCommand.Replacement("a\r\nb\r\n", "A\nB"));
+        Assert.Equal(" \n x", SelectionCommand.Replacement(" \n ", "x"));
     }
 
     [Fact]
     public void TheResultOnlyGoesOverTheSameSelection()
     {
         SelectionCommand.Delivery Delivery(bool canPaste = true, bool sameWindow = true, SelectionSource source = SelectionSource.Accessibility,
-                                           string? now = "hello", bool editable = true) =>
-            SelectionCommand.DeliveryOf(canPaste, sameWindow, "hello", source, now, editable);
+                                           string? now = "hello", bool input = false, bool editable = true) =>
+            SelectionCommand.DeliveryOf(canPaste, sameWindow, "hello", source, now, input, editable);
+        var changed = new SelectionCommand.Delivery.Clipboard(SelectionCommand.ClipboardReason.SelectionChanged);
         Assert.Equal(new SelectionCommand.Delivery.Paste(), Delivery());
         Assert.Equal(new SelectionCommand.Delivery.Paste(), Delivery(now: "hello\r\n"));
         Assert.Equal(new SelectionCommand.Delivery.Clipboard(SelectionCommand.ClipboardReason.Locked), Delivery(canPaste: false));
@@ -272,6 +298,14 @@ public class SelectionCommandTests
         // Read by copying in the first place: UI Automation's answer now says nothing about it.
         Assert.Equal(new SelectionCommand.Delivery.Paste(), Delivery(source: SelectionSource.CopyShortcut, now: ""));
         Assert.Equal(new SelectionCommand.Delivery.Clipboard(SelectionCommand.ClipboardReason.NotEditable), Delivery(editable: false));
+        Assert.Equal(new SelectionCommand.Delivery.Paste(), Delivery(now: "hello\u00A0"));
+        // Read again and the same: a click or key since changed nothing.
+        Assert.Equal(new SelectionCommand.Delivery.Paste(), Delivery(input: true));
+        // Not read again (copied, or UI Automation can't tell now): any click or key since may have moved it.
+        Assert.Equal(new SelectionCommand.Delivery.Paste(), Delivery(source: SelectionSource.MenuCopy, now: null));
+        Assert.Equal(changed, Delivery(source: SelectionSource.MenuCopy, now: null, input: true));
+        Assert.Equal(changed, Delivery(source: SelectionSource.CopyShortcut, now: "", input: true));
+        Assert.Equal(changed, Delivery(now: null, input: true));
     }
 
     // MARK: The chord

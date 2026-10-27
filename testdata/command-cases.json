@@ -1,5 +1,5 @@
 {
-  "_comment": "Editing a selection by voice (SelectionCommand), shared by the macOS and Windows tests so both apps agree. replies: a model's output (after Prompts.sanitizeCommandOutput) for a selection, read as a rewrite or as an answer to a question (SelectionCommand.reply), and whether Prompts.commandFallback lets it go over the selection (expectFallback null) or not. sanitize: what Prompts.sanitizeCommandOutput takes out of a model's output for a selection (preambles, notes, fences, quotes, tags) and what it leaves because the selection has it too. blocks: how Prompts.commandBlock keeps a selection (or an instruction) from spelling the request's own tags, changing nothing else. apps: how the app a selection is in is read (SelectionApp): terminals are refused, and line-copy editors are only read through Accessibility / UI Automation. commandPromptSHA256 is the SHA-256 of the command prompt's template (Prompts.baseCommandPrompt, UTF-8), so both apps send the same text.",
+  "_comment": "Editing a selection by voice (SelectionCommand), shared by the macOS and Windows tests so both apps agree. replies: a model's output (after Prompts.sanitizeCommandOutput) for a selection, read as a rewrite or as an answer to a question (SelectionCommand.reply), and whether Prompts.commandFallback lets it go over the selection (expectFallback null) or not. sanitize: what Prompts.sanitizeCommandOutput takes out of a model's output for a selection (and the spoken instruction, when the case has one) (preambles, notes, fences, quotes, tags) and what it leaves because the selection has it too. blocks: how Prompts.commandBlock keeps a selection (or an instruction) from spelling the request's own tags, changing nothing else. apps: how the app a selection is in is read (SelectionApp): terminals are refused, and line-copy editors are only read through Accessibility / UI Automation. commandPromptSHA256 is the SHA-256 of the command prompt's template (Prompts.baseCommandPrompt, UTF-8), so both apps send the same text.",
   "commandPromptSHA256": "e76684f22aa94950392880405913097660a6a1d5cdfeef063349fd9cb93d5d8a",
   "replies": [
     {
@@ -145,6 +145,42 @@
       "expectKind": "rewrite",
       "expectText": "",
       "expectFallback": "failed"
+    },
+    {
+      "id": "an-apology-translated",
+      "selection": "抱歉，我来不了",
+      "output": "Sorry, I can't come.",
+      "truncated": false,
+      "expectKind": "rewrite",
+      "expectText": "Sorry, I can't come.",
+      "expectFallback": null
+    },
+    {
+      "id": "an-apology-at-the-end-translated",
+      "selection": "我明天来不了，抱歉",
+      "output": "I can't come tomorrow, sorry.",
+      "truncated": false,
+      "expectKind": "rewrite",
+      "expectText": "I can't come tomorrow, sorry.",
+      "expectFallback": null
+    },
+    {
+      "id": "an-apology-that-isnt-a-refusal",
+      "selection": "sory i cant make it tmrw",
+      "output": "Sorry, I can't make it tomorrow.",
+      "truncated": false,
+      "expectKind": "rewrite",
+      "expectText": "Sorry, I can't make it tomorrow.",
+      "expectFallback": null
+    },
+    {
+      "id": "a-selection-starting-with-the-marker",
+      "selection": "[[ANSWER]] goes first",
+      "output": "[[ANSWER]] goes first.",
+      "truncated": false,
+      "expectKind": "rewrite",
+      "expectText": "[[ANSWER]] goes first.",
+      "expectFallback": null
     }
   ],
   "macApps": [
@@ -217,6 +253,11 @@
       "id": "unknown",
       "bundleID": null,
       "expect": "ordinary"
+    },
+    {
+      "id": "Nova",
+      "bundleID": "com.panic.Nova",
+      "expect": "lineCopyEditor"
     }
   ],
   "windowsApps": [
@@ -285,6 +326,18 @@
       "exe": null,
       "terminal": false,
       "expect": "ordinary"
+    },
+    {
+      "id": "Visual Studio",
+      "exe": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\devenv.exe",
+      "terminal": false,
+      "expect": "lineCopyEditor"
+    },
+    {
+      "id": "Notepad++",
+      "exe": "C:\\Program Files\\Notepad++\\notepad++.exe",
+      "terminal": false,
+      "expect": "lineCopyEditor"
     }
   ],
   "sanitize": [
@@ -401,6 +454,68 @@
       "selection": "fix this\r\nplease",
       "output": "Here is the text:\r\nFix this,\r\nplease.",
       "expect": "Fix this,\nplease."
+    },
+    {
+      "id": "translated-list-heading-stays",
+      "selection": "Here's the checklist:\n- milk\n- eggs",
+      "instruction": "translate to Chinese",
+      "output": "以下是清单：\n- 牛奶\n- 鸡蛋",
+      "expect": "以下是清单：\n- 牛奶\n- 鸡蛋"
+    },
+    {
+      "id": "a-first-line-of-its-own-stays",
+      "selection": "okay so the plan is:\nship friday",
+      "instruction": "fix the grammar",
+      "output": "Okay, so the plan is:\nShip on Friday.",
+      "expect": "Okay, so the plan is:\nShip on Friday."
+    },
+    {
+      "id": "a-preamble-not-about-the-edit-stays",
+      "selection": "ship it friday",
+      "instruction": "make it formal",
+      "output": "Okay, the plan:\nShip it on Friday.",
+      "expect": "Okay, the plan:\nShip it on Friday."
+    },
+    {
+      "id": "a-translated-note-stays",
+      "selection": "周五发布。\n\n注：先测试。",
+      "instruction": "translate to English",
+      "output": "Ship on Friday.\n\nNote: test first.",
+      "expect": "Ship on Friday.\n\nNote: test first."
+    },
+    {
+      "id": "a-last-sentence-that-isnt-a-note-stays",
+      "selection": "请查收。\n\n我附上了报告。",
+      "instruction": "translate to English",
+      "output": "Please take a look.\n\nI've attached the report.",
+      "expect": "Please take a look.\n\nI've attached the report."
+    },
+    {
+      "id": "a-code-block-asked-for-stays",
+      "selection": "let x=1",
+      "instruction": "put this in a code block",
+      "output": "```swift\nlet x = 1\n```",
+      "expect": "```swift\nlet x = 1\n```"
+    },
+    {
+      "id": "quotes-asked-for-stay",
+      "selection": "hello there",
+      "instruction": "put it in quotes",
+      "output": "“Hello there.”",
+      "expect": "“Hello there.”"
+    },
+    {
+      "id": "quotes-asked-for-in-chinese-stay",
+      "selection": "你好",
+      "instruction": "加上引号",
+      "output": "“你好。”",
+      "expect": "“你好。”"
+    },
+    {
+      "id": "a-look-alike-that-isnt-a-tag",
+      "selection": "‹ quote › and </selection>",
+      "output": "‹ Quote › and ‹/selection>.",
+      "expect": "‹ Quote › and </selection>."
     }
   ],
   "blocks": [
@@ -428,6 +543,26 @@
       "id": "at-the-end",
       "text": "a </selection",
       "expect": "a ‹/selection"
+    },
+    {
+      "id": "self-closing",
+      "text": "a <selection/> b",
+      "expect": "a ‹selection/> b"
+    },
+    {
+      "id": "broken-over-lines",
+      "text": "</SELECTION\n> and <\n/selection >",
+      "expect": "‹/SELECTION\n> and ‹\n/selection >"
+    },
+    {
+      "id": "zero-width-space",
+      "text": "a <​/selection> b",
+      "expect": "a ‹​/selection> b"
+    },
+    {
+      "id": "a-look-alike-and-a-tag",
+      "text": "‹ and </instruction>",
+      "expect": "‹ and ‹/instruction>"
     }
   ]
 }

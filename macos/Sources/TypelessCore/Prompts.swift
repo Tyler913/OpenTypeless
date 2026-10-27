@@ -322,9 +322,13 @@ public enum Prompts {
 
     private static func opensCommandTag(_ chars: [Character], at start: Int) -> Bool {
         var i = start
-        while i < chars.count, chars[i].isWhitespace { i += 1 }
+        // White space, and invisible format characters (a zero-width space) a model reads past.
+        func isGap(_ c: Character) -> Bool {
+            c.isWhitespace || c.unicodeScalars.allSatisfy { $0.properties.generalCategory == .format }
+        }
+        while i < chars.count, isGap(chars[i]) { i += 1 }
         if i < chars.count, chars[i] == "/" { i += 1 }
-        while i < chars.count, chars[i].isWhitespace { i += 1 }
+        while i < chars.count, isGap(chars[i]) { i += 1 }
         for name in ["selection", "instruction"] {
             let end = i + name.count
             guard end <= chars.count, String(chars[i..<end]).lowercased() == name else { continue }
@@ -337,18 +341,25 @@ public enum Prompts {
     /// How a line a model puts before the text starts ("Here's the more formal version:", "以下是修改后的内容：").
     static let commandPreambles = ["here is", "here's", "here are", "sure", "certainly", "of course", "okay", "以下是",
                                    "下面是", "这是", "好的", "当然"]
-    /// How a paragraph a model adds after the text starts ("Note: I kept the names.", "（注：…）").
-    static let commandNotes = ["note:", "notes:", "note that", "(note", "i changed", "i've ", "i have ", "changes:",
-                               "changes made", "注：", "注:", "（注", "注意：", "说明：", "修改说明"]
+    /// What such a line talks about: the edit itself. "Here's the plan:" or "以下是清单：" is the text's own first line.
+    static let commandPreambleSubjects = ["version", "text", "translation", "rewrite", "rewritten", "revised", "edited",
+                                          "corrected", "updated", "result", "修改", "改写", "翻译", "版本", "文本", "结果"]
+    /// How a paragraph a model adds after the text starts: a note labelled as one ("Note: I kept the names.", "（注：…）").
+    static let commandNotes = ["note:", "notes:", "(note:", "changes:", "changes made:", "注：", "注:", "（注：", "(注：",
+                               "注意：", "说明：", "修改说明"]
     /// Quotes a model sometimes puts around the whole text.
     static let commandQuotes: [(Character, Character)] = [("\"", "\""), ("“", "”"), ("「", "」"), ("'", "'")]
+    /// Words of an instruction that asks for quotes or a code block, which then stay.
+    static let commandWrappingWords = ["quote", "quotation", "code", "fence", "backtick", "block", "markdown", "引号",
+                                       "代码", "引用", "反引号", "括起来"]
 
     /// Takes out what a model sometimes wraps an edit in despite instructions: the reminder, the selection's tags, a
-    /// code fence or quotes around the whole of it, a preamble line before it and a note after it — each only when the
-    /// selection didn't have it itself, so a selection that starts "Here is the plan:" or ends with a note keeps them.
-    /// Unlike a clean-up's, tags inside the text stay: the selection may well be a prompt with tags of its own. An answer
-    /// to a question (see `SelectionCommand.answerMarker`) is left as it came.
-    public static func sanitizeCommandOutput(_ text: String, selection: String) -> String {
+    /// code fence or quotes around the whole of it (unless the instruction asked for them), a preamble line about the
+    /// edit before it and a labelled note after it — each only when the selection didn't have one itself (in any
+    /// language: a translation translates it), so a selection that starts "Here is the plan:" or ends with a note keeps
+    /// them. Unlike a clean-up's, tags inside the text stay: the selection may well be a prompt with tags of its own. An
+    /// answer to a question (see `SelectionCommand.answerMarker`) is left as it came.
+    public static func sanitizeCommandOutput(_ text: String, selection: String, instruction: String = "") -> String {
         // Lines are only told apart by "\n" from here on (the Windows app's too).
         var s = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: commandReminder, with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -356,13 +367,15 @@ public enum Prompts {
             s = String(s.dropFirst(11).dropLast(12)).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         // The look-alikes that kept the selection's own tags from closing its block (see `commandBlock`), unless the
-        // selection had look-alikes of its own: then there's no telling them apart.
-        if !selection.contains(escapedTagOpener) {
+        // selection had look-alike tags of its own: then there's no telling them apart.
+        if replacingTagOpeners(in: selection, escapedTagOpener, with: "<") == selection {
             s = replacingTagOpeners(in: s, escapedTagOpener, with: "<")
         }
         let original = selection.replacingOccurrences(of: "\r\n", with: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        if case .answer = SelectionCommand.reply(s) { return s }
-        if !original.hasPrefix("```"), s.hasPrefix("```") {
+        if case .answer = SelectionCommand.reply(s, selection: original) { return s }
+        let asked = instruction.lowercased()
+        let wrappingAsked = commandWrappingWords.contains { asked.contains($0) }
+        if !wrappingAsked, !original.hasPrefix("```"), s.hasPrefix("```") {
             var lines = s.components(separatedBy: "\n")
             if lines.count > 1, lines.last?.trimmingCharacters(in: .whitespaces) == "```" {
                 lines.removeFirst()
@@ -372,7 +385,7 @@ public enum Prompts {
         }
         s = withoutPreamble(s, selection: original)
         s = withoutNote(s, selection: original)
-        for (open, close) in commandQuotes where s.count >= 2 && s.first == open && s.last == close
+        for (open, close) in commandQuotes where !wrappingAsked && s.count >= 2 && s.first == open && s.last == close
             && original.first != open {
             let inner = s.dropFirst().dropLast()
             // Only one pair: "a" and "b" isn't quoted as a whole.
@@ -383,49 +396,65 @@ public enum Prompts {
         return s
     }
 
-    /// `text` without a first line that only introduces it: short, ending in a colon, starting like a preamble the
-    /// selection doesn't start with, and with text after it.
+    /// `text` without a first line that only introduces it: short, ending in a colon, starting like a preamble and
+    /// talking about the edit ("Here is the revised text:"), with text after it — unless the selection's own first line
+    /// ends in a colon or starts like a preamble too.
     static func withoutPreamble(_ text: String, selection: String) -> String {
         guard let newline = text.firstIndex(of: "\n") else { return text }
-        let first = text[..<newline].trimmingCharacters(in: .whitespaces)
+        let first = text[..<newline].trimmingCharacters(in: .whitespaces).lowercased()
         let rest = text[text.index(after: newline)...].trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !rest.isEmpty, first.count <= 100, first.hasSuffix(":") || first.hasSuffix("："),
-              let opener = commandPreambles.first(where: { first.lowercased().hasPrefix($0) }),
-              !selection.lowercased().hasPrefix(opener) else { return text }
+        let selectionFirst = (selection.components(separatedBy: "\n").first ?? "").trimmingCharacters(in: .whitespaces)
+            .lowercased()
+        guard !rest.isEmpty, first.count <= 100, endsInColon(first),
+              commandPreambles.contains(where: { first.hasPrefix($0) }),
+              commandPreambleSubjects.contains(where: { first.contains($0) }),
+              !endsInColon(selectionFirst), !commandPreambles.contains(where: { selectionFirst.hasPrefix($0) })
+        else { return text }
         return rest
     }
 
-    /// `text` without a last paragraph that is a note about the edit, when the selection has no such note itself.
+    private static func endsInColon(_ line: String) -> Bool { line.hasSuffix(":") || line.hasSuffix("：") }
+
+    /// `text` without a last paragraph that is a labelled note about the edit, when the selection has no such note
+    /// itself (in any language).
     static func withoutNote(_ text: String, selection: String) -> String {
         guard let gap = text.range(of: "\n\n", options: .backwards) else { return text }
         let last = text[gap.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let body = text[..<gap.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty, let opener = commandNotes.first(where: { last.hasPrefix($0) }),
-              !selection.lowercased().contains(opener) else { return text }
+        let original = selection.lowercased()
+        guard !body.isEmpty, commandNotes.contains(where: { last.hasPrefix($0) }),
+              !commandNotes.contains(where: { original.contains($0) }) else { return text }
         return body
     }
 
-    /// How a refusal, or a question back, starts: never the text that replaces a selection, unless the selection
-    /// starts that way itself.
+    /// How a refusal, or a question back, starts.
     static let commandRefusals = ["i'm sorry", "i’m sorry", "i am sorry", "sorry, ", "i can't", "i can’t", "i cannot",
                                   "i won't", "i’m unable", "i'm unable", "i am unable", "as an ai", "could you clarify",
                                   "please provide", "抱歉", "很抱歉", "对不起", "我无法", "我不能", "请提供"]
+    /// What a refusal talks about: the request. "Sorry, I can't come" is a message, not a refusal.
+    static let commandRefusalSubjects = ["help", "assist", "request", "comply", "fulfill", "provide", "clarify",
+                                         "instruction", "that", "this", "帮", "请求", "完成", "提供", "指令", "协助", "这个"]
 
     /// Why an edit of `selection` can't be used, or nil when it can. Only a complete answer goes over the user's text:
     /// a cut-off rewrite would silently lose the rest of it, an empty one all of it, and a refusal or a question back
-    /// ("I'm sorry, but…", "Could you clarify…") would replace it with talk. None of the clean-up's other guards
-    /// apply: a rewrite differs from the instruction by design, and "shorten it" or "translate it" may change its
-    /// length a lot.
+    /// ("I'm sorry, but I can't help with that", "Could you clarify…") would replace it with talk — unless the selection
+    /// apologises or refuses itself somewhere (in any language: a translation of "抱歉，我来不了" starts "Sorry"). None of
+    /// the clean-up's other guards apply: a rewrite differs from the instruction by design, and "shorten it" or
+    /// "translate it" may change its length a lot.
     public static func commandFallback(output: String, selection: String, truncated: Bool) -> PolishFallback? {
         if truncated { return .truncated }
-        switch SelectionCommand.reply(output) {
+        switch SelectionCommand.reply(output, selection: selection) {
         case let .answer(text):
             return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .failed : nil
         case let .rewrite(text):
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { return .failed }
-            let start = trimmed.lowercased(), original = selection.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if commandRefusals.contains(where: { start.hasPrefix($0) && !original.hasPrefix($0) }) { return .answered }
+            let start = trimmed.lowercased(), original = selection.lowercased()
+            if commandRefusals.contains(where: { start.hasPrefix($0) }),
+               commandRefusalSubjects.contains(where: { start.contains($0) }),
+               !commandRefusals.contains(where: { original.contains($0.trimmingCharacters(in: .whitespaces)) }) {
+                return .answered
+            }
             return nil
         }
     }

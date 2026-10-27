@@ -231,6 +231,7 @@ extension APIClient {
         let messages = (body["messages"] as? [[String: String]] ?? []).compactMap { $0["content"] }
         let reminder = Prompts.reminder(translation: options.translation)
         let selection = options.selection
+        let instruction = transcript
         let session = self.session
         let answering = OnceFlag()
 
@@ -240,7 +241,8 @@ extension APIClient {
                     do {
                         return try await Self.readPolishStream(session: session, request: request, messages: messages,
                                                                reminder: reminder, selection: selection,
-                                                               answering: answering, onPartial: onPartial)
+                                                               instruction: instruction, answering: answering,
+                                                               onPartial: onPartial)
                     } catch let error as URLError where error.code == .timedOut {
                         // No byte for the idle timeout.
                         throw APIError.timeout(seconds: limits.idle)
@@ -260,10 +262,11 @@ extension APIClient {
         }
     }
 
-    /// `selection`: the text an edit works on (its answer is cleaned up as an edit's), nil for a clean-up or translation.
+    /// `selection`: the text an edit works on (its answer is cleaned up as an edit's, by `instruction`), nil for a
+    /// clean-up or translation.
     private static func readPolishStream(
         session: URLSession, request: URLRequest, messages: [String], reminder: String, selection: String?,
-        answering: OnceFlag, onPartial: (@Sendable (String) -> Void)?
+        instruction: String, answering: OnceFlag, onPartial: (@Sendable (String) -> Void)?
     ) async throws -> PolishResult {
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.badResponse("no HTTP response") }
@@ -298,7 +301,7 @@ extension APIClient {
                 }
             }
         }
-        let cleaned = selection.map { Prompts.sanitizeCommandOutput(text, selection: $0) }
+        let cleaned = selection.map { Prompts.sanitizeCommandOutput(text, selection: $0, instruction: instruction) }
             ?? Prompts.sanitizePolishOutput(text, reminder: reminder)
         guard !cleaned.isEmpty else { throw APIError.badResponse(L("模型返回了空内容", "the model returned nothing")) }
         if usage == nil || (usage?.inputTokens == nil && usage?.outputTokens == nil && usage?.cost == nil) {

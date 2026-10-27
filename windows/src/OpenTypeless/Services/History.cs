@@ -254,6 +254,13 @@ public sealed class HistoryStore
         var loaded = new List<DictationRecord>();
         foreach (var folder in Directory.EnumerateDirectories(AppPaths.Sessions))
         {
+            if (!File.Exists(Path.Combine(folder, "session.json")) && !File.Exists(Path.Combine(folder, "audio.wav")))
+            {
+                // What a delete that couldn't finish left behind (a cancelled file's transcoder still had its output open):
+                // no record and no recording, so nothing in it is anyone's.
+                try { Directory.Delete(folder, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+                continue;
+            }
             try
             {
                 var record = JsonSerializer.Deserialize<DictationRecord>(File.ReadAllBytes(Path.Combine(folder, "session.json")), Json);
@@ -271,13 +278,8 @@ public sealed class HistoryStore
             {
                 // Quit while the file was still being read: what was read of it is no use.
                 try { File.Delete(record.PartialAudioPath); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
-                record.Error = L("上次运行中断，文件还没读完，请重新转写这个文件",
-                                 "Interrupted last time while reading the file — transcribe the file again");
             }
-            else
-            {
-                record.Error = L("上次运行中断（音频已保存，可重试）", "Interrupted last time (audio saved — you can retry)");
-            }
+            record.Error = FileTranscription.InterruptedMessage(record.IsFile, record.HasAudio);
             Save(record);
         }
         _records.AddRange(loaded);

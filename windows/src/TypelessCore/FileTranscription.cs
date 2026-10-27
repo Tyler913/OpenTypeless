@@ -62,6 +62,64 @@ public static class FileTranscription
     public static int OutstandingLimit(bool dictating) => dictating ? 0 : MaxOutstandingChunks;
 
     /// <summary>
+    /// Connections a file's requests may open to one host. They have a client of their own
+    /// (<see cref="ApiClient.ForFiles"/>), so a long upload or clean-up of a file never makes a dictation's requests wait
+    /// for a connection.
+    /// </summary>
+    public const int MaxConnectionsPerHost = 3;
+    /// <summary>
+    /// After this many chunks in a row fail (each after its own retries), a file stops: the provider is down or refusing,
+    /// and reading on would only send requests that fail too, and keep their audio for a last round.
+    /// </summary>
+    public const int MaxConsecutiveFailures = 3;
+    /// <summary>How often a file waiting for its chunks (or for a dictation to end) looks again, in milliseconds.</summary>
+    public const int PollMilliseconds = 200;
+
+    /// <summary>
+    /// Whether a file should stop handing out audio: the provider turned a chunk down as it would any request (bad key, no
+    /// credit, no such model), or <see cref="MaxConsecutiveFailures"/> chunks in a row failed. Only a file stops early; a
+    /// dictation has no more audio to hold back, and Finish gives its failed chunks another round.
+    /// </summary>
+    public static bool ShouldGiveUp(ChunkCounts counts) => counts.Refused > 0 || counts.FailureStreak >= MaxConsecutiveFailures;
+
+    /// <summary>
+    /// Hands a recording to <paramref name="pipeline"/> a block at a time from disk, holding back while enough chunks are
+    /// out (or while <paramref name="dictating"/> says a dictation is under way), and stopping with the
+    /// <see cref="PipelineFailure"/> so far once its chunks keep failing (<see cref="ShouldGiveUp"/>); then waits for the
+    /// transcript. Cancelling <paramref name="token"/> cancels the pipeline.
+    /// </summary>
+    public static async Task<string> Feed(WavFileReader reader, TranscriptionPipeline pipeline, Func<bool> dictating,
+                                          CancellationToken token = default)
+    {
+        using var registration = token.Register(pipeline.Cancel);
+        var block = AudioFormat.SampleCount(BlockSeconds);
+        while (reader.Read(block) is { } samples)
+        {
+            while (true)
+            {
+                var counts = pipeline.ChunkCounts();
+                if (ShouldGiveUp(counts)) throw pipeline.GiveUp();
+                if (counts.Outstanding < OutstandingLimit(dictating())) break;
+                await Task.Delay(PollMilliseconds, token).ConfigureAwait(false);
+            }
+            token.ThrowIfCancellationRequested();
+            pipeline.Append(samples);
+        }
+        return await pipeline.Finish().ConfigureAwait(false);
+    }
+
+    /// <summary>Room a file's recording needs on disk: 32 KB a second of 16 kHz 16-bit audio, and 64 MB to spare.</summary>
+    public static long RequiredBytes(double seconds) => (long)(Math.Max(0, seconds) * AudioFormat.SampleRate * 2) + 64L * 1_048_576;
+
+    /// <summary>
+    /// What a record still processing at launch says: the app quit mid-way. A file quit while it was still being read (no
+    /// recording yet) has to be transcribed again from the file; anything else can be retried from its recording.
+    /// </summary>
+    public static string InterruptedMessage(bool isFile, bool hasAudio) => isFile && !hasAudio
+        ? L("上次运行中断，文件还没读完，请重新转写这个文件", "Interrupted last time while reading the file — transcribe the file again")
+        : L("上次运行中断（音频已保存，可重试）", "Interrupted last time (audio saved — you can retry)");
+
+    /// <summary>
     /// What transcribing <paramref name="seconds"/> of audio should cost at <paramref name="price"/>, in USD; null when the
     /// model has no per-minute price (one billed by the token, or no price entered) or the length isn't known. Silence
     /// isn't sent, so it's a ceiling.
@@ -108,8 +166,9 @@ public static class FileTranscription
     {
         for (var e = error; e != null; e = e.InnerException)
         {
-            // ERROR_DISK_FULL and ERROR_HANDLE_DISK_FULL, as HRESULTs.
-            if (e.HResult is unchecked((int)0x80070070) or unchecked((int)0x80070027)) return true;
+            // ERROR_DISK_FULL, ERROR_HANDLE_DISK_FULL and ERROR_DISK_QUOTA_EXCEEDED as HRESULTs, and STG_E_MEDIUMFULL.
+            if (e.HResult is unchecked((int)0x80070070) or unchecked((int)0x80070027) or unchecked((int)0x8007050F)
+                or unchecked((int)0x80030070)) return true;
         }
         return false;
     }
@@ -118,7 +177,8 @@ public static class FileTranscription
 /// <summary>Why a file couldn't be transcribed, as History shows it on the record.</summary>
 public sealed class FileTranscriptionException : Exception
 {
-    public enum Kind { NotFound, PermissionDenied, Unsupported, NoAudioTrack, DiskFull, WriteFailed }
+    /// <summary><c>NoSound</c>: an audio track with nothing in it. <c>Protected</c>: copy-protected (DRM).</summary>
+    public enum Kind { NotFound, PermissionDenied, Unsupported, NoAudioTrack, NoSound, Protected, DiskFull, WriteFailed }
 
     public Kind Reason { get; }
     /// <summary>For <see cref="Kind.Unsupported"/>, what the system said when that says more; for <see cref="Kind.WriteFailed"/>, why.</summary>
@@ -138,6 +198,8 @@ public sealed class FileTranscriptionException : Exception
                                                         $"Can't read this file: it's damaged or in a format that isn't supported ({detail})"),
         Kind.Unsupported => L("无法读取这个文件：已损坏，或是不支持的格式", "Can't read this file: it's damaged or in a format that isn't supported"),
         Kind.NoAudioTrack => L("这个文件里没有音轨", "This file has no audio track"),
+        Kind.NoSound => L("这个文件的音轨是空的", "This file's audio track is empty"),
+        Kind.Protected => L("这个文件有版权保护（DRM），无法读取", "This file is copy-protected (DRM), so it can't be read"),
         Kind.DiskFull => L("磁盘空间不足，无法保存音频", "Not enough disk space to save the audio"),
         _ => L("无法保存音频：", "Can't save the audio: ") + Detail,
     };

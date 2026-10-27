@@ -183,6 +183,13 @@ public sealed class FileTranscriber
             Report(id, new FileTranscription.Progress.Reading(null));
             try
             {
+                // Off the UI thread: opening a file can take a while (a network drive, a large video).
+                var seconds = await Task.Run(() => AudioLoader.Duration(file), token);
+                // Refused at once when the recording can't fit, rather than after filling the disk.
+                if (FreeBytes(record.Folder) is { } free && free < FileTranscription.RequiredBytes(seconds))
+                {
+                    throw new FileTranscriptionException(FileTranscriptionException.Kind.DiskFull);
+                }
                 // The transcoder says how far it has got whether or not the length is known.
                 var progress = new Throttled(fraction => _dispatcher.TryEnqueue(() => Report(id, new FileTranscription.Progress.Reading(fraction))));
                 var (samples, chunks) = await Read(file, record.AudioPath, record.PartialAudioPath, progress, token);
@@ -234,7 +241,7 @@ public sealed class FileTranscriber
         var pipeline = _controller.MakePipeline(endpoint, preset, forFile: true);
         _pipeline = pipeline;
         var started = Stopwatch.StartNew();
-        Report(id, new FileTranscription.Progress.Transcribing(Math.Min(preset.Count, total), total));
+        Report(id, new FileTranscription.Progress.Transcribing(Math.Min(pipeline.ChunkCounts().Answered, total), total));
         // Moves the progress on as chunks come back, and saves the transcripts so far now and then.
         var watch = new CancellationTokenSource();
         _ = Watch();
@@ -243,7 +250,11 @@ public sealed class FileTranscriber
         try
         {
             var audio = record.AudioPath;
-            raw = await Task.Run(() => Feed(audio, pipeline, () => _dictating, token));
+            raw = await Task.Run(async () =>
+            {
+                using var reader = new WavFileReader(audio);
+                return await FileTranscription.Feed(reader, pipeline, () => _dictating, token).ConfigureAwait(false);
+            });
         }
         catch (Exception error)
         {
@@ -290,7 +301,7 @@ public sealed class FileTranscriber
             Store(record);
             try
             {
-                var outcome = await _controller.Polish(raw, null, token, FileTranscription.CleanUpConcurrency);
+                var outcome = await _controller.Polish(raw, null, token, forFile: true, holdWhile: () => _dictating);
                 polished = outcome;
                 timing.PolishFirstToken = outcome.FirstTokenSeconds;
                 timing.Polish = outcome.TotalSeconds;
@@ -329,7 +340,7 @@ public sealed class FileTranscriber
             while (!watch.IsCancellationRequested)
             {
                 try { await Task.Delay(250, watch.Token); } catch (OperationCanceledException) { return; }
-                Report(id, new FileTranscription.Progress.Transcribing(Math.Min(pipeline.ChunkCounts().Finished, total), total));
+                Report(id, new FileTranscription.Progress.Transcribing(Math.Min(pipeline.ChunkCounts().Answered, total), total));
                 if (saved.Elapsed.TotalSeconds < FileTranscription.SaveInterval) continue;
                 saved.Restart();
                 if (_history.Records.FirstOrDefault(r => r.Id == id)?.Copy() is { Status: DictationStatus.Processing } current)
@@ -355,7 +366,7 @@ public sealed class FileTranscriber
         try { File.Delete(partial); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         try
         {
-            await AudioLoader.Transcode(file, partial, progress, token);
+            await Task.Run(() => AudioLoader.Transcode(file, partial, progress, token), CancellationToken.None);
             (int Samples, int Chunks) counted;
             try
             {
@@ -365,7 +376,7 @@ public sealed class FileTranscriber
             {
                 throw new FileTranscriptionException(FileTranscriptionException.Kind.Unsupported);
             }
-            if (counted.Samples == 0) throw new FileTranscriptionException(FileTranscriptionException.Kind.NoAudioTrack);
+            if (counted.Samples == 0) throw new FileTranscriptionException(FileTranscriptionException.Kind.NoSound);
             try
             {
                 File.Move(partial, destination, overwrite: true);
@@ -378,8 +389,41 @@ public sealed class FileTranscriber
         }
         catch
         {
-            try { File.Delete(partial); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            await DeleteWhenFree(partial);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Deletes a recording being written, waiting (up to two seconds) while it's still open: a cancelled transcode lets go
+    /// of its output a moment after it stops, and deleting the record's folder before then would leave the folder behind.
+    /// </summary>
+    private static async Task DeleteWhenFree(string path)
+    {
+        for (var attempt = 0; attempt < 10 && File.Exists(path); attempt++)
+        {
+            try
+            {
+                File.Delete(path);
+                return;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                await Task.Delay(200);
+            }
+        }
+    }
+
+    /// <summary>Space left on the drive holding <paramref name="folder"/>; null when Windows doesn't say (a network share).</summary>
+    private static long? FreeBytes(string folder)
+    {
+        try
+        {
+            return Path.GetPathRoot(Path.GetFullPath(folder)) is { Length: > 0 } root ? new DriveInfo(root).AvailableFreeSpace : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
         }
     }
 
@@ -395,27 +439,6 @@ public sealed class FileTranscriber
             chunks += chunker.Append(block).Count;
         }
         return (reader.SampleCount, chunks + (chunker.Finish() == null ? 0 : 1));
-    }
-
-    /// <summary>
-    /// Hands the recording to the pipeline a block at a time, holding back while enough chunks are out (or a dictation is
-    /// under way), then waits for the transcript.
-    /// </summary>
-    private static async Task<string> Feed(string audio, TranscriptionPipeline pipeline, Func<bool> dictating, CancellationToken token)
-    {
-        using var registration = token.Register(pipeline.Cancel);
-        using var reader = new WavFileReader(audio);
-        var block = AudioFormat.SampleCount(FileTranscription.BlockSeconds);
-        while (reader.Read(block) is { } samples)
-        {
-            while (pipeline.ChunkCounts().Outstanding >= FileTranscription.OutstandingLimit(dictating()))
-            {
-                await Task.Delay(200, token).ConfigureAwait(false);
-            }
-            token.ThrowIfCancellationRequested();
-            pipeline.Append(samples);
-        }
-        return await pipeline.Finish().ConfigureAwait(false);
     }
 
     /// <summary>Passes progress on once it has moved by a percent, so the page isn't redrawn for every block.</summary>

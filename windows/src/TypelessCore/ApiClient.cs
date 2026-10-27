@@ -33,6 +33,23 @@ public sealed partial class ApiClient
         Timeout = System.Threading.Timeout.InfiniteTimeSpan,
     };
 
+    /// <summary>
+    /// A client for a file being transcribed, with connections of its own, fewer per host (see
+    /// <see cref="FileTranscription.MaxConnectionsPerHost"/>): a dictation's requests never wait behind a file's.
+    /// </summary>
+    public static ApiClient ForFiles(ProviderEndpoint endpoint) => new(endpoint, FileHttp);
+
+    internal static readonly HttpClient FileHttp = new(new SocketsHttpHandler
+    {
+        MaxConnectionsPerServer = FileTranscription.MaxConnectionsPerHost,
+        PooledConnectionIdleTimeout = TimeSpan.FromSeconds(60),
+        ConnectTimeout = TimeSpan.FromSeconds(30),
+        AutomaticDecompression = DecompressionMethods.All,
+    })
+    {
+        Timeout = System.Threading.Timeout.InfiniteTimeSpan,
+    };
+
     internal static readonly JsonSerializerOptions BodyJson = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     internal bool IsOpenRouter => Endpoint.Id == ProviderId.OpenRouter;

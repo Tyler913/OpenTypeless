@@ -65,6 +65,8 @@ public sealed class HistoryPage : PageBase
     private string? _selection;
     /// <summary>What the detail was built from, so it's only rebuilt when that changes.</summary>
     private (DictationRecord? Record, bool HasAudio, bool Idle, FileTranscription.Progress? Progress)? _shownDetail;
+    /// <summary>The detail's progress line and bar while its file is under way, moved on in place as the file gets further.</summary>
+    private (TextBlock Label, ProgressBar Bar)? _detailProgress;
 
     public HistoryPage(SessionController controller, nint owner) : base(SettingsPage.History, scrolls: false)
     {
@@ -258,6 +260,7 @@ public sealed class HistoryPage : PageBase
     private void ShowEmpty()
     {
         _shownDetail = null;
+        _detailProgress = null;
         _detailHost.Content = null;
         _syncing = true;
         _entries = [];
@@ -306,7 +309,18 @@ public sealed class HistoryPage : PageBase
             (record, record?.HasAudio ?? false, _controller.State == SessionController.SessionState.Idle,
              record == null ? null : _files.Progress(record.Id));
         if (_shownDetail == shown) return;
+        // Only the file's progress moved: the line and bar are updated, not the whole detail rebuilt (no flicker).
+        if (_shownDetail is { } before && ReferenceEquals(before.Record, shown.Record) && before.HasAudio == shown.HasAudio
+            && before.Idle == shown.Idle && before.Progress != null && shown.Progress is { } moved && _detailProgress is { } line)
+        {
+            _shownDetail = shown;
+            line.Label.Text = moved.Label;
+            line.Bar.IsIndeterminate = moved.Fraction == null;
+            line.Bar.Value = moved.Fraction ?? 0;
+            return;
+        }
         _shownDetail = shown;
+        _detailProgress = null;
         _detailHost.Content = record == null ? Card.Make() : Detail(record);
     }
 
@@ -521,11 +535,10 @@ public sealed class HistoryPage : PageBase
         if (record.Error is { } error) body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, error));
         if (_files.Progress(record.Id) is { } progress)
         {
-            body.Children.Add(new StackPanel
-            {
-                Spacing = 8, Margin = new Thickness(0, 40, 0, 40),
-                Children = { Ui.Text(progress.Label, 13, foreground: Ui.Secondary), FileProgressBar(progress) },
-            });
+            var label = Ui.Text(progress.Label, 13, foreground: Ui.Secondary);
+            var bar = FileProgressBar(progress);
+            _detailProgress = (label, bar);
+            body.Children.Add(new StackPanel { Spacing = 8, Margin = new Thickness(0, 40, 0, 40), Children = { label, bar } });
         }
         else if (record.FinalText.Length == 0 && record.Status is DictationStatus.Recording or DictationStatus.Processing)
         {
@@ -833,7 +846,8 @@ public sealed class HistoryPage : PageBase
                 {
                     try
                     {
-                        var length = await AudioLoader.Duration(path);
+                        // Off the UI thread: opening a file can take a while (a network drive, a large video).
+                        var length = await Task.Run(() => AudioLoader.Duration(path));
                         seconds += length;
                         durations[path].Text = length > 0 ? Formatting.DurationLabel(length) : "";
                     }

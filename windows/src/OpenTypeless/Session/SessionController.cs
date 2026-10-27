@@ -95,6 +95,9 @@ public sealed class SessionController
     /// <summary>Audio and video files being transcribed into History, alongside (never instead of) dictating.</summary>
     public FileTranscriber Files => _files ??= new FileTranscriber(this);
 
+    /// <summary>Quitting: a file being transcribed keeps what it has (see <see cref="FileTranscriber.StopForQuit"/>), if one ever started.</summary>
+    public void StopFilesForQuit() => _files?.StopForQuit();
+
     public SessionController()
     {
         _editWatcher.OnCorrections = (corrections, quiet) =>
@@ -440,20 +443,20 @@ public sealed class SessionController
     private readonly Dictionary<string, TranscriptionLatency> _latencies = new();
 
     /// <param name="forFile">
-    /// For a file being transcribed (see <see cref="FileTranscriber"/>), which sends fewer requests at once, has no
-    /// speculative tail, and keeps its own idea of how long requests take (its chunks are mostly long).
+    /// For a file being transcribed (see <see cref="FileTranscriber"/>), which sends fewer requests at once on a client of
+    /// its own, has no speculative tail, and keeps its own idea of how long requests take (its chunks are mostly long).
     /// </param>
     internal TranscriptionPipeline MakePipeline(ProviderEndpoint endpoint, IReadOnlyDictionary<int, string> preset,
                                                 Action<string?>? onSpeculation = null, bool forFile = false)
     {
         var language = _settings.SttLanguage.Length == 0 ? null : _settings.SttLanguage;
         var backup = _settings.SttBackupEndpoint is { } backupEndpoint
-            ? new TranscriptionRoute(new ApiClient(backupEndpoint), new TranscriptionOptions(_settings.SttBackupModel.Trim(), language, _settings.VocabularyList))
+            ? new TranscriptionRoute(Client(backupEndpoint, forFile), new TranscriptionOptions(_settings.SttBackupModel.Trim(), language, _settings.VocabularyList))
             : null;
         var key = ModelPrice.Key(_settings.SttProvider, _settings.SttModel);
         var latency = forFile ? new TranscriptionLatency() : _latencies.GetValueOrDefault(key) ?? new TranscriptionLatency();
         if (!forFile) _latencies[key] = latency;
-        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, language, _settings.VocabularyList), preset: preset,
+        return new TranscriptionPipeline(Client(endpoint, forFile), new TranscriptionOptions(_settings.SttModel, language, _settings.VocabularyList), preset: preset,
                                          backup: backup, latency: latency, speculate: !forFile, onSpeculation: onSpeculation,
                                          maxConcurrentRequests: forFile ? FileTranscription.MaxConcurrentRequests : 3);
     }
@@ -871,22 +874,31 @@ public sealed class SessionController
         }
     }
 
-    /// <param name="concurrency">How many parts of a long transcript are out at once (null: all, as a dictation wants them).</param>
-    internal async Task<SegmentedPolishResult> Polish(string raw, Action<string>? onPartial, CancellationToken token, int? concurrency = null)
+    /// <param name="forFile">
+    /// The clean-up of a file being transcribed (see <see cref="FileTranscriber"/>), which sends a few parts at a time, on
+    /// the file client, each part waiting to start while <paramref name="holdWhile"/> says so (a dictation is under way). A
+    /// dictation's own clean-up sends all of its parts at once.
+    /// </param>
+    internal async Task<SegmentedPolishResult> Polish(string raw, Action<string>? onPartial, CancellationToken token, bool forFile = false,
+                                                      Func<bool>? holdWhile = null)
     {
         if (_settings.PolishEndpoint is not { } endpoint || !_settings.IsConfigured(_settings.PolishProvider))
         {
             throw ApiException.MissingApiKey(_settings.PolishProvider.DisplayName());
         }
-        var primary = Route(endpoint, _settings.PolishModel);
-        var backup = _settings.PolishBackupEndpoint is { } backupEndpoint ? Route(backupEndpoint, _settings.PolishBackupModel) : null;
-        return await SegmentedPolish.Run(raw, primary, backup, onPartial, token, concurrency);
+        var primary = Route(endpoint, _settings.PolishModel, forFile);
+        var backup = _settings.PolishBackupEndpoint is { } backupEndpoint ? Route(backupEndpoint, _settings.PolishBackupModel, forFile) : null;
+        return await SegmentedPolish.Run(raw, primary, backup, onPartial, token,
+                                         forFile ? FileTranscription.CleanUpConcurrency : null, holdWhile);
     }
 
-    private PolishRoute Route(ProviderEndpoint endpoint, string model)
+    /// <summary>A file's requests go on connections of their own, so a dictation's never wait behind them.</summary>
+    private static ApiClient Client(ProviderEndpoint endpoint, bool forFile) => forFile ? ApiClient.ForFiles(endpoint) : new ApiClient(endpoint);
+
+    private PolishRoute Route(ProviderEndpoint endpoint, string model, bool forFile = false)
     {
         model = model.Trim();
-        return new PolishRoute(new ApiClient(endpoint), new PolishOptions(
+        return new PolishRoute(Client(endpoint, forFile), new PolishOptions(
             model,
             _settings.VocabularyList,
             _settings.ExtraInstructions,

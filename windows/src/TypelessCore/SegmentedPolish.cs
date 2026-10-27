@@ -126,14 +126,17 @@ public static class SegmentedPolish
     /// How many parts are out at once (null: all of them, which is what a dictation wants; the transcript of an hour-long
     /// file has dozens).
     /// </param>
+    /// <param name="holdWhile">
+    /// With a cap, a part waits to start while this says so (a file's clean-up, while a dictation is under way).
+    /// </param>
     public static Task<SegmentedPolishResult> Run(string transcript, PolishRoute primary, PolishRoute? backup,
                                                   Action<string>? onPartial = null, CancellationToken cancellationToken = default,
-                                                  int? concurrency = null)
+                                                  int? concurrency = null, Func<bool>? holdWhile = null)
     {
         var policy = new RetryPolicy(MaxAttempts: 2, RetriesTimeouts: false);
         return Run(transcript, (part, partial, token) => policy.Run(
                        (_, ct) => HedgedPolish.Run(part, primary, backup, cancellationToken: ct, onPartial: partial), cancellationToken: token),
-                   onPartial, cancellationToken, concurrency);
+                   onPartial, cancellationToken, concurrency, holdWhile);
     }
 
     /// <summary>
@@ -145,7 +148,7 @@ public static class SegmentedPolish
     public static async Task<SegmentedPolishResult> Run(string transcript,
                                                         Func<string, Action<string>?, CancellationToken, Task<HedgedPolishResult>> polish,
                                                         Action<string>? onPartial = null, CancellationToken cancellationToken = default,
-                                                        int? concurrency = null)
+                                                        int? concurrency = null, Func<bool>? holdWhile = null)
     {
         var texts = Parts(transcript);
         var clock = Stopwatch.StartNew();
@@ -190,6 +193,10 @@ public static class SegmentedPolish
             }
             try
             {
+                if (gate != null && holdWhile != null)
+                {
+                    while (holdWhile()) await Task.Delay(200, cancellationToken).ConfigureAwait(false);
+                }
                 return (await polish(text, partial => progress.Update(index, partial), cancellationToken).ConfigureAwait(false), null);
             }
             catch (Exception error)

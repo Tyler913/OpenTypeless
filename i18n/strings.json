@@ -3625,5 +3625,23 @@
     "ru": "Не удаётся сохранить аудио: ",
     "fr": "Impossible d’enregistrer l’audio : ",
     "de": "Das Audio kann nicht gespeichert werden: "
+  },
+  "This file's audio track is empty": {
+    "ja": "このファイルの音声トラックは空です",
+    "ko": "이 파일의 오디오 트랙이 비어 있습니다",
+    "es": "La pista de audio de este archivo está vacía",
+    "pt": "A faixa de áudio deste arquivo está vazia",
+    "ru": "Звуковая дорожка этого файла пуста",
+    "fr": "La piste audio de ce fichier est vide",
+    "de": "Die Tonspur dieser Datei ist leer"
+  },
+  "This file is copy-protected (DRM), so it can't be read": {
+    "ja": "このファイルはコピー保護（DRM）されているため読み込めません",
+    "ko": "이 파일은 복제 방지(DRM)되어 있어 읽을 수 없습니다",
+    "es": "Este archivo tiene protección anticopia (DRM), así que no se puede leer",
+    "pt": "Este arquivo tem proteção contra cópia (DRM), então não pode ser lido",
+    "ru": "Этот файл защищён от копирования (DRM), поэтому его нельзя прочитать",
+    "fr": "Ce fichier est protégé contre la copie (DRM), il ne peut donc pas être lu",
+    "de": "Diese Datei ist kopiergeschützt (DRM) und kann daher nicht gelesen werden"
   }
 }

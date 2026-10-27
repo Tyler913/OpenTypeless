@@ -57,6 +57,12 @@ public sealed class ApiException : Exception, IEquatable<ApiException>
 
     public bool IsCancelled => Kind == ApiErrorKind.Cancelled;
 
+    /// <summary>
+    /// The provider turns every request down this way (no key or a bad one, no credit, no such model or endpoint), not
+    /// just this one: a file being transcribed stops at the first such failure rather than sending the rest.
+    /// </summary>
+    public bool RefusesEveryRequest => Kind == ApiErrorKind.MissingApiKey || (Kind == ApiErrorKind.Http && Status is 401 or 402 or 403 or 404);
+
     public bool IsTimeout => Kind == ApiErrorKind.Timeout;
 
     public static ApiException From(Exception error)

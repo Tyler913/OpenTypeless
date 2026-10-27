@@ -74,6 +74,8 @@ public class PolishGuardTests
     {
         var examples = Examples(Prompts.BasePolishPrompt);
         Assert.True(examples.Count >= 10);
+        // The one with dictated line breaks, read whole.
+        Assert.Contains(examples, example => example.Input.Contains("\n\n") && example.Output.Contains("\n\n"));
         foreach (var (input, output) in examples) Assert.True(Prompts.Fallback(input, output, truncated: false) == null, input);
     }
 
@@ -108,13 +110,20 @@ public class PolishGuardTests
             if (input != null) pairs.Add((input, string.Join("\n", output).Trim()));
             output.Clear();
         }
+        // A transcript laid out over several lines (dictated line breaks), up to the line that closes it.
+        List<string>? opened = null;
         foreach (var raw in lines)
         {
             var line = raw.TrimEnd('\r');
-            if (line.StartsWith("<transcript>", StringComparison.Ordinal) && line.EndsWith("</transcript>", StringComparison.Ordinal))
+            if (opened == null && line.StartsWith("<transcript>", StringComparison.Ordinal)) opened = [];
+            if (opened != null)
             {
+                opened.Add(line);
+                if (!line.EndsWith("</transcript>", StringComparison.Ordinal)) continue;
                 Flush();
-                input = line["<transcript>".Length..^"</transcript>".Length];
+                var text = string.Join("\n", opened);
+                input = text["<transcript>".Length..^"</transcript>".Length];
+                opened = null;
             }
             else if (input != null)
             {

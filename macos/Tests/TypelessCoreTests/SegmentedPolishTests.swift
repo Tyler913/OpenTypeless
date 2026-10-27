@@ -31,6 +31,8 @@ import Testing
     @Test func promptExamplesPass() {
         let examples = Self.examples(in: Prompts.basePolishPrompt)
         #expect(examples.count >= 10)
+        // The one with dictated line breaks, read whole.
+        #expect(examples.contains { $0.0.contains("\n\n") && $0.1.contains("\n\n") })
         for (input, output) in examples {
             #expect(Prompts.fallback(input: input, output: output, truncated: false) == nil, "\(input)")
         }
@@ -62,10 +64,18 @@ import Testing
             if let input { pairs.append((input, output.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines))) }
             output = []
         }
+        // A transcript laid out over several lines (dictated line breaks), up to the line that closes it.
+        var opened: [String]?
         for line in lines {
-            if line.hasPrefix("<transcript>"), line.hasSuffix("</transcript>") {
+            if opened == nil, line.hasPrefix("<transcript>") { opened = [] }
+            if var transcript = opened {
+                transcript.append(line)
+                opened = transcript
+                guard line.hasSuffix("</transcript>") else { continue }
                 flush()
-                input = String(line.dropFirst("<transcript>".count).dropLast("</transcript>".count))
+                let text = transcript.joined(separator: "\n")
+                input = String(text.dropFirst("<transcript>".count).dropLast("</transcript>".count))
+                opened = nil
             } else if input != nil {
                 output.append(line)
             }

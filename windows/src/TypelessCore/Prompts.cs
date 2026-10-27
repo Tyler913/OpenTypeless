@@ -71,6 +71,7 @@ public static class Prompts
 
         ## Layout
         - Default: plain sentences in the speaker's order; a new paragraph only where the topic clearly changes.
+        - Line breaks already in the transcript were put there by the speaker: keep each one where it is, a blank line as a blank line, and never join the lines they separate.
         - A numbered list ("1. ") only when the speaker explicitly enumerates three or more parallel items (第一/第二/第三、首先…然后…最后、一个是…一个是…还有一个、"a few things: …"). Keep their lead-in sentence before the list. Never turn a narrative or a single request into steps.
         - Chinese text uses full-width punctuation. Put a space between Chinese and English words or numbers ("用 SwiftUI 写 3 个页面").
         - Plain text only: no headings, bold, tables, code fences, quotes around the output, preamble ("以下是…", "Here is…"), or closing remarks.
@@ -98,6 +99,15 @@ public static class Prompts
         2. 按钮颜色改成绿色。
 
         另外，这个 app 现在打包出来有 200 兆，别的同类才 20 兆，能不能想办法压一下？
+
+        <transcript>hi Anna,
+        thanks for the quick review, um, I'll look at the comments tonight.
+
+        so the bug, uh, the bug was in the parser</transcript>
+        Hi Anna,
+        Thanks for the quick review, I'll look at the comments tonight.
+
+        So the bug was in the parser.
 
         <transcript>我现在用的是 claude opus 五点五，然后呃之前用的是 GPT 六，感觉 opus 写 swift 更好</transcript>
         我现在用的是 Claude Opus 5.5，之前用的是 GPT-6，感觉 Opus 写 Swift 更好。

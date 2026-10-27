@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using OpenTypeless.Native;
 using TypelessCore;
 
@@ -24,12 +23,14 @@ internal static class SelectedText
     private const int MaxReadLength = 120_000;
 
     /// <summary>
-    /// Where a selection was read: the foreground window, its process, and the element with keyboard focus (null where UI
-    /// Automation doesn't say). The edit goes back only while they're still the same (see <see cref="IsInFront"/>).
+    /// Where a selection was read: the foreground window, its title (a browser's tab), its process, and the element with
+    /// keyboard focus (null where UI Automation doesn't say). The edit goes back only while they're still the same (see
+    /// <see cref="IsInFront"/>).
     /// </summary>
-    internal sealed class Place(nint window, uint processId, UIAutomation.IUIAutomationElement? element)
+    internal sealed class Place(nint window, string title, uint processId, UIAutomation.IUIAutomationElement? element)
     {
         public nint Window { get; } = window;
+        public string Title { get; } = title;
         public uint ProcessId { get; } = processId;
         public UIAutomation.IUIAutomationElement? Element { get; } = element;
 
@@ -40,17 +41,18 @@ internal static class SelectedText
             if (window == 0) return null;
             Win32.GetWindowThreadProcessId(window, out var pid);
             if (pid == (uint)Environment.ProcessId) return null;
+            var title = Win32.WindowTitle(window);
             var element = await Off<UIAutomation.IUIAutomationElement?>(UIAutomation.FocusedElement, null);
-            return new Place(window, pid, element);
+            return new Place(window, title, pid, element);
         }
 
         /// <summary>
-        /// Whether the same window is still in front, with the same element focused (where that was known then and can be
-        /// told now; when UI Automation doesn't answer in time, it isn't).
+        /// Whether the same window is still in front, with the same title, and the same element focused (where that was
+        /// known then and can be told now; when UI Automation doesn't answer in time, it isn't).
         /// </summary>
         public async Task<bool> IsInFront()
         {
-            if (Win32.GetForegroundWindow() != Window) return false;
+            if (Win32.GetForegroundWindow() != Window || Win32.WindowTitle(Window) != Title) return false;
             if (Element is not { } element) return true;
             if (await Off<UIAutomation.IUIAutomationElement?>(UIAutomation.FocusedElement, null) is not { } now) return true;
             return await Off(() => UIAutomation.SameElement(element, now), false) && Win32.GetForegroundWindow() == Window;
@@ -111,8 +113,9 @@ internal static class SelectedText
             {
                 return read();
             }
-            catch (Exception e) when (e is COMException or InvalidCastException)
+            catch (Exception)
             {
+                // A COM error, an element gone, an app that crashed: all the same here.
                 return unanswered;
             }
         });

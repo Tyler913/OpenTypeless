@@ -65,9 +65,9 @@ public sealed class DictationRecord
     }
 
     /// <summary>
-    /// How many characters the selection an edit worked on had. The selection itself isn't kept: it can be anything the
-    /// user had open (a contract, a private message), and History keeps entries for days. Its instruction is kept as the
-    /// transcript, and the rewrite (or the answer to a question about it) as the clean-up.
+    /// How many characters the selection an edit worked on had. Neither the selection nor the rewrite (or the answer to
+    /// a question about it) is kept: they can be anything the user had open (a contract, a private message), and History
+    /// keeps entries for days. Only its instruction is, as the transcript.
     /// </summary>
     [JsonPropertyName("selectionLength")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? SelectionLength { get; set; }
 

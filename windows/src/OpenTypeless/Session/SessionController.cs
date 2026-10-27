@@ -125,10 +125,11 @@ public sealed class SessionController
     /// <summary>What the running recording is for; plain dictation at every start.</summary>
     public RecordingMode Mode { get; private set; } = RecordingMode.Dictation;
     /// <summary>
-    /// Command mode: the selection being read (or read) when the chord was pressed, and where (see
-    /// <see cref="ReadSelection"/>). Dropped with the recording, or when another chord switches it to another mode.
+    /// Command mode: the selection being read (or read) when the chord was pressed, where, and how many clicks and keys
+    /// had reached apps by then (see <see cref="ReadSelection"/>). Dropped with the recording, or when another chord
+    /// switches it to another mode.
     /// </summary>
-    private Task<(SelectedText.Place? Place, SelectionRead Read)>? _selection;
+    private Task<(SelectedText.Place? Place, SelectionRead Read, long Mark)>? _selection;
     private CancellationTokenSource? _selectionCancel;
     /// <summary>
     /// The "Paste last dictation" waiting for its keys to be let go, or pasting, by its number. A new dictation, Esc or the
@@ -334,18 +335,21 @@ public sealed class SessionController
         var hotkey = _settings.Hotkey;
         var chordKeys = ModeChords.Keys.ToList();
         var timeout = TimeSpan.FromMinutes(Math.Max(1, _settings.MaxRecordingMinutes)) + TimeSpan.FromSeconds(10);
+        // Clicks count from now on too, until the edit is done (see DeliverEdit).
+        HotkeyMonitor.Shared.CountInput(true);
         var reading = Run();
         // Unless it was refused straight away (this app in front), which has already ended the recording.
         if (_selectionCancel == cancel) _selection = reading;
 
-        async Task<(SelectedText.Place? Place, SelectionRead Read)> Run()
+        async Task<(SelectedText.Place? Place, SelectionRead Read, long Mark)> Run()
         {
             var place = await SelectedText.Place.Front();
             SelectionRead read = place == null
                 ? new SelectionRead.Refused(new SelectionRefusal.NoSelection())
                 : await SelectedText.Read(place, hotkey, chordKeys, timeout, cancel.Token);
+            var mark = HotkeyMonitor.Shared.InputCount;
             if (read is SelectionRead.Refused refused) SelectionRefused(refused.Reason, generation);
-            return (place, read);
+            return (place, read, mark);
         }
     }
 
@@ -363,6 +367,7 @@ public sealed class SessionController
         _selectionCancel?.Cancel();
         _selectionCancel = null;
         _selection = null;
+        HotkeyMonitor.Shared.CountInput(false);
     }
 
     /// <summary>
@@ -995,8 +1000,9 @@ public sealed class SessionController
         var begun = Stopwatch.StartNew();
         SelectedText.Place? place = null;
         SelectionRead read = new SelectionRead.Refused(new SelectionRefusal.NoSelection());
+        long mark = 0;
         // Read by Ctrl+C, the selection is only being read now that the keys are up.
-        if (_selection is { } selection) (place, read) = await selection;
+        if (_selection is { } selection) (place, read, mark) = await selection;
         // Esc (or a new dictation) meanwhile: Cancel has dealt with this one.
         if (!IsCurrent(generation, token)) return;
         if (read is not SelectionRead.Selection selected || place == null)
@@ -1047,16 +1053,15 @@ public sealed class SessionController
             else
             {
                 record.Status = DictationStatus.Done;
-                switch (SelectionCommand.ReplyOf(polished.Text))
+                // Neither is kept in History: both come from the selection (see SelectionCommand.RecordMode).
+                switch (SelectionCommand.ReplyOf(polished.Text, original))
                 {
                     case SelectionCommand.Reply.Answer answer:
-                        record.PolishedText = answer.Text;
                         TextInserter.CopyToClipboard(answer.Text);
                         if (record.Timing != null) record.Timing.Delivery = "answered";
                         Finish(new HudPhase.Answer(answer.Text), 4);
                         break;
                     case SelectionCommand.Reply.Rewrite rewrite:
-                        record.PolishedText = rewrite.Text;
                         if (SelectionCommand.IsUnchanged(original, rewrite.Text))
                         {
                             if (record.Timing != null) record.Timing.Delivery = "unchanged";
@@ -1065,7 +1070,7 @@ public sealed class SessionController
                         else
                         {
                             var delivery = await DeliverEdit(SelectionCommand.Replacement(original, rewrite.Text), place, original,
-                                                             selected.Source, generation, token);
+                                                             selected.Source, mark, generation, token);
                             if (record.Timing != null) record.Timing.Delivery = delivery;
                         }
                         break;
@@ -1082,16 +1087,22 @@ public sealed class SessionController
 
     /// <summary>
     /// Pastes an edit over the selection it was made from, which the app's own undo then takes back. Only while it can go
-    /// over that very selection (see <see cref="SelectionCommand.DeliveryOf"/>: the same window and element in front, the
-    /// same text still selected where UI Automation can tell, something that takes text, the session unlocked), and the
-    /// window and the lock are checked once more right before Ctrl+V goes out; otherwise it goes to the clipboard, and the
-    /// capsule says why. Returns how it went, for History.
+    /// over that very selection (see <see cref="SelectionCommand.DeliveryOf"/>: the same window, tab and element in front,
+    /// the same text still selected where UI Automation can tell, or else no click or key since it was read
+    /// (<paramref name="mark"/>), something that takes text, the session unlocked); the window, the clicks and keys and the
+    /// lock are checked once more right before Ctrl+V, as on macOS. Otherwise it goes to the clipboard, and the capsule
+    /// says why. Returns how it went, for History.
     /// </summary>
     private async Task<string> DeliverEdit(string text, SelectedText.Place place, string original, SelectionSource source,
-                                           int generation, CancellationToken token)
+                                           long mark, int generation, CancellationToken token)
     {
         if (_deliverByPaste) await TextInserter.LeaveMenuMode();
-        var delivery = await EditDelivery(place, original, source);
+        var canPaste = _deliverByPaste && !_isLocked;
+        var sameWindow = canPaste && await place.IsInFront();
+        var now = sameWindow && source == SelectionSource.Accessibility ? await SelectedText.SelectionNow() : null;
+        var editable = !sameWindow || await FocusProbe.FocusedTarget() != FocusProbe.Target.NotEditable;
+        var delivery = SelectionCommand.DeliveryOf(canPaste, sameWindow, original, source, now,
+                                                   HotkeyMonitor.Shared.InputCount != mark, editable);
         if (!IsCurrent(generation, token))
         {
             Note("edit → nothing, it was cancelled meanwhile");
@@ -1106,7 +1117,9 @@ public sealed class SessionController
         }
         var outcome = await TextInserter.Insert(text, _settings.RestoreClipboard,
                                                 () => IsCurrent(generation, token) && _deliverByPaste && !_isLocked
-                                                      && Win32.GetForegroundWindow() == place.Window);
+                                                      && Win32.GetForegroundWindow() == place.Window
+                                                      && Win32.WindowTitle(place.Window) == place.Title
+                                                      && HotkeyMonitor.Shared.InputCount == mark);
         if (!IsCurrent(generation, token))
         {
             Note($"edit → {outcome}, but it was cancelled meanwhile");
@@ -1120,25 +1133,17 @@ public sealed class SessionController
                 Hud.FinishWorking();
                 return "pasted";
             case TextInserter.Outcome.Skipped:
-                // The window or the lock changed just as Ctrl+V was due.
+                // The window, a click or key, or the lock changed just as Ctrl+V was due.
                 TextInserter.CopyToClipboard(text);
-                var reason = _deliverByPaste && !_isLocked ? SelectionCommand.ClipboardReason.MovedAway : SelectionCommand.ClipboardReason.Locked;
+                var reason = !_deliverByPaste || _isLocked ? SelectionCommand.ClipboardReason.Locked
+                    : HotkeyMonitor.Shared.InputCount != mark ? SelectionCommand.ClipboardReason.SelectionChanged
+                    : SelectionCommand.ClipboardReason.MovedAway;
                 Finish(new HudPhase.Error(reason.Message()), 3);
                 return "copied";
             default:
                 Finish(new HudPhase.Copied(), 1.6);
                 return "failed";
         }
-    }
-
-    /// <summary>Whether an edit can go over the selection at <paramref name="place"/> now (see <see cref="SelectionCommand.DeliveryOf"/>).</summary>
-    private async Task<SelectionCommand.Delivery> EditDelivery(SelectedText.Place place, string original, SelectionSource source)
-    {
-        var canPaste = _deliverByPaste && !_isLocked;
-        var sameWindow = canPaste && await place.IsInFront();
-        var now = sameWindow && source == SelectionSource.Accessibility ? await SelectedText.SelectionNow() : null;
-        var editable = !sameWindow || await FocusProbe.FocusedTarget() != FocusProbe.Target.NotEditable;
-        return SelectionCommand.DeliveryOf(canPaste, sameWindow, original, source, now, editable);
     }
 
     /// <summary>The edit of <paramref name="selection"/> by <paramref name="instruction"/>, with the clean-up's models and routes.</summary>

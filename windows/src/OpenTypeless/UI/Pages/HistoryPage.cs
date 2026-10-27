@@ -483,7 +483,7 @@ public sealed class HistoryPage : PageBase
                 raw.IsTextSelectionEnabled = true;
                 body.Children.Add(new Expander
                 {
-                    Header = record.IsCommand ? L("说出的指令", "Spoken instruction") : L("原始转写", "Raw transcript"),
+                    Header = L("原始转写", "Raw transcript"),
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     HorizontalContentAlignment = HorizontalAlignment.Stretch,
                     Content = raw,

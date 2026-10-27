@@ -303,6 +303,17 @@ public static partial class Win32
         return n > 0 ? new string(buffer, 0, n) : "";
     }
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowText(nint hWnd, [Out] char[] lpString, int nMaxCount);
+
+    /// <summary>The window's title (a browser's: its tab's), up to 512 characters.</summary>
+    public static string WindowTitle(nint hwnd)
+    {
+        var buffer = new char[512];
+        var n = GetWindowText(hwnd, buffer, buffer.Length);
+        return n > 0 ? new string(buffer, 0, n) : "";
+    }
+
     [DllImport("user32.dll")]
     public static extern uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 

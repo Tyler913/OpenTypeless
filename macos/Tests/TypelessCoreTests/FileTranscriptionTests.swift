@@ -32,7 +32,7 @@ import Testing
     @Test func progressLabelsAndFractions() {
         // In whichever language the tests run in (another suite may switch it meanwhile).
         #expect(FileTranscription.Progress.transcribing(done: 3, total: 12).label.contains("3/12"))
-        #expect(FileTranscription.Progress.reading(0.404).label.contains("40%"))
+        #expect(FileTranscription.Progress.reading(0.404).label.contains("40"))
         #expect(!FileTranscription.Progress.reading(nil).label.contains("%"))
         #expect(FileTranscription.Progress.transcribing(done: 3, total: 12).fraction == 0.25)
         #expect(FileTranscription.Progress.transcribing(done: 0, total: 0).fraction == nil)

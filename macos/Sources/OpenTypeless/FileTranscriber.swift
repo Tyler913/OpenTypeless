@@ -367,6 +367,7 @@ final class FileTranscriber: ObservableObject {
         var chunks = 0
         while let samples = try reader.read(maxSamples: AudioFormat.sampleCount(forSeconds: FileTranscription.blockSeconds)) {
             try Task.checkCancellation()
+            await Task.yield()
             chunks += chunker.append(samples).count
         }
         return chunks + (chunker.finish() == nil ? 0 : 1)

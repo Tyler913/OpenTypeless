@@ -11,8 +11,8 @@ public enum AudioFileDecoder {
     /// (a `FileTranscriptionError`).
     public static func duration(of url: URL) async throws -> Double {
         let (asset, _) = try await audioTrack(of: url)
-        let duration = (try? await asset.load(.duration))?.seconds ?? 0
-        return duration.isFinite ? max(0, duration) : 0
+        let seconds = (try? await asset.load(.duration))?.seconds ?? 0
+        return seconds.isFinite ? max(0, seconds) : 0
     }
 
     /// Hands the whole sound of `url` to `onSamples`, a block of a few thousand samples at a time, and returns how many
@@ -47,6 +47,9 @@ public enum AudioFileDecoder {
         do {
             while let buffer = output.copyNextSampleBuffer() {
                 try Task.checkCancellation()
+                // Decoding an hour of audio takes a while: lets the other work on this shared thread (a dictation's
+                // requests among it) go between blocks.
+                await Task.yield()
                 guard let block = CMSampleBufferGetDataBuffer(buffer) else { continue }
                 var samples = [Int16](repeating: 0, count: CMBlockBufferGetDataLength(block) / 2)
                 guard !samples.isEmpty else { continue }

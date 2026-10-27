@@ -106,7 +106,8 @@ final class MockChatServer: URLProtocol {
     }
 
     @Test func slowBackupDoesNotBeatPrimaryThatAnswersFirst() async throws {
-        MockChatServer.reset(["primary": .init(delay: 0.4, text: "A"), "backup": .init(delay: 2, text: "B")])
+        // The primary's delay leaves the backup's 0.1 s start room on a busy runner; the backup answers well after it.
+        MockChatServer.reset(["primary": .init(delay: 1.5, text: "A"), "backup": .init(delay: 4, text: "B")])
         let outcome = try await HedgedPolish.run(transcript: "x", primary: MockChatServer.route("primary"),
                                                  backup: MockChatServer.route("backup"), hedgeDelay: 0.1)
         #expect(outcome.result.text == "A")

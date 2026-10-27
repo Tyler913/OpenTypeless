@@ -94,7 +94,8 @@ public class HedgedPolishTests
     [Fact]
     public async Task SlowBackupDoesNotBeatPrimaryThatAnswersFirst()
     {
-        var server = new MockChatServer(new() { ["primary"] = new(Delay: 0.4, Text: "A"), ["backup"] = new(Delay: 2, Text: "B") });
+        // The primary's delay leaves the backup's 0.1 s start room on a busy runner; the backup answers well after it.
+        var server = new MockChatServer(new() { ["primary"] = new(Delay: 1.5, Text: "A"), ["backup"] = new(Delay: 4, Text: "B") });
         var outcome = await HedgedPolish.Run("x", server.Route("primary"), server.Route("backup"), hedgeDelay: 0.1);
         Assert.Equal("A", outcome.Result.Text);
         Assert.Equal(["backup", "primary"], server.Requested.Order());

@@ -3688,5 +3688,275 @@
     "ru": "пригодного перевода не пришло",
     "fr": "aucune traduction utilisable n’est revenue",
     "de": "es kam keine brauchbare Übersetzung zurück"
+  },
+  "An edit of a selection can't be retried": {
+    "ja": "選択範囲の編集はやり直せません",
+    "ko": "선택 영역 편집은 다시 시도할 수 없습니다",
+    "es": "Una edición de una selección no se puede reintentar",
+    "pt": "Uma edição de uma seleção não pode ser repetida",
+    "ru": "Правку выделенного текста нельзя повторить",
+    "fr": "Une modification de sélection ne peut pas être relancée",
+    "de": "Eine Bearbeitung einer Auswahl kann nicht wiederholt werden"
+  },
+  "Answer copied: ": {
+    "ja": "回答をコピーしました：",
+    "ko": "답변을 복사했습니다: ",
+    "es": "Respuesta copiada: ",
+    "pt": "Resposta copiada: ",
+    "ru": "Ответ скопирован: ",
+    "fr": "Réponse copiée : ",
+    "de": "Antwort kopiert: "
+  },
+  "Can't paste there — the edited text is on the clipboard": {
+    "ja": "そこには貼り付けられません — 編集後のテキストはクリップボードにあります",
+    "ko": "그곳에는 붙여넣을 수 없습니다 — 편집된 텍스트는 클립보드에 있습니다",
+    "es": "No se puede pegar ahí: el texto editado está en el portapapeles",
+    "pt": "Não é possível colar aí — o texto editado está na área de transferência",
+    "ru": "Сюда нельзя вставить — изменённый текст в буфере обмена",
+    "fr": "Impossible de coller ici — le texte modifié est dans le presse-papiers",
+    "de": "Dort kann nicht eingefügt werden – der bearbeitete Text ist in der Zwischenablage"
+  },
+  "Can't read the selection in this editor": {
+    "ja": "このエディタでは選択範囲を読み取れません",
+    "ko": "이 편집기에서는 선택한 텍스트를 읽을 수 없습니다",
+    "es": "No se puede leer la selección en este editor",
+    "pt": "Não é possível ler a seleção neste editor",
+    "ru": "Не удаётся прочитать выделение в этом редакторе",
+    "fr": "Impossible de lire la sélection dans cet éditeur",
+    "de": "Die Auswahl in diesem Editor kann nicht gelesen werden"
+  },
+  "Command mode": {
+    "ja": "編集モード",
+    "ko": "편집 모드",
+    "es": "Modo de edición",
+    "pt": "Modo de edição",
+    "ru": "Режим правки",
+    "fr": "Mode édition",
+    "de": "Bearbeitungsmodus"
+  },
+  "Couldn't edit the selection: ": {
+    "ja": "選択範囲を編集できませんでした：",
+    "ko": "선택한 텍스트를 편집하지 못했습니다: ",
+    "es": "No se pudo editar la selección: ",
+    "pt": "Não foi possível editar a seleção: ",
+    "ru": "Не удалось изменить выделенный текст: ",
+    "fr": "Impossible de modifier la sélection : ",
+    "de": "Die Auswahl konnte nicht bearbeitet werden: "
+  },
+  "Couldn't edit: ": {
+    "ja": "編集できませんでした：",
+    "ko": "편집하지 못했습니다: ",
+    "es": "No se pudo editar: ",
+    "pt": "Não foi possível editar: ",
+    "ru": "Не удалось изменить: ",
+    "fr": "Modification impossible : ",
+    "de": "Bearbeiten fehlgeschlagen: "
+  },
+  "Couldn't edit: {0}": {
+    "ja": "編集できませんでした：{0}",
+    "ko": "편집하지 못했습니다: {0}",
+    "es": "No se pudo editar: {0}",
+    "pt": "Não foi possível editar: {0}",
+    "ru": "Не удалось изменить: {0}",
+    "fr": "Modification impossible : {0}",
+    "de": "Bearbeiten fehlgeschlagen: {0}"
+  },
+  "Couldn't edit: {0}. Your text is unchanged": {
+    "ja": "編集できませんでした：{0}。テキストは変更されていません",
+    "ko": "편집하지 못했습니다: {0}. 텍스트는 바뀌지 않았습니다",
+    "es": "No se pudo editar: {0}. Tu texto no ha cambiado",
+    "pt": "Não foi possível editar: {0}. Seu texto não foi alterado",
+    "ru": "Не удалось изменить: {0}. Ваш текст не изменён",
+    "fr": "Modification impossible : {0}. Votre texte est inchangé",
+    "de": "Bearbeiten fehlgeschlagen: {0}. Dein Text ist unverändert"
+  },
+  "Edit selected text by voice": {
+    "ja": "選択したテキストを音声で編集",
+    "ko": "선택한 텍스트를 음성으로 편집",
+    "es": "Editar el texto seleccionado con la voz",
+    "pt": "Editar o texto selecionado por voz",
+    "ru": "Правка выделенного текста голосом",
+    "fr": "Modifier le texte sélectionné à la voix",
+    "de": "Ausgewählten Text per Sprache bearbeiten"
+  },
+  "Edited a selection ({0} characters)": {
+    "ja": "選択範囲を編集（{0} 文字）",
+    "ko": "선택 영역 편집({0}자)",
+    "es": "Edición de una selección ({0} caracteres)",
+    "pt": "Edição de uma seleção ({0} caracteres)",
+    "ru": "Правка выделения ({0} симв.)",
+    "fr": "Modification d'une sélection ({0} caractères)",
+    "de": "Auswahl bearbeitet ({0} Zeichen)"
+  },
+  "Hold + {0}: edit the selection": {
+    "ja": "押したまま + {0}：選択範囲を編集",
+    "ko": "누른 채 + {0}: 선택 영역 편집",
+    "es": "Mantén + {0}: editar la selección",
+    "pt": "Segure + {0}: editar a seleção",
+    "ru": "Удерживать + {0}: правка выделения",
+    "fr": "Maintenir + {0} : modifier la sélection",
+    "de": "Halten + {0}: Auswahl bearbeiten"
+  },
+  "Hold the dictation shortcut and press {0} too: what you say edits the selected text": {
+    "ja": "音声入力のショートカットを押したまま {0} も押すと、話した内容で選択したテキストを編集します",
+    "ko": "받아쓰기 단축키를 누른 채 {0}도 누르면 말한 내용으로 선택한 텍스트를 편집합니다",
+    "es": "Mantén pulsado el atajo de dictado y pulsa también {0}: lo que digas edita el texto seleccionado",
+    "pt": "Mantenha o atalho de ditado pressionado e pressione também {0}: o que você disser edita o texto selecionado",
+    "ru": "Удерживая сочетание клавиш для диктовки, нажмите ещё {0}: сказанное изменит выделенный текст",
+    "fr": "Maintenez le raccourci de dictée et appuyez aussi sur {0} : ce que vous dites modifie le texte sélectionné",
+    "de": "Halte das Diktier-Tastenkürzel und drücke zusätzlich {0}: Was du sagst, bearbeitet den ausgewählten Text"
+  },
+  "No text selected — select the text to change, then hold the dictation shortcut and say how": {
+    "ja": "テキストが選択されていません — 変更するテキストを選択してから、音声入力のショートカットを押したまま指示を話してください",
+    "ko": "선택한 텍스트가 없습니다 — 바꿀 텍스트를 선택한 뒤 받아쓰기 단축키를 누른 채 어떻게 바꿀지 말하세요",
+    "es": "No hay texto seleccionado: selecciona el texto que quieres cambiar, mantén pulsado el atajo de dictado y di cómo",
+    "pt": "Nenhum texto selecionado — selecione o texto a alterar, segure o atalho de ditado e diga como",
+    "ru": "Текст не выделен — выделите текст, удерживайте сочетание клавиш для диктовки и скажите, что изменить",
+    "fr": "Aucun texte sélectionné — sélectionnez le texte à modifier, maintenez le raccourci de dictée et dites comment",
+    "de": "Kein Text ausgewählt – wähle den Text aus, halte das Diktier-Tastenkürzel und sag, wie er sich ändern soll"
+  },
+  "Nothing to change": {
+    "ja": "変更する箇所はありません",
+    "ko": "바꿀 부분이 없습니다",
+    "es": "Nada que cambiar",
+    "pt": "Nada a alterar",
+    "ru": "Менять нечего",
+    "fr": "Rien à modifier",
+    "de": "Nichts zu ändern"
+  },
+  "Password fields can't be edited by voice": {
+    "ja": "パスワード欄は音声で編集できません",
+    "ko": "비밀번호 입력란은 음성으로 편집할 수 없습니다",
+    "es": "Los campos de contraseña no se pueden editar con la voz",
+    "pt": "Campos de senha não podem ser editados por voz",
+    "ru": "Поля паролей нельзя править голосом",
+    "fr": "Les champs de mot de passe ne peuvent pas être modifiés à la voix",
+    "de": "Passwortfelder können nicht per Sprache bearbeitet werden"
+  },
+  "Say how to change it, and the selection is replaced": {
+    "ja": "どう変えるかを話すと、選択範囲が置き換えられます",
+    "ko": "어떻게 바꿀지 말하면 선택 영역이 바뀝니다",
+    "es": "Di cómo cambiarlo y la selección se reemplaza",
+    "pt": "Diga como alterá-lo e a seleção é substituída",
+    "ru": "Скажите, как изменить, — и выделение будет заменено",
+    "fr": "Dites comment le modifier, et la sélection est remplacée",
+    "de": "Sag, wie er sich ändern soll, und die Auswahl wird ersetzt"
+  },
+  "Screen locked — the edited text is on the clipboard": {
+    "ja": "画面がロックされました — 編集後のテキストはクリップボードにあります",
+    "ko": "화면이 잠겼습니다 — 편집된 텍스트는 클립보드에 있습니다",
+    "es": "Pantalla bloqueada: el texto editado está en el portapapeles",
+    "pt": "Tela bloqueada — o texto editado está na área de transferência",
+    "ru": "Экран заблокирован — изменённый текст в буфере обмена",
+    "fr": "Écran verrouillé — le texte modifié est dans le presse-papiers",
+    "de": "Bildschirm gesperrt – der bearbeitete Text ist in der Zwischenablage"
+  },
+  "Select text in any app, hold the dictation shortcut and press {0} too, and say how to change it (“more formal”, “translate to English”, “fix the grammar”): when you let go, the selection is replaced, and Undo brings it back. Ask about it (“what does this mean”) and the answer is shown and copied. Nothing changes when no text is selected; password fields and terminals are never read.": {
+    "ja": "任意のアプリでテキストを選択し、音声入力のショートカットを押したまま {0} も押して、どう変えるかを話します（「もっと丁寧に」「英語に翻訳して」「文法を直して」）。キーを離すと選択範囲が置き換えられ、取り消しで元に戻せます。内容について質問すると（「これはどういう意味？」）、回答が表示されコピーされます。テキストが選択されていないときは何も変わりません。パスワード欄とターミナルは読み取りません。",
+    "ko": "아무 앱에서나 텍스트를 선택하고 받아쓰기 단축키를 누른 채 {0}도 누른 뒤 어떻게 바꿀지 말하세요(“더 격식 있게”, “영어로 번역해 줘”, “문법 고쳐 줘”). 키를 놓으면 선택 영역이 바뀌고, 실행 취소로 되돌릴 수 있습니다. 내용에 대해 물어보면(“이게 무슨 뜻이야”) 답변이 표시되고 복사됩니다. 선택한 텍스트가 없으면 아무것도 바뀌지 않으며, 비밀번호 입력란과 터미널은 읽지 않습니다.",
+    "es": "Selecciona texto en cualquier app, mantén pulsado el atajo de dictado, pulsa también {0} y di cómo cambiarlo («más formal», «tradúcelo al inglés», «corrige la gramática»): al soltar, la selección se reemplaza y Deshacer la recupera. Pregunta sobre él («¿qué significa esto?») y la respuesta se muestra y se copia. Si no hay texto seleccionado, no cambia nada; los campos de contraseña y los terminales nunca se leen.",
+    "pt": "Selecione texto em qualquer app, segure o atalho de ditado, pressione também {0} e diga como alterá-lo (“mais formal”, “traduza para o inglês”, “corrija a gramática”): ao soltar, a seleção é substituída, e Desfazer a traz de volta. Pergunte sobre ele (“o que isso significa?”) e a resposta é mostrada e copiada. Nada muda quando não há texto selecionado; campos de senha e terminais nunca são lidos.",
+    "ru": "Выделите текст в любом приложении, удерживая сочетание клавиш для диктовки, нажмите ещё {0} и скажите, как его изменить («официальнее», «переведи на английский», «исправь грамматику»): когда вы отпустите клавиши, выделение будет заменено, а «Отменить» вернёт его. Спросите о тексте («что это значит?») — ответ будет показан и скопирован. Если ничего не выделено, ничего не меняется; поля паролей и терминалы никогда не читаются.",
+    "fr": "Sélectionnez du texte dans n'importe quelle app, maintenez le raccourci de dictée, appuyez aussi sur {0} et dites comment le modifier (« plus formel », « traduis en anglais », « corrige la grammaire ») : quand vous relâchez, la sélection est remplacée, et Annuler la rétablit. Posez une question à son sujet (« qu'est-ce que ça veut dire ? ») et la réponse est affichée et copiée. Rien ne change si aucun texte n'est sélectionné ; les champs de mot de passe et les terminaux ne sont jamais lus.",
+    "de": "Wähle in einer beliebigen App Text aus, halte das Diktier-Tastenkürzel, drücke zusätzlich {0} und sag, wie er sich ändern soll („förmlicher“, „übersetze ins Englische“, „korrigiere die Grammatik“): Beim Loslassen wird die Auswahl ersetzt, und Widerrufen holt sie zurück. Frag nach dem Text („was bedeutet das?“), und die Antwort wird angezeigt und kopiert. Ohne Auswahl ändert sich nichts; Passwortfelder und Terminals werden nie gelesen."
+  },
+  "Spoken instruction": {
+    "ja": "話した指示",
+    "ko": "말한 지시",
+    "es": "Instrucción hablada",
+    "pt": "Instrução falada",
+    "ru": "Произнесённая команда",
+    "fr": "Instruction dictée",
+    "de": "Gesprochene Anweisung"
+  },
+  "Text in a terminal can't be edited by voice": {
+    "ja": "ターミナルのテキストは音声で編集できません",
+    "ko": "터미널의 텍스트는 음성으로 편집할 수 없습니다",
+    "es": "El texto de un terminal no se puede editar con la voz",
+    "pt": "Texto em um terminal não pode ser editado por voz",
+    "ru": "Текст в терминале нельзя править голосом",
+    "fr": "Le texte d'un terminal ne peut pas être modifié à la voix",
+    "de": "Text in einem Terminal kann nicht per Sprache bearbeitet werden"
+  },
+  "The selection changed — the edited text is on the clipboard": {
+    "ja": "選択範囲が変わりました — 編集後のテキストはクリップボードにあります",
+    "ko": "선택 영역이 바뀌었습니다 — 편집된 텍스트는 클립보드에 있습니다",
+    "es": "La selección cambió: el texto editado está en el portapapeles",
+    "pt": "A seleção mudou — o texto editado está na área de transferência",
+    "ru": "Выделение изменилось — изменённый текст в буфере обмена",
+    "fr": "La sélection a changé — le texte modifié est dans le presse-papiers",
+    "de": "Die Auswahl hat sich geändert – der bearbeitete Text ist in der Zwischenablage"
+  },
+  "The selection is too long ({0} characters; up to {1})": {
+    "ja": "選択範囲が長すぎます（{0} 文字、上限 {1}）",
+    "ko": "선택한 텍스트가 너무 깁니다({0}자, 최대 {1}자)",
+    "es": "La selección es demasiado larga ({0} caracteres; máximo {1})",
+    "pt": "A seleção é longa demais ({0} caracteres; até {1})",
+    "ru": "Выделение слишком длинное ({0} симв.; не больше {1})",
+    "fr": "La sélection est trop longue ({0} caractères ; {1} au maximum)",
+    "de": "Die Auswahl ist zu lang ({0} Zeichen; höchstens {1})"
+  },
+  "Transcription failed — your text is unchanged": {
+    "ja": "文字起こしに失敗しました — テキストは変更されていません",
+    "ko": "받아쓰기에 실패했습니다 — 텍스트는 바뀌지 않았습니다",
+    "es": "La transcripción falló: tu texto no ha cambiado",
+    "pt": "A transcrição falhou — seu texto não foi alterado",
+    "ru": "Не удалось распознать речь — ваш текст не изменён",
+    "fr": "La transcription a échoué — votre texte est inchangé",
+    "de": "Transkription fehlgeschlagen – dein Text ist unverändert"
+  },
+  "Translation mode uses this key too — pick another": {
+    "ja": "翻訳モードもこのキーを使っています — 別のキーを選んでください",
+    "ko": "번역 모드도 이 키를 씁니다 — 다른 키를 고르세요",
+    "es": "El modo de traducción también usa esta tecla: elige otra",
+    "pt": "O modo de tradução também usa esta tecla — escolha outra",
+    "ru": "Эту клавишу использует и режим перевода — выберите другую",
+    "fr": "Le mode traduction utilise aussi cette touche — choisissez-en une autre",
+    "de": "Der Übersetzungsmodus nutzt diese Taste auch – wähle eine andere"
+  },
+  "You moved to another window — the edited text is on the clipboard": {
+    "ja": "別のウインドウに移動しました — 編集後のテキストはクリップボードにあります",
+    "ko": "다른 창으로 이동했습니다 — 편집된 텍스트는 클립보드에 있습니다",
+    "es": "Cambiaste a otra ventana: el texto editado está en el portapapeles",
+    "pt": "Você mudou para outra janela — o texto editado está na área de transferência",
+    "ru": "Вы перешли в другое окно — изменённый текст в буфере обмена",
+    "fr": "Vous êtes passé à une autre fenêtre — le texte modifié est dans le presse-papiers",
+    "de": "Du bist in ein anderes Fenster gewechselt – der bearbeitete Text ist in der Zwischenablage"
+  },
+  "no usable rewrite came back": {
+    "ja": "使える書き換え結果が返ってきませんでした",
+    "ko": "쓸 수 있는 수정 결과가 오지 않았습니다",
+    "es": "no llegó ninguna reescritura utilizable",
+    "pt": "nenhuma reescrita utilizável voltou",
+    "ru": "не пришло пригодной правки",
+    "fr": "aucune réécriture utilisable n'est revenue",
+    "de": "es kam keine brauchbare Überarbeitung zurück"
+  },
+  "the model replied instead of editing": {
+    "ja": "モデルが編集せずに返答しました",
+    "ko": "모델이 편집하지 않고 답했습니다",
+    "es": "el modelo respondió en lugar de editar",
+    "pt": "o modelo respondeu em vez de editar",
+    "ru": "модель ответила вместо правки",
+    "fr": "le modèle a répondu au lieu de modifier",
+    "de": "das Modell hat geantwortet, statt zu bearbeiten"
+  },
+  "the rewrite was cut off": {
+    "ja": "書き換え結果が途中で切れました",
+    "ko": "수정 결과가 중간에 잘렸습니다",
+    "es": "la reescritura quedó cortada",
+    "pt": "a reescrita foi cortada",
+    "ru": "правка оборвалась",
+    "fr": "la réécriture a été tronquée",
+    "de": "die Überarbeitung wurde abgeschnitten"
+  },
+  "✎ Edit": {
+    "ja": "✎ 編集",
+    "ko": "✎ 편집",
+    "es": "✎ Editar",
+    "pt": "✎ Editar",
+    "ru": "✎ Правка",
+    "fr": "✎ Modifier",
+    "de": "✎ Bearbeiten"
   }
 }

@@ -99,6 +99,14 @@ A recording under 10 s is discarded as before. From 10 s on, Esc stops recording
 ### Live preview (`OpenTypeless/LivePreview.swift`)
 Optional (beta). While recording, the words recognised so far appear above the capsule. macOS runs `SpeechAnalyzer` with a `SpeechTranscriber` reporting volatile results, fed the same 16 kHz samples being recorded (converted to the analyzer's format); a language used for the first time has its model downloaded in the background and previews from the next dictation. It is never used for the result: the inserted text still comes from the speech-to-text provider. `LivePreviewText` keeps the last 60 characters on one line without splitting a character.
 
+### Transcribing files (`TypelessCore/FileTranscription.swift`, `AudioFileDecoder.swift`, `OpenTypeless/FileTranscriber.swift`)
+History's **Transcribe File…** button, a drop on History, or Finder's Open With offers audio and video files in a sheet with each file's length, the speech-to-text estimate when the model has a per-minute price (a ceiling: silence isn't sent) and a **Clean up text** switch. Each file becomes a History record marked `source: "file"` with its `sourceName`, and goes through the same pipeline as a dictation, one file at a time:
+- **Decode into the recording.** The audio track is read as 16 kHz mono (`AVAssetReader` on macOS; Media Foundation's `MediaTranscoder` to a PCM WAV on Windows) into `audio.partial.wav`, renamed to `audio.wav` once all of it is there, so Re-transcribe works as for a dictation and a recording only ever exists whole. A missing file, one that may not be read, a damaged or unsupported one (DRM included), one with no audio track, and a full disk each get their own message on the record.
+- **Feed it from disk.** The recording is handed to the pipeline 10 s at a time (`WAVFileReader`), held back while 4 chunks are still out, and the pipeline lets go of each chunk's audio once it's answered, so an hour of audio (about 115 MB) is never all in memory. The transcripts so far are saved every 20 s, and on quit, so a retry only sends what's missing.
+- **Never in the way of dictating.** A file sends at most 2 speech-to-text requests at once (a dictation has its own 3), hands out no new audio while a dictation is under way, has no speculative tail, keeps its own latency estimate, and cleans up 2 parts at a time. Nothing is pasted.
+- **Accounting.** What a file costs is counted; its words and length aren't added to the Home page's dictation totals (an hour-long meeting would swamp them), and the popover's Retry never offers a file.
+- Cancel while reading or queued drops the new record; while transcribing it keeps the recording and the transcripts so far, retryable. A file still being read at quit shows as interrupted, to be transcribed again.
+
 ### Hotkey (`OpenTypeless/Hotkey.swift`)
 - A session-level `CGEventTap` (default tap, which only needs Accessibility).
 - A modifier-only hotkey is tracked through `flagsChanged`. Combinations are matched on `keyDown` and swallowed.
@@ -109,7 +117,7 @@ Optional (beta). While recording, the words recognised so far appear above the c
 
 `~/Library/Application Support/OpenTypeless/Sessions/<timestamp>/`:
 - `audio.wav`, written while recording.
-- `session.json`: status, raw text, cleaned text, and per-chunk transcripts, so a retry only re-sends failed chunks.
+- `session.json`: status, raw text, cleaned text, and per-chunk transcripts, so a retry only re-sends failed chunks; for a transcribed file, `source: "file"` and the file's name.
 
 A session found in `recording`/`processing` state at launch is marked failed-but-retryable.
 

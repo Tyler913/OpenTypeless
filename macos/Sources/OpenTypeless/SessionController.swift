@@ -10,11 +10,13 @@ private final class SampleCounter: @unchecked Sendable {
     var seconds: Double { lock.withLock { AudioFormat.seconds(forSampleCount: count) } }
 }
 
-/// What a recording is for: plain dictation, or a translation (see `TranslationTarget`), which the translation chord
-/// (see `ModeChords`) switches it to while recording.
+/// What a recording is for: plain dictation, a translation (see `TranslationTarget`), or an edit of the text selected
+/// in the app in front (see `SelectionCommand`), which the translation and command chords (see `ModeChords`) switch it
+/// to while recording.
 enum RecordingMode: Equatable, Sendable {
     case dictation
     case translate
+    case command
 }
 
 private extension PolishFallback {
@@ -26,6 +28,48 @@ private extension PolishFallback {
         case .summarised: return L("翻译漏掉了太多内容", "the translation left too much out")
         case .untranslated: return L("结果不是目标语言", "it didn't come back in the target language")
         case .failed, .unrelated: return L("没有可用的翻译", "no usable translation came back")
+        }
+    }
+
+    /// Why an edit of a selection couldn't be used, for History and the capsule.
+    var commandReason: String {
+        switch self {
+        case .truncated: return L("改写被截断了", "the rewrite was cut off")
+        case .answered: return L("模型回复了别的内容，没有改写", "the model replied instead of editing")
+        default: return L("没有可用的改写", "no usable rewrite came back")
+        }
+    }
+}
+
+extension SelectionRefusal {
+    /// What the capsule says when the selection can't be edited by voice.
+    var message: String {
+        switch self {
+        case .noSelection:
+            return L("没有选中文字：先选中要修改的文字，再按住听写快捷键说出怎么改",
+                     "No text selected — select the text to change, then hold the dictation shortcut and say how")
+        case .terminal: return L("终端里的文字不能用语音编辑", "Text in a terminal can't be edited by voice")
+        case .secureField: return L("密码框不能用语音编辑", "Password fields can't be edited by voice")
+        case .unreadableInEditor:
+            return L("读不到这个编辑器里选中的文字", "Can't read the selection in this editor")
+        case let .tooLong(count):
+            return L("选中的文字太长（\(count) 字符，最多 \(SelectionCommand.maxCharacters)）",
+                     "The selection is too long (\(count) characters; up to \(SelectionCommand.maxCharacters))")
+        }
+    }
+}
+
+extension SelectionCommand.ClipboardReason {
+    /// Why an edit went to the clipboard instead of over the selection.
+    var message: String {
+        switch self {
+        case .locked: return L("屏幕已锁定，改写后的文字已复制", "Screen locked — the edited text is on the clipboard")
+        case .movedAway:
+            return L("已切换到别的窗口，改写后的文字已复制", "You moved to another window — the edited text is on the clipboard")
+        case .selectionChanged:
+            return L("选中的文字变了，改写后的文字已复制", "The selection changed — the edited text is on the clipboard")
+        case .notEditable:
+            return L("这里不能粘贴，改写后的文字已复制", "Can't paste there — the edited text is on the clipboard")
         }
     }
 }
@@ -65,6 +109,10 @@ final class SessionController: ObservableObject {
     private(set) var modeChords = ModeChords<RecordingMode>()
     /// What the running recording is for; plain dictation at every start.
     private(set) var mode: RecordingMode = .dictation
+    /// Command mode: the selection being read (or read) when the chord was pressed, and where (see `readSelection`).
+    /// Dropped with the recording, or when another chord switches it to another mode.
+    private var selectionRead: Task<SelectionRead, Never>?
+    private var selectionPlace: SelectedText.Place?
     /// The "Paste last dictation" waiting for its keys to be let go, or pasting, by its number. A new dictation, Esc or
     /// the screen locking drops it (nil), and what it still had to do is left undone. Pressing it again meanwhile does nothing.
     private var pendingPasteLast: Int?
@@ -235,29 +283,81 @@ final class SessionController: ObservableObject {
     }
 
     /// The running recording becomes `newMode`'s: the record keeps it (a retry runs the same way), the capsule shows it,
-    /// and a clean-up started ahead of time with the other prompt starts again with this one.
+    /// and a clean-up started ahead of time with the other prompt starts again with this one. Command mode reads the
+    /// selection now, while the app it's in is in front (see `readSelection`).
     private func switchMode(to newMode: RecordingMode) {
         let translation = newMode == .translate ? settings.translationTarget : nil
-        // Translation turned off a moment ago: its chord is on its way out.
-        guard newMode == .dictation || translation != nil else { return }
+        // Translation or command mode turned off a moment ago: its chord is on its way out.
+        switch newMode {
+        case .dictation: break
+        case .translate: guard translation != nil else { return }
+        case .command: guard settings.commandModeEnabled else { return }
+        }
+        if mode == .command { dropSelection() }
         mode = newMode
         record?.translation = translation
-        hud.model.badge = translation?.badge
+        if newMode == .command { record?.mode = SelectionCommand.recordMode }
+        hud.model.badge = translation?.badge ?? (newMode == .command ? L("✎ 编辑", "✎ Edit") : nil)
+        if newMode == .command { readSelection() }
         if let raw = speculativePolish?.raw {
             dropSpeculativePolish()
+            // Never for an edit, which only starts once its instruction is complete.
             speculationChanged(raw)
         }
     }
 
-    /// Registers the translation chord's keys while translation mode is on (none otherwise), and returns every chord key,
+    /// Command mode: reads the selection in the app in front, the one the edit goes back to (see `SelectedText`). One
+    /// that can't be edited (none, in a password field or a terminal, too long) stops the recording at once and says
+    /// why; nothing is pasted or copied. Read by ⌘C, it's only known once the keys are let go of, after a push-to-talk
+    /// recording: then `editSelection` says so.
+    private func readSelection() {
+        let generation = self.generation
+        guard let place = SelectedText.Place.front() else {
+            selectionRefused(.noSelection, generation: generation)
+            return
+        }
+        selectionPlace = place
+        let hotkey = settings.hotkey
+        let timeout = TimeInterval(max(1, settings.maxRecordingMinutes) * 60 + 10)
+        selectionRead = Task { [weak self] in
+            let read = await SelectedText.read(at: place, releasing: hotkey, releaseTimeout: timeout)
+            if case let .refused(reason) = read { self?.selectionRefused(reason, generation: generation) }
+            return read
+        }
+    }
+
+    /// While still recording in command mode: the recording stops as if it never started, and the capsule says why.
+    private func selectionRefused(_ reason: SelectionRefusal, generation: Int) {
+        guard generation == self.generation, state == .recording, mode == .command else { return }
+        note("command mode: selection refused (\(reason)) — recording stopped")
+        cancel(silently: true)
+        hud.show(.error(reason.message), autoHideAfter: 3)
+    }
+
+    private func dropSelection() {
+        selectionRead?.cancel()
+        selectionRead = nil
+        selectionPlace = nil
+    }
+
+    /// Registers the translation chord's keys while translation mode is on, and command mode's while that is (none
+    /// otherwise), and returns every chord key,
     /// for the hotkey monitor to keep from the focused app while the hotkey is held. A modifier-only hotkey's own key is
     /// never its chord. At launch, and whenever settings change.
     func updateModeChords() -> Set<Int64> {
         var chords = ModeChords<RecordingMode>()
-        if settings.translationTarget != nil {
-            let hotkey = settings.hotkey
-            for key in settings.translationChord.keyCodes(excludingHotkey: hotkey.isModifierOnly ? hotkey.keyCode : nil) {
+        let hotkey = settings.hotkey.isModifierOnly ? settings.hotkey.keyCode : nil
+        let translating = settings.translationTarget != nil
+        if translating {
+            for key in settings.translationChord.keyCodes(excludingHotkey: hotkey) {
                 chords.register(key, mode: .translate)
+            }
+        }
+        if settings.commandModeEnabled {
+            for key in SelectionCommand.chordKeys(command: settings.commandChord,
+                                                  translation: translating ? settings.translationChord : nil,
+                                                  excludingHotkey: hotkey) {
+                chords.register(key, mode: .command)
             }
         }
         modeChords = chords
@@ -492,7 +592,7 @@ final class SessionController: ObservableObject {
     /// ahead of them, so the first request after the key is released doesn't wait for DNS, TCP and TLS. Each host once.
     private func warmConnections() {
         var endpoints: [ProviderEndpoint?] = [settings.sttEndpoint, settings.sttBackupEndpoint]
-        if settings.polishEnabled || settings.translationTarget != nil {
+        if settings.polishEnabled || settings.translationTarget != nil || settings.commandModeEnabled {
             endpoints += [settings.polishEndpoint, settings.polishBackupEndpoint]
         }
         preconnector.warm(endpoints.map { $0.map { APIClient(endpoint: $0) } })
@@ -571,7 +671,7 @@ final class SessionController: ObservableObject {
         state = .processing
         // Where the text should go: if another app is in front by the time it's ready, it goes to the clipboard.
         pasteTarget = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        hud.showWorking(polishes: settings.polishEnabled || record.translation != nil)
+        hud.showWorking(polishes: settings.polishEnabled || record.translation != nil || record.isCommand)
 
         // No waiting when the speaker paused before letting go and that pause is already being transcribed as the last
         // chunk: the moment's (quiet) audio changes nothing then, and the text may be ready at once.
@@ -636,7 +736,11 @@ final class SessionController: ObservableObject {
                 finish(showing: .error(L("没有识别到语音", "No speech detected")), hideAfter: 2)
                 return
             }
-            await polishAndDeliver(record: &record, pipeline: pipeline, generation: generation)
+            if record.isCommand {
+                await editSelection(record: &record, pipeline: pipeline, generation: generation)
+            } else {
+                await polishAndDeliver(record: &record, pipeline: pipeline, generation: generation)
+            }
         } catch let failure as PipelineFailure {
             guard isCurrent(generation) else { return }
             record.chunkTexts = pipeline.completedTranscripts()
@@ -646,7 +750,10 @@ final class SessionController: ObservableObject {
             account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes())
             history.update(record)
             lastError = failure.localizedDescription
-            finish(showing: .error(L("转写失败，可在菜单栏重试", "Failed — retry from the menu bar")), hideAfter: 4)
+            // An edit can't be retried: its selection isn't kept.
+            finish(showing: .error(record.isCommand
+                                   ? L("转写失败，选中的文字没有改动", "Transcription failed — your text is unchanged")
+                                   : L("转写失败，可在菜单栏重试", "Failed — retry from the menu bar")), hideAfter: 4)
         } catch {
             if APIError.from(error) == .cancelled || !isCurrent(generation) { return }
             record.status = .failed
@@ -800,6 +907,150 @@ final class SessionController: ObservableObject {
         history.update(record)
     }
 
+    // MARK: - Editing a selection
+
+    /// Command mode, once the instruction is transcribed: the selection read when the chord was pressed is edited by it
+    /// (see `SelectionCommand`), and the rewrite pasted over it (see `deliverEdit`); an answer to a question about the
+    /// text is shown and copied instead. Nothing is pasted when the selection couldn't be read, the rewrite can't be used
+    /// (cut off, a refusal, nothing), or the model changed nothing; nor once Esc or the screen locking came first.
+    private func editSelection(record: inout DictationRecord, pipeline: TranscriptionPipeline, generation: Int) async {
+        let begun = ProcessInfo.processInfo.systemUptime
+        // Read by ⌘C, the selection is only being read now that the keys are up.
+        let read = await selectionRead?.value ?? .refused(.noSelection)
+        // Esc (or a new dictation) meanwhile: `cancel` has dealt with this one.
+        guard isCurrent(generation) else { return }
+        guard case let .selection(selection, source) = read, let place = selectionPlace else {
+            let reason: SelectionRefusal
+            if case let .refused(refusal) = read { reason = refusal } else { reason = .noSelection }
+            note("command mode: selection refused (\(reason)) after recording")
+            record.status = .polishFailed
+            record.error = reason.message
+            account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes())
+            history.update(record)
+            finish(showing: .error(reason.message), hideAfter: 3)
+            return
+        }
+        record.selectionLength = selection.count
+        // Saved while the edit runs, so the instruction survives a crash.
+        history.update(record)
+
+        let polished: SegmentedPolishResult
+        do {
+            polished = try await edit(selection, by: record.rawText, onPartial: onPolishPartial(expected: selection))
+        } catch {
+            // Esc: `cancel` has kept the record as cancelled.
+            if APIError.from(error) == .cancelled || !isCurrent(generation) { return }
+            record.status = .polishFailed
+            record.error = L("未能编辑：", "Couldn't edit: ") + error.localizedDescription
+            account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes())
+            history.update(record)
+            finish(showing: .error(L("未能编辑选中的文字：", "Couldn't edit the selection: ") + error.localizedDescription),
+                   hideAfter: 5)
+            return
+        }
+        noteTiming(of: polished, ahead: 0, in: &record, what: "edit of a selection")
+        if isCurrent(generation) {
+            hud.model.bar.reach(.delivered)
+            let transcription = record.timing?.transcription ?? 0
+            record.timing?.delivered = transcription + ProcessInfo.processInfo.systemUptime - begun
+            if let fallback = polished.fallbacks.first?.fallback {
+                note("edit unusable (\(fallback.rawValue)) → nothing pasted")
+                record.status = .polishFailed
+                record.error = L("未能编辑：\(fallback.commandReason)", "Couldn't edit: \(fallback.commandReason)")
+                finish(showing: .error(L("未能编辑：\(fallback.commandReason)，选中的文字没有改动",
+                                         "Couldn't edit: \(fallback.commandReason). Your text is unchanged")), hideAfter: 4)
+            } else {
+                record.status = .done
+                switch SelectionCommand.reply(polished.text) {
+                case let .answer(answer):
+                    record.polishedText = answer
+                    TextInserter.copyToClipboard(answer)
+                    record.timing?.delivery = "answered"
+                    finish(showing: .answer(answer), hideAfter: 4)
+                case let .rewrite(rewrite):
+                    record.polishedText = rewrite
+                    if SelectionCommand.isUnchanged(selection: selection, rewrite: rewrite) {
+                        record.timing?.delivery = "unchanged"
+                        finish(showing: .error(L("没有需要修改的地方", "Nothing to change")), hideAfter: 2.5)
+                    } else {
+                        record.timing?.delivery = await deliverEdit(
+                            SelectionCommand.replacement(for: selection, rewrite: rewrite), at: place, original: selection,
+                            source: source, generation: generation)
+                    }
+                }
+            }
+        }
+        // Esc came before the text was in place (or while it went in): `cancel` has kept the record as cancelled, and
+        // so it stays, now with its edit.
+        if Task.isCancelled { record.status = .cancelled }
+        if record.status == .polishFailed { record.polishedText = nil }
+        account(&record, pipeline: pipeline, polished: polished, discarded: takeDiscardedPolishes())
+        history.update(record)
+    }
+
+    /// Pastes an edit over the selection it was made from, which the app's own undo then takes back. Only while it can
+    /// go over that very selection (see `SelectionCommand.delivery`: the same app, window and element in front, the same
+    /// text still selected where Accessibility can tell, something that takes text, the screen unlocked), checked once
+    /// more right before ⌘V goes out; otherwise it goes to the clipboard, and the capsule says why. Returns how it went,
+    /// for History.
+    private func deliverEdit(_ text: String, at place: SelectedText.Place, original: String, source: SelectionSource,
+                             generation: Int) async -> String {
+        func delivery() -> SelectionCommand.Delivery {
+            SelectionCommand.delivery(
+                canPaste: deliverByPaste && !isLocked, sameWindow: place.isInFront, original: original, source: source,
+                selectionNow: source == .accessibility ? SelectedText.selection(at: place) : nil,
+                editable: FocusProbe.focusedTarget() != .notEditable)
+        }
+        if case let .clipboard(reason) = delivery() {
+            note("edit → clipboard (\(reason))")
+            TextInserter.copyToClipboard(text)
+            finish(showing: .error(reason.message), hideAfter: 3)
+            return "copied"
+        }
+        let outcome = await TextInserter.insert(text, restoreClipboard: settings.restoreClipboard) {
+            self.isCurrent(generation) && delivery() == .paste
+        }
+        guard isCurrent(generation) else {
+            note("edit → \(outcome), but it was cancelled meanwhile")
+            return "cancelled"
+        }
+        note("edit → \(outcome) in \(frontmostID)")
+        switch outcome {
+        case .pasted:
+            reset()
+            hud.finishWorking()
+            return "pasted"
+        case .notPasted:
+            finish(showing: .copied, hideAfter: 1.6)
+            return "failed"
+        case .skipped:
+            // The window, the selection or the lock changed just as ⌘V was due.
+            TextInserter.copyToClipboard(text)
+            let reason: SelectionCommand.ClipboardReason
+            if case let .clipboard(why) = delivery() { reason = why } else { reason = .movedAway }
+            finish(showing: .error(reason.message), hideAfter: 3)
+            return "copied"
+        case .noPermission:
+            finish(showing: .error(L("没有辅助功能权限，文字已复制到剪贴板",
+                                     "No Accessibility permission — text copied to the clipboard")), hideAfter: 3)
+            return "failed"
+        }
+    }
+
+    /// The edit of `selection` by `instruction`, with the clean-up's models and routes.
+    private func edit(_ selection: String, by instruction: String,
+                      onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
+        guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
+            throw APIError.missingAPIKey(settings.polishProvider.displayName)
+        }
+        let primary = route(endpoint, model: settings.polishModel, translation: nil, selection: selection)
+        let backup = settings.polishBackupEndpoint.map {
+            route($0, model: settings.polishBackupModel, translation: nil, selection: selection)
+        }
+        return try await SelectionCommand.run(instruction: instruction, primary: primary, backup: backup,
+                                              onPartial: onPartial)
+    }
+
     /// Saves how long the clean-up (or translation) `outcome` took after the key was released (one started ahead of
     /// time had a head start of `ahead` seconds), and which model answered.
     private func noteTiming(of outcome: SegmentedPolishResult, ahead: Double, in record: inout DictationRecord, what: String) {
@@ -860,7 +1111,7 @@ final class SessionController: ObservableObject {
     /// has one (they went on). Starts cleaning that transcript up (or translating it, in translation mode), so the text
     /// can be ready when the key is released.
     private func speculationChanged(_ raw: String?) {
-        guard state == .recording, settings.polishEnabled || mode == .translate else { return }
+        guard state == .recording, mode != .command, settings.polishEnabled || mode == .translate else { return }
         if let raw, raw == speculativePolish?.raw { return }
         dropSpeculativePolish()
         guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -984,7 +1235,8 @@ final class SessionController: ObservableObject {
         return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup, onPartial: onPartial)
     }
 
-    private func route(_ endpoint: ProviderEndpoint, model: String, translation: TranslationTarget?) -> PolishRoute {
+    private func route(_ endpoint: ProviderEndpoint, model: String, translation: TranslationTarget?,
+                       selection: String? = nil) -> PolishRoute {
         let model = model.trimmingCharacters(in: .whitespaces)
         return PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
@@ -993,7 +1245,8 @@ final class SessionController: ObservableObject {
             extraInstructions: settings.extraInstructions,
             modelInfo: endpoint.id == .openrouter ? modelInfo[model] : nil,
             host: endpoint.id == .openrouter ? settings.openRouterHost(for: model) : nil,
-            translation: translation
+            translation: translation,
+            selection: selection
         ))
     }
 
@@ -1083,7 +1336,8 @@ final class SessionController: ObservableObject {
             LastDictation.Entry(kind: $0.status.pruningKind,
                                 hasText: !$0.finalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                                 // Only a failed one is ever re-sent, so only its recording is looked for on disk.
-                                hasAudio: $0.status == .failed && $0.hasAudio)
+                                hasAudio: $0.status == .failed && $0.hasAudio,
+                                isCommand: $0.isCommand)
         }
         switch LastDictation.choose(entries) {
         case .nothing:
@@ -1152,6 +1406,12 @@ final class SessionController: ObservableObject {
     /// app its text is pasted into, only while that app is in front (nil: whichever is in front then).
     func retry(_ saved: DictationRecord, paste: Bool, target: pid_t? = nil) {
         guard state == .idle else { return }
+        // An edit of a selection can't run again without its selection, which isn't kept; run as a dictation, it would
+        // paste the instruction.
+        guard !saved.isCommand else {
+            hud.show(.error(L("编辑选中文字的记录不能重试", "An edit of a selection can't be retried")), autoHideAfter: 3)
+            return
+        }
         guard let endpoint = settings.sttEndpoint else { return }
         guard saved.hasAudio, let data = try? Data(contentsOf: saved.audioURL),
               let samples = WAV.decodeSamples(data) else {
@@ -1251,6 +1511,7 @@ final class SessionController: ObservableObject {
         pasteTarget = nil
         handsFree = false
         mode = .dictation
+        dropSelection()
         processingTask = nil
     }
 

@@ -164,8 +164,9 @@ struct MenuPopoverView: View {
     }
 
     private var failedRecord: DictationRecord? {
+        // An edit of a selection can't be run again without its selection.
         guard controller.state == .idle, let last = history.records.first,
-              last.status == .failed, last.hasAudio else { return nil }
+              last.status == .failed, last.hasAudio, !last.isCommand else { return nil }
         return last
     }
 

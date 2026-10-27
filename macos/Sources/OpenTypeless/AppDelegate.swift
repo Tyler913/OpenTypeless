@@ -48,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if self.hotkey.hotkey != self.settings.hotkey { self.hotkey.hotkey = self.settings.hotkey }
                 let shortcuts = self.settings.shortcutMap
                 if self.hotkey.shortcuts != shortcuts { self.hotkey.shortcuts = shortcuts }
-                // Translation turned on or off, its chord changed, or the hotkey became one of the chord's keys.
+                // Translation or command mode turned on or off, a chord changed, or the hotkey became one of a chord's keys.
                 let chordKeys = self.controller.updateModeChords()
                 if self.hotkey.modeChordKeys != chordKeys { self.hotkey.modeChordKeys = chordKeys }
                 if self.menuLanguage != AppLanguage.resolved { self.setUpMainMenu() }

@@ -14,12 +14,15 @@ final class HUDModel: ObservableObject {
         case copied
         /// New words were learned from the user's fixes to the last dictation.
         case learned(String)
+        /// The answer to a question about the selection (see `SelectionCommand.Reply`), also on the clipboard.
+        case answer(String)
         case error(String)
 
         /// The text a notice shows (its length decides how long it stays up).
         var message: String? {
             switch self {
             case let .learned(terms): return L("已加入词汇表：", "Added to vocabulary: ") + terms
+            case let .answer(answer): return L("答案已复制：", "Answer copied: ") + answer
             case let .error(message): return message
             default: return nil
             }
@@ -256,6 +259,9 @@ struct HUDView: View {
             }
         case .learned:
             NoticeRow(symbol: "character.book.closed.fill", tint: .tint, text: model.phase.message ?? "")
+        case .answer:
+            // The start of it; the whole answer is on the clipboard.
+            NoticeRow(symbol: "text.bubble.fill", tint: .tint, text: model.phase.message ?? "")
         case let .error(message):
             // Up to three lines: the end of an error is often what to do about it ("… → Privacy & Security → Microphone").
             NoticeRow(symbol: "exclamationmark.triangle.fill", tint: .orange, text: message)

@@ -280,7 +280,7 @@ private struct HistoryDetail: View {
                                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.04)))
                                         .padding(.top, 6)
                                 } label: {
-                                    Text(L("原始转写", "Raw transcript"))
+                                    Text(record.isCommand ? L("说出的指令", "Spoken instruction") : L("原始转写", "Raw transcript"))
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundStyle(.secondary)
                                 }
@@ -311,10 +311,13 @@ private struct HistoryDetail: View {
                     }
                     .disabled(record.finalText.isEmpty)
                     if record.hasAudio {
-                        Button { controller.retry(record, paste: false) } label: {
-                            Label(L("重新转写", "Re-transcribe"), systemImage: "arrow.clockwise")
+                        // An edit of a selection can't be run again without its selection, which isn't kept.
+                        if !record.isCommand {
+                            Button { controller.retry(record, paste: false) } label: {
+                                Label(L("重新转写", "Re-transcribe"), systemImage: "arrow.clockwise")
+                            }
+                            .help(L("完成后复制到剪贴板", "Copies the result to the clipboard"))
                         }
-                        .help(L("完成后复制到剪贴板", "Copies the result to the clipboard"))
                         Button { NSWorkspace.shared.activateFileViewerSelecting([record.audioURL]) } label: {
                             Image(systemName: "folder")
                         }
@@ -346,7 +349,8 @@ private struct HistoryDetail: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    /// "0:42 · 123 words · $0.0012", and "Translation → English" for a translation dictation.
+    /// "0:42 · 123 words · $0.0012", and "Translation → English" for a translation dictation or "Edited a selection
+    /// (240 characters)" for an edit.
     private var details: String {
         var parts = [record.duration.durationLabel]
         let words = WordCount.count(record.finalText)
@@ -354,6 +358,10 @@ private struct HistoryDetail: View {
         if let cost = record.cost { parts.append(UsageFormat.money(cost)) }
         if let translation = record.translation {
             parts.append(L("翻译 → \(translation.displayName)", "Translation → \(translation.displayName)"))
+        }
+        if record.isCommand {
+            let length = record.selectionLength.map { UsageFormat.count($0) } ?? "?"
+            parts.append(L("编辑选中文字（\(length) 字符）", "Edited a selection (\(length) characters)"))
         }
         return parts.joined(separator: " · ")
     }

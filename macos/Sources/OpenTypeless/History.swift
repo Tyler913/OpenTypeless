@@ -34,11 +34,19 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var cost: Double?
     /// Its words are in the usage totals (so re-transcribing it doesn't count them twice).
     var counted: Bool?
-    /// "translate" for a translation dictation (see `TranslationTarget.recordMode`), nil for plain dictation: records from
-    /// before translation, and older versions reading newer ones, see a dictation.
+    /// "translate" for a translation dictation (see `TranslationTarget.recordMode`), "command" for an edit of a selection
+    /// by voice (see `SelectionCommand.recordMode`), nil for plain dictation: records from before translation, and older
+    /// versions reading newer ones, see a dictation.
     var mode: String?
     /// The language a translation dictation is written in (`TranslationTarget.id`).
     var targetLanguage: String?
+    /// How many characters the selection an edit worked on had. The selection itself isn't kept: it can be anything the
+    /// user had open (a contract, a private message), and History keeps entries for days. Its instruction is kept as the
+    /// transcript, and the rewrite (or the answer to a question about it) as the clean-up.
+    var selectionLength: Int?
+
+    /// An edit of a selection by voice rather than a dictation. Without its selection it can't be run again.
+    var isCommand: Bool { SelectionCommand.isCommand(mode: mode) }
 
     /// What a translation dictation is translated into; nil for plain dictation. A retry translates it again.
     var translation: TranslationTarget? {

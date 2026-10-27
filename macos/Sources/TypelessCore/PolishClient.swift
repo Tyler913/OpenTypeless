@@ -15,10 +15,13 @@ public struct PolishOptions: Sendable {
     public var host: String?
     /// Translate into this language instead of cleaning up (see `Prompts.translateSystemPrompt`).
     public var translation: TranslationTarget?
+    /// Edit this selected text by the transcript, a spoken instruction, instead of cleaning the transcript up (see
+    /// `Prompts.commandSystemPrompt`).
+    public var selection: String?
 
     public init(model: String, vocabulary: [String] = [], misheard: [Correction] = [], extraInstructions: String = "",
                 modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil,
-                translation: TranslationTarget? = nil) {
+                translation: TranslationTarget? = nil, selection: String? = nil) {
         self.model = model
         self.vocabulary = vocabulary
         self.misheard = misheard
@@ -27,6 +30,7 @@ public struct PolishOptions: Sendable {
         self.systemPromptOverride = systemPromptOverride
         self.host = host
         self.translation = translation
+        self.selection = selection
     }
 }
 
@@ -114,8 +118,15 @@ extension APIClient {
         return routing
     }
 
-    /// The system prompt and the user message a clean-up (or translation) of `transcript` sends.
+    /// The system prompt and the user message a clean-up (or translation) of `transcript` sends, or an edit of the
+    /// options' selection by it.
     static func polishMessages(transcript: String, options: PolishOptions) -> [String] {
+        if let selection = options.selection {
+            return [options.systemPromptOverride ?? Prompts.commandSystemPrompt(
+                        vocabulary: options.vocabulary, misheard: options.misheard,
+                        extraInstructions: options.extraInstructions),
+                    Prompts.commandUserMessage(selection: selection, instruction: transcript)]
+        }
         if let target = options.translation {
             return [options.systemPromptOverride ?? Prompts.translateSystemPrompt(
                         target: target, vocabulary: options.vocabulary, misheard: options.misheard,
@@ -142,7 +153,7 @@ extension APIClient {
         ]
         guard includeOptional else { return body }
         if isOpenRouter {
-            body["max_tokens"] = max(1024, transcript.count * 3)
+            body["max_tokens"] = Self.maxTokens(transcript: transcript, options: options)
             body["provider"] = Self.polishRouting(host: options.host)
             if let reasoning = ReasoningConfig.body(for: options.modelInfo) { body["reasoning"] = reasoning }
             if options.modelInfo?.supportedParameters.contains("temperature") ?? true { body["temperature"] = 0.2 }
@@ -154,6 +165,13 @@ extension APIClient {
             body["stream_options"] = ["include_usage": true]
         }
         return body
+    }
+
+    /// Room for the answer: three tokens a character of what is to be rewritten (the transcript, or an edit's selection,
+    /// which can be long and come back longer still: "translate this into Japanese"), within what models can write.
+    static func maxTokens(transcript: String, options: PolishOptions) -> Int {
+        guard let selection = options.selection else { return max(1024, transcript.count * 3) }
+        return min(16_384, max(1024, (selection.count + transcript.count) * 3))
     }
 
     /// How long a clean-up may take in all: long enough for a slow provider to stream the whole answer out, and short
@@ -178,7 +196,9 @@ extension APIClient {
         firstTokenTimeout: Double = APIClient.polishFirstTokenTimeout,
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> PolishResult {
-        let limits = StreamLimits(idle: idleTimeout, total: totalTimeout ?? Self.polishTimeout(for: transcript),
+        // An edit streams out its selection rewritten, so that is what takes time.
+        let limits = StreamLimits(idle: idleTimeout,
+                                  total: totalTimeout ?? Self.polishTimeout(for: (options.selection ?? "") + transcript),
                                   firstToken: firstTokenTimeout)
         do {
             return try await streamPolish(transcript: transcript, options: options, includeOptional: true,
@@ -210,6 +230,7 @@ extension APIClient {
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let messages = (body["messages"] as? [[String: String]] ?? []).compactMap { $0["content"] }
         let reminder = Prompts.reminder(translation: options.translation)
+        let selection = options.selection
         let session = self.session
         let answering = OnceFlag()
 
@@ -218,8 +239,8 @@ extension APIClient {
                 group.addTask {
                     do {
                         return try await Self.readPolishStream(session: session, request: request, messages: messages,
-                                                               reminder: reminder, answering: answering,
-                                                               onPartial: onPartial)
+                                                               reminder: reminder, selection: selection,
+                                                               answering: answering, onPartial: onPartial)
                     } catch let error as URLError where error.code == .timedOut {
                         // No byte for the idle timeout.
                         throw APIError.timeout(seconds: limits.idle)
@@ -239,9 +260,10 @@ extension APIClient {
         }
     }
 
+    /// `selection`: the text an edit works on (its answer is cleaned up as an edit's), nil for a clean-up or translation.
     private static func readPolishStream(
-        session: URLSession, request: URLRequest, messages: [String], reminder: String, answering: OnceFlag,
-        onPartial: (@Sendable (String) -> Void)?
+        session: URLSession, request: URLRequest, messages: [String], reminder: String, selection: String?,
+        answering: OnceFlag, onPartial: (@Sendable (String) -> Void)?
     ) async throws -> PolishResult {
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.badResponse("no HTTP response") }
@@ -276,7 +298,8 @@ extension APIClient {
                 }
             }
         }
-        let cleaned = Prompts.sanitizePolishOutput(text, reminder: reminder)
+        let cleaned = selection.map { Prompts.sanitizeCommandOutput(text, selection: $0) }
+            ?? Prompts.sanitizePolishOutput(text, reminder: reminder)
         guard !cleaned.isEmpty else { throw APIError.badResponse(L("模型返回了空内容", "the model returned nothing")) }
         if usage == nil || (usage?.inputTokens == nil && usage?.outputTokens == nil && usage?.cost == nil) {
             usage = APIClient.estimatedUsage(messages: messages, output: text)

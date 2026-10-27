@@ -21,7 +21,12 @@ public sealed record PolishOptions(
     /// </summary>
     string? Host = null,
     /// <summary>Translate into this language instead of cleaning up (see <see cref="Prompts.TranslateSystemPrompt"/>).</summary>
-    TranslationTarget? Translation = null);
+    TranslationTarget? Translation = null,
+    /// <summary>
+    /// Edit this selected text by the transcript, a spoken instruction, instead of cleaning the transcript up (see
+    /// <see cref="Prompts.CommandSystemPrompt"/>).
+    /// </summary>
+    string? Selection = null);
 
 public static class ReasoningConfig
 {
@@ -126,9 +131,20 @@ public sealed partial class ApiClient
         return routing;
     }
 
-    /// <summary>The system prompt and the user message a clean-up (or translation) of <paramref name="transcript"/> sends.</summary>
+    /// <summary>
+    /// The system prompt and the user message a clean-up (or translation) of <paramref name="transcript"/> sends, or an edit
+    /// of the options' selection by it.
+    /// </summary>
     internal static string[] PolishMessages(string transcript, PolishOptions options)
     {
+        if (options.Selection is { } selection)
+        {
+            return
+            [
+                options.SystemPromptOverride ?? Prompts.CommandSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard),
+                Prompts.CommandUserMessage(selection, transcript),
+            ];
+        }
         if (options.Translation is { } target)
         {
             return
@@ -165,7 +181,7 @@ public sealed partial class ApiClient
         if (!includeOptional) return body;
         if (IsOpenRouter)
         {
-            body["max_tokens"] = Math.Max(1024, TextMetrics.CharacterCount(transcript) * 3);
+            body["max_tokens"] = MaxTokens(transcript, options);
             body["provider"] = PolishRouting(options.Host);
             if (ReasoningConfig.Body(options.ModelInfo) is { } reasoning) body["reasoning"] = reasoning;
             if (options.ModelInfo?.SupportedParameters.Contains("temperature") ?? true) body["temperature"] = 0.2;
@@ -180,6 +196,16 @@ public sealed partial class ApiClient
             body["stream_options"] = new JsonObject { ["include_usage"] = true };
         }
         return body;
+    }
+
+    /// <summary>
+    /// Room for the answer: three tokens a character of what is to be rewritten (the transcript, or an edit's selection,
+    /// which can be long and come back longer still: "translate this into Japanese"), within what models can write.
+    /// </summary>
+    internal static int MaxTokens(string transcript, PolishOptions options)
+    {
+        if (options.Selection is not { } selection) return Math.Max(1024, TextMetrics.CharacterCount(transcript) * 3);
+        return Math.Min(16_384, Math.Max(1024, (TextMetrics.CharacterCount(selection) + TextMetrics.CharacterCount(transcript)) * 3));
     }
 
     /// <summary>
@@ -205,7 +231,8 @@ public sealed partial class ApiClient
                                            Action<string>? onPartial = null, CancellationToken cancellationToken = default,
                                            double firstTokenTimeout = PolishFirstTokenTimeout)
     {
-        var limits = new StreamLimits(idleTimeout, totalTimeout ?? PolishTimeout(transcript), firstTokenTimeout);
+        // An edit streams out its selection rewritten, so that is what takes time.
+        var limits = new StreamLimits(idleTimeout, totalTimeout ?? PolishTimeout((options.Selection ?? "") + transcript), firstTokenTimeout);
         try
         {
             return await StreamPolish(transcript, options, true, limits, onPartial, cancellationToken).ConfigureAwait(false);
@@ -288,7 +315,10 @@ public sealed partial class ApiClient
                         }
                         if (receivedDone) break;
                     }
-                    var cleaned = Prompts.SanitizePolishOutput(text.ToString(), Prompts.Reminder(options.Translation));
+                    // An edit's answer is cleaned up as an edit's.
+                    var cleaned = options.Selection is { } selection
+                        ? Prompts.SanitizeCommandOutput(text.ToString(), selection)
+                        : Prompts.SanitizePolishOutput(text.ToString(), Prompts.Reminder(options.Translation));
                     if (cleaned.Length == 0) throw ApiException.BadResponse(L("模型返回了空内容", "the model returned nothing"));
                     if (usage is null || (usage.InputTokens == null && usage.OutputTokens == null && usage.Cost == null))
                     {

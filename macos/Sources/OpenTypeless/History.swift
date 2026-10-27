@@ -202,14 +202,9 @@ final class HistoryStore: ObservableObject {
         // on disk, so surface it as failed and retryable.
         for index in loaded.indices where loaded[index].status == .recording || loaded[index].status == .processing {
             loaded[index].status = .failed
-            if loaded[index].isFile && !loaded[index].hasAudio {
-                // Quit while the file was still being read: what was read of it is no use.
-                try? FileManager.default.removeItem(at: loaded[index].partialAudioURL)
-                loaded[index].error = L("上次运行中断，文件还没读完，请重新转写这个文件",
-                                        "Interrupted last time while reading the file — transcribe the file again")
-            } else {
-                loaded[index].error = L("上次运行中断（音频已保存，可重试）", "Interrupted last time (audio saved — you can retry)")
-            }
+            // Quit while a file was still being read: what was read of it is no use.
+            if loaded[index].isFile && !loaded[index].hasAudio { try? FileManager.default.removeItem(at: loaded[index].partialAudioURL) }
+            loaded[index].error = FileTranscription.interruptedMessage(isFile: loaded[index].isFile, hasAudio: loaded[index].hasAudio)
             save(loaded[index])
         }
         records = loaded

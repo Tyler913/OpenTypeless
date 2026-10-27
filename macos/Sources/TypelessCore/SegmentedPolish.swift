@@ -113,16 +113,18 @@ public enum SegmentedPolish {
     /// The app's clean-up of `transcript`: each part hedged between the routes (see HedgedPolish) and asked a second
     /// time after a transient failure, but not after a timeout. A second wait as long as the first would only hold the
     /// dictation up; the part goes in as spoken instead. `concurrency` caps how many parts are out at once (nil: all of
-    /// them, which is what a dictation wants; the transcript of an hour-long file has dozens).
+    /// them, which is what a dictation wants; the transcript of an hour-long file has dozens), and with a cap, a part
+    /// waits to start while `holdWhile` says so (a file's clean-up, while a dictation is under way).
     public static func run(
         transcript: String,
         primary: PolishRoute,
         backup: PolishRoute?,
         concurrency: Int? = nil,
+        holdWhile: (@Sendable () -> Bool)? = nil,
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> SegmentedPolishResult {
         let policy = RetryPolicy(maxAttempts: 2, retriesTimeouts: false)
-        return try await run(transcript: transcript, concurrency: concurrency, polish: { part, partial in
+        return try await run(transcript: transcript, concurrency: concurrency, holdWhile: holdWhile, polish: { part, partial in
             try await policy.run { _ in
                 try await HedgedPolish.run(transcript: part, primary: primary, backup: backup, onPartial: partial)
             }
@@ -136,6 +138,7 @@ public enum SegmentedPolish {
     public static func run(
         transcript: String,
         concurrency: Int? = nil,
+        holdWhile: (@Sendable () -> Bool)? = nil,
         polish: @escaping @Sendable (String, (@Sendable (String) -> Void)?) async throws -> HedgedPolishResult,
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> SegmentedPolishResult {
@@ -149,6 +152,9 @@ public enum SegmentedPolish {
                     await gate?.wait()
                     let outcome: Result<HedgedPolishResult, Error>
                     do {
+                        if gate != nil, let holdWhile {
+                            while holdWhile(), !Task.isCancelled { try? await Task.sleep(nanoseconds: 200_000_000) }
+                        }
                         // One that waited its turn past a cancellation doesn't start at all.
                         if gate != nil { try Task.checkCancellation() }
                         outcome = .success(try await polish(text, { progress.update(index, $0) }))

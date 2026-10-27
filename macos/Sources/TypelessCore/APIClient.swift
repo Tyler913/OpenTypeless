@@ -20,6 +20,20 @@ public struct APIClient: Sendable {
         return URLSession(configuration: config)
     }()
 
+    /// A client for a file being transcribed, on a session of its own with fewer connections per host (see
+    /// `FileTranscription.maxConnectionsPerHost`): a dictation's requests never wait behind a file's.
+    public static func forFiles(endpoint: ProviderEndpoint) -> APIClient {
+        APIClient(endpoint: endpoint, session: fileSession)
+    }
+
+    static let fileSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForResource = 600
+        config.waitsForConnectivity = false
+        config.httpMaximumConnectionsPerHost = FileTranscription.maxConnectionsPerHost
+        return URLSession(configuration: config)
+    }()
+
     var isOpenRouter: Bool { endpoint.id == .openrouter }
 
     func url(_ path: String) -> URL {

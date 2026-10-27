@@ -411,13 +411,13 @@ final class SessionController: ObservableObject {
     /// How long each speech-to-text route takes, kept while the app runs, so the backup is asked when a chunk is late.
     private var latencies: [String: TranscriptionLatency] = [:]
 
-    /// `forFile`: for a file being transcribed (see FileTranscriber), which sends fewer requests at once, has no
-    /// speculative tail, and keeps its own idea of how long requests take (its chunks are mostly long).
+    /// `forFile`: for a file being transcribed (see FileTranscriber), which sends fewer requests at once on a session of
+    /// its own, has no speculative tail, and keeps its own idea of how long requests take (its chunks are mostly long).
     func makePipeline(endpoint: ProviderEndpoint, preset: [Int: String], forFile: Bool = false,
                       onSpeculation: (@Sendable (String?) -> Void)? = nil) -> TranscriptionPipeline {
         let language = settings.sttLanguage.isEmpty ? nil : settings.sttLanguage
         let backup = settings.sttBackupEndpoint.map {
-            (client: APIClient(endpoint: $0),
+            (client: forFile ? APIClient.forFiles(endpoint: $0) : APIClient(endpoint: $0),
              options: APIClient.TranscriptionOptions(model: settings.sttBackupModel.trimmingCharacters(in: .whitespaces), language: language,
                                                      vocabulary: settings.vocabularyList))
         }
@@ -425,7 +425,7 @@ final class SessionController: ObservableObject {
         let latency = forFile ? TranscriptionLatency() : latencies[key] ?? TranscriptionLatency()
         if !forFile { latencies[key] = latency }
         return TranscriptionPipeline(
-            client: APIClient(endpoint: endpoint),
+            client: forFile ? APIClient.forFiles(endpoint: endpoint) : APIClient(endpoint: endpoint),
             options: .init(model: settings.sttModel, language: language, vocabulary: settings.vocabularyList),
             preset: preset,
             backup: backup,
@@ -811,21 +811,24 @@ final class SessionController: ObservableObject {
 
     private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
 
-    /// `concurrency`: how many parts of a long transcript are out at once (nil: all, as a dictation wants them).
-    func polish(_ raw: String, concurrency: Int? = nil,
+    /// `forFile`: the clean-up of a file being transcribed (see FileTranscriber), which sends a few parts at a time, on
+    /// the file session, each part waiting to start while `holdWhile` says so (a dictation is under way). A dictation's
+    /// own clean-up sends all of its parts at once.
+    func polish(_ raw: String, forFile: Bool = false, holdWhile: (@Sendable () -> Bool)? = nil,
                 onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
-        let primary = route(endpoint, model: settings.polishModel)
-        let backup = settings.polishBackupEndpoint.map { route($0, model: settings.polishBackupModel) }
-        return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup, concurrency: concurrency,
-                                             onPartial: onPartial)
+        let primary = route(endpoint, model: settings.polishModel, forFile: forFile)
+        let backup = settings.polishBackupEndpoint.map { route($0, model: settings.polishBackupModel, forFile: forFile) }
+        return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup,
+                                             concurrency: forFile ? FileTranscription.cleanUpConcurrency : nil,
+                                             holdWhile: holdWhile, onPartial: onPartial)
     }
 
-    private func route(_ endpoint: ProviderEndpoint, model: String) -> PolishRoute {
+    private func route(_ endpoint: ProviderEndpoint, model: String, forFile: Bool = false) -> PolishRoute {
         let model = model.trimmingCharacters(in: .whitespaces)
-        return PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
+        return PolishRoute(client: forFile ? .forFiles(endpoint: endpoint) : APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
             vocabulary: settings.vocabularyList,
             misheard: settings.misheardHints,

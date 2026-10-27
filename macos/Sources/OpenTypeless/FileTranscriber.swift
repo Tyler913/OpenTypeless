@@ -177,6 +177,10 @@ final class FileTranscriber: ObservableObject {
             report(id, .reading(nil))
             do {
                 let seconds = try await AudioFileDecoder.duration(of: file)
+                // Refused at once when the recording can't fit, rather than after filling the disk.
+                if let free = Self.freeBytes(at: record.folder), free < FileTranscription.requiredBytes(seconds: seconds) {
+                    throw FileTranscriptionError.diskFull
+                }
                 let decoded = try await Self.read(file, to: record.audioURL, partial: record.partialAudioURL, seconds: seconds) { [weak self] fraction in
                     Task { @MainActor in self?.report(id, .reading(fraction)) }
                 }
@@ -218,14 +222,14 @@ final class FileTranscriber: ObservableObject {
         let pipeline = controller.makePipeline(endpoint: endpoint, preset: preset, forFile: true)
         self.pipeline = pipeline
         let started = ProcessInfo.processInfo.systemUptime
-        report(id, .transcribing(done: min(preset.count, total), total: total))
+        report(id, .transcribing(done: min(pipeline.chunkCounts().answered, total), total: total))
         // Moves the progress on as chunks come back, and saves the transcripts so far now and then.
         let watch = Task { @MainActor [weak self] in
             var saved = ProcessInfo.processInfo.systemUptime
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 guard let self, !Task.isCancelled else { return }
-                self.report(id, .transcribing(done: min(pipeline.chunkCounts().finished, total), total: total))
+                self.report(id, .transcribing(done: min(pipeline.chunkCounts().answered, total), total: total))
                 if ProcessInfo.processInfo.systemUptime - saved >= FileTranscription.saveInterval,
                    var current = self.history.records.first(where: { $0.id == id }), current.status == .processing {
                     saved = ProcessInfo.processInfo.systemUptime
@@ -280,7 +284,7 @@ final class FileTranscriber: ObservableObject {
             // Saved while the clean-up runs, so the transcript survives a crash.
             store(record)
             do {
-                let outcome = try await controller.polish(raw, concurrency: FileTranscription.cleanUpConcurrency)
+                let outcome = try await controller.polish(raw, forFile: true, holdWhile: { [dictating] in dictating.value })
                 polished = outcome
                 record.timing?.polishFirstToken = outcome.firstTokenSeconds
                 record.timing?.polish = outcome.totalSeconds
@@ -344,7 +348,7 @@ final class FileTranscriber: ObservableObject {
             writer.close()
             closed = true
             if let failure = writer.failure { throw FileTranscriptionError.writing(failure) }
-            guard count > 0 else { throw FileTranscriptionError.noAudioTrack }
+            guard count > 0 else { throw FileTranscriptionError.noSound }
             if chunker.finish() != nil { chunks += 1 }
             try? FileManager.default.removeItem(at: destination)
             do {
@@ -373,18 +377,15 @@ final class FileTranscriber: ObservableObject {
         return chunks + (chunker.finish() == nil ? 0 : 1)
     }
 
-    /// Hands the recording to the pipeline a block at a time, holding back while enough chunks are out (or a dictation
-    /// is under way), then waits for the transcript.
+    /// Hands the recording to the pipeline from disk (see `FileTranscription.feed`), then waits for the transcript.
     nonisolated private static func feed(_ audio: URL, to pipeline: TranscriptionPipeline, dictating: Flag) async throws -> String {
         let reader = try WAVFileReader(url: audio)
-        let block = AudioFormat.sampleCount(forSeconds: FileTranscription.blockSeconds)
-        while let samples = try reader.read(maxSamples: block) {
-            while pipeline.chunkCounts().outstanding >= FileTranscription.outstandingLimit(dictating: dictating.value) {
-                try await Task.sleep(nanoseconds: 200_000_000)
-            }
-            try Task.checkCancellation()
-            pipeline.append(samples)
-        }
-        return try await pipeline.finish()
+        return try await FileTranscription.feed(reader, to: pipeline, dictating: { dictating.value })
+    }
+
+    /// Space left on the volume holding `folder` for files the user is saving; nil when the system doesn't say.
+    nonisolated private static func freeBytes(at folder: URL) -> Int64? {
+        let values = try? folder.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        return values?.volumeAvailableCapacityForImportantUsage
     }
 }

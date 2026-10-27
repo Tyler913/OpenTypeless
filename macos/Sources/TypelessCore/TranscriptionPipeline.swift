@@ -71,6 +71,29 @@ public enum ChunkState: Sendable, Equatable {
     }
 }
 
+/// Where the chunks handed to a pipeline stand (see `TranscriptionPipeline.chunkCounts`).
+public struct ChunkCounts: Equatable, Sendable {
+    /// Transcribed, reused from `preset`, or with nothing to send (silence).
+    public var answered: Int
+    /// Failed after their retries (sent once more by `finish`, unless the failure is permanent).
+    public var failed: Int
+    /// Handed out and still waiting for an answer.
+    public var outstanding: Int
+    /// Of the failed ones, those the provider turned down the way it turns down every request (see
+    /// `APIError.refusesEveryRequest`).
+    public var refused: Int
+    /// How many chunks failed since the last one that was transcribed, in the order their answers came.
+    public var failureStreak: Int
+
+    public init(answered: Int, failed: Int, outstanding: Int, refused: Int = 0, failureStreak: Int = 0) {
+        self.answered = answered
+        self.failed = failed
+        self.outstanding = outstanding
+        self.refused = refused
+        self.failureStreak = failureStreak
+    }
+}
+
 public struct PipelineFailure: Error, LocalizedError, Sendable {
     public let partialText: String
     public let failedChunks: [Int]
@@ -108,6 +131,10 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     private var results: [Int: ChunkState] = [:]
     /// Chunks whose last failure was permanent (bad key, no credit…): not worth another round.
     private var permanentFailures: Set<Int> = []
+    /// Chunks that failed since the last one transcribed (see `ChunkCounts.failureStreak`).
+    private var failureStreak = 0
+    /// Failed chunks the provider turned down as it would any request (see `ChunkCounts.refused`).
+    private var refusals: Set<Int> = []
     private var tasks: [Int: Task<Void, Never>] = [:]
     /// Usage of every successful request, retries of the same chunk included (each one was billed).
     private var usages: [RequestUsage] = []
@@ -297,15 +324,35 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         }
     }
 
-    /// How many of the chunks so far have their answer (or needed none, or were reused from `preset`), and how many are
-    /// handed out and still waiting for one. Unlike `transcriptionProgress` it's there before `finish`: a long recording
-    /// read from a file is handed over a block at a time, held back while enough chunks are out (see FileTranscription).
-    public func chunkCounts() -> (finished: Int, outstanding: Int) {
+    /// Where the chunks so far stand: answered (or needing none, or reused from `preset`), failed, and handed out and
+    /// still waiting. Unlike `transcriptionProgress` it's there before `finish`: a long recording read from a file is
+    /// handed over a block at a time, held back while enough chunks are out, and stopped once they keep failing (see
+    /// FileTranscription).
+    public func chunkCounts() -> ChunkCounts {
         lock.withLock {
-            let finished = results.values.filter(\.isFinished).count
-            return (finished, results.count - finished)
+            var counts = ChunkCounts(answered: 0, failed: 0, outstanding: 0, refused: refusals.count, failureStreak: failureStreak)
+            for state in results.values {
+                switch state {
+                case .done, .skippedSilence: counts.answered += 1
+                case .failed: counts.failed += 1
+                case .queued, .transcribing: counts.outstanding += 1
+                }
+            }
+            return counts
         }
     }
+
+    /// Stops a recording handed over a block at a time (a file) whose chunks keep failing, rather than reading the rest
+    /// of it only to send requests that fail too: what's still out is cancelled, and the failure `finish` would have
+    /// thrown comes back, with the text so far. A dictation never stops this way.
+    public func giveUp() -> PipelineFailure {
+        cancel()
+        let (text, failed, lastError) = snapshot()
+        return PipelineFailure(partialText: text, failedChunks: failed, underlying: lastError ?? "unknown")
+    }
+
+    /// How many chunks' audio is still held (to be sent, or sent again in `finish`'s last round).
+    var heldChunkCount: Int { lock.withLock { chunks.count } }
 
     /// What the requests so far used, one entry per successful request.
     public func requestUsages() -> [RequestUsage] {
@@ -372,6 +419,13 @@ public final class TranscriptionPipeline: @unchecked Sendable {
             if case .failed = outcome.state {} else { chunks[index] = nil }
             if outcome.permanent { permanentFailures.insert(index) } else { permanentFailures.remove(index) }
             if case .done = outcome.state { answeredByBackup[index] = outcome.backup } else { answeredByBackup[index] = nil }
+            switch outcome.state {
+            case .done:
+                failureStreak = 0
+                refusals.remove(index)
+            case .failed: failureStreak += 1
+            default: break
+            }
         }
         observer?(index, outcome.state)
         announce()
@@ -495,6 +549,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
             return (.done(result.text), false, usedBackup)
         } catch {
             let apiError = APIError.from(error)
+            if apiError.refusesEveryRequest { lock.withLock { _ = refusals.insert(chunk.index) } }
             return (.failed(apiError.localizedDescription), !apiError.isRetryable, false)
         }
     }

@@ -32,10 +32,60 @@ public enum FileTranscription {
     /// only sends what wasn't transcribed yet.
     public static let saveInterval = 20.0
 
+    /// Connections a file's requests may open to one host. They have a session of their own (`APIClient.forFiles`),
+    /// so a long upload or clean-up of a file never makes a dictation's requests wait for a connection.
+    public static let maxConnectionsPerHost = 3
+    /// After this many chunks in a row fail (each after its own retries), a file stops: the provider is down or refusing,
+    /// and reading on would only send requests that fail too, and keep their audio for a last round.
+    public static let maxConsecutiveFailures = 3
+    /// How often a file waiting for its chunks (or for a dictation to end) looks again, in seconds.
+    public static let pollInterval = 0.2
+
     /// How many chunks may be out before more audio is handed over: none while a dictation is under way, so a file
     /// never competes with it for more than the requests it already has out.
     public static func outstandingLimit(dictating: Bool) -> Int {
         dictating ? 0 : maxOutstandingChunks
+    }
+
+    /// Whether a file should stop handing out audio: the provider turned a chunk down as it would any request (bad key,
+    /// no credit, no such model), or `maxConsecutiveFailures` chunks in a row failed. Only a file stops early; a
+    /// dictation has no more audio to hold back, and `finish` gives its failed chunks another round.
+    public static func shouldGiveUp(_ counts: ChunkCounts) -> Bool {
+        counts.refused > 0 || counts.failureStreak >= maxConsecutiveFailures
+    }
+
+    /// Hands a recording to `pipeline` a block at a time from disk, holding back while enough chunks are out (or while
+    /// `dictating` says a dictation is under way), and stopping with the `PipelineFailure` so far once its chunks keep
+    /// failing (`shouldGiveUp`); then waits for the transcript.
+    public static func feed(_ reader: WAVFileReader, to pipeline: TranscriptionPipeline,
+                            dictating: @Sendable () -> Bool) async throws -> String {
+        let block = AudioFormat.sampleCount(forSeconds: blockSeconds)
+        while let samples = try reader.read(maxSamples: block) {
+            while true {
+                let counts = pipeline.chunkCounts()
+                if shouldGiveUp(counts) { throw pipeline.giveUp() }
+                if counts.outstanding < outstandingLimit(dictating: dictating()) { break }
+                try await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))
+            }
+            try Task.checkCancellation()
+            pipeline.append(samples)
+        }
+        return try await pipeline.finish()
+    }
+
+    /// Room a file's recording needs on disk: 32 KB a second of 16 kHz 16-bit audio, and 64 MB to spare.
+    public static func requiredBytes(seconds: Double) -> Int64 {
+        Int64(max(0, seconds) * Double(AudioFormat.sampleRate) * 2) + 64 * 1_048_576
+    }
+
+    /// What a record still processing at launch says: the app quit mid-way. A file quit while it was still being read
+    /// (no recording yet) has to be transcribed again from the file; anything else can be retried from its recording.
+    public static func interruptedMessage(isFile: Bool, hasAudio: Bool) -> String {
+        if isFile && !hasAudio {
+            return L("上次运行中断，文件还没读完，请重新转写这个文件",
+                     "Interrupted last time while reading the file — transcribe the file again")
+        }
+        return L("上次运行中断（音频已保存，可重试）", "Interrupted last time (audio saved — you can retry)")
     }
 
     /// What transcribing `seconds` of audio should cost at `price`, in USD; nil when the model has no per-minute price
@@ -98,6 +148,10 @@ public enum FileTranscriptionError: Error, LocalizedError, Equatable, Sendable {
     /// Damaged, or in a format this computer can't decode; with what the system said, when that says more.
     case unsupported(String?)
     case noAudioTrack
+    /// It has an audio track, but nothing in it.
+    case noSound
+    /// Copy-protected (DRM), so it can't be decoded.
+    case protected
     case diskFull
     /// The recording couldn't be written for some other reason.
     case writeFailed(String)
@@ -115,6 +169,10 @@ public enum FileTranscriptionError: Error, LocalizedError, Equatable, Sendable {
             return L("无法读取这个文件：已损坏，或是不支持的格式", "Can't read this file: it's damaged or in a format that isn't supported")
         case .noAudioTrack:
             return L("这个文件里没有音轨", "This file has no audio track")
+        case .noSound:
+            return L("这个文件的音轨是空的", "This file's audio track is empty")
+        case .protected:
+            return L("这个文件有版权保护（DRM），无法读取", "This file is copy-protected (DRM), so it can't be read")
         case .diskFull:
             return L("磁盘空间不足，无法保存音频", "Not enough disk space to save the audio")
         case let .writeFailed(message):

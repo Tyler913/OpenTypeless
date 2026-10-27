@@ -77,7 +77,8 @@ public enum AudioFileDecoder {
     }
 
     /// The file's first audio track. A file AVFoundation opens with tracks but none of them audio (a silent video)
-    /// has no audio track; one it opens with no tracks at all, or not at all, isn't a media file it can read.
+    /// has no audio track; one it opens with no tracks at all, or not at all, isn't a media file it can read; a
+    /// copy-protected one can't be read either, and says so.
     private static func audioTrack(of url: URL) async throws -> (AVURLAsset, AVAssetTrack) {
         try checkReadable(url)
         let asset = AVURLAsset(url: url)
@@ -86,6 +87,8 @@ public enum AudioFileDecoder {
             guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
                 throw all.isEmpty ? FileTranscriptionError.unsupported(nil) : FileTranscriptionError.noAudioTrack
             }
+            // Bought music and rented films: AVAssetReader can't read them, and would only say it failed.
+            if try await asset.load(.hasProtectedContent) { throw FileTranscriptionError.protected }
             return (asset, track)
         } catch {
             throw FileTranscriptionError.reading(error)

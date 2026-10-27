@@ -90,4 +90,21 @@ public class HotkeyPressTests
         Assert.False(chords.TryGetMode(0x54, out _));
         Assert.Equal(new OtherKeyOutcome<Mode>.Cancel(), chords.OtherKey(0x54, 50, 50.2, handsFree: false));
     }
+
+    /// <summary>
+    /// While a chord modifier's press is swallowed, a key pressed would reach the app without it, as another shortcut
+    /// (Win + Ctrl + Q as Win + Q): it's kept from the app. Modifiers, chord keys and the repeats of a key pressed before
+    /// go through as before, and with nothing swallowed every key does.
+    /// </summary>
+    [Fact]
+    public void KeysPressedWhileAChordModifierIsSwallowedAreKeptFromTheApp()
+    {
+        var chords = new HashSet<int> { 0xA0, 0xA1 }; // Shift
+        Assert.True(HotkeyPress.KeepsFromApp(0x51, repeat: false, isModifier: false, chords, chordModifierSwallowed: true)); // Q
+        Assert.True(HotkeyPress.KeepsFromApp(0x20, repeat: false, isModifier: false, chords, chordModifierSwallowed: true)); // Space
+        Assert.False(HotkeyPress.KeepsFromApp(0x51, repeat: false, isModifier: false, chords, chordModifierSwallowed: false));
+        Assert.False(HotkeyPress.KeepsFromApp(0x51, repeat: true, isModifier: false, chords, chordModifierSwallowed: true));
+        Assert.False(HotkeyPress.KeepsFromApp(0xA2, repeat: false, isModifier: true, chords, chordModifierSwallowed: true)); // Ctrl
+        Assert.False(HotkeyPress.KeepsFromApp(0xA1, repeat: false, isModifier: false, chords, chordModifierSwallowed: true));
+    }
 }

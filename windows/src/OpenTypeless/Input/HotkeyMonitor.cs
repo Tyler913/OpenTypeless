@@ -264,7 +264,8 @@ public sealed class HotkeyMonitor
             // A new press: the last one's key-up went by while a shortcut was being recorded (or the hook was off).
             _swallowedKeys.Remove(vk);
         }
-        if (_isSuspended) return false;
+        // While a new hotkey is recorded too: a key that would reach the app without a swallowed chord modifier.
+        if (_isSuspended) return down && KeepsFromApp(vk, repeat);
 
         var time = HotkeyPress.TickTime(info.time, Environment.TickCount64);
         if (hotkey.IsModifierOnly)
@@ -296,7 +297,7 @@ public sealed class HotkeyMonitor
                 // Auto-repeat while held arrives as more key-downs: ignored.
                 return false;
             }
-            if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
+            if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down) || (down && KeepsFromApp(vk, repeat));
             if (!down) return false;
             // A mode chord pressed with the hotkey counts, a modifier too (Right Alt + Shift translates), and is kept
             // from the focused app, where Shift on its own would switch a Chinese or Japanese input method between its
@@ -326,7 +327,7 @@ public sealed class HotkeyMonitor
                 }
             }
             // After the combo above, which cancels a dictation the shortcut's modifier may have just started.
-            return HandleAction(vk, repeat);
+            return HandleAction(vk, repeat) || KeepsFromApp(vk, repeat);
         }
 
         // Key combination.
@@ -355,7 +356,7 @@ public sealed class HotkeyMonitor
             }
             // Otherwise the same key with other modifiers, which may be an action's shortcut (F5 dictates, Shift + F5 pastes).
         }
-        if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
+        if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down) || (down && KeepsFromApp(vk, repeat));
         if (!down) return false;
         // A new press only: the repeats of one that went through before the hotkey (Shift held, then ⌥Space) go through
         // too, or the focused app would see it go down and never come up. A swallowed one's repeats went above.
@@ -366,7 +367,19 @@ public sealed class HotkeyMonitor
             Fire(OnOtherKey, vk, time);
             return Swallow(vk);
         }
-        return HandleAction(vk, repeat);
+        return HandleAction(vk, repeat) || KeepsFromApp(vk, repeat);
+    }
+
+    /// <summary>
+    /// A key going down while a chord modifier whose press was swallowed is still held: swallowed too, its repeats and
+    /// key-up with it, since it would reach the app without that modifier, as another shortcut (see
+    /// <see cref="HotkeyPress.KeepsFromApp"/>). Only chords swallow a modifier: an action's shortcut is never one alone.
+    /// </summary>
+    private bool KeepsFromApp(int vk, bool repeat)
+    {
+        if (!HotkeyPress.KeepsFromApp(vk, repeat, IsModifier(vk), ModeChordKeys, _swallowedKeys.Any(IsModifier))) return false;
+        HotkeyLog.Debug($"key (vk {vk}) kept from the app while a chord modifier is held");
+        return Swallow(vk);
     }
 
     /// <summary>

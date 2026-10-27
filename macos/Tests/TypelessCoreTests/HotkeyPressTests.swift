@@ -69,6 +69,24 @@ extension HotkeyPressTests {
             #expect(HotkeyPress.eventTime(stamp, now: 100) == 100)
         }
     }
+    /// While a chord modifier's press is swallowed, a key pressed would reach the app without it, as another shortcut
+    /// (⌘⇧Q, log out, as ⌘Q, quit): it's kept from the app. Modifiers, chord keys and the repeats of a key pressed
+    /// before go through as before, and with nothing swallowed every key does.
+    @Test func keysPressedWhileAChordModifierIsSwallowedAreKeptFromTheApp() {
+        let chords: Set<Int64> = [56, 60] // ⇧
+        #expect(HotkeyPress.keepsFromApp(12, isRepeat: false, isModifier: false, chordKeys: chords,
+                                         chordModifierSwallowed: true)) // Q
+        #expect(HotkeyPress.keepsFromApp(49, isRepeat: false, isModifier: false, chordKeys: chords,
+                                         chordModifierSwallowed: true)) // Space
+        #expect(!HotkeyPress.keepsFromApp(12, isRepeat: false, isModifier: false, chordKeys: chords,
+                                          chordModifierSwallowed: false))
+        #expect(!HotkeyPress.keepsFromApp(12, isRepeat: true, isModifier: false, chordKeys: chords,
+                                          chordModifierSwallowed: true))
+        #expect(!HotkeyPress.keepsFromApp(55, isRepeat: false, isModifier: true, chordKeys: chords,
+                                          chordModifierSwallowed: true)) // ⌘
+        #expect(!HotkeyPress.keepsFromApp(60, isRepeat: false, isModifier: false, chordKeys: chords,
+                                          chordModifierSwallowed: true))
+    }
 }
 
 /// A modifier kept from the focused app is taken out of the flags of every event let through until its release.

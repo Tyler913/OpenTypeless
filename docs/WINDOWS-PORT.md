@@ -91,7 +91,8 @@ failure handling. Only the system-integration layer and the look differ.
   Ctrl. Its key-down and key-up are swallowed, so Shift doesn't switch a Chinese or Japanese IME and Alt + Shift doesn't
   switch the layout. The rest of a swallowed press (the key-combination hotkey's included) stays swallowed while a new
   hotkey is being recorded, too. A swallowed key never reaches the key state, so there are no flags to clear afterwards
-  as on macOS.
+  as on macOS, but for the same reason another key pressed while a swallowed chord modifier is held is swallowed too
+  (`HotkeyPress.KeepsFromApp`): it would reach the app as another shortcut (Win + Ctrl + Q as Win + Q).
 
 ## Deliberate platform differences
 

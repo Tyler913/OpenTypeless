@@ -327,6 +327,7 @@ final class HotkeyMonitor {
         // chords changed in Settings), the rest of it is swallowed too, or the focused app gets half a key press.
         if let swallowed = restOfSwallowedPress(type: type, keyCode: keyCode, event: event) { return swallowed }
         if isSuspended {
+            if type == .keyDown, keepsFromApp(keyCode, event: event) { return true }
             if type == .flagsChanged, keyCode == hotkey.keyCode {
                 HotkeyLog.debug("ignored \(Hotkey.modifierName(keyCode)) — recording a new shortcut")
             }
@@ -369,7 +370,7 @@ final class HotkeyMonitor {
                 if repeated { return false } // one swallowed went above
                 fire(onEscape)
                 escapeSwallowed = swallowsEscape
-                return escapeSwallowed
+                return escapeSwallowed || keepsFromApp(keyCode, event: event)
             } else if isDown, hotkey.isModifierOnly {
                 // A real combo (Fn+F1, right ⌘+Tab…) carries the hotkey's modifier flag on the key event.
                 // Keys injected by other apps at the same moment — e.g. Logi Options+ sending its own
@@ -400,7 +401,8 @@ final class HotkeyMonitor {
                 swallowedKeys.insert(keyCode)
                 return true
             }
-            return false
+            // Reported above when it makes a combination (which cancels the dictation), but not let through either.
+            return keepsFromApp(keyCode, event: event)
 
         case .keyUp:
             if !hotkey.isModifierOnly, keyCode == hotkey.keyCode, isDown {
@@ -415,6 +417,17 @@ final class HotkeyMonitor {
         default:
             return false
         }
+    }
+
+    /// A key going down while a suppressed modifier is held: swallowed, its repeats and release with it, since it would
+    /// reach the app without that modifier's flags, as another shortcut (see `HotkeyPress.keepsFromApp`).
+    private func keepsFromApp(_ keyCode: Int64, event: CGEvent) -> Bool {
+        guard HotkeyPress.keepsFromApp(keyCode, isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
+                                       isModifier: Hotkey.modifierKeys[keyCode] != nil, chordKeys: modeChordKeys,
+                                       chordModifierSwallowed: !suppressedModifiers.isEmpty) else { return false }
+        HotkeyLog.debug("key (code \(keyCode)) kept from the app while a chord modifier is held · \(HotkeyLog.describe(event))")
+        swallowedKeys.insert(keyCode)
+        return true
     }
 
     /// The auto-repeats and release of a key whose press was swallowed, and the release of a suppressed modifier: true

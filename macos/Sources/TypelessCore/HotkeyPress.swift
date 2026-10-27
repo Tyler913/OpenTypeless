@@ -29,6 +29,16 @@ public enum HotkeyPress {
     public static func eventTime(_ stamp: TimeInterval, now: TimeInterval) -> TimeInterval {
         stamp > 0 && stamp <= now && now - stamp < maxEventAge ? stamp : now
     }
+
+    /// Whether a key going down is kept from the focused app because a chord modifier's press was swallowed and it's
+    /// still held. Let through, the key would reach the app without that modifier, as another shortcut altogether:
+    /// with ⇧ the translation chord, ⌘⇧Q (log out) as ⌘Q (quit), ⌘⌃Space as ⌘Space. Its auto-repeats and release go
+    /// with it. Not a modifier (which only changes what's held), a chord key, or the repeat of a key pressed before the
+    /// chord, whose press the app has seen and whose release it must see too.
+    public static func keepsFromApp(_ keyCode: Int64, isRepeat: Bool, isModifier: Bool, chordKeys: Set<Int64>,
+                                    chordModifierSwallowed: Bool) -> Bool {
+        chordModifierSwallowed && !isRepeat && !isModifier && !chordKeys.contains(keyCode)
+    }
 }
 
 /// What another key, pressed while the dictation hotkey is held, does to the recording.

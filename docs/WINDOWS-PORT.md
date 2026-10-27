@@ -85,6 +85,12 @@ failure handling. Only the system-integration layer and the look differ.
   in front when the shortcut was pressed, or before the tray panel opened (unknown when that was the taskbar: then the
   window in front once the panel closes). `BlocksAltGr` (Ctrl + Alt with a character key) shows the AltGr notice for an
   action's shortcut.
+- The send key (Finish and send, see DESIGN.md: Enter, Shift + Enter or Ctrl + Enter) is matched in the same hook while
+  recording, against `CurrentModifiers()` less the held hotkey's (`HeldModifiers`: Right Alt brings Ctrl along on AltGr
+  layouts), and swallowed like an action's shortcut. Its `SendInput` puts the modifiers down around Enter, since an
+  injected key carries none of its own, marked like the paste, and only after `WaitForRelease` saw every modifier and
+  Enter let go (`HeldKeys`, as the swallowed Enter never reaches `GetAsyncKeyState`). The keypad's Enter has the same
+  virtual key.
 
 ## Deliberate platform differences
 
@@ -125,8 +131,8 @@ These follow from how Windows works rather than from missing features:
 ## UI parity checklist
 
 - **Popover**: header (tile, name, status pill), setup warnings with Fix, last failed dictation with Retry, 5 recent items (click to copy, check mark; with none yet, "Hold [keys] and speak" and the tip), footer (Settings, History, Paste last dictation, Quit).
-- **General**: permissions, language (System or one of the nine UI languages), open at login (+ error / approval footer), restore clipboard, sounds, maximum recording (1–60 min).
-- **Shortcut**: current keys (large key caps), record / cancel, presets, how it works, more shortcuts (record / change / clear per action, refusal reason), warnings.
+- **General**: permissions, language (System or one of the nine UI languages), open at login (+ error / approval footer), restore clipboard, press Return / Enter after inserting, spoken line breaks, sounds, maximum recording (1–60 min).
+- **Shortcut**: current keys (large key caps), record / cancel, presets, how it works, finish and send (send key picker), more shortcuts (record / change / clear per action, refusal reason), warnings.
 - **Providers**: six expandable cards: usage tags, configured pill, API key (password box + Paste), Base URL (+ Reset), get-a-key link, Test connection.
 - **Models**: STT provider / model (free text + browse, grouped by vendor when > 40) / spoken language; clean-up toggle / provider / model; backup model toggle / provider / model; missing-key banners.
 - **Vocabulary & Style**: vocabulary editor, "Learn from my corrections" with the learned terms (heard as…, date, remove = never learn again), preferences editor.

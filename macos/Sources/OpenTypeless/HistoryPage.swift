@@ -280,7 +280,7 @@ private struct HistoryDetail: View {
                                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.04)))
                                         .padding(.top, 6)
                                 } label: {
-                                    Text(record.isCommand ? L("说出的指令", "Spoken instruction") : L("原始转写", "Raw transcript"))
+                                    Text(L("原始转写", "Raw transcript"))
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundStyle(.secondary)
                                 }

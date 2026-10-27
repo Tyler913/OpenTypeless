@@ -40,9 +40,9 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var mode: String?
     /// The language a translation dictation is written in (`TranslationTarget.id`).
     var targetLanguage: String?
-    /// How many characters the selection an edit worked on had. The selection itself isn't kept: it can be anything the
-    /// user had open (a contract, a private message), and History keeps entries for days. Its instruction is kept as the
-    /// transcript, and the rewrite (or the answer to a question about it) as the clean-up.
+    /// How many characters the selection an edit worked on had. Neither the selection nor the rewrite (or the answer to
+    /// a question about it) is kept: they can be anything the user had open (a contract, a private message), and History
+    /// keeps entries for days. Only its instruction is, as the transcript.
     var selectionLength: Int?
 
     /// An edit of a selection by voice rather than a dictation. Without its selection it can't be run again.

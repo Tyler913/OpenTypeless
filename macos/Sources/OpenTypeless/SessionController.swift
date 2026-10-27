@@ -111,8 +111,15 @@ final class SessionController: ObservableObject {
     private(set) var mode: RecordingMode = .dictation
     /// Command mode: the selection being read (or read) when the chord was pressed, and where (see `readSelection`).
     /// Dropped with the recording, or when another chord switches it to another mode.
-    private var selectionRead: Task<SelectionRead, Never>?
-    private var selectionPlace: SelectedText.Place?
+    private var selectionRead: Task<SelectionReading, Never>?
+
+    /// What reading the selection found: where (nil when this app was in front), what, and how many clicks and keys had
+    /// reached apps by the time it was read.
+    private struct SelectionReading {
+        let place: SelectedText.Place?
+        let read: SelectionRead
+        let mark: SelectedText.InputMark
+    }
     /// The "Paste last dictation" waiting for its keys to be let go, or pasting, by its number. A new dictation, Esc or
     /// the screen locking drops it (nil), and what it still had to do is left undone. Pressing it again meanwhile does nothing.
     private var pendingPasteLast: Int?
@@ -312,17 +319,19 @@ final class SessionController: ObservableObject {
     /// recording: then `editSelection` says so.
     private func readSelection() {
         let generation = self.generation
-        guard let place = SelectedText.Place.front() else {
-            selectionRefused(.noSelection, generation: generation)
-            return
-        }
-        selectionPlace = place
+        // The app in front as the chord goes down.
+        let front = NSWorkspace.shared.frontmostApplication
         let hotkey = settings.hotkey
         let timeout = TimeInterval(max(1, settings.maxRecordingMinutes) * 60 + 10)
         selectionRead = Task { [weak self] in
+            guard let place = await SelectedText.Place.front(front) else {
+                self?.selectionRefused(.noSelection, generation: generation)
+                return SelectionReading(place: nil, read: .refused(.noSelection), mark: .now())
+            }
             let read = await SelectedText.read(at: place, releasing: hotkey, releaseTimeout: timeout)
+            let mark = SelectedText.InputMark.now()
             if case let .refused(reason) = read { self?.selectionRefused(reason, generation: generation) }
-            return read
+            return SelectionReading(place: place, read: read, mark: mark)
         }
     }
 
@@ -337,7 +346,6 @@ final class SessionController: ObservableObject {
     private func dropSelection() {
         selectionRead?.cancel()
         selectionRead = nil
-        selectionPlace = nil
     }
 
     /// Registers the translation chord's keys while translation mode is on, and command mode's while that is (none
@@ -916,12 +924,12 @@ final class SessionController: ObservableObject {
     private func editSelection(record: inout DictationRecord, pipeline: TranscriptionPipeline, generation: Int) async {
         let begun = ProcessInfo.processInfo.systemUptime
         // Read by ⌘C, the selection is only being read now that the keys are up.
-        let read = await selectionRead?.value ?? .refused(.noSelection)
+        let reading = await selectionRead?.value
         // Esc (or a new dictation) meanwhile: `cancel` has dealt with this one.
         guard isCurrent(generation) else { return }
-        guard case let .selection(selection, source) = read, let place = selectionPlace else {
+        guard let reading, case let .selection(selection, source) = reading.read, let place = reading.place else {
             let reason: SelectionRefusal
-            if case let .refused(refusal) = read { reason = refusal } else { reason = .noSelection }
+            if case let .refused(refusal) = reading?.read { reason = refusal } else { reason = .noSelection }
             note("command mode: selection refused (\(reason)) after recording")
             record.status = .polishFailed
             record.error = reason.message
@@ -961,21 +969,20 @@ final class SessionController: ObservableObject {
                                          "Couldn't edit: \(fallback.commandReason). Your text is unchanged")), hideAfter: 4)
             } else {
                 record.status = .done
-                switch SelectionCommand.reply(polished.text) {
+                // Neither is kept in History: both come from the selection (see `SelectionCommand.recordMode`).
+                switch SelectionCommand.reply(polished.text, selection: selection) {
                 case let .answer(answer):
-                    record.polishedText = answer
                     TextInserter.copyToClipboard(answer)
                     record.timing?.delivery = "answered"
                     finish(showing: .answer(answer), hideAfter: 4)
                 case let .rewrite(rewrite):
-                    record.polishedText = rewrite
                     if SelectionCommand.isUnchanged(selection: selection, rewrite: rewrite) {
                         record.timing?.delivery = "unchanged"
                         finish(showing: .error(L("没有需要修改的地方", "Nothing to change")), hideAfter: 2.5)
                     } else {
                         record.timing?.delivery = await deliverEdit(
                             SelectionCommand.replacement(for: selection, rewrite: rewrite), at: place, original: selection,
-                            source: source, generation: generation)
+                            source: source, mark: reading.mark, generation: generation)
                     }
                 }
             }
@@ -989,26 +996,30 @@ final class SessionController: ObservableObject {
     }
 
     /// Pastes an edit over the selection it was made from, which the app's own undo then takes back. Only while it can
-    /// go over that very selection (see `SelectionCommand.delivery`: the same app, window and element in front, the same
-    /// text still selected where Accessibility can tell, something that takes text, the screen unlocked), checked once
-    /// more right before ⌘V goes out; otherwise it goes to the clipboard, and the capsule says why. Returns how it went,
-    /// for History.
+    /// go over that very selection (see `SelectionCommand.delivery`: the same app, window, tab and element in front, the
+    /// same text still selected where Accessibility can tell, or else no click or key since it was read (`mark`),
+    /// something that takes text, the screen unlocked); the app, the clicks and keys and the lock are checked once more
+    /// right before ⌘V. Otherwise it goes to the clipboard, and the capsule says why. Returns how it went, for History.
     private func deliverEdit(_ text: String, at place: SelectedText.Place, original: String, source: SelectionSource,
-                             generation: Int) async -> String {
-        func delivery() -> SelectionCommand.Delivery {
-            SelectionCommand.delivery(
-                canPaste: deliverByPaste && !isLocked, sameWindow: place.isInFront, original: original, source: source,
-                selectionNow: source == .accessibility ? SelectedText.selection(at: place) : nil,
-                editable: FocusProbe.focusedTarget() != .notEditable)
-        }
-        if case let .clipboard(reason) = delivery() {
+                             mark: SelectedText.InputMark, generation: Int) async -> String {
+        let canPaste = deliverByPaste && !isLocked
+        let sameWindow = canPaste ? await place.isInFront() : false
+        let selectionNow = sameWindow && source == .accessibility ? await SelectedText.selection(at: place) : nil
+        let delivery = SelectionCommand.delivery(
+            canPaste: canPaste, sameWindow: sameWindow, original: original, source: source, selectionNow: selectionNow,
+            inputSinceRead: SelectedText.InputMark.now() != mark,
+            editable: !sameWindow || FocusProbe.focusedTarget() != .notEditable)
+        guard isCurrent(generation) else { return "cancelled" }
+        if case let .clipboard(reason) = delivery {
             note("edit → clipboard (\(reason))")
             TextInserter.copyToClipboard(text)
             finish(showing: .error(reason.message), hideAfter: 3)
             return "copied"
         }
         let outcome = await TextInserter.insert(text, restoreClipboard: settings.restoreClipboard) {
-            self.isCurrent(generation) && delivery() == .paste
+            self.isCurrent(generation) && self.deliverByPaste && !self.isLocked
+                && NSWorkspace.shared.frontmostApplication?.processIdentifier == place.pid
+                && SelectedText.InputMark.now() == mark
         }
         guard isCurrent(generation) else {
             note("edit → \(outcome), but it was cancelled meanwhile")
@@ -1024,10 +1035,10 @@ final class SessionController: ObservableObject {
             finish(showing: .copied, hideAfter: 1.6)
             return "failed"
         case .skipped:
-            // The window, the selection or the lock changed just as ⌘V was due.
+            // The app, a click or key, or the lock changed just as ⌘V was due.
             TextInserter.copyToClipboard(text)
-            let reason: SelectionCommand.ClipboardReason
-            if case let .clipboard(why) = delivery() { reason = why } else { reason = .movedAway }
+            let reason: SelectionCommand.ClipboardReason = !deliverByPaste || isLocked ? .locked
+                : SelectedText.InputMark.now() != mark ? .selectionChanged : .movedAway
             finish(showing: .error(reason.message), hideAfter: 3)
             return "copied"
         case .noPermission:

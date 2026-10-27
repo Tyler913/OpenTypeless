@@ -202,6 +202,11 @@ final class HotkeyMonitor {
     /// Keys that switch the recording's mode while the hotkey is held (see `ModeChords`); kept from the focused app then.
     var modeChordKeys: Set<Int64> = []
 
+    /// How many key-downs (auto-repeats too) went through to the focused app, not counting the ones this app posts itself:
+    /// a key typed while a selection is being edited may have changed it (see `SelectedText.InputMark`). Main thread
+    /// only, like the tap.
+    private(set) var keysLetThrough = 0
+
     var hotkey: Hotkey = .fn {
         didSet { isDown = false }
     }
@@ -251,6 +256,9 @@ final class HotkeyMonitor {
                 guard let refcon else { return Unmanaged.passUnretained(event) }
                 let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
                 if monitor.handle(type: type, event: event) { return nil }
+                if type == .keyDown, event.getIntegerValueField(.eventSourceUserData) != TextInserter.eventSignature {
+                    monitor.keysLetThrough &+= 1
+                }
                 monitor.stripSuppressedModifiers(from: event, type: type)
                 return Unmanaged.passUnretained(event)
             },

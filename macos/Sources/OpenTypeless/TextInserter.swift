@@ -133,20 +133,27 @@ enum TextInserter {
 
     /// The text `copy` puts on the clipboard (false: it couldn't be done), the clipboard put back as it was. The
     /// clipboard's change count tells a copy from no copy, also one of the very text that was there before. nil when
-    /// nothing was copied within 400 ms.
+    /// nothing was copied within 400 ms; an app that copies only just after that still has the clipboard put back (a
+    /// moment later), so its copy is never left there to be taken for the user's own clipboard.
     @MainActor
-    static func copySelection(by copy: () -> Bool) async -> String? {
+    static func copySelection(by copy: () async -> Bool) async -> String? {
         let pasteboard = NSPasteboard.general
         let saved = snapshot(pasteboard)
         let before = pasteboard.changeCount
-        guard copy() else { return nil }
+        guard await copy() else { return nil }
         let clock = ContinuousClock()
         let deadline = clock.now + .milliseconds(400)
         while pasteboard.changeCount == before, clock.now < deadline {
             // Not `Task.sleep`, which returns at once in a cancelled task (Esc while the selection is read).
             await pause(.milliseconds(20))
         }
-        guard pasteboard.changeCount != before else { return nil }
+        if pasteboard.changeCount == before {
+            await pause(.milliseconds(250))
+            guard pasteboard.changeCount != before else { return nil }
+            pasteboard.clearContents()
+            if !saved.isEmpty { pasteboard.writeObjects(saved) }
+            return nil
+        }
         let text = pasteboard.string(forType: .string)
         pasteboard.clearContents()
         if !saved.isEmpty { pasteboard.writeObjects(saved) }

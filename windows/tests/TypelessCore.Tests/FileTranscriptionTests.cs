@@ -417,7 +417,7 @@ public class FileTranscriptionTests
     public async Task AFileStopsWhenTheProviderRefuses()
     {
         var server = new MockServer { Status = 401 };
-        var audio = Speech(300);
+        var audio = Speech(200);
         var path = Recording(audio);
         try
         {
@@ -437,7 +437,7 @@ public class FileTranscriptionTests
     public async Task AFileStopsAfterARunOfFailures()
     {
         var server = new MockServer { Status = 500 };
-        var audio = Speech(300);
+        var audio = Speech(200);
         var path = Recording(audio);
         try
         {

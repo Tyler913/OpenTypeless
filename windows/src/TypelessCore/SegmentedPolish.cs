@@ -190,6 +190,12 @@ public static class SegmentedPolish
                 {
                     return (null, ApiException.Cancelled());
                 }
+                // The turn can come with the cancellation, freed by the part it stopped: the semaphore doesn't check it then.
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    gate.Release();
+                    return (null, ApiException.Cancelled());
+                }
             }
             try
             {

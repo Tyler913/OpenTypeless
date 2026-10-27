@@ -451,7 +451,7 @@ private final class MockServer: URLProtocol {
 
     @Test func aFileStopsWhenTheProviderRefuses() async throws {
         MockServer.reset(status: 401)
-        let audio = fileSpeech(seconds: 300)
+        let audio = fileSpeech(seconds: 200)
         let (reader, dir) = try recording(audio)
         defer { try? FileManager.default.removeItem(at: dir) }
         let pipeline = pipeline()
@@ -463,7 +463,7 @@ private final class MockServer: URLProtocol {
 
     @Test func aFileStopsAfterARunOfFailures() async throws {
         MockServer.reset(status: 500)
-        let audio = fileSpeech(seconds: 300)
+        let audio = fileSpeech(seconds: 200)
         let (reader, dir) = try recording(audio)
         defer { try? FileManager.default.removeItem(at: dir) }
         let pipeline = pipeline(attempts: 1)

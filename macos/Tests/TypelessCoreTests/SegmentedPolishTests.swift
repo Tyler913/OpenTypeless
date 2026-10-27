@@ -31,8 +31,6 @@ import Testing
     @Test func promptExamplesPass() {
         let examples = Self.examples(in: Prompts.basePolishPrompt)
         #expect(examples.count >= 10)
-        // The one with dictated line breaks, read whole.
-        #expect(examples.contains { $0.0.contains("\n\n") && $0.1.contains("\n\n") })
         for (input, output) in examples {
             #expect(Prompts.fallback(input: input, output: output, truncated: false) == nil, "\(input)")
         }
@@ -126,6 +124,23 @@ import Testing
                 == "帮我改一下：\n\n1. 标题。\n2. 按钮。\n\n另外打包太大了。")
         #expect(SegmentedPolish.join(["第一段。", "第二段。"]) == "第一段。第二段。")
         #expect(SegmentedPolish.join(["Done.", "Next."]) == "Done. Next.")
+    }
+
+    /// A long transcript whose line breaks were dictated gets exactly those back where it was split at one; otherwise the
+    /// parts are joined as before.
+    @Test func dictatedBreaksBetweenPartsGoBack() async throws {
+        let transcript = (1...20).map { "我们今天讨论了第\($0)个问题，主要是关于缓存和数据库的性能。" }.joined(separator: "\n")
+        let split = SegmentedPolish.partsAndBreaks(of: transcript)
+        #expect(split.count > 1)
+        #expect(split.dropLast().allSatisfy { $0.breaksAfter == 1 })
+        #expect(split.last?.breaksAfter == 0)
+        let echo: @Sendable (String, (@Sendable (String) -> Void)?) async throws -> HedgedPolishResult = { part, _ in answer(part) }
+        let kept = try await SegmentedPolish.run(transcript: transcript, polish: echo, keepsLineBreaks: true)
+        #expect(kept.parts.count > 1)
+        #expect(kept.text == transcript)
+        let joined = try await SegmentedPolish.run(transcript: transcript, polish: echo)
+        #expect(joined.text != transcript)
+        #expect(SegmentedPolish.join(["A.", "B.", "C."], breaks: [0, 2, 0]) == "A.\n\nB. C.")
     }
 
     @Test func partsAreCleanedInParallelAndChecked() async throws {

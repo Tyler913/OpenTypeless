@@ -13,9 +13,13 @@ public struct PolishOptions: Sendable {
     /// The OpenRouter host (an endpoint tag such as "groq" or "deepinfra/fp8") the user wants this model served by;
     /// nil lets OpenRouter pick the fastest.
     public var host: String?
+    /// The transcripts' line breaks were dictated (see `SpokenLayout`): the prompt then asks to keep them, for a transcript
+    /// (or part of one) that has any.
+    public var dictatedLineBreaks: Bool
 
     public init(model: String, vocabulary: [String] = [], misheard: [Correction] = [], extraInstructions: String = "",
-                modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil) {
+                modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil,
+                dictatedLineBreaks: Bool = false) {
         self.model = model
         self.vocabulary = vocabulary
         self.misheard = misheard
@@ -23,6 +27,7 @@ public struct PolishOptions: Sendable {
         self.modelInfo = modelInfo
         self.systemPromptOverride = systemPromptOverride
         self.host = host
+        self.dictatedLineBreaks = dictatedLineBreaks
     }
 }
 
@@ -113,7 +118,8 @@ extension APIClient {
     /// The system prompt and the user message a clean-up of `transcript` sends.
     static func polishMessages(transcript: String, options: PolishOptions) -> [String] {
         [options.systemPromptOverride ?? Prompts.polishSystemPrompt(
-            vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions),
+            vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions,
+            dictatedLineBreaks: options.dictatedLineBreaks && transcript.contains(where: \.isNewline)),
          Prompts.polishUserMessage(transcript: transcript)]
     }
 

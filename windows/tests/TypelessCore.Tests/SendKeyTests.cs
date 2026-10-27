@@ -56,6 +56,27 @@ public class SendKeyTests
     }
 
     [Fact]
+    public void OtherModifiersMakeAnotherKey()
+    {
+        foreach (var key in new[] { SendKey.Enter, SendKey.ShiftEnter, SendKey.CommandEnter })
+        {
+            var own = key.Modifiers(Codes) ?? 0;
+            Assert.False(key.Matches(Enter, own | Win, 0, Codes));
+            Assert.False(key.Matches(Enter, own | Alt, 0, Codes));
+        }
+    }
+
+    /// <summary>A dictation hotkey that is a combination on Enter takes its presses first, and Settings says so.</summary>
+    [Fact]
+    public void AHotkeyOnEnterTakesIt()
+    {
+        Assert.True(SendKey.CommandEnter.IsTakenByHotkey(Enter, isModifierOnly: false, Codes));
+        Assert.False(SendKey.Off.IsTakenByHotkey(Enter, isModifierOnly: false, Codes));
+        Assert.False(SendKey.Enter.IsTakenByHotkey(Space, isModifierOnly: false, Codes)); // Alt + Space
+        Assert.False(SendKey.Enter.IsTakenByHotkey(0xA5, isModifierOnly: true, Codes)); // Right Alt
+    }
+
+    [Fact]
     public void RightWithTheHotkeyItsAKeyCombination()
     {
         Assert.True(SendKeys.IsCombination(100, 100.1));

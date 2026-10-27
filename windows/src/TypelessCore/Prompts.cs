@@ -10,10 +10,15 @@ public static class Prompts
     /// The examples matter more than the rules: models follow a shown example far more reliably.
     /// The text is identical to the macOS app's, so evaluation results carry over between platforms.
     /// <paramref name="misheard"/> are corrections the speaker made to earlier dictations (learned from their edits).
+    /// <paramref name="dictatedLineBreaks"/>: the transcript's line breaks are ones the speaker asked for (see
+    /// <see cref="SpokenLayout"/>), to be kept. Otherwise the prompt says nothing about them, as before the commands existed:
+    /// speech recognition's own breaks are laid out like any other text.
     /// </summary>
-    public static string PolishSystemPrompt(IEnumerable<string> vocabulary, string extraInstructions, IReadOnlyList<Correction>? misheard = null)
+    public static string PolishSystemPrompt(IEnumerable<string> vocabulary, string extraInstructions, IReadOnlyList<Correction>? misheard = null,
+                                            bool dictatedLineBreaks = false)
     {
         var prompt = BasePolishPrompt;
+        if (dictatedLineBreaks) prompt += "\n\n" + LineBreaksSection;
         var terms = vocabulary.Select(t => t.Trim(' ', '\t')).Where(t => t.Length > 0).ToList();
         if (terms.Count > 0)
         {
@@ -32,6 +37,20 @@ public static class Prompts
         }
         return prompt;
     }
+
+    /// <summary>Added for a transcript with line breaks the speaker dictated ("new line", "new paragraph"; see <see cref="SpokenLayout"/>).</summary>
+    internal const string LineBreaksSection = """
+        ## Line breaks
+        The line breaks in this transcript were dictated by the speaker: keep each one where it is, a blank line as a blank line, and never join the lines they separate. For example:
+        <transcript>hi Anna,
+        thanks for the quick review, um, I'll look at the comments tonight.
+
+        so the bug, uh, the bug was in the parser</transcript>
+        Hi Anna,
+        Thanks for the quick review, I'll look at the comments tonight.
+
+        So the bug was in the parser.
+        """;
 
     internal const string BasePolishPrompt = """
         You clean up a raw speech-to-text transcript so it reads the way the speaker would have typed it. You are a light-touch editor, not a writer: the result keeps the speaker's own words, in their order, in their mix of languages — only the mess of speaking is removed. Output only that text.
@@ -71,7 +90,6 @@ public static class Prompts
 
         ## Layout
         - Default: plain sentences in the speaker's order; a new paragraph only where the topic clearly changes.
-        - Line breaks already in the transcript were put there by the speaker: keep each one where it is, a blank line as a blank line, and never join the lines they separate.
         - A numbered list ("1. ") only when the speaker explicitly enumerates three or more parallel items (第一/第二/第三、首先…然后…最后、一个是…一个是…还有一个、"a few things: …"). Keep their lead-in sentence before the list. Never turn a narrative or a single request into steps.
         - Chinese text uses full-width punctuation. Put a space between Chinese and English words or numbers ("用 SwiftUI 写 3 个页面").
         - Plain text only: no headings, bold, tables, code fences, quotes around the output, preamble ("以下是…", "Here is…"), or closing remarks.
@@ -99,15 +117,6 @@ public static class Prompts
         2. 按钮颜色改成绿色。
 
         另外，这个 app 现在打包出来有 200 兆，别的同类才 20 兆，能不能想办法压一下？
-
-        <transcript>hi Anna,
-        thanks for the quick review, um, I'll look at the comments tonight.
-
-        so the bug, uh, the bug was in the parser</transcript>
-        Hi Anna,
-        Thanks for the quick review, I'll look at the comments tonight.
-
-        So the bug was in the parser.
 
         <transcript>我现在用的是 claude opus 五点五，然后呃之前用的是 GPT 六，感觉 opus 写 swift 更好</transcript>
         我现在用的是 Claude Opus 5.5，之前用的是 GPT-6，感觉 Opus 写 Swift 更好。

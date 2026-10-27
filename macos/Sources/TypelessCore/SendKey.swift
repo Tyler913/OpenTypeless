@@ -41,6 +41,13 @@ public enum SendKey: String, CaseIterable, Sendable {
         }
     }
 
+    /// Whether a dictation hotkey that is a key combination on `keyCode` takes this send key's presses: the hotkey's keys
+    /// are read first, so that key (and, while the hotkey is held, any press of it) is the hotkey's, and the send key would
+    /// never fire. Settings says so.
+    public func isTaken(byHotkeyKey keyCode: Int64, isModifierOnly: Bool, codes: SendKeyCodes) -> Bool {
+        self != .off && !isModifierOnly && codes.returnKeys.contains(keyCode)
+    }
+
     /// Whether `keyCode` going down with `modifiers` held (only those shortcuts are made of) is this send key.
     /// `hotkeyModifiers`: those of the dictation hotkey while it's held (none hands-free), which may be down as well and
     /// then don't count: Return pressed while holding right ⌘ (or Right Alt) to talk, or the ⌥ of ⌥Space, is still Return.

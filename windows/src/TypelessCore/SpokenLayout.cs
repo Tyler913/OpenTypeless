@@ -54,10 +54,42 @@ public static class SpokenLayout
         return commands;
     }
 
+    /// <summary>A transcript laid out for the clean-up and the paste (see <see cref="Layout"/>).</summary>
+    /// <param name="Leading">The line breaks of a command at the very start, kept out of the clean-up (whose answer is trimmed).</param>
+    /// <param name="Body">What the clean-up is given, or what goes in without one.</param>
+    /// <param name="Trailing">The line breaks of a command at the very end.</param>
+    /// <param name="DictatedBreaks">
+    /// Whether a command was said: every line break in <paramref name="Body"/> is then one the speaker asked for, and the
+    /// clean-up is told to keep them. Otherwise the body is the transcript exactly as it came, line breaks of its own included.
+    /// </param>
+    public sealed record LaidOut(string Leading, string Body, string Trailing, bool DictatedBreaks)
+    {
+        /// <summary>The whole laid-out text, as it goes in when it isn't cleaned up.</summary>
+        public string Text => Leading + Body + Trailing;
+
+        /// <summary><paramref name="cleaned"/> (the clean-up of the body) with the breaks at the start and end put back.</summary>
+        public string Around(string cleaned) => Leading + cleaned + Trailing;
+    }
+
+    /// <summary>
+    /// The transcript as the dictation uses it: with <paramref name="enabled"/> and a command said, laid out (see
+    /// <see cref="Apply"/>) and its edges split off (see <see cref="Edges"/>); otherwise the transcript as it is.
+    /// </summary>
+    public static LaidOut Layout(string transcript, bool enabled)
+    {
+        var applied = enabled ? Apply(transcript) : transcript;
+        if (applied == transcript) return new LaidOut("", transcript, "", false);
+        var (leading, body, trailing) = Edges(applied);
+        return new LaidOut(leading, body, trailing, true);
+    }
+
     /// <summary>
     /// <paramref name="transcript"/> with each command said on its own turned into its line breaks. The punctuation before
     /// a command stays ("Hi Anna," keeps its comma, a line can end in "。"); the command, the punctuation after it and the
-    /// spaces around the break go. A command at the very start or end gives a break there (see <see cref="Edges"/>).
+    /// spaces around the break go. A command at the very start or end gives a break there (see <see cref="Edges"/>). Line
+    /// breaks speech recognition put in itself (some services break the text at their own segments, mid-sentence) become a
+    /// space then, or nothing between Chinese or Japanese characters, so the only breaks left are the ones the speaker
+    /// asked for. Without a command, <paramref name="transcript"/> comes back as it is.
     /// </summary>
     public static string Apply(string transcript)
     {
@@ -65,8 +97,9 @@ public static class SpokenLayout
         if (!pieces.Any(piece => LineBreaks(piece.Clause) != null)) return transcript;
         var result = new StringBuilder();
         var afterBreak = false;
-        foreach (var (clause, separator) in pieces)
+        for (var index = 0; index < pieces.Count; index++)
         {
+            var (clause, separator) = pieces[index];
             if (LineBreaks(clause) is { } breaks)
             {
                 while (result.Length > 0 && char.IsWhiteSpace(result[result.Length - 1]) && !IsNewline(result[result.Length - 1])) result.Length--;
@@ -74,10 +107,37 @@ public static class SpokenLayout
                 afterBreak = true;
                 continue;
             }
-            result.Append(afterBreak ? DropLeadingSpace(clause) : clause).Append(separator);
+            result.Append(afterBreak ? DropLeadingSpace(clause) : clause);
+            char? next = null;
+            for (var later = index + 1; later < pieces.Count && next == null; later++)
+            {
+                foreach (var c in pieces[later].Clause)
+                {
+                    if (char.IsWhiteSpace(c)) continue;
+                    next = c;
+                    break;
+                }
+            }
+            char? previous = result.Length > 0 ? result[result.Length - 1] : null;
+            result.Append(WithoutLineBreaks(separator, previous, next));
             afterBreak = false;
         }
         return result.ToString();
+    }
+
+    /// <summary>
+    /// <paramref name="separator"/> with the line breaks speech recognition put in (and the spaces around them) as one space,
+    /// or none where the text on either side is Chinese or Japanese, or at the end.
+    /// </summary>
+    internal static string WithoutLineBreaks(string separator, char? previous, char? next)
+    {
+        if (!separator.Any(IsNewline)) return separator;
+        var kept = new string(separator.Where(c => !char.IsWhiteSpace(c)).ToArray());
+        char? lastKept = kept.Length > 0 ? kept[kept.Length - 1] : previous;
+        return Joins(lastKept) || Joins(next) ? kept : kept + " ";
+
+        static bool Joins(char? character) =>
+            character is not { } value || Rune.TryCreate(value, out var rune) && TranscriptJoiner.JoinsWithoutSpace(rune);
     }
 
     /// <summary>

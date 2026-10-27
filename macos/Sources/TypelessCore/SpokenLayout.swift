@@ -42,15 +42,47 @@ public enum SpokenLayout {
         return commands
     }()
 
+    /// A transcript laid out for the clean-up and the paste (see `layout`).
+    public struct LaidOut: Equatable, Sendable {
+        /// The line breaks of a command at the very start, kept out of the clean-up (whose answer is trimmed).
+        public let leading: String
+        /// What the clean-up is given, or what goes in without one.
+        public let body: String
+        /// The line breaks of a command at the very end.
+        public let trailing: String
+        /// Whether a command was said: every line break in `body` is then one the speaker asked for, and the clean-up is
+        /// told to keep them. Otherwise `body` is the transcript exactly as it came, line breaks of its own included.
+        public let dictatedBreaks: Bool
+
+        /// The whole laid-out text, as it goes in when it isn't cleaned up.
+        public var text: String { leading + body + trailing }
+        /// `cleaned` (the clean-up of `body`) with the breaks at the start and end put back.
+        public func around(_ cleaned: String) -> String { leading + cleaned + trailing }
+    }
+
+    /// The transcript as the dictation uses it: with `enabled` and a command said, laid out (see `apply`) and its edges
+    /// split off (see `edges`); otherwise the transcript as it is.
+    public static func layout(_ transcript: String, enabled: Bool) -> LaidOut {
+        let applied = enabled ? apply(transcript) : transcript
+        guard applied != transcript else {
+            return LaidOut(leading: "", body: transcript, trailing: "", dictatedBreaks: false)
+        }
+        let parts = edges(applied)
+        return LaidOut(leading: parts.leading, body: parts.body, trailing: parts.trailing, dictatedBreaks: true)
+    }
+
     /// `transcript` with each command said on its own turned into its line breaks. The punctuation before a command stays
     /// ("Hi Anna," keeps its comma, a line can end in "。"); the command, the punctuation after it and the spaces around
-    /// the break go. A command at the very start or end gives a break there (see `edges`).
+    /// the break go. A command at the very start or end gives a break there (see `edges`). Line breaks speech recognition
+    /// put in itself (some services break the text at their own segments, mid-sentence) become a space then, or nothing
+    /// between Chinese or Japanese characters, so the only breaks left are the ones the speaker asked for. Without a
+    /// command, `transcript` comes back as it is.
     public static func apply(_ transcript: String) -> String {
         let pieces = clauses(of: Array(transcript))
         guard pieces.contains(where: { lineBreaks(for: $0.clause) != nil }) else { return transcript }
         var result = ""
         var afterBreak = false
-        for piece in pieces {
+        for (index, piece) in pieces.enumerated() {
             if let breaks = lineBreaks(for: piece.clause) {
                 while let last = result.last, last.isWhitespace, !last.isNewline { result.removeLast() }
                 result += breaks
@@ -58,10 +90,24 @@ public enum SpokenLayout {
                 continue
             }
             let clause = afterBreak ? String(piece.clause.drop { $0.isWhitespace && !$0.isNewline }) : piece.clause
-            result += clause + piece.separator
+            result += clause
+            let next = pieces[(index + 1)...].lazy.compactMap { $0.clause.first(where: { !$0.isWhitespace }) }.first
+            result += withoutLineBreaks(piece.separator, after: result.last, before: next)
             afterBreak = false
         }
         return result
+    }
+
+    /// `separator` with the line breaks speech recognition put in (and the spaces around them) as one space, or none where
+    /// the text on either side is Chinese or Japanese, or at the end.
+    static func withoutLineBreaks(_ separator: String, after previous: Character?, before next: Character?) -> String {
+        guard separator.contains(where: \.isNewline) else { return separator }
+        let kept = String(separator.filter { !$0.isWhitespace })
+        let joins = { (character: Character?) in
+            character?.unicodeScalars.first.map(TranscriptJoiner.joinsWithoutSpace) ?? true
+        }
+        let lastKept = kept.last ?? previous
+        return joins(lastKept) || joins(next) ? kept : kept + " "
     }
 
     /// Splits off the line breaks a command at the very start or end gave, which the clean-up would otherwise lose (its

@@ -8,6 +8,7 @@ import Testing
         let id: String
         let input: String
         let output: String?
+        let limitation: String?
     }
 
     private struct EdgeCase: Decodable {
@@ -18,9 +19,20 @@ import Testing
         let trailing: String
     }
 
+    private struct LayoutOfCase: Decodable {
+        let id: String
+        let input: String
+        let enabled: Bool
+        let leading: String
+        let body: String
+        let trailing: String
+        let dictatedBreaks: Bool
+    }
+
     private struct CaseFile: Decodable {
         let cases: [LayoutCase]
         let edges: [EdgeCase]
+        let layouts: [LayoutOfCase]
     }
 
     /// testdata/spoken-layout-cases.json, shared with the Windows tests so both apps lay a dictation out the same.
@@ -48,6 +60,22 @@ import Testing
         }
     }
 
+    /// What a dictation uses: off, or without a command, the transcript exactly as it came (its own line breaks included).
+    @Test func sharedLayouts() throws {
+        for c in try caseFile().layouts {
+            let expected = SpokenLayout.LaidOut(leading: c.leading, body: c.body, trailing: c.trailing, dictatedBreaks: c.dictatedBreaks)
+            #expect(SpokenLayout.layout(c.input, enabled: c.enabled) == expected, "\(c.id)")
+        }
+        let laidOut = SpokenLayout.layout("New line. Hello. New paragraph.", enabled: true)
+        #expect(laidOut.text == "\nHello.\n\n")
+        #expect(laidOut.around("Hello!") == "\nHello!\n\n")
+    }
+
+    /// The known false positives (a command word said as its own clause in a list, or as an answer) stay pinned.
+    @Test func limitationsArePinned() throws {
+        #expect(try caseFile().cases.filter { $0.limitation != nil }.count >= 7)
+    }
+
     /// Put back together, the edges are the laid-out text again, trimmed only where there were breaks.
     @Test func edgesPutBackTogether() {
         for text in ["\n\nSecond point.\n", "Hello.", "A.\nB.", "\n"] {
@@ -61,6 +89,31 @@ import Testing
         for (key, breaks) in SpokenLayout.commands {
             #expect(SpokenLayout.apply("A. \(key). B.") == "A.\(breaks)B.", "\(key)")
             #expect(SpokenLayout.apply("A \(key) B.") == "A \(key) B.", "\(key)")
+        }
+    }
+
+    /// The clean-up's prompt is the one ordinary dictations always had unless the transcript's breaks were dictated, and
+    /// then only for a transcript (or part) that has any.
+    @Test func ordinaryDictationsKeepTheirPrompt() {
+        let plain = Prompts.polishSystemPrompt(vocabulary: [], extraInstructions: "")
+        #expect(plain == Prompts.basePolishPrompt)
+        #expect(!plain.contains("Line breaks"))
+        #expect(Prompts.polishSystemPrompt(vocabulary: [], extraInstructions: "", dictatedLineBreaks: true)
+                == Prompts.basePolishPrompt + "\n\n" + Prompts.lineBreaksSection)
+        let dictated = PolishOptions(model: "m", dictatedLineBreaks: true)
+        #expect(APIClient.polishMessages(transcript: "Hi,\nthere.", options: dictated)[0].contains("## Line breaks"))
+        #expect(!APIClient.polishMessages(transcript: "Hi there.", options: dictated)[0].contains("## Line breaks"))
+        // Speech recognition's own breaks: nothing said about them, as before.
+        #expect(!APIClient.polishMessages(transcript: "Hi,\nthere.", options: PolishOptions(model: "m"))[0].contains("## Line breaks"))
+    }
+
+    /// The section's example is a clean-up, and keeps its lines.
+    @Test func theLineBreaksExampleIsACleanUp() {
+        let examples = PolishGuardTests.examples(in: Prompts.lineBreaksSection)
+        #expect(examples.count == 1)
+        for (input, output) in examples {
+            #expect(input.contains("\n\n") && output.contains("\n\n"))
+            #expect(Prompts.fallback(input: input, output: output, truncated: false) == nil)
         }
     }
 

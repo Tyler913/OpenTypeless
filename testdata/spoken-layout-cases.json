@@ -1,5 +1,5 @@
 {
-  "_comment": "Spoken layout commands (SpokenLayout), shared by the macOS and Windows tests. output null: the transcript comes back exactly as it was. edges: how the line breaks at the very start and end are kept out of the clean-up.",
+  "_comment": "Spoken layout commands (SpokenLayout), shared by the macOS and Windows tests. cases: apply(input); output null = the transcript comes back exactly as it was. Cases with a \"limitation\" are known false positives, pinned so a change to them is deliberate: a command word said as its own clause in a list or as an answer becomes a break (one visible, undoable line break; the toggle turns it off). edges: the line breaks at the very start and end kept out of the clean-up. layouts: layout(input, enabled), what a dictation uses.",
   "cases": [
     {
       "id": "en-commas",
@@ -180,6 +180,113 @@
       "id": "nothing-to-do-spaces-kept",
       "input": "  odd  spacing , kept ",
       "output": null
+    },
+    {
+      "id": "limitation-reported-speech",
+      "input": "I said, new line, and then I stopped.",
+      "output": "I said,\nand then I stopped.",
+      "limitation": "the words quoted without quotation marks"
+    },
+    {
+      "id": "limitation-list-en",
+      "input": "Trim spaces, newline, tabs.",
+      "output": "Trim spaces,\ntabs.",
+      "limitation": "a list of the characters"
+    },
+    {
+      "id": "limitation-list-zh",
+      "input": "空格，换行，制表符",
+      "output": "空格，\n制表符",
+      "limitation": "a list of the characters"
+    },
+    {
+      "id": "limitation-list-ja",
+      "input": "スペース、改行、タブ",
+      "output": "スペース、\nタブ",
+      "limitation": "a list of the characters"
+    },
+    {
+      "id": "limitation-list-ko",
+      "input": "공백, 줄바꿈, 탭",
+      "output": "공백,\n탭",
+      "limitation": "a list of the characters"
+    },
+    {
+      "id": "limitation-topic-zh",
+      "input": "换行，是怎么实现的",
+      "output": "\n是怎么实现的",
+      "limitation": "the word as the topic of a question"
+    },
+    {
+      "id": "limitation-answer",
+      "input": "What should I type? New line.",
+      "output": "What should I type?\n",
+      "limitation": "the words as an answer"
+    },
+    {
+      "id": "crlf-without-a-command",
+      "input": "Hi.\r\nThere.",
+      "output": null
+    },
+    {
+      "id": "crlf-with-a-command",
+      "input": "Hi.\r\nNew line.\r\nThere.",
+      "output": "Hi.\nThere."
+    },
+    {
+      "id": "recognition-breaks-without-a-command-stay",
+      "input": "this is a long\nsentence.",
+      "output": null
+    },
+    {
+      "id": "recognition-breaks-go-with-a-command",
+      "input": "Hi Anna,\nthis is a long\nsentence. New paragraph. Bye.",
+      "output": "Hi Anna, this is a long sentence.\n\nBye."
+    },
+    {
+      "id": "recognition-breaks-go-between-chinese",
+      "input": "登录模块\n重构完了，换行，支付修好了",
+      "output": "登录模块重构完了，\n支付修好了"
+    },
+    {
+      "id": "decomposed-spanish",
+      "input": "Hola. Nuevo párrafo. Adiós.",
+      "output": "Hola.\n\nAdiós."
+    },
+    {
+      "id": "decomposed-korean",
+      "input": "안녕. 새 문단. 끝.",
+      "output": "안녕.\n\n끝."
+    },
+    {
+      "id": "ideographic-space-around",
+      "input": "周报，　换行　，内容",
+      "output": "周报，\n内容"
+    },
+    {
+      "id": "no-break-space-around",
+      "input": "Hi Anna, new line, thanks.",
+      "output": "Hi Anna,\nthanks."
+    },
+    {
+      "id": "ellipsis-after",
+      "input": "Hi Anna… new line… thanks.",
+      "output": "Hi Anna…\nthanks."
+    },
+    {
+      "id": "dash-is-not-a-pause",
+      "input": "Hi Anna — new line — thanks.",
+      "output": null
+    },
+    {
+      "id": "full-width-marks",
+      "input": "收到！换行！谢谢？新段落？好的",
+      "output": "收到！\n谢谢？\n\n好的"
+    },
+    {
+      "id": "closing-quote-after",
+      "input": "He typed \"New line.\" twice.",
+      "output": null
     }
   ],
   "edges": [
@@ -217,6 +324,58 @@
       "leading": "",
       "body": "A.\nB.",
       "trailing": ""
+    },
+    {
+      "id": "other-line-separators",
+      "input": " Hi",
+      "leading": "\n",
+      "body": "Hi",
+      "trailing": "\n"
+    },
+    {
+      "id": "mixed-line-endings",
+      "input": "\r\n\nHi\n\r",
+      "leading": "\n\n",
+      "body": "Hi",
+      "trailing": "\n\n"
+    }
+  ],
+  "layouts": [
+    {
+      "id": "edges-split-off",
+      "input": "New line. Hello. New paragraph.",
+      "enabled": true,
+      "leading": "\n",
+      "body": "Hello.",
+      "trailing": "\n\n",
+      "dictatedBreaks": true
+    },
+    {
+      "id": "switched-off",
+      "input": "New line. Hello. New paragraph.",
+      "enabled": false,
+      "leading": "",
+      "body": "New line. Hello. New paragraph.",
+      "trailing": "",
+      "dictatedBreaks": false
+    },
+    {
+      "id": "recognition-breaks-only",
+      "input": "Line one\nline two.",
+      "enabled": true,
+      "leading": "",
+      "body": "Line one\nline two.",
+      "trailing": "",
+      "dictatedBreaks": false
+    },
+    {
+      "id": "inside",
+      "input": "Hi Anna, new line, thanks.",
+      "enabled": true,
+      "leading": "",
+      "body": "Hi Anna,\nthanks.",
+      "trailing": "",
+      "dictatedBreaks": true
     }
   ]
 }

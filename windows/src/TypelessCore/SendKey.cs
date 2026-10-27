@@ -70,6 +70,14 @@ public static class SendKeys
     };
 
     /// <summary>
+    /// Whether a dictation hotkey that is a key combination on <paramref name="keyCode"/> takes this send key's presses: the
+    /// hotkey's keys are read first, so that key (and, while the hotkey is held, any press of it) is the hotkey's, and the
+    /// send key would never fire. Settings says so.
+    /// </summary>
+    public static bool IsTakenByHotkey(this SendKey key, int keyCode, bool isModifierOnly, SendKeyCodes codes) =>
+        key != SendKey.Off && !isModifierOnly && codes.ReturnKeys.Contains(keyCode);
+
+    /// <summary>
     /// Whether <paramref name="keyCode"/> going down with <paramref name="modifiers"/> held (only those shortcuts are made
     /// of) is this send key. <paramref name="hotkeyModifiers"/>: those of the dictation hotkey while it's held (none
     /// hands-free), which may be down as well and then don't count: Enter pressed while holding Right Alt (or right ⌘) to

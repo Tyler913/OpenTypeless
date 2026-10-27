@@ -47,6 +47,23 @@ import Testing
         #expect(!SendKey.commandEnter.matches(keyCode: 36, modifiers: 0, hotkeyModifiers: command, codes: codes))
     }
 
+    @Test func otherModifiersMakeAnotherKey() {
+        for key in [SendKey.enter, .shiftEnter, .commandEnter] {
+            let own = key.modifiers(codes) ?? 0
+            #expect(!key.matches(keyCode: 36, modifiers: own | control, codes: codes))
+            #expect(!key.matches(keyCode: 36, modifiers: own | option, codes: codes))
+        }
+    }
+
+    /// A dictation hotkey that is a combination on Return takes its presses first, and Settings says so.
+    @Test func aHotkeyOnReturnTakesIt() {
+        #expect(SendKey.commandEnter.isTaken(byHotkeyKey: 36, isModifierOnly: false, codes: codes))
+        #expect(SendKey.enter.isTaken(byHotkeyKey: 76, isModifierOnly: false, codes: codes))
+        #expect(!SendKey.off.isTaken(byHotkeyKey: 36, isModifierOnly: false, codes: codes))
+        #expect(!SendKey.enter.isTaken(byHotkeyKey: 49, isModifierOnly: false, codes: codes)) // ⌥Space
+        #expect(!SendKey.enter.isTaken(byHotkeyKey: 54, isModifierOnly: true, codes: codes)) // right ⌘
+    }
+
     @Test func rightWithTheHotkeyItsAKeyCombination() {
         #expect(SendKey.isCombination(hotkeyPressedAt: 100, at: 100.1))
         #expect(SendKey.isCombination(hotkeyPressedAt: 100, at: 100.39))

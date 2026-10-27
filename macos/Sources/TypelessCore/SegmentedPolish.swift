@@ -54,7 +54,12 @@ public enum SegmentedPolish {
     /// ends into parts of about the same size; a sentence too long to fit is split at commas, and only a run-on without
     /// either (speech recognition sometimes leaves Chinese unpunctuated) between words or characters.
     public static func parts(of transcript: String) -> [String] {
-        guard needsParts(transcript) else { return [transcript] }
+        partsAndBreaks(of: transcript).map(\.text)
+    }
+
+    /// `parts(of:)`, each with the number of line breaks that follow it in the transcript (none after the last).
+    static func partsAndBreaks(of transcript: String) -> [(text: String, breaksAfter: Int)] {
+        guard needsParts(transcript) else { return [(transcript, 0)] }
         let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         let total = WordCount.count(text)
         let count = (total + partSize - 1) / partSize
@@ -88,19 +93,29 @@ public enum SegmentedPolish {
             parts[parts.count - 1].text += last.text
             parts[parts.count - 1].words += last.words
         }
-        return parts.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return parts.compactMap { part in
+            let trimmed = part.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            // What ends a piece (the space and line breaks after a sentence) stays with it, so the breaks between two
+            // parts are at the end of the first.
+            return (trimmed, part.text.reversed().prefix(while: \.isWhitespace).filter(\.isNewline).count)
+        }
     }
 
     /// Joins the parts' clean-ups the way transcripts are joined (see TranscriptJoiner), except that where either side
     /// is laid out over several lines (paragraphs, a list), they're kept a paragraph apart, so text doesn't run on from
-    /// the last item of a list.
-    public static func join(_ texts: [String]) -> String {
+    /// the last item of a list. `breaks`: the line breaks the speaker dictated before each text (see `SpokenLayout`),
+    /// where a long transcript was split at them: exactly those go back in.
+    public static func join(_ texts: [String], breaks: [Int] = []) -> String {
         var result = ""
         var previous = ""
-        for text in texts {
+        for (index, text) in texts.enumerated() {
             let part = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !part.isEmpty else { continue }
-            if !result.isEmpty, previous.contains("\n") || part.contains("\n") {
+            let dictated = index < breaks.count ? breaks[index] : 0
+            if !result.isEmpty, dictated > 0 {
+                result += String(repeating: "\n", count: dictated) + part
+            } else if !result.isEmpty, previous.contains("\n") || part.contains("\n") {
                 result += "\n\n" + part
             } else {
                 result = TranscriptJoiner.join([result, part])
@@ -124,18 +139,22 @@ public enum SegmentedPolish {
             try await policy.run { _ in
                 try await HedgedPolish.run(transcript: part, primary: primary, backup: backup, onPartial: partial)
             }
-        }, onPartial: onPartial)
+        }, onPartial: onPartial, keepsLineBreaks: primary.options.dictatedLineBreaks)
     }
 
     /// Cleans up the parts of `transcript` with `polish`, all at once, and puts each part's answer through
     /// `Prompts.fallback`: a part whose answer is unusable, or that got none, goes in as spoken. Throws only when no part
     /// got an answer (the first part's error), or when cancelled. `onPartial` gets the parts' text so far, joined.
+    /// `keepsLineBreaks`: the transcript's line breaks were dictated, and those between two parts are put back as they were.
     public static func run(
         transcript: String,
         polish: @escaping @Sendable (String, (@Sendable (String) -> Void)?) async throws -> HedgedPolishResult,
-        onPartial: (@Sendable (String) -> Void)? = nil
+        onPartial: (@Sendable (String) -> Void)? = nil,
+        keepsLineBreaks: Bool = false
     ) async throws -> SegmentedPolishResult {
-        let texts = Self.parts(of: transcript)
+        let split = Self.partsAndBreaks(of: transcript)
+        let texts = split.map(\.text)
+        let breaks = keepsLineBreaks ? [0] + split.dropLast().map(\.breaksAfter) : []
         let start = ProcessInfo.processInfo.systemUptime
         let progress = PartialProgress(count: texts.count, onChange: onPartial)
         let outcomes = await withTaskGroup(of: (Int, Result<HedgedPolishResult, Error>).self) { group in
@@ -169,7 +188,7 @@ public enum SegmentedPolish {
         }
         // Nothing came back at all: the clean-up failed, just as a single request would have.
         if results.allSatisfy({ $0.answer == nil }), let error = results.first?.error { throw error }
-        return SegmentedPolishResult(text: join(results.map(\.text)), parts: results,
+        return SegmentedPolishResult(text: join(results.map(\.text), breaks: breaks), parts: results,
                                      firstTokenSeconds: results.compactMap { $0.answer?.firstTokenSeconds }.min() ?? 0,
                                      totalSeconds: ProcessInfo.processInfo.systemUptime - start)
     }

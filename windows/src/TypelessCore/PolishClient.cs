@@ -19,7 +19,12 @@ public sealed record PolishOptions(
     /// The OpenRouter host (an endpoint tag such as "groq" or "deepinfra/fp8") the user wants this model served by;
     /// null lets OpenRouter pick the fastest.
     /// </summary>
-    string? Host = null);
+    string? Host = null,
+    /// <summary>
+    /// The transcripts' line breaks were dictated (see <see cref="SpokenLayout"/>): the prompt then asks to keep them, for a
+    /// transcript (or part of one) that has any.
+    /// </summary>
+    bool DictatedLineBreaks = false);
 
 public static class ReasoningConfig
 {
@@ -127,7 +132,8 @@ public sealed partial class ApiClient
     /// <summary>The system prompt and the user message a clean-up of <paramref name="transcript"/> sends.</summary>
     internal static string[] PolishMessages(string transcript, PolishOptions options) =>
     [
-        options.SystemPromptOverride ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard),
+        options.SystemPromptOverride ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard,
+                                                                   options.DictatedLineBreaks && transcript.Contains('\n')),
         Prompts.PolishUserMessage(transcript),
     ];
 

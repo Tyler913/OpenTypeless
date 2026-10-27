@@ -37,6 +37,58 @@ public class SpokenLayoutTests
         }
     }
 
+    /// <summary>What a dictation uses: off, or without a command, the transcript exactly as it came (its own line breaks included).</summary>
+    [Fact]
+    public void SharedLayouts()
+    {
+        foreach (var node in CaseFile()["layouts"]!.AsArray())
+        {
+            var expected = new SpokenLayout.LaidOut((string)node!["leading"]!, (string)node["body"]!, (string)node["trailing"]!,
+                                                    (bool)node["dictatedBreaks"]!);
+            var actual = SpokenLayout.Layout((string)node["input"]!, (bool)node["enabled"]!);
+            Assert.True(expected == actual, $"{node["id"]}: got {actual}");
+        }
+        var laidOut = SpokenLayout.Layout("New line. Hello. New paragraph.", enabled: true);
+        Assert.Equal("\nHello.\n\n", laidOut.Text);
+        Assert.Equal("\nHello!\n\n", laidOut.Around("Hello!"));
+    }
+
+    /// <summary>The known false positives (a command word said as its own clause in a list, or as an answer) stay pinned.</summary>
+    [Fact]
+    public void LimitationsArePinned() =>
+        Assert.True(CaseFile()["cases"]!.AsArray().Count(node => node!["limitation"] != null) >= 7);
+
+    /// <summary>
+    /// The clean-up's prompt is the one ordinary dictations always had unless the transcript's breaks were dictated, and
+    /// then only for a transcript (or part) that has any.
+    /// </summary>
+    [Fact]
+    public void OrdinaryDictationsKeepTheirPrompt()
+    {
+        var plain = Prompts.PolishSystemPrompt([], "");
+        Assert.Equal(Prompts.BasePolishPrompt, plain);
+        Assert.DoesNotContain("Line breaks", plain);
+        Assert.Equal(Prompts.BasePolishPrompt + "\n\n" + Prompts.LineBreaksSection, Prompts.PolishSystemPrompt([], "", dictatedLineBreaks: true));
+        var dictated = new PolishOptions("m", DictatedLineBreaks: true);
+        Assert.Contains("## Line breaks", ApiClient.PolishMessages("Hi,\nthere.", dictated)[0]);
+        Assert.DoesNotContain("## Line breaks", ApiClient.PolishMessages("Hi there.", dictated)[0]);
+        // Speech recognition's own breaks: nothing said about them, as before.
+        Assert.DoesNotContain("## Line breaks", ApiClient.PolishMessages("Hi,\nthere.", new PolishOptions("m"))[0]);
+    }
+
+    /// <summary>The section's example is a clean-up, and keeps its lines.</summary>
+    [Fact]
+    public void TheLineBreaksExampleIsACleanUp()
+    {
+        var examples = PolishGuardTests.Examples(Prompts.LineBreaksSection);
+        Assert.Single(examples);
+        foreach (var (input, output) in examples)
+        {
+            Assert.True(input.Contains("\n\n") && output.Contains("\n\n"));
+            Assert.Null(Prompts.Fallback(input, output, truncated: false));
+        }
+    }
+
     /// <summary>Put back together, the edges are the laid-out text again, trimmed only where there were breaks.</summary>
     [Fact]
     public void EdgesPutBackTogether()

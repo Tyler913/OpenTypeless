@@ -5,9 +5,13 @@ public enum Prompts {
     /// dictations with `OpenTypeless --eval-polish` — re-run those after changing anything here.
     /// The examples matter more than the rules: models follow a shown example far more reliably.
     /// `misheard` are corrections the speaker made to earlier dictations (learned from their edits).
+    /// `dictatedLineBreaks`: the transcript's line breaks are ones the speaker asked for (see `SpokenLayout`), to be kept.
+    /// Otherwise the prompt says nothing about them, as before the commands existed: speech recognition's own breaks are
+    /// laid out like any other text.
     public static func polishSystemPrompt(vocabulary: [String], misheard: [Correction] = [],
-                                          extraInstructions: String) -> String {
+                                          extraInstructions: String, dictatedLineBreaks: Bool = false) -> String {
         var prompt = basePolishPrompt
+        if dictatedLineBreaks { prompt += "\n\n" + lineBreaksSection }
         let terms = vocabulary.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         if !terms.isEmpty {
             prompt += "\n\n## Vocabulary\nThese terms may appear; spell them exactly like this: "
@@ -62,7 +66,6 @@ public enum Prompts {
 
     ## Layout
     - Default: plain sentences in the speaker's order; a new paragraph only where the topic clearly changes.
-    - Line breaks already in the transcript were put there by the speaker: keep each one where it is, a blank line as a blank line, and never join the lines they separate.
     - A numbered list ("1. ") only when the speaker explicitly enumerates three or more parallel items (第一/第二/第三、首先…然后…最后、一个是…一个是…还有一个、"a few things: …"). Keep their lead-in sentence before the list. Never turn a narrative or a single request into steps.
     - Chinese text uses full-width punctuation. Put a space between Chinese and English words or numbers ("用 SwiftUI 写 3 个页面").
     - Plain text only: no headings, bold, tables, code fences, quotes around the output, preamble ("以下是…", "Here is…"), or closing remarks.
@@ -91,15 +94,6 @@ public enum Prompts {
 
     另外，这个 app 现在打包出来有 200 兆，别的同类才 20 兆，能不能想办法压一下？
 
-    <transcript>hi Anna,
-    thanks for the quick review, um, I'll look at the comments tonight.
-
-    so the bug, uh, the bug was in the parser</transcript>
-    Hi Anna,
-    Thanks for the quick review, I'll look at the comments tonight.
-
-    So the bug was in the parser.
-
     <transcript>我现在用的是 claude opus 五点五，然后呃之前用的是 GPT 六，感觉 opus 写 swift 更好</transcript>
     我现在用的是 Claude Opus 5.5，之前用的是 GPT-6，感觉 Opus 写 Swift 更好。
 
@@ -111,6 +105,20 @@ public enum Prompts {
 
     <transcript>so um send the report to Mike by Friday, actually no, send it to Sarah, and uh cc the finance team</transcript>
     Send the report to Sarah by Friday, and cc the finance team.
+    """
+
+    /// Added for a transcript with line breaks the speaker dictated ("new line", "new paragraph"; see `SpokenLayout`).
+    static let lineBreaksSection = """
+    ## Line breaks
+    The line breaks in this transcript were dictated by the speaker: keep each one where it is, a blank line as a blank line, and never join the lines they separate. For example:
+    <transcript>hi Anna,
+    thanks for the quick review, um, I'll look at the comments tonight.
+
+    so the bug, uh, the bug was in the parser</transcript>
+    Hi Anna,
+    Thanks for the quick review, I'll look at the comments tonight.
+
+    So the bug was in the parser.
     """
 
     /// The reminder after the transcript restates the two rules models drift from most (sweeping

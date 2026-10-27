@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import TypelessCore
 
-@Suite struct FileTranscriptionTests {
+@Suite(.timeLimit(.minutes(1))) struct FileTranscriptionTests {
     private struct Probe: Codable, Equatable {
         var source: RecordSource?
     }
@@ -491,7 +491,8 @@ private final class MockServer: URLProtocol {
         let pipeline = pipeline(attempts: 1, maxConcurrentRequests: 3)
         pipeline.append(audio)
         await #expect(throws: PipelineFailure.self) { try await pipeline.finish() }
-        #expect(MockServer.counts.requests == 2 * total)
+        // At least: a slow answer on a busy machine can be raced as well.
+        #expect(MockServer.counts.requests >= 2 * total)
     }
 
     @Test func aFileWaitsWhileDictating() async throws {

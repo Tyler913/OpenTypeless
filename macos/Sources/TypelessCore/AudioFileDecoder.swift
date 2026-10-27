@@ -42,31 +42,80 @@ public enum AudioFileDecoder {
         output.alwaysCopiesSampleData = false
         guard reader.canAdd(output) else { throw FileTranscriptionError.unsupported(nil) }
         reader.add(output)
-        guard reader.startReading() else { throw FileTranscriptionError.reading(reader.error ?? CocoaError(.fileReadUnknown)) }
+        let reading = Reading(reader: reader, output: output)
+        guard await reading.start() else {
+            throw FileTranscriptionError.reading(reader.error ?? CocoaError(.fileReadUnknown))
+        }
         var total = 0
         do {
-            while let buffer = output.copyNextSampleBuffer() {
+            while true {
                 try Task.checkCancellation()
-                // Decoding an hour of audio takes a while: lets the other work on this shared thread (a dictation's
-                // requests among it) go between blocks.
-                await Task.yield()
-                guard let block = CMSampleBufferGetDataBuffer(buffer) else { continue }
-                var samples = [Int16](repeating: 0, count: CMBlockBufferGetDataLength(block) / 2)
-                guard !samples.isEmpty else { continue }
-                let status = samples.withUnsafeMutableBytes {
-                    CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: $0.count, destination: $0.baseAddress!)
-                }
-                guard status == kCMBlockBufferNoErr else { throw FileTranscriptionError.unsupported(nil) }
-                try onSamples(samples)
-                total += samples.count
+                guard let block = try await reading.next() else { break }
+                guard !block.isEmpty else { continue }
+                try onSamples(block)
+                total += block.count
             }
         } catch {
-            reader.cancelReading()
+            reading.cancel()
             throw error
         }
         if reader.status == .failed { throw FileTranscriptionError.reading(reader.error ?? CocoaError(.fileReadUnknown)) }
         try Task.checkCancellation()
         return total
+    }
+
+    /// An AVAssetReader asked on a queue of its own. Asking it for the next block holds the thread until the block is
+    /// decoded, and AVFoundation may need Swift concurrency's shared threads to get there: asked from one of those, a few
+    /// files read at once can take every one of them and never finish (CI's three-core runners did). So the reading
+    /// happens here, and the task only waits for it.
+    private final class Reading: @unchecked Sendable {
+        private let reader: AVAssetReader
+        private let output: AVAssetReaderTrackOutput
+        private let queue = DispatchQueue(label: "OpenTypeless.AudioFileDecoder")
+
+        init(reader: AVAssetReader, output: AVAssetReaderTrackOutput) {
+            self.reader = reader
+            self.output = output
+        }
+
+        func start() async -> Bool {
+            await withCheckedContinuation { continuation in
+                queue.async { continuation.resume(returning: self.reader.startReading()) }
+            }
+        }
+
+        /// The next block of samples (empty when a buffer had none), or nil at the end. Cancelling the task cancels the
+        /// reading, which lets a decoder that hangs go, so Cancel always ends a file's reading.
+        func next() async throws -> [Int16]? {
+            try await withTaskCancellationHandler {
+                try await nextBlock()
+            } onCancel: {
+                reader.cancelReading()
+            }
+        }
+
+        private func nextBlock() async throws -> [Int16]? {
+            try await withCheckedThrowingContinuation { continuation in
+                queue.async {
+                    guard let buffer = self.output.copyNextSampleBuffer() else { return continuation.resume(returning: nil) }
+                    guard let block = CMSampleBufferGetDataBuffer(buffer) else { return continuation.resume(returning: []) }
+                    var samples = [Int16](repeating: 0, count: CMBlockBufferGetDataLength(block) / 2)
+                    guard !samples.isEmpty else { return continuation.resume(returning: []) }
+                    let status = samples.withUnsafeMutableBytes {
+                        CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: $0.count, destination: $0.baseAddress!)
+                    }
+                    if status == kCMBlockBufferNoErr {
+                        continuation.resume(returning: samples)
+                    } else {
+                        continuation.resume(throwing: FileTranscriptionError.unsupported(nil))
+                    }
+                }
+            }
+        }
+
+        func cancel() {
+            queue.async { self.reader.cancelReading() }
+        }
     }
 
     /// The whole sound of `url` at once, for the command line (the app streams it with `decode`).

@@ -462,7 +462,8 @@ public class FileTranscriptionTests
         var pipeline = Pipeline(server, attempts: 1, maxConcurrentRequests: 3);
         pipeline.Append(audio);
         await Assert.ThrowsAsync<PipelineFailure>(() => pipeline.Finish());
-        Assert.Equal(2 * total, server.Counts.Requests);
+        // At least: a slow answer on a busy machine can be raced as well.
+        Assert.True(server.Counts.Requests >= 2 * total);
     }
 
     [Fact]

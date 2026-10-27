@@ -7,22 +7,30 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Shapes;
+using OpenTypeless.Audio;
 using OpenTypeless.Input;
 using OpenTypeless.Services;
 using OpenTypeless.Session;
 using TypelessCore;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+using Windows.Storage.Pickers;
 
 namespace OpenTypeless.UI;
 
 /// <summary>
 /// Every dictation, newest first and grouped by day, with search; the selected one's text, details and actions on
-/// the right. How long recordings are kept sits in the toolbar.
+/// the right. How long recordings are kept sits in the toolbar, next to transcribing a file (also by dropping one on
+/// the page).
 /// </summary>
 public sealed class HistoryPage : PageBase
 {
     private readonly HistoryStore _history = HistoryStore.Shared;
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly SessionController _controller;
+    private readonly FileTranscriber _files;
+    /// <summary>The settings window, which owns the file picker.</summary>
+    private readonly nint _owner;
     private readonly AutoSuggestBox _search = new()
     {
         PlaceholderText = L("搜索听写内容", "Search dictations"),
@@ -52,14 +60,17 @@ public sealed class HistoryPage : PageBase
     private readonly Grid _split = new() { ColumnSpacing = 14 };
     /// <summary>Set while the page itself changes the list, whose selection changes then aren't the user's.</summary>
     private bool _syncing;
+    /// <summary>A dialog is open (one at a time: a second ShowAsync while one is open would throw).</summary>
     private bool _confirming;
     private string? _selection;
     /// <summary>What the detail was built from, so it's only rebuilt when that changes.</summary>
-    private (DictationRecord? Record, bool HasAudio, bool Idle)? _shownDetail;
+    private (DictationRecord? Record, bool HasAudio, bool Idle, FileTranscription.Progress? Progress)? _shownDetail;
 
-    public HistoryPage(SessionController controller) : base(SettingsPage.History, scrolls: false)
+    public HistoryPage(SessionController controller, nint owner) : base(SettingsPage.History, scrolls: false)
     {
         _controller = controller;
+        _files = controller.Files;
+        _owner = owner;
         _list = new ListView
         {
             SelectionMode = ListViewSelectionMode.Single,
@@ -97,6 +108,13 @@ public sealed class HistoryPage : PageBase
             _searchDelay.Start();
         };
         _history.Changed += OnHistoryChanged;
+        _files.Changed += Update;
+        // Audio and video files dropped anywhere on the page are offered for transcribing.
+        AllowDrop = true;
+        // A transparent background, so a drop over the page's empty space reaches it too.
+        if (Content is Panel root) root.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        DragOver += OnDragOver;
+        Drop += OnDrop;
         Render();
     }
 
@@ -104,6 +122,7 @@ public sealed class HistoryPage : PageBase
     {
         _searchDelay.Stop();
         _history.Changed -= OnHistoryChanged;
+        _files.Changed -= Update;
     }
 
     private void OnHistoryChanged()
@@ -144,11 +163,24 @@ public sealed class HistoryPage : PageBase
                 picker,
             },
         };
+        var transcribe = new Button
+        {
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 6,
+                Children = { Ui.Icon(Glyphs.OpenFile, 13), Ui.Text(L("转写文件…", "Transcribe File…"), 13) },
+            },
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ToolTipService.SetToolTip(transcribe, L("转写语音备忘录、会议录音或视频（也可以直接拖到这里）",
+                                                "Transcribe a voice memo, meeting recording or video (or drop it here)"));
+        transcribe.Click += async (_, _) => await PickFiles();
+        var leadingTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { _search, transcribe } };
         var toolbar = new Grid { ColumnSpacing = 12 };
         toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        toolbar.Children.Add(_search);
+        toolbar.Children.Add(leadingTools);
         Grid.SetColumn(trailing, 2);
         toolbar.Children.Add(trailing);
         RefreshStorage();
@@ -171,7 +203,8 @@ public sealed class HistoryPage : PageBase
             var needle = _search.Text.Trim();
             if (needle.Length == 0) return _history.Records.ToList();
             return _history.Records.Where(r => r.FinalText.Contains(needle, StringComparison.CurrentCultureIgnoreCase)
-                                                || r.RawText.Contains(needle, StringComparison.CurrentCultureIgnoreCase)).ToList();
+                                                || r.RawText.Contains(needle, StringComparison.CurrentCultureIgnoreCase)
+                                                || r.SourceName?.Contains(needle, StringComparison.CurrentCultureIgnoreCase) == true).ToList();
         }
     }
 
@@ -239,6 +272,7 @@ public sealed class HistoryPage : PageBase
                 Ui.Icon(Glyphs.Microphone, 36, Ui.Tertiary),
                 Ui.Text(L("还没有听写记录", "No dictations yet"), 14, FontWeights.Medium),
                 Ui.Text(L($"按住 {hotkey} 说话，每次听写都会保存在这里。", $"Hold {hotkey} and talk. Every dictation is kept here."), 12, foreground: Ui.Secondary),
+                Ui.Text(L("也可以把音频或视频文件拖到这里转写。", "You can also drop audio or video files here to transcribe them."), 12, foreground: Ui.Secondary),
             },
         };
     }
@@ -266,10 +300,11 @@ public sealed class HistoryPage : PageBase
 
     private void ShowDetail(DictationRecord? record)
     {
-        // Rebuilt when the record changed (records are replaced, not edited), lost its recording, or the retry
-        // button's state would differ.
-        (DictationRecord? Record, bool HasAudio, bool Idle) shown =
-            (record, record?.HasAudio ?? false, _controller.State == SessionController.SessionState.Idle);
+        // Rebuilt when the record changed (records are replaced, not edited), lost its recording, the retry button's
+        // state would differ, or its file has got further.
+        (DictationRecord? Record, bool HasAudio, bool Idle, FileTranscription.Progress? Progress) shown =
+            (record, record?.HasAudio ?? false, _controller.State == SessionController.SessionState.Idle,
+             record == null ? null : _files.Progress(record.Id));
         if (_shownDetail == shown) return;
         _shownDetail = shown;
         _detailHost.Content = record == null ? Card.Make() : Detail(record);
@@ -282,24 +317,27 @@ public sealed class HistoryPage : PageBase
         /// <summary>The header's text ("Today", "Fri, Sep 26"); null for a dictation.</summary>
         public string? Title { get; }
         public DictationRecord? Record { get; }
+        /// <summary>How far a file being transcribed has got.</summary>
+        public FileTranscription.Progress? Progress { get; }
 
-        private Entry(string key, string? title, DictationRecord? record)
+        private Entry(string key, string? title, DictationRecord? record, FileTranscription.Progress? progress = null)
         {
             Key = key;
             Title = title;
             Record = record;
+            Progress = progress;
         }
 
         public static Entry Header(DateTime day) => new("day " + day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), DayTitle(day), null);
 
-        public static Entry Of(DictationRecord record) => new(record.Id, null, record);
+        public static Entry Of(DictationRecord record, FileTranscription.Progress? progress) => new(record.Id, null, record, progress);
 
         /// <summary>Looks the same on screen. The store replaces a record when it's updated, so a changed one is a new object.</summary>
-        public bool LooksLike(Entry other) => ReferenceEquals(Record, other.Record) && Title == other.Title;
+        public bool LooksLike(Entry other) => ReferenceEquals(Record, other.Record) && Title == other.Title && Equals(Progress, other.Progress);
     }
 
     /// <summary>The records with a header before each day's first one.</summary>
-    private static List<Entry> Entries(List<DictationRecord> records)
+    private List<Entry> Entries(List<DictationRecord> records)
     {
         var entries = new List<Entry>(records.Count + 32);
         DateTime? currentDay = null;
@@ -311,7 +349,7 @@ public sealed class HistoryPage : PageBase
                 currentDay = day;
                 entries.Add(Entry.Header(day));
             }
-            entries.Add(Entry.Of(record));
+            entries.Add(Entry.Of(record, _files.Progress(record.Id)));
         }
         return entries;
     }
@@ -360,7 +398,7 @@ public sealed class HistoryPage : PageBase
             container.ClearValue(Control.IsTabStopProperty);
             container.ClearValue(FrameworkElement.MinHeightProperty);
             container.ClearValue(Control.PaddingProperty);
-            holder.Child = Row(record);
+            holder.Child = Row(record, entry.Progress);
         }
         else
         {
@@ -385,8 +423,11 @@ public sealed class HistoryPage : PageBase
         };
     }
 
-    /// <summary>A list entry: time, duration and a status badge when it isn't simply done, then the start of the text.</summary>
-    private static FrameworkElement Row(DictationRecord record)
+    /// <summary>
+    /// A list entry: time, duration and a status badge when it isn't simply done, then the start of the text. A file shows
+    /// its name, and how far it has got while it's being transcribed.
+    /// </summary>
+    private static FrameworkElement Row(DictationRecord record, FileTranscription.Progress? progress)
     {
         var meta = new Grid();
         meta.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -406,11 +447,38 @@ public sealed class HistoryPage : PageBase
         Grid.SetColumn(duration, 1);
         meta.Children.Add(duration);
 
+        var row = new StackPanel { Spacing = 3, Padding = new Thickness(0, 7, 0, 7), Children = { meta } };
+        if (record.IsFile && record.SourceName is { } name) row.Children.Add(FileName(name, 11.5));
+        if (progress != null)
+        {
+            row.Children.Add(Ui.Text(progress.Label, 12, foreground: Ui.Secondary));
+            row.Children.Add(FileProgressBar(progress));
+            return row;
+        }
         var text = Ui.Text(Preview(record), 13, foreground: record.FinalText.Length == 0 ? Ui.Secondary : null, wrap: true);
         text.MaxLines = 2;
         text.TextTrimming = TextTrimming.CharacterEllipsis;
-        return new StackPanel { Spacing = 3, Padding = new Thickness(0, 7, 0, 7), Children = { meta, text } };
+        row.Children.Add(text);
+        return row;
     }
+
+    /// <summary>The name of the file a record was transcribed from, after a file icon.</summary>
+    private static FrameworkElement FileName(string name, double size)
+    {
+        var text = Ui.Text(name, size, FontWeights.Medium, Ui.Secondary);
+        text.TextTrimming = TextTrimming.CharacterEllipsis;
+        text.MaxLines = 1;
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { Ui.Icon(Glyphs.Page, size, Ui.Secondary), text } };
+    }
+
+    /// <summary>How far a file being transcribed has got: a bar when that can be measured, moving dots otherwise.</summary>
+    private static ProgressBar FileProgressBar(FileTranscription.Progress progress) => new()
+    {
+        Minimum = 0,
+        Maximum = 1,
+        Value = progress.Fraction ?? 0,
+        IsIndeterminate = progress.Fraction == null,
+    };
 
     // MARK: Detail
 
@@ -449,8 +517,17 @@ public sealed class HistoryPage : PageBase
                 L($"已取消，没有插入。这条会保留到 {until}，之前可以复制或重新转写。",
                   $"Cancelled, so nothing was inserted. It's kept until {until} to copy or re-transcribe.")));
         }
+        if (record.IsFile && record.SourceName is { } name) body.Children.Add(FileName(name, 12));
         if (record.Error is { } error) body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, error));
-        if (record.FinalText.Length == 0 && record.Status is DictationStatus.Recording or DictationStatus.Processing)
+        if (_files.Progress(record.Id) is { } progress)
+        {
+            body.Children.Add(new StackPanel
+            {
+                Spacing = 8, Margin = new Thickness(0, 40, 0, 40),
+                Children = { Ui.Text(progress.Label, 13, foreground: Ui.Secondary), FileProgressBar(progress) },
+            });
+        }
+        else if (record.FinalText.Length == 0 && record.Status is DictationStatus.Recording or DictationStatus.Processing)
         {
             body.Children.Add(new StackPanel
             {
@@ -518,7 +595,36 @@ public sealed class HistoryPage : PageBase
             copyIcon.Glyph = Glyphs.Copy;
         };
         leading.Children.Add(copy);
-        if (record.HasAudio)
+        var active = _files.IsActive(record.Id);
+        if (active)
+        {
+            var cancel = new Button
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal, Spacing = 6,
+                    Children = { Ui.Icon(Glyphs.Cancel, 13), Ui.Text(L("取消", "Cancel"), 13) },
+                },
+            };
+            cancel.Click += (_, _) => _files.Cancel(record.Id);
+            leading.Children.Add(cancel);
+        }
+        else if (record.HasAudio && record.IsFile)
+        {
+            // A file goes back through the file queue: a long one mustn't hold up dictating.
+            var again = new Button
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal, Spacing = 6,
+                    Children = { Ui.Icon(Glyphs.Refresh, 13), Ui.Text(L("重新转写", "Re-transcribe"), 13) },
+                },
+            };
+            ToolTipService.SetToolTip(again, L("用保存的音频重新转写", "Transcribes the saved audio again"));
+            again.Click += (_, _) => _files.Retry(record);
+            leading.Children.Add(again);
+        }
+        if (record.HasAudio && !active && !record.IsFile)
         {
             var retry = new Button
             {
@@ -532,13 +638,16 @@ public sealed class HistoryPage : PageBase
             ToolTipService.SetToolTip(retry, L("完成后复制到剪贴板", "Copies the result to the clipboard"));
             retry.Click += (_, _) => _controller.Retry(record, paste: false);
             leading.Children.Add(retry);
+        }
+        if (record.HasAudio)
+        {
             var folder = new Button { Content = Ui.Icon(Glyphs.Folder, 14) };
             Ui.Label(folder, L("在文件资源管理器中显示录音", "Show recording in File Explorer"));
             folder.Click += (_, _) => Process.Start("explorer.exe", $"/select,\"{record.AudioPath}\"");
             leading.Children.Add(folder);
         }
         buttons.Children.Add(leading);
-        var delete = new Button { Content = Ui.Icon(Glyphs.Delete, 14, Palette.Brush(Tint.Red)) };
+        var delete = new Button { Content = Ui.Icon(Glyphs.Delete, 14, Palette.Brush(Tint.Red)), IsEnabled = !active };
         Ui.Label(delete, L("删除", "Delete"));
         delete.Click += async (_, _) =>
         {
@@ -569,6 +678,197 @@ public sealed class HistoryPage : PageBase
         Grid.SetRow(buttons, 4);
         layout.Children.Add(buttons);
         return Card.Make(layout);
+    }
+
+    // MARK: Transcribing files
+
+    private void OnDragOver(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        e.AcceptedOperation = DataPackageOperation.Copy;
+        e.DragUIOverride.Caption = L("松开即可转写音频或视频文件", "Drop audio or video files to transcribe them");
+    }
+
+    private async void OnDrop(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        var deferral = e.GetDeferral();
+        IReadOnlyList<IStorageItem> items;
+        try
+        {
+            items = await e.DataView.GetStorageItemsAsync();
+        }
+        catch (Exception error)
+        {
+            AppLog.Debug("files", "couldn't read the dropped files: " + error.Message);
+            return;
+        }
+        finally
+        {
+            deferral.Complete();
+        }
+        await OfferFiles(items.Where(item => item.IsOfType(StorageItemTypes.File)).Select(item => item.Path));
+    }
+
+    private async Task PickFiles()
+    {
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary, ViewMode = PickerViewMode.List };
+        foreach (var extension in AudioLoader.Extensions) picker.FileTypeFilter.Add(extension);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, _owner);
+        IReadOnlyList<StorageFile> files;
+        try
+        {
+            files = await picker.PickMultipleFilesAsync();
+        }
+        catch (Exception error)
+        {
+            AppLog.Debug("files", "the file picker failed: " + error.Message);
+            return;
+        }
+        await OfferFiles(files.Select(file => file.Path));
+    }
+
+    /// <summary>
+    /// Before files are transcribed: which ones and how long, what their speech-to-text should cost when the model has a
+    /// per-minute price, and whether to clean the text up. Transcribes the audio and video files among
+    /// <paramref name="paths"/> if the user goes ahead.
+    /// </summary>
+    private async Task OfferFiles(IEnumerable<string> paths)
+    {
+        var media = paths.Where(AudioLoader.IsMedia).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (media.Count == 0 || _confirming || XamlRoot == null) return;
+        _confirming = true;
+        try
+        {
+            var configured = _settings.SttEndpoint != null && _settings.IsConfigured(_settings.SttProvider);
+            var list = new StackPanel();
+            var durations = new Dictionary<string, TextBlock>();
+            foreach (var path in media)
+            {
+                if (list.Children.Count > 0) list.Children.Add(new CardDivider { Inset = 14 });
+                var name = Ui.Text(Path.GetFileName(path), 13);
+                name.TextTrimming = TextTrimming.CharacterEllipsis;
+                var length = Ui.Text("…", 12, foreground: Ui.Secondary);
+                length.HorizontalAlignment = HorizontalAlignment.Right;
+                durations[path] = length;
+                var row = new Grid { ColumnSpacing = 10, Padding = new Thickness(14, 9, 14, 9) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.Children.Add(Ui.Icon(AudioLoader.IsVideo(path) ? Glyphs.Video : Glyphs.Volume, 13, Ui.Secondary));
+                Grid.SetColumn(name, 1);
+                row.Children.Add(name);
+                Grid.SetColumn(length, 2);
+                row.Children.Add(length);
+                list.Children.Add(row);
+            }
+            var estimate = Ui.Text(L("正在读取文件长度…", "Reading how long the files are…"), 12, foreground: Ui.Secondary, wrap: true);
+            var cleanUp = new ToggleSwitch
+            {
+                IsOn = _settings.PolishEnabled && _settings.FileCleanUp, IsEnabled = _settings.PolishEnabled,
+                OnContent = "", OffContent = "", MinWidth = 0,
+            };
+            var content = new StackPanel
+            {
+                Spacing = 14, Width = 440,
+                Children =
+                {
+                    Card.Make(new ScrollViewer { Content = list, MaxHeight = 200, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }),
+                    estimate,
+                    Card.Make(new CardRow
+                    {
+                        Glyph = Glyphs.Font, Tint = Tint.Green, Title = L("整理文字", "Clean up text"),
+                        Subtitle = _settings.PolishEnabled
+                            ? L("用整理模型分段整理转写结果，另行计费", "Runs the transcript through the clean-up model, in parts (billed on top)")
+                            : L("文字整理已在设置里关闭", "Clean-up is turned off in Settings"),
+                        Trailing = cleanUp,
+                    }),
+                },
+            };
+            if (!configured)
+            {
+                var name = _settings.SttProvider.DisplayName();
+                content.Children.Add(new Banner(Glyphs.Warning, Tint.Orange,
+                    L($"请先在设置里配置语音转文字服务商（{name}）", $"Set up the speech-to-text provider ({name}) in Settings first")));
+            }
+            content.Children.Add(Ui.Text(L("结果保存在历史记录里，不会粘贴。", "The text is kept in History; nothing is pasted."), 11.5,
+                                         foreground: Ui.Tertiary, wrap: true));
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = L("转写文件", "Transcribe Files"),
+                Content = content,
+                PrimaryButtonText = L("开始转写", "Transcribe"),
+                CloseButtonText = L("取消", "Cancel"),
+                DefaultButton = ContentDialogButton.Primary,
+                IsPrimaryButtonEnabled = configured,
+            };
+            if (Application.Current.Resources.TryGetValue("DefaultContentDialogStyle", out var style) && style is Style dialogStyle)
+            {
+                dialog.Style = dialogStyle;
+            }
+            _ = Probe();
+            ContentDialogResult result;
+            try
+            {
+                result = await dialog.ShowAsync();
+            }
+            catch (Exception error)
+            {
+                // Another dialog already open in this window: the files are simply not offered.
+                AppLog.Debug("files", "the import dialog couldn't open: " + error.Message);
+                return;
+            }
+            if (result != ContentDialogResult.Primary) return;
+            if (_settings.PolishEnabled) _settings.FileCleanUp = cleanUp.IsOn;
+            // The newest record is the last file's: show it.
+            _selection = null;
+            _files.Transcribe(media, _settings.PolishEnabled && _settings.FileCleanUp);
+
+            // Each file's length, or why it can't be transcribed, then the estimate for them all.
+            async Task Probe()
+            {
+                var seconds = 0.0;
+                foreach (var path in media)
+                {
+                    try
+                    {
+                        var length = await AudioLoader.Duration(path);
+                        seconds += length;
+                        durations[path].Text = length > 0 ? Formatting.DurationLabel(length) : "";
+                    }
+                    catch (Exception error)
+                    {
+                        durations[path].Text = FileTranscriptionException.Reading(error).Message;
+                        durations[path].Foreground = Palette.Brush(Tint.Orange);
+                        durations[path].TextWrapping = TextWrapping.Wrap;
+                        durations[path].MaxWidth = 220;
+                    }
+                }
+                estimate.Text = Estimate(seconds);
+            }
+        }
+        finally
+        {
+            _confirming = false;
+        }
+    }
+
+    /// <summary>"1 h 12 min in all; speech-to-text should cost about $0.43 (whisper-1 at $0.006/min). Silence isn't sent."</summary>
+    private string Estimate(double seconds)
+    {
+        var total = UsageFormat.Duration(seconds);
+        var model = _settings.SttModel;
+        var price = PriceStore.Shared.Price(_settings.SttProvider, _settings.SttModel);
+        if (FileTranscription.EstimatedCost(seconds, price) is { } cost && price?.PerMinute is { } perMinute)
+        {
+            var rate = UsageFormat.Rate(perMinute);
+            var money = UsageFormat.Money(cost);
+            return L($"共 {total}，语音转文字预计约 {money}（{model} 每分钟 {rate}）。静音部分不会发送。",
+                     $"{total} in all; speech-to-text should cost about {money} ({model} at {rate}/min). Silence isn't sent.");
+        }
+        return L($"共 {total}。{model} 没有按分钟的价格，无法预估费用。",
+                 $"{total} in all. {model} has no per-minute price, so the cost can't be estimated.");
     }
 
     private async Task<bool> ConfirmDelete(DictationRecord record)

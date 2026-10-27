@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using OpenTypeless.Audio;
 using OpenTypeless.Services;
 using TypelessCore;
 

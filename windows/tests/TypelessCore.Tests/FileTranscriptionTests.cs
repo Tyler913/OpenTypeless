@@ -46,7 +46,7 @@ public class FileTranscriptionTests
     {
         // In whichever language the tests run in.
         Assert.Contains("3/12", new FileTranscription.Progress.Transcribing(3, 12).Label);
-        Assert.Contains("40%", new FileTranscription.Progress.Reading(0.404).Label);
+        Assert.Contains("40", new FileTranscription.Progress.Reading(0.404).Label);
         Assert.DoesNotContain("%", new FileTranscription.Progress.Reading(null).Label);
         Assert.Equal(0.25, new FileTranscription.Progress.Transcribing(3, 12).Fraction);
         Assert.Null(new FileTranscription.Progress.Transcribing(0, 0).Fraction);

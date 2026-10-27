@@ -43,12 +43,25 @@ public sealed class DictationRecord
     [JsonPropertyName("cost")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Cost { get; set; }
     /// <summary>Its words are in the usage totals (so re-transcribing it doesn't count them twice).</summary>
     [JsonPropertyName("counted")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Counted { get; set; }
+    /// <summary>
+    /// Where the audio came from: a dictation (not written), or a transcribed audio or video file (see
+    /// <see cref="Session.FileTranscriber"/>).
+    /// </summary>
+    [JsonPropertyName("source")][JsonConverter(typeof(RecordSourceConverter))][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public RecordSource Source { get; set; }
+    /// <summary>The name of the file it was transcribed from.</summary>
+    [JsonPropertyName("sourceName")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? SourceName { get; set; }
 
     /// <summary>What was (or would be) inserted.</summary>
     [JsonIgnore] public string FinalText => PolishedText ?? RawText;
 
+    /// <summary>Transcribed from a file rather than dictated: never pasted, and not in the Home page's dictation totals.</summary>
+    [JsonIgnore] public bool IsFile => Source == RecordSource.File;
+
     [JsonIgnore] public string Folder => Path.Combine(AppPaths.Sessions, Id);
     [JsonIgnore] public string AudioPath => Path.Combine(Folder, "audio.wav");
+    /// <summary>Where a file's sound is written while it's read; renamed to <see cref="AudioPath"/> once all of it is there.</summary>
+    [JsonIgnore] public string PartialAudioPath => Path.Combine(Folder, "audio.partial.wav");
     [JsonIgnore] public bool HasAudio => File.Exists(AudioPath);
 
     /// <summary>Records have value semantics (a struct on macOS): the store and the session each keep their own copy.</summary>
@@ -254,7 +267,17 @@ public sealed class HistoryStore
         foreach (var record in loaded.Where(r => r.Status is DictationStatus.Recording or DictationStatus.Processing))
         {
             record.Status = DictationStatus.Failed;
-            record.Error = L("上次运行中断（音频已保存，可重试）", "Interrupted last time (audio saved — you can retry)");
+            if (record.IsFile && !record.HasAudio)
+            {
+                // Quit while the file was still being read: what was read of it is no use.
+                try { File.Delete(record.PartialAudioPath); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+                record.Error = L("上次运行中断，文件还没读完，请重新转写这个文件",
+                                 "Interrupted last time while reading the file — transcribe the file again");
+            }
+            else
+            {
+                record.Error = L("上次运行中断（音频已保存，可重试）", "Interrupted last time (audio saved — you can retry)");
+            }
             Save(record);
         }
         _records.AddRange(loaded);

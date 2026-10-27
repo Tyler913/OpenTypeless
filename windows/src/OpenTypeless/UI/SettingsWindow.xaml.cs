@@ -123,7 +123,7 @@ public sealed partial class SettingsWindow : Window
             SettingsPage.Providers => new ProvidersPage(),
             SettingsPage.Models => new ModelsPage(this, _controller),
             SettingsPage.Style => new StylePage(),
-            _ => new HistoryPage(_controller),
+            _ => new HistoryPage(_controller, Hwnd),
         };
     }
 

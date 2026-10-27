@@ -21,6 +21,7 @@
     <Compile Include="..\OpenTypeless\Services\AppPaths.cs" Link="Shared\AppPaths.cs" />
     <Compile Include="..\OpenTypeless\Services\AppSettings.cs" Link="Shared\AppSettings.cs" />
     <Compile Include="..\OpenTypeless\Services\Credentials.cs" Link="Shared\Credentials.cs" />
+    <Compile Include="..\OpenTypeless\Audio\AudioLoader.cs" Link="Shared\AudioLoader.cs" />
     <Using Include="TypelessCore.Localization" Static="true" />
   </ItemGroup>
 

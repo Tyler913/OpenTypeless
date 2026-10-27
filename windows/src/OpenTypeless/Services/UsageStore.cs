@@ -40,11 +40,13 @@ public sealed class UsageStore
 
     /// <summary>
     /// Adds a finished dictation's words and speaking time once. Returns whether it was counted now, so the caller
-    /// saves the record's <see cref="DictationRecord.Counted"/> flag and a retry doesn't count it again.
+    /// saves the record's <see cref="DictationRecord.Counted"/> flag and a retry doesn't count it again. A transcribed
+    /// file isn't counted: its words weren't dictated, and an hour-long meeting would swamp the words and the time saved
+    /// over typing. What it cost is counted all the same (<see cref="Record"/>).
     /// </summary>
     public bool CountIfFinished(DictationRecord record)
     {
-        if (record.Counted == true || record.Status is not (DictationStatus.Done or DictationStatus.PolishFailed)) return false;
+        if (record.IsFile || record.Counted == true || record.Status is not (DictationStatus.Done or DictationStatus.PolishFailed)) return false;
         var words = WordCount.Count(record.FinalText);
         if (words == 0) return false;
         Ledger.AddDictation(DateOnly.FromDateTime(record.Date.LocalDateTime), words, record.Duration);

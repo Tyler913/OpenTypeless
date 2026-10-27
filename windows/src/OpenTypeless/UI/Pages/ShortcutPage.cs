@@ -40,10 +40,51 @@ public sealed class ShortcutPage : PageBase
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(AppSettings.Hotkey) or nameof(AppSettings.Shortcuts) or nameof(AppSettings.TranslationEnabled)
-            or nameof(AppSettings.TranslationLanguage) or nameof(AppSettings.TranslationOtherLanguage) or nameof(AppSettings.TranslationChord))
+            or nameof(AppSettings.TranslationLanguage) or nameof(AppSettings.TranslationOtherLanguage) or nameof(AppSettings.TranslationChord)
+            or nameof(AppSettings.CommandModeEnabled) or nameof(AppSettings.CommandChord))
         {
             DispatcherQueue.TryEnqueue(Render);
         }
+    }
+
+    /// <summary>
+    /// Command mode: on or off, and the key that, pressed while the dictation shortcut is held, makes the recording an
+    /// instruction for the text selected in the app in front (see <see cref="SelectionCommand"/>).
+    /// </summary>
+    private CardSection CommandModeSection()
+    {
+        var key = _settings.CommandChord.Label();
+        var section = new CardSection
+        {
+            Title = L("用语音编辑选中的文字", "Edit selected text by voice"),
+            Footer = L($"选中任意应用里的文字，按住听写快捷键时再按一下 {key}，说出怎么改（“正式一点”“翻译成英文”“修正语法”），松开后选中的文字就会被替换，可以用撤销恢复。问关于它的问题（“这是什么意思”），答案会显示并复制。没有选中文字时什么都不会改；密码框和终端不会被读取。",
+                       $"Select text in any app, hold the dictation shortcut and press {key} too, and say how to change it (“more formal”, “translate to English”, “fix the grammar”): when you let go, the selection is replaced, and Undo brings it back. Ask about it (“what does this mean”) and the answer is shown and copied. Nothing changes when no text is selected; password fields and terminals are never read."),
+        };
+        var enabled = new ToggleSwitch { IsOn = _settings.CommandModeEnabled, OnContent = "", OffContent = "", MinWidth = 0 };
+        enabled.Toggled += (_, _) => _settings.CommandModeEnabled = enabled.IsOn;
+        section.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Edit, Tint = Tint.Pink, Title = L("编辑模式", "Command mode"),
+            Subtitle = L($"按住听写快捷键时再按一下 {key}，这次说的话会用来修改选中的文字",
+                         $"Hold the dictation shortcut and press {key} too: what you say edits the selected text"),
+            Trailing = enabled,
+        });
+        if (!_settings.CommandModeEnabled) return section;
+        var chords = TranslationChords.All;
+        var chord = new ComboBox { MinWidth = 120 };
+        foreach (var option in chords) chord.Items.Add(option.Label());
+        chord.SelectedIndex = Math.Max(0, Array.IndexOf(chords, _settings.CommandChord));
+        chord.SelectionChanged += (_, _) => _settings.CommandChord = chords[Math.Max(0, chord.SelectedIndex)];
+        section.Body.Add(new CardDivider());
+        section.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Keyboard, Tint = Tint.Blue, Title = L("切换键", "Switch key"),
+            Subtitle = _settings.CommandChordClashes
+                ? L("和翻译模式的切换键相同，请换一个", "Translation mode uses this key too — pick another")
+                : L("按住听写快捷键时按下它（左右两边都可以）", "Pressed while you hold the dictation shortcut (either side)"),
+            Trailing = chord,
+        });
+        return section;
     }
 
     private void Render()
@@ -168,7 +209,18 @@ public sealed class ShortcutPage : PageBase
                              $"Inserted translated into {target.DisplayName} (set up under Vocabulary & Style)"),
             });
         }
+        if (_settings.CommandModeEnabled && !_settings.CommandChordClashes)
+        {
+            var key = _settings.CommandChord.KeyCap();
+            how.Body.Add(new CardDivider());
+            how.Body.Add(new CardRow
+            {
+                Glyph = Glyphs.Edit, Tint = Tint.Pink, Title = L($"按住 + {key}：编辑选中的文字", $"Hold + {key}: edit the selection"),
+                Subtitle = L("说出怎么改，选中的文字会被替换", "Say how to change it, and the selection is replaced"),
+            });
+        }
         Body.Children.Add(how);
+        Body.Children.Add(CommandModeSection());
 
         // Actions with a shortcut of their own
         var actions = new CardSection

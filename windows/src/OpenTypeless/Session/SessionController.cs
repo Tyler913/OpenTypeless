@@ -18,10 +18,11 @@ internal sealed class SampleCounter
 }
 
 /// <summary>
-/// What a recording is for: plain dictation, or a translation (see <see cref="TranslationTarget"/>), which the translation
-/// chord (see <see cref="ModeChords{TMode}"/>) switches it to while recording.
+/// What a recording is for: plain dictation, a translation (see <see cref="TranslationTarget"/>), or an edit of the text
+/// selected in the app in front (see <see cref="SelectionCommand"/>), which the translation and command chords (see
+/// <see cref="ModeChords{TMode}"/>) switch it to while recording.
 /// </summary>
-public enum RecordingMode { Dictation, Translate }
+public enum RecordingMode { Dictation, Translate, Command }
 
 internal static class TranslationFallbackText
 {
@@ -33,6 +34,40 @@ internal static class TranslationFallbackText
         PolishFallback.Summarised => L("翻译漏掉了太多内容", "the translation left too much out"),
         PolishFallback.Untranslated => L("结果不是目标语言", "it didn't come back in the target language"),
         _ => L("没有可用的翻译", "no usable translation came back"),
+    };
+}
+
+internal static class CommandText
+{
+    /// <summary>Why an edit of a selection couldn't be used, for History and the capsule.</summary>
+    public static string CommandReason(this PolishFallback fallback) => fallback switch
+    {
+        PolishFallback.Truncated => L("改写被截断了", "the rewrite was cut off"),
+        PolishFallback.Answered => L("模型回复了别的内容，没有改写", "the model replied instead of editing"),
+        _ => L("没有可用的改写", "no usable rewrite came back"),
+    };
+
+    /// <summary>What the capsule says when the selection can't be edited by voice.</summary>
+    public static string Message(this SelectionRefusal refusal) => refusal switch
+    {
+        SelectionRefusal.Terminal => L("终端里的文字不能用语音编辑", "Text in a terminal can't be edited by voice"),
+        SelectionRefusal.SecureField => L("密码框不能用语音编辑", "Password fields can't be edited by voice"),
+        SelectionRefusal.UnreadableInEditor => L("读不到这个编辑器里选中的文字", "Can't read the selection in this editor"),
+        SelectionRefusal.TooLong tooLong => L($"选中的文字太长（{tooLong.Count} 字符，最多 {SelectionCommand.MaxCharacters}）",
+                                              $"The selection is too long ({tooLong.Count} characters; up to {SelectionCommand.MaxCharacters})"),
+        _ => L("没有选中文字：先选中要修改的文字，再按住听写快捷键说出怎么改",
+               "No text selected — select the text to change, then hold the dictation shortcut and say how"),
+    };
+
+    /// <summary>Why an edit went to the clipboard instead of over the selection.</summary>
+    public static string Message(this SelectionCommand.ClipboardReason reason) => reason switch
+    {
+        SelectionCommand.ClipboardReason.Locked => L("屏幕已锁定，改写后的文字已复制", "Screen locked — the edited text is on the clipboard"),
+        SelectionCommand.ClipboardReason.MovedAway => L("已切换到别的窗口，改写后的文字已复制",
+                                                        "You moved to another window — the edited text is on the clipboard"),
+        SelectionCommand.ClipboardReason.SelectionChanged => L("选中的文字变了，改写后的文字已复制",
+                                                               "The selection changed — the edited text is on the clipboard"),
+        _ => L("这里不能粘贴，改写后的文字已复制", "Can't paste there — the edited text is on the clipboard"),
     };
 }
 
@@ -89,6 +124,12 @@ public sealed class SessionController
     public ModeChords<RecordingMode> ModeChords { get; private set; } = new();
     /// <summary>What the running recording is for; plain dictation at every start.</summary>
     public RecordingMode Mode { get; private set; } = RecordingMode.Dictation;
+    /// <summary>
+    /// Command mode: the selection being read (or read) when the chord was pressed, and where (see
+    /// <see cref="ReadSelection"/>). Dropped with the recording, or when another chord switches it to another mode.
+    /// </summary>
+    private Task<(SelectedText.Place? Place, SelectionRead Read)>? _selection;
+    private CancellationTokenSource? _selectionCancel;
     /// <summary>
     /// The "Paste last dictation" waiting for its keys to be let go, or pasting, by its number. A new dictation, Esc or the
     /// session locking drops it (null), and what it still had to do is left undone. Pressing it again meanwhile does nothing.
@@ -253,37 +294,100 @@ public sealed class SessionController
 
     /// <summary>
     /// The running recording becomes <paramref name="mode"/>'s: the record keeps it (a retry runs the same way), the
-    /// capsule shows it, and a clean-up started ahead of time with the other prompt starts again with this one.
+    /// capsule shows it, and a clean-up started ahead of time with the other prompt starts again with this one. Command
+    /// mode reads the selection now, while the app it's in is in front (see <see cref="ReadSelection"/>).
     /// </summary>
     private void SwitchMode(RecordingMode mode)
     {
         var translation = mode == RecordingMode.Translate ? _settings.TranslationTarget : null;
-        // Translation turned off a moment ago: its chord is on its way out.
+        // Translation or command mode turned off a moment ago: its chord is on its way out.
         if (mode == RecordingMode.Translate && translation is null) return;
+        if (mode == RecordingMode.Command && !_settings.CommandModeEnabled) return;
+        if (Mode == RecordingMode.Command) DropSelection();
         Mode = mode;
-        if (_record != null) _record.Translation = translation;
-        Hud.Model.Badge = translation?.Badge;
+        if (_record != null)
+        {
+            _record.Translation = translation;
+            if (mode == RecordingMode.Command) _record.Mode = SelectionCommand.RecordMode;
+        }
+        Hud.Model.Badge = translation?.Badge ?? (mode == RecordingMode.Command ? L("✎ 编辑", "✎ Edit") : null);
+        if (mode == RecordingMode.Command) ReadSelection();
         if (_speculativePolish?.Raw is { } raw)
         {
             DropSpeculativePolish();
+            // Never for an edit, which only starts once its instruction is complete.
             SpeculationChanged(raw);
         }
     }
 
     /// <summary>
-    /// Registers the translation chord's keys while translation mode is on (none otherwise), and returns every chord key,
+    /// Command mode: reads the selection in the app in front, the one the edit goes back to (see <see cref="SelectedText"/>).
+    /// One that can't be edited (none, in a password field or a terminal, too long) stops the recording at once and says
+    /// why; nothing is pasted or copied. Read by Ctrl+C, it's only known once the keys are let go of, after a push-to-talk
+    /// recording: then <see cref="EditSelection"/> says so.
+    /// </summary>
+    private void ReadSelection()
+    {
+        var generation = _generation;
+        var cancel = new CancellationTokenSource();
+        _selectionCancel = cancel;
+        var hotkey = _settings.Hotkey;
+        var chordKeys = ModeChords.Keys.ToList();
+        var timeout = TimeSpan.FromMinutes(Math.Max(1, _settings.MaxRecordingMinutes)) + TimeSpan.FromSeconds(10);
+        var reading = Run();
+        // Unless it was refused straight away (this app in front), which has already ended the recording.
+        if (_selectionCancel == cancel) _selection = reading;
+
+        async Task<(SelectedText.Place? Place, SelectionRead Read)> Run()
+        {
+            var place = await SelectedText.Place.Front();
+            SelectionRead read = place == null
+                ? new SelectionRead.Refused(new SelectionRefusal.NoSelection())
+                : await SelectedText.Read(place, hotkey, chordKeys, timeout, cancel.Token);
+            if (read is SelectionRead.Refused refused) SelectionRefused(refused.Reason, generation);
+            return (place, read);
+        }
+    }
+
+    /// <summary>While still recording in command mode: the recording stops as if it never started, and the capsule says why.</summary>
+    private void SelectionRefused(SelectionRefusal reason, int generation)
+    {
+        if (generation != _generation || State != SessionState.Recording || Mode != RecordingMode.Command) return;
+        Note($"command mode: selection refused ({reason}) — recording stopped");
+        Cancel(silently: true);
+        Hud.Show(new HudPhase.Error(reason.Message()), 3);
+    }
+
+    private void DropSelection()
+    {
+        _selectionCancel?.Cancel();
+        _selectionCancel = null;
+        _selection = null;
+    }
+
+    /// <summary>
+    /// Registers the translation chord's keys while translation mode is on, and command mode's while that is (none
+    /// otherwise), and returns every chord key,
     /// for the hotkey hook to keep from the focused app while the hotkey is held. A modifier-only hotkey's own key is
     /// never its chord. At launch, and whenever the settings it depends on change.
     /// </summary>
     public IReadOnlySet<int> UpdateModeChords()
     {
         var chords = new ModeChords<RecordingMode>();
-        if (_settings.TranslationTarget != null)
+        var hotkey = _settings.Hotkey.IsModifierOnly ? _settings.Hotkey.KeyCode : (int?)null;
+        var translating = _settings.TranslationTarget != null;
+        if (translating)
         {
-            var hotkey = _settings.Hotkey;
-            foreach (var key in _settings.TranslationChord.KeyCodes(hotkey.IsModifierOnly ? hotkey.KeyCode : null))
+            foreach (var key in _settings.TranslationChord.KeyCodes(hotkey))
             {
                 chords.Register(key, RecordingMode.Translate);
+            }
+        }
+        if (_settings.CommandModeEnabled)
+        {
+            foreach (var key in SelectionCommand.ChordKeys(_settings.CommandChord, translating ? _settings.TranslationChord : (TranslationChord?)null, hotkey))
+            {
+                chords.Register(key, RecordingMode.Command);
             }
         }
         ModeChords = chords;
@@ -520,7 +624,7 @@ public sealed class SessionController
     private void WarmConnections()
     {
         var endpoints = new List<ProviderEndpoint?> { _settings.SttEndpoint, _settings.SttBackupEndpoint };
-        if (_settings.PolishEnabled || _settings.TranslationTarget != null)
+        if (_settings.PolishEnabled || _settings.TranslationTarget != null || _settings.CommandModeEnabled)
         {
             endpoints.Add(_settings.PolishEndpoint);
             endpoints.Add(_settings.PolishBackupEndpoint);
@@ -615,7 +719,7 @@ public sealed class SessionController
         State = SessionState.Processing;
         // Where the text should go: if another window is in front by the time it's ready, it goes to the clipboard.
         _pasteTarget = Win32.GetForegroundWindow();
-        Hud.ShowWorking(_settings.PolishEnabled || record.Translation != null);
+        Hud.ShowWorking(_settings.PolishEnabled || record.Translation != null || record.IsCommand);
 
         // No waiting when the speaker paused before letting go and that pause is already being transcribed as the last
         // chunk: the moment's (quiet) audio changes nothing then, and the text may be ready at once.
@@ -675,7 +779,8 @@ public sealed class SessionController
                 Finish(new HudPhase.Error(L("没有识别到语音", "No speech detected")), 2);
                 return;
             }
-            await PolishAndDeliver(record, pipeline, generation, token);
+            if (record.IsCommand) await EditSelection(record, pipeline, generation, token);
+            else await PolishAndDeliver(record, pipeline, generation, token);
         }
         catch (PipelineFailure failure)
         {
@@ -687,7 +792,10 @@ public sealed class SessionController
             Account(record, pipeline, null, TakeDiscardedPolishes());
             _history.Update(record);
             LastError = failure.Message;
-            Finish(new HudPhase.Error(L("转写失败，可在托盘菜单重试", "Failed — retry from the tray menu")), 4);
+            // An edit can't be retried: its selection isn't kept.
+            Finish(new HudPhase.Error(record.IsCommand
+                                          ? L("转写失败，选中的文字没有改动", "Transcription failed — your text is unchanged")
+                                          : L("转写失败，可在托盘菜单重试", "Failed — retry from the tray menu")), 4);
         }
         catch (Exception error)
         {
@@ -873,6 +981,180 @@ public sealed class SessionController
         _history.Update(record);
     }
 
+    // MARK: - Editing a selection
+
+    /// <summary>
+    /// Command mode, once the instruction is transcribed: the selection read when the chord was pressed is edited by it
+    /// (see <see cref="SelectionCommand"/>), and the rewrite pasted over it (see <see cref="DeliverEdit"/>); an answer to a
+    /// question about the text is shown and copied instead. Nothing is pasted when the selection couldn't be read, the
+    /// rewrite can't be used (cut off, a refusal, nothing), or the model changed nothing; nor once Esc or the screen locking
+    /// came first.
+    /// </summary>
+    private async Task EditSelection(DictationRecord record, TranscriptionPipeline pipeline, int generation, CancellationToken token)
+    {
+        var begun = Stopwatch.StartNew();
+        SelectedText.Place? place = null;
+        SelectionRead read = new SelectionRead.Refused(new SelectionRefusal.NoSelection());
+        // Read by Ctrl+C, the selection is only being read now that the keys are up.
+        if (_selection is { } selection) (place, read) = await selection;
+        // Esc (or a new dictation) meanwhile: Cancel has dealt with this one.
+        if (!IsCurrent(generation, token)) return;
+        if (read is not SelectionRead.Selection selected || place == null)
+        {
+            var reason = read is SelectionRead.Refused refused ? refused.Reason : new SelectionRefusal.NoSelection();
+            Note($"command mode: selection refused ({reason}) after recording");
+            record.Status = DictationStatus.PolishFailed;
+            record.Error = reason.Message();
+            Account(record, pipeline, null, TakeDiscardedPolishes());
+            _history.Update(record);
+            Finish(new HudPhase.Error(reason.Message()), 3);
+            return;
+        }
+        var original = selected.Text;
+        record.SelectionLength = TextMetrics.CharacterCount(original);
+        // Saved while the edit runs, so the instruction survives a crash.
+        _history.Update(record);
+
+        SegmentedPolishResult polished;
+        try
+        {
+            polished = await Edit(original, record.RawText, OnPolishPartial(original), token);
+        }
+        catch (Exception error)
+        {
+            // Esc: Cancel has kept the record as cancelled.
+            if (ApiException.From(error).IsCancelled || !IsCurrent(generation, token)) return;
+            record.Status = DictationStatus.PolishFailed;
+            record.Error = L("未能编辑：", "Couldn't edit: ") + error.Message;
+            Account(record, pipeline, null, TakeDiscardedPolishes());
+            _history.Update(record);
+            Finish(new HudPhase.Error(L("未能编辑选中的文字：", "Couldn't edit the selection: ") + error.Message), 5);
+            return;
+        }
+        NoteTiming(polished, 0, record, "edit of a selection");
+        if (IsCurrent(generation, token))
+        {
+            Hud.Model.Progress.Reach(new ProcessingProgress.Milestone.Delivered());
+            if (record.Timing is { } timing) timing.Delivered = (timing.Transcription ?? 0) + begun.Elapsed.TotalSeconds;
+            if (polished.Fallbacks.FirstOrDefault()?.Fallback is { } fallback)
+            {
+                Note($"edit unusable ({fallback.ToString().ToLowerInvariant()}) → nothing pasted");
+                var reason = fallback.CommandReason();
+                record.Status = DictationStatus.PolishFailed;
+                record.Error = L($"未能编辑：{reason}", $"Couldn't edit: {reason}");
+                Finish(new HudPhase.Error(L($"未能编辑：{reason}，选中的文字没有改动", $"Couldn't edit: {reason}. Your text is unchanged")), 4);
+            }
+            else
+            {
+                record.Status = DictationStatus.Done;
+                switch (SelectionCommand.ReplyOf(polished.Text))
+                {
+                    case SelectionCommand.Reply.Answer answer:
+                        record.PolishedText = answer.Text;
+                        TextInserter.CopyToClipboard(answer.Text);
+                        if (record.Timing != null) record.Timing.Delivery = "answered";
+                        Finish(new HudPhase.Answer(answer.Text), 4);
+                        break;
+                    case SelectionCommand.Reply.Rewrite rewrite:
+                        record.PolishedText = rewrite.Text;
+                        if (SelectionCommand.IsUnchanged(original, rewrite.Text))
+                        {
+                            if (record.Timing != null) record.Timing.Delivery = "unchanged";
+                            Finish(new HudPhase.Error(L("没有需要修改的地方", "Nothing to change")), 2.5);
+                        }
+                        else
+                        {
+                            var delivery = await DeliverEdit(SelectionCommand.Replacement(original, rewrite.Text), place, original,
+                                                             selected.Source, generation, token);
+                            if (record.Timing != null) record.Timing.Delivery = delivery;
+                        }
+                        break;
+                }
+            }
+        }
+        // Esc came before the text was in place (or while it went in): Cancel has kept the record as cancelled, and so it
+        // stays, now with its edit.
+        if (token.IsCancellationRequested) record.Status = DictationStatus.Cancelled;
+        if (record.Status == DictationStatus.PolishFailed) record.PolishedText = null;
+        Account(record, pipeline, polished, TakeDiscardedPolishes());
+        _history.Update(record);
+    }
+
+    /// <summary>
+    /// Pastes an edit over the selection it was made from, which the app's own undo then takes back. Only while it can go
+    /// over that very selection (see <see cref="SelectionCommand.DeliveryOf"/>: the same window and element in front, the
+    /// same text still selected where UI Automation can tell, something that takes text, the session unlocked), and the
+    /// window and the lock are checked once more right before Ctrl+V goes out; otherwise it goes to the clipboard, and the
+    /// capsule says why. Returns how it went, for History.
+    /// </summary>
+    private async Task<string> DeliverEdit(string text, SelectedText.Place place, string original, SelectionSource source,
+                                           int generation, CancellationToken token)
+    {
+        if (_deliverByPaste) await TextInserter.LeaveMenuMode();
+        var delivery = await EditDelivery(place, original, source);
+        if (!IsCurrent(generation, token))
+        {
+            Note("edit → nothing, it was cancelled meanwhile");
+            return "cancelled";
+        }
+        if (delivery is SelectionCommand.Delivery.Clipboard clipboard)
+        {
+            Note($"edit → clipboard ({clipboard.Reason})");
+            TextInserter.CopyToClipboard(text);
+            Finish(new HudPhase.Error(clipboard.Reason.Message()), 3);
+            return "copied";
+        }
+        var outcome = await TextInserter.Insert(text, _settings.RestoreClipboard,
+                                                () => IsCurrent(generation, token) && _deliverByPaste && !_isLocked
+                                                      && Win32.GetForegroundWindow() == place.Window);
+        if (!IsCurrent(generation, token))
+        {
+            Note($"edit → {outcome}, but it was cancelled meanwhile");
+            return "cancelled";
+        }
+        Note($"edit → {outcome}");
+        switch (outcome)
+        {
+            case TextInserter.Outcome.Pasted:
+                Reset();
+                Hud.FinishWorking();
+                return "pasted";
+            case TextInserter.Outcome.Skipped:
+                // The window or the lock changed just as Ctrl+V was due.
+                TextInserter.CopyToClipboard(text);
+                var reason = _deliverByPaste && !_isLocked ? SelectionCommand.ClipboardReason.MovedAway : SelectionCommand.ClipboardReason.Locked;
+                Finish(new HudPhase.Error(reason.Message()), 3);
+                return "copied";
+            default:
+                Finish(new HudPhase.Copied(), 1.6);
+                return "failed";
+        }
+    }
+
+    /// <summary>Whether an edit can go over the selection at <paramref name="place"/> now (see <see cref="SelectionCommand.DeliveryOf"/>).</summary>
+    private async Task<SelectionCommand.Delivery> EditDelivery(SelectedText.Place place, string original, SelectionSource source)
+    {
+        var canPaste = _deliverByPaste && !_isLocked;
+        var sameWindow = canPaste && await place.IsInFront();
+        var now = sameWindow && source == SelectionSource.Accessibility ? await SelectedText.SelectionNow() : null;
+        var editable = !sameWindow || await FocusProbe.FocusedTarget() != FocusProbe.Target.NotEditable;
+        return SelectionCommand.DeliveryOf(canPaste, sameWindow, original, source, now, editable);
+    }
+
+    /// <summary>The edit of <paramref name="selection"/> by <paramref name="instruction"/>, with the clean-up's models and routes.</summary>
+    private async Task<SegmentedPolishResult> Edit(string selection, string instruction, Action<string>? onPartial, CancellationToken token)
+    {
+        if (_settings.PolishEndpoint is not { } endpoint || !_settings.IsConfigured(_settings.PolishProvider))
+        {
+            throw ApiException.MissingApiKey(_settings.PolishProvider.DisplayName());
+        }
+        var primary = Route(endpoint, _settings.PolishModel, null, selection);
+        var backup = _settings.PolishBackupEndpoint is { } backupEndpoint
+            ? Route(backupEndpoint, _settings.PolishBackupModel, null, selection)
+            : null;
+        return await SelectionCommand.Run(instruction, primary, backup, onPartial, token);
+    }
+
     /// <summary>
     /// Saves how long the clean-up (or translation) <paramref name="outcome"/> took after the key was released (one started
     /// ahead of time had a head start of <paramref name="ahead"/> seconds), and which model answered.
@@ -922,7 +1204,7 @@ public sealed class SessionController
     /// </summary>
     private void SpeculationChanged(string? raw)
     {
-        if (State != SessionState.Recording || !(_settings.PolishEnabled || Mode == RecordingMode.Translate)) return;
+        if (State != SessionState.Recording || Mode == RecordingMode.Command || !(_settings.PolishEnabled || Mode == RecordingMode.Translate)) return;
         if (raw != null && raw == _speculativePolish?.Raw) return;
         DropSpeculativePolish();
         if (raw is null || raw.Trim().Length == 0) return;
@@ -1049,7 +1331,7 @@ public sealed class SessionController
         return await SegmentedPolish.Run(raw, primary, backup, onPartial, token);
     }
 
-    private PolishRoute Route(ProviderEndpoint endpoint, string model, TranslationTarget? translation)
+    private PolishRoute Route(ProviderEndpoint endpoint, string model, TranslationTarget? translation, string? selection = null)
     {
         model = model.Trim();
         return new PolishRoute(new ApiClient(endpoint), new PolishOptions(
@@ -1059,7 +1341,8 @@ public sealed class SessionController
             endpoint.Id == ProviderId.OpenRouter ? _modelInfo.GetValueOrDefault(model) : null,
             Misheard: _settings.MisheardHints,
             Host: endpoint.Id == ProviderId.OpenRouter ? _settings.OpenRouterHost(model) : null,
-            Translation: translation));
+            Translation: translation,
+            Selection: selection));
     }
 
     /// <summary>
@@ -1167,7 +1450,8 @@ public sealed class SessionController
             r.Status.PruningKind(),
             r.FinalText.Trim().Length > 0,
             // Only a failed one is ever re-sent, so only its recording is looked for on disk.
-            r.Status == DictationStatus.Failed && r.HasAudio)).ToList();
+            r.Status == DictationStatus.Failed && r.HasAudio,
+            r.IsCommand)).ToList();
         switch (LastDictation.Choose(entries))
         {
             case LastDictation.Choice.Retry retry:
@@ -1232,6 +1516,13 @@ public sealed class SessionController
     public void Retry(DictationRecord saved, bool paste, nint target = 0)
     {
         if (State != SessionState.Idle) return;
+        // An edit of a selection can't run again without its selection, which isn't kept; run as a dictation, it would
+        // paste the instruction.
+        if (saved.IsCommand)
+        {
+            Hud.Show(new HudPhase.Error(L("编辑选中文字的记录不能重试", "An edit of a selection can't be retried")), 3);
+            return;
+        }
         if (_settings.SttEndpoint is not { } endpoint) return;
         short[]? samples = null;
         try
@@ -1364,6 +1655,7 @@ public sealed class SessionController
         _pasteTarget = 0;
         _handsFree = false;
         Mode = RecordingMode.Dictation;
+        DropSelection();
         _processing = null;
     }
 

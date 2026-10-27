@@ -99,6 +99,7 @@ public static class Glyphs
     public const string Money = "\uE8C7";
     public const string Calendar = "\uE787";
     public const string Speech = "\uE720";
+    public const string Edit = "\uE70F";
     public const string ReturnKey = "\uE751";
     public const string Mute = "\uE74F";
 }

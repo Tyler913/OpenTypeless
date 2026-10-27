@@ -144,9 +144,10 @@ public partial class App : Application
             if (_hotkey.Hotkey != hotkey) _hotkey.Hotkey = hotkey;
         }
         if (e.PropertyName == nameof(AppSettings.Shortcuts)) _hotkey.Shortcuts = _settings.Shortcuts;
-        // Translation turned on or off, its chord changed, or the hotkey became one of the chord's keys.
+        // Translation or command mode turned on or off, a chord changed, or the hotkey became one of a chord's keys.
         if (e.PropertyName is nameof(AppSettings.Hotkey) or nameof(AppSettings.TranslationEnabled) or nameof(AppSettings.TranslationLanguage)
-            or nameof(AppSettings.TranslationOtherLanguage) or nameof(AppSettings.TranslationChord))
+            or nameof(AppSettings.TranslationOtherLanguage) or nameof(AppSettings.TranslationChord)
+            or nameof(AppSettings.CommandModeEnabled) or nameof(AppSettings.CommandChord))
         {
             _dispatcher?.TryEnqueue(() => _hotkey.ModeChordKeys = _controller.UpdateModeChords());
         }

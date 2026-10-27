@@ -15,6 +15,8 @@ public abstract record HudPhase
     public sealed record Copied : HudPhase;
     /// <summary>New words were learned from the user's fixes to the last dictation.</summary>
     public sealed record Learned(string Terms) : HudPhase;
+    /// <summary>The answer to a question about the selection (see <see cref="SelectionCommand.Reply"/>), also on the clipboard.</summary>
+    public sealed record Answer(string Text) : HudPhase;
     public sealed record Error(string Message) : HudPhase;
 }
 

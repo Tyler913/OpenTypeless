@@ -44,8 +44,9 @@ public sealed class DictationRecord
     /// <summary>Its words are in the usage totals (so re-transcribing it doesn't count them twice).</summary>
     [JsonPropertyName("counted")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Counted { get; set; }
     /// <summary>
-    /// "translate" for a translation dictation (see <see cref="TranslationTarget.RecordMode"/>), null for plain dictation:
-    /// records from before translation, and older versions reading newer ones, see a dictation.
+    /// "translate" for a translation dictation (see <see cref="TranslationTarget.RecordMode"/>), "command" for an edit of a
+    /// selection by voice (see <see cref="SelectionCommand.RecordMode"/>), null for plain dictation: records from before
+    /// translation, and older versions reading newer ones, see a dictation.
     /// </summary>
     [JsonPropertyName("mode")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Mode { get; set; }
     /// <summary>The language a translation dictation is written in (<see cref="TranslationTarget.Id"/>).</summary>
@@ -62,6 +63,16 @@ public sealed class DictationRecord
             TargetLanguage = value?.Id;
         }
     }
+
+    /// <summary>
+    /// How many characters the selection an edit worked on had. The selection itself isn't kept: it can be anything the
+    /// user had open (a contract, a private message), and History keeps entries for days. Its instruction is kept as the
+    /// transcript, and the rewrite (or the answer to a question about it) as the clean-up.
+    /// </summary>
+    [JsonPropertyName("selectionLength")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? SelectionLength { get; set; }
+
+    /// <summary>An edit of a selection by voice rather than a dictation. Without its selection it can't be run again.</summary>
+    [JsonIgnore] public bool IsCommand => SelectionCommand.IsCommand(Mode);
 
     /// <summary>What was (or would be) inserted.</summary>
     [JsonIgnore] public string FinalText => PolishedText ?? RawText;

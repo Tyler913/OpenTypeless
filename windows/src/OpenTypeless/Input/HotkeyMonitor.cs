@@ -411,19 +411,25 @@ public sealed class HotkeyMonitor
     /// <summary>
     /// Waits until none of <paramref name="shortcut"/>'s keys is physically held any more (its key, and any of Ctrl, Alt,
     /// Shift and Win): a Ctrl+V sent meanwhile would be read together with them, as another shortcut altogether. Returns
-    /// false when they're still held after <paramref name="timeout"/>. The key itself is followed through the hook: its
-    /// presses were swallowed, so <c>GetAsyncKeyState</c> never heard of them (modifiers always go through).
+    /// false when they're still held after <paramref name="timeout"/>, or once <paramref name="cancellationToken"/> is
+    /// cancelled. The key itself is followed through the hook: its presses were swallowed, so <c>GetAsyncKeyState</c>
+    /// never heard of them (modifiers always go through, except a mode chord's: <paramref name="alsoKeys"/>, followed the
+    /// same way).
     /// </summary>
-    public async Task<bool> WaitForRelease(Hotkey shortcut, TimeSpan timeout)
+    public async Task<bool> WaitForRelease(Hotkey shortcut, TimeSpan timeout, IReadOnlyCollection<int>? alsoKeys = null,
+                                           CancellationToken cancellationToken = default)
     {
         var clock = Stopwatch.StartNew();
-        while (true)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            var keyHeld = !shortcut.IsModifierOnly && _held.IsHeld(shortcut.KeyCode, unchecked((uint)Environment.TickCount));
+            var now = unchecked((uint)Environment.TickCount);
+            var keyHeld = (!shortcut.IsModifierOnly && _held.IsHeld(shortcut.KeyCode, now))
+                          || (alsoKeys?.Any(key => _held.IsHeld(key, now)) ?? false);
             if (CurrentModifiers() == HotkeyModifiers.None && !keyHeld) return true;
             if (clock.Elapsed >= timeout) return false;
-            await Task.Delay(20);
+            try { await Task.Delay(20, cancellationToken); } catch (OperationCanceledException) { return false; }
         }
+        return false;
     }
 
     /// <summary>The scan code of the Left Ctrl that AltGr layouts send along with Right Alt.</summary>

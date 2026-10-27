@@ -66,6 +66,11 @@ public sealed class SessionController
     private double? _pressedAt;
     private bool _handsFree;
     /// <summary>
+    /// The send key that ended this recording (see <see cref="SendKey"/>): pressed in the app once the text is pasted
+    /// there, for this dictation only. Off unless it was pressed.
+    /// </summary>
+    private SendKey _sendKey;
+    /// <summary>
     /// Second keys that switch the recording's mode while the hotkey is held (see <see cref="ModeChords{TMode}"/>). None is
     /// registered yet; whatever registers one also gives the hotkey hook its key, to keep it from the focused app.
     /// </summary>
@@ -232,6 +237,20 @@ public sealed class SessionController
                 Cancel(silently: true);
                 break;
         }
+    }
+
+    /// <summary>
+    /// The send key went down while recording (see <see cref="SendKey"/>): the recording ends as if the hotkey were let go
+    /// (or, hands-free, pressed again), and once its text is pasted the same key is pressed in that app to send it.
+    /// </summary>
+    public void SendKeyPressed()
+    {
+        if (State != SessionState.Recording) return;
+        var key = _settings.SendKey;
+        if (key == SendKey.Off) return;
+        Note($"send key {key.RawValue()} → stop, and send once the text is in");
+        _sendKey = key;
+        FinishRecording();
     }
 
     /// <summary>
@@ -432,6 +451,7 @@ public sealed class SessionController
         _deliverByPaste = true;
         _pressedAt = pressedAt;
         _handsFree = false;
+        _sendKey = SendKey.Off;
         Mode = RecordingMode.Dictation;
         State = SessionState.Recording;
         LastError = null;
@@ -605,7 +625,8 @@ public sealed class SessionController
             record.Timing.LastChunkRoute = pipeline.LastChunkUsedBackup is { } backup ? backup ? "backup" : "primary" : null;
             if (pipeline.TailWasSpeculative) Note($"last segment transcribed ahead of time: text {started.Elapsed.TotalSeconds:0.00}s after release");
             record.ChunkTexts = pipeline.CompletedTranscripts();
-            record.RawText = raw;
+            // With "new line" and "new paragraph" said on their own as line breaks: what goes in when it isn't cleaned up.
+            record.RawText = LaidOut(raw);
             // A new transcript supersedes a clean-up from an earlier run (a retry): History mustn't show that one if this
             // run inserts the raw text (clean-up off or failed). A retry that fails before this keeps the old result.
             record.PolishedText = null;
@@ -660,11 +681,15 @@ public sealed class SessionController
     private async Task PolishAndDeliver(DictationRecord record, TranscriptionPipeline pipeline, int generation, CancellationToken token)
     {
         var begun = Stopwatch.StartNew();
-        var text = record.RawText;
+        // A line break said at the very start or end stays out of the clean-up, whose answer is trimmed, and goes back on
+        // around its text (see SpokenLayout.Edges). Without one, the body is the transcript itself.
+        var (leading, body, trailing) = SpokenLayout.Edges(record.RawText);
+        var text = body;
         string? notice = null;
         SegmentedPolishResult? polished = null;
 
-        if (_settings.PolishEnabled)
+        // Nothing to clean up when all that was said was "new line".
+        if (_settings.PolishEnabled && !string.IsNullOrWhiteSpace(body))
         {
             // When the speaker paused before letting go and said nothing more, the clean-up of this very transcript
             // started while they were still holding the key: take it over (often it's already done).
@@ -672,13 +697,13 @@ public sealed class SessionController
             var ahead = 0.0;
             CancellationTokenRegistration adopted = default;
             // One that already failed (while recording) gets a fresh attempt instead.
-            if (_speculativePolish is { } speculative && speculative.Raw == record.RawText
+            if (_speculativePolish is { } speculative && speculative.Raw == body
                 && !speculative.Task.IsFaulted && !speculative.Task.IsCanceled)
             {
                 _speculativePolish = null;
                 polishing = speculative.Task;
                 // What it streams from now on moves this dictation's bar.
-                speculative.Partials.Target = OnPolishPartial(record.RawText);
+                speculative.Partials.Target = OnPolishPartial(body);
                 ahead = speculative.Started.Elapsed.TotalSeconds;
                 if (record.Timing is { } timing) timing.PolishHeadStart = Math.Max(0, ahead - (timing.Transcription ?? 0));
                 adopted = token.Register(speculative.Cancel.Cancel);
@@ -687,7 +712,7 @@ public sealed class SessionController
             else
             {
                 DropSpeculativePolish();
-                polishing = Polish(record.RawText, OnPolishPartial(record.RawText), token);
+                polishing = Polish(body, OnPolishPartial(body), token);
             }
             // Saved while the clean-up runs, so the transcript survives a crash.
             _history.Update(record);
@@ -720,7 +745,7 @@ public sealed class SessionController
                     // A part whose clean-up was unusable goes in as spoken, between the parts that were cleaned up.
                     if (fallbacks.Count > 0) notice = L("部分未整理，已插入原文", "Partly inserted without clean-up");
                     text = outcome.Text;
-                    record.PolishedText = outcome.Text;
+                    record.PolishedText = leading + outcome.Text + trailing;
                     record.Status = DictationStatus.Done;
                 }
             }
@@ -748,7 +773,7 @@ public sealed class SessionController
         {
             Hud.Model.Progress.Reach(new ProcessingProgress.Milestone.Delivered());
             if (record.Timing is { } timing) timing.Delivered = (timing.Transcription ?? 0) + begun.Elapsed.TotalSeconds;
-            var delivery = await Deliver(text, notice, generation, token);
+            var delivery = await Deliver(leading + text + trailing, notice, generation, token);
             if (record.Timing != null) record.Timing.Delivery = delivery;
         }
         // Esc came before the text was in place (or while it went in): Cancel has kept the record as cancelled, and so
@@ -758,6 +783,9 @@ public sealed class SessionController
         Account(record, pipeline, polished, discarded);
         _history.Update(record);
     }
+
+    /// <summary><paramref name="raw"/> with the layout commands said in it as line breaks, unless they're switched off (see <see cref="SpokenLayout"/>).</summary>
+    private string LaidOut(string raw) => _settings.SpokenLayoutCommands ? SpokenLayout.Apply(raw) : raw;
 
     /// <summary>Whether the dictation <paramref name="generation"/> is still the one under way, not cancelled or followed by another.</summary>
     private bool IsCurrent(int generation, CancellationToken token) => generation == _generation && !token.IsCancellationRequested;
@@ -785,9 +813,11 @@ public sealed class SessionController
     /// The pipeline has the whole transcript the recording would give if it ended now (the speaker paused), or no longer
     /// has one (they went on). Starts cleaning that transcript up, so the text can be ready when the key is released.
     /// </summary>
-    private void SpeculationChanged(string? raw)
+    private void SpeculationChanged(string? transcript)
     {
         if (State != SessionState.Recording || !_settings.PolishEnabled) return;
+        // As the clean-up would be given it once the key is released (see PolishAndDeliver).
+        var raw = transcript is null ? null : SpokenLayout.Edges(LaidOut(transcript)).Body;
         if (raw != null && raw == _speculativePolish?.Raw) return;
         DropSpeculativePolish();
         if (raw is null || raw.Trim().Length == 0) return;
@@ -872,7 +902,13 @@ public sealed class SessionController
             case TextInserter.Outcome.Pasted:
                 // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
                 var sent = false;
-                if (_settings.PressEnterAfterInsert)
+                if (_sendKey != SendKey.Off)
+                {
+                    // The key that ended the recording, in place of "Press Enter after inserting".
+                    sent = await Send(_sendKey, generation, token);
+                    if (!IsCurrent(generation, token)) return "pasted";
+                }
+                else if (_settings.PressEnterAfterInsert)
                 {
                     // Not into another window that came to the front after the paste, nor once the screen locked.
                     sent = await TextInserter.PressEnter(() => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved);
@@ -898,6 +934,26 @@ public sealed class SessionController
                 Finish(new HudPhase.Copied(), 1.6);
                 return "failed";
         }
+    }
+
+    /// <summary>
+    /// Presses the send key that ended the recording in the app the text was just pasted into, under the same conditions as
+    /// the paste. Its keys are let go of first: Enter read together with a modifier still held is another key (Shift +
+    /// Enter makes a new line in most chat boxes, and the hotkey's Right Alt may still be down), so when they're still held
+    /// after a while the text is left unsent rather than sent the wrong way. Returns whether it was pressed.
+    /// </summary>
+    private async Task<bool> Send(SendKey key, int generation, CancellationToken token)
+    {
+        if (key.Keys() is not { } keys) return false;
+        if (!await HotkeyMonitor.Shared.WaitForRelease(keys, TimeSpan.FromSeconds(2)))
+        {
+            Note("send key → not sent, its keys are still held");
+            return false;
+        }
+        if (!IsCurrent(generation, token)) return false;
+        var sent = await TextInserter.PressEnter(() => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved, keys.Modifiers);
+        Note($"send key → {(sent ? "sent" : "not sent, the dictation was cancelled or focus moved")}");
+        return sent;
     }
 
     private async Task<SegmentedPolishResult> Polish(string raw, Action<string>? onPartial, CancellationToken token)
@@ -1221,6 +1277,7 @@ public sealed class SessionController
         _pressedAt = null;
         _pasteTarget = 0;
         _handsFree = false;
+        _sendKey = SendKey.Off;
         Mode = RecordingMode.Dictation;
         _processing = null;
     }

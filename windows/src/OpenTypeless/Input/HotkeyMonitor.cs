@@ -26,7 +26,7 @@ public readonly record struct MouseButton(int Message, int X, int Y, uint Time);
 /// The hook runs on its own thread with its own message loop, so a busy UI thread can never make Windows
 /// drop it for being slow. Everything is passed through untouched except the keystrokes of a key-combination
 /// hotkey, which are swallowed so that e.g. Alt+Space doesn't also reach the focused app, Esc while a dictation
-/// is under way, and the keys of an action's shortcut or of a mode chord.
+/// is under way, the keys of an action's shortcut or of a mode chord, and the send key while recording.
 ///
 /// The press, release and other-key callbacks get the key event's own time, in seconds on the
 /// <see cref="Environment.TickCount64"/> clock (see <see cref="HotkeyPress"/>).
@@ -45,6 +45,15 @@ public sealed class HotkeyMonitor
     public Action? OnEscape;
     /// <summary>An action's shortcut went down (see <see cref="Shortcuts"/>).</summary>
     public Action<ShortcutAction>? OnAction;
+    /// <summary>The send key went down while recording (see <see cref="RecordingSendKey"/>).</summary>
+    public Action? OnSendKey;
+
+    /// <summary>
+    /// The "Finish and send" key while a dictation is recording, off otherwise (see <see cref="SendKey"/>): it then ends
+    /// the recording, and is kept from the focused app, which would send what's there before the text is in. Set on the
+    /// UI thread.
+    /// </summary>
+    public volatile SendKey RecordingSendKey;
 
     /// <summary>
     /// The shortcuts of actions besides dictating. Their keys are always kept from the focused app, whatever the session
@@ -102,6 +111,8 @@ public sealed class HotkeyMonitor
     public bool IsRunning { get; private set; }
 
     private volatile bool _isDown;
+    /// <summary>When the hotkey last went down, by the key event's own time. Hook thread only.</summary>
+    private double _pressedAt;
     private DispatcherQueue? _dispatcher;
     private Thread? _thread;
     private uint _threadId;
@@ -278,6 +289,7 @@ public sealed class HotkeyMonitor
                     // still open the menu bar of a native app, which then swallows the Ctrl+V of the paste.
                     // Send it from the hook thread's message loop instead, once this key-down has gone through.
                     if (hotkey.NeedsMenuMask) Win32.PostThreadMessage(_threadId, WM_SEND_MENU_MASK, 0, 0);
+                    _pressedAt = time;
                     Fire(OnPress, time);
                 }
                 else if (up && _isDown)
@@ -292,6 +304,8 @@ public sealed class HotkeyMonitor
                 // Auto-repeat while held arrives as more key-downs: ignored.
                 return false;
             }
+            // Before a combination with the hotkey below, which could cancel the dictation instead.
+            if (down && IsSendKey(vk, repeat, time, hotkey)) return SendKeyPressed(vk);
             if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
             if (!down) return false;
             // Shift, Ctrl… pressed with the hotkey make no combo on their own (macOS doesn't count them either). AltGr
@@ -327,6 +341,7 @@ public sealed class HotkeyMonitor
                     _isDown = true;
                     HotkeyLog.Debug($"{hotkey.DisplayName} down");
                     if ((hotkey.Modifiers & (HotkeyModifiers.Alt | HotkeyModifiers.Win)) != 0) SendMenuMask();
+                    _pressedAt = time;
                     Fire(OnPress, time);
                 }
                 return true;
@@ -340,6 +355,7 @@ public sealed class HotkeyMonitor
             }
             // Otherwise the same key with other modifiers, which may be an action's shortcut (F5 dictates, Shift + F5 pastes).
         }
+        if (down && IsSendKey(vk, repeat, time, hotkey)) return SendKeyPressed(vk);
         if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
         if (!down) return false;
         if (_isDown && !injected && ModeChordKeys.Contains(vk))
@@ -372,6 +388,29 @@ public sealed class HotkeyMonitor
             if ((shortcuts.Chords[action].Modifiers & (int)(HotkeyModifiers.Alt | HotkeyModifiers.Win)) != 0) SendMenuMask();
             Fire(OnAction, action);
         }
+        return Swallow(vk);
+    }
+
+    /// <summary>
+    /// Whether a key going down is the send key while recording (see <see cref="RecordingSendKey"/>): not an auto-repeat,
+    /// and not right with the hotkey still held (Right Ctrl + Enter…), which is left as it was.
+    /// </summary>
+    private bool IsSendKey(int vk, bool repeat, double time, Hotkey hotkey)
+    {
+        var key = RecordingSendKey;
+        if (key == SendKey.Off || repeat) return false;
+        // Every key typed while recording comes through here: the modifiers are only asked for Enter.
+        if (!SendKeyText.Codes.ReturnKeys.Contains(vk)) return false;
+        var held = _isDown ? (int)hotkey.HeldModifiers : 0;
+        if (!key.Matches(vk, (int)CurrentModifiers(), held, SendKeyText.Codes)) return false;
+        return !(_isDown && SendKeys.IsCombination(_pressedAt, time));
+    }
+
+    /// <summary>The send key ends the recording, and its key-down, auto-repeats and key-up are kept from the focused app.</summary>
+    private bool SendKeyPressed(int vk)
+    {
+        HotkeyLog.Debug("send key");
+        Fire(OnSendKey);
         return Swallow(vk);
     }
 

@@ -158,8 +158,8 @@ public sealed class GeneralPage : PageBase
         dictation.Body.Add(new CardRow
         {
             Glyph = Glyphs.LineBreak, Tint = Tint.Blue, Title = L("说“换行”另起一行", "Say “new line” for a line break"),
-            Subtitle = L("单独说“换行”或“新段落”（前后稍作停顿），会换成换行或空一行；其他语言的说法也可以，比如 new line、new paragraph。在一句话中间说到这些词时照原样保留。",
-                         "Say “new line” or “new paragraph” on its own, with a short pause before and after, for a line break or a blank line; 换行 / 新段落 and the other languages’ words work too. Said within a sentence, the words stay as they are."),
+            Subtitle = L("单独说“换行”或“新段落”（前后稍作停顿），会换成换行或空一行；其他语言的说法也可以，比如 new line、new paragraph。在一句话中间说到这些词时照原样保留；但在列举里单独说出（“空格，换行，制表符”）时也会变成换行。",
+                         "Say “new line” or “new paragraph” on its own, with a short pause before and after, for a line break or a blank line; 换行 / 新段落 and the other languages’ words work too. Said within a sentence, the words stay as they are; said on their own in a list (“spaces, new line, tabs”), they become a break too."),
             Trailing = Toggle(_settings.SpokenLayoutCommands, on => _settings.SpokenLayoutCommands = on),
         });
         dictation.Body.Add(new CardDivider());

@@ -86,8 +86,8 @@ failure handling. Only the system-integration layer and the look differ.
   window in front once the panel closes). `BlocksAltGr` (Ctrl + Alt with a character key) shows the AltGr notice for an
   action's shortcut.
 - The send key (Finish and send, see DESIGN.md: Enter, Shift + Enter or Ctrl + Enter) is matched in the same hook while
-  recording, against `CurrentModifiers()` less the held hotkey's (`HeldModifiers`: Right Alt brings Ctrl along on AltGr
-  layouts), and swallowed like an action's shortcut. Its `SendInput` puts the modifiers down around Enter, since an
+  recording, from the keyboard only (an injected Enter goes through), against `CurrentModifiers()` less the held
+  hotkey's (`HeldModifiers`: Right Alt brings Ctrl along on AltGr layouts), and swallowed like an action's shortcut. Its `SendInput` puts the modifiers down around Enter, since an
   injected key carries none of its own, marked like the paste, and only after `WaitForRelease` saw every modifier and
   Enter let go (`HeldKeys`, as the swallowed Enter never reaches `GetAsyncKeyState`). The keypad's Enter has the same
   virtual key.

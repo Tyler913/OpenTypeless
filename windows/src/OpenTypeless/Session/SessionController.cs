@@ -339,7 +339,8 @@ public sealed class SessionController
                 return;
             }
             if (_history.Records.All(r => r.Id != record.Id)) return; // deleted meanwhile
-            record.RawText = raw;
+            // Laid out like any dictation's text, for when it's copied from History.
+            record.RawText = LaidOutTranscript(raw).Text;
             record.ChunkTexts = pipeline.CompletedTranscripts();
             Account(record, pipeline, null, discarded);
             _history.Update(record);
@@ -626,7 +627,8 @@ public sealed class SessionController
             if (pipeline.TailWasSpeculative) Note($"last segment transcribed ahead of time: text {started.Elapsed.TotalSeconds:0.00}s after release");
             record.ChunkTexts = pipeline.CompletedTranscripts();
             // With "new line" and "new paragraph" said on their own as line breaks: what goes in when it isn't cleaned up.
-            record.RawText = LaidOut(raw);
+            var layout = LaidOutTranscript(raw);
+            record.RawText = layout.Text;
             // A new transcript supersedes a clean-up from an earlier run (a retry): History mustn't show that one if this
             // run inserts the raw text (clean-up off or failed). A retry that fails before this keeps the old result.
             record.PolishedText = null;
@@ -639,7 +641,7 @@ public sealed class SessionController
                 Finish(new HudPhase.Error(L("没有识别到语音", "No speech detected")), 2);
                 return;
             }
-            await PolishAndDeliver(record, pipeline, generation, token);
+            await PolishAndDeliver(record, layout, pipeline, generation, token);
         }
         catch (PipelineFailure failure)
         {
@@ -678,12 +680,15 @@ public sealed class SessionController
         }
     }
 
-    private async Task PolishAndDeliver(DictationRecord record, TranscriptionPipeline pipeline, int generation, CancellationToken token)
+    /// <param name="layout">
+    /// The record's transcript laid out (see <see cref="SpokenLayout.Layout"/>). A line break said at the very start or end
+    /// stays out of the clean-up, whose answer is trimmed, and goes back on around its text.
+    /// </param>
+    private async Task PolishAndDeliver(DictationRecord record, SpokenLayout.LaidOut layout, TranscriptionPipeline pipeline, int generation,
+                                        CancellationToken token)
     {
         var begun = Stopwatch.StartNew();
-        // A line break said at the very start or end stays out of the clean-up, whose answer is trimmed, and goes back on
-        // around its text (see SpokenLayout.Edges). Without one, the body is the transcript itself.
-        var (leading, body, trailing) = SpokenLayout.Edges(record.RawText);
+        var body = layout.Body;
         var text = body;
         string? notice = null;
         SegmentedPolishResult? polished = null;
@@ -697,7 +702,7 @@ public sealed class SessionController
             var ahead = 0.0;
             CancellationTokenRegistration adopted = default;
             // One that already failed (while recording) gets a fresh attempt instead.
-            if (_speculativePolish is { } speculative && speculative.Raw == body
+            if (_speculativePolish is { } speculative && speculative.Layout == layout
                 && !speculative.Task.IsFaulted && !speculative.Task.IsCanceled)
             {
                 _speculativePolish = null;
@@ -712,7 +717,7 @@ public sealed class SessionController
             else
             {
                 DropSpeculativePolish();
-                polishing = Polish(body, OnPolishPartial(body), token);
+                polishing = Polish(body, layout.DictatedBreaks, OnPolishPartial(body), token);
             }
             // Saved while the clean-up runs, so the transcript survives a crash.
             _history.Update(record);
@@ -745,7 +750,7 @@ public sealed class SessionController
                     // A part whose clean-up was unusable goes in as spoken, between the parts that were cleaned up.
                     if (fallbacks.Count > 0) notice = L("部分未整理，已插入原文", "Partly inserted without clean-up");
                     text = outcome.Text;
-                    record.PolishedText = leading + outcome.Text + trailing;
+                    record.PolishedText = layout.Around(outcome.Text);
                     record.Status = DictationStatus.Done;
                 }
             }
@@ -773,7 +778,7 @@ public sealed class SessionController
         {
             Hud.Model.Progress.Reach(new ProcessingProgress.Milestone.Delivered());
             if (record.Timing is { } timing) timing.Delivered = (timing.Transcription ?? 0) + begun.Elapsed.TotalSeconds;
-            var delivery = await Deliver(leading + text + trailing, notice, generation, token);
+            var delivery = await Deliver(layout.Around(text), notice, generation, token);
             if (record.Timing != null) record.Timing.Delivery = delivery;
         }
         // Esc came before the text was in place (or while it went in): Cancel has kept the record as cancelled, and so
@@ -784,8 +789,8 @@ public sealed class SessionController
         _history.Update(record);
     }
 
-    /// <summary><paramref name="raw"/> with the layout commands said in it as line breaks, unless they're switched off (see <see cref="SpokenLayout"/>).</summary>
-    private string LaidOut(string raw) => _settings.SpokenLayoutCommands ? SpokenLayout.Apply(raw) : raw;
+    /// <summary><paramref name="transcript"/> with the layout commands said in it as line breaks, unless they're switched off (see <see cref="SpokenLayout"/>).</summary>
+    private SpokenLayout.LaidOut LaidOutTranscript(string transcript) => SpokenLayout.Layout(transcript, _settings.SpokenLayoutCommands);
 
     /// <summary>Whether the dictation <paramref name="generation"/> is still the one under way, not cancelled or followed by another.</summary>
     private bool IsCurrent(int generation, CancellationToken token) => generation == _generation && !token.IsCancellationRequested;
@@ -796,7 +801,7 @@ public sealed class SessionController
     // MARK: - Clean-up ahead of time
 
     /// <summary>A clean-up of <c>Raw</c>, started while recording.</summary>
-    private sealed record SpeculativePolish(string Raw, Stopwatch Started, Task<SegmentedPolishResult> Task, CancellationTokenSource Cancel,
+    private sealed record SpeculativePolish(SpokenLayout.LaidOut Layout, Stopwatch Started, Task<SegmentedPolishResult> Task, CancellationTokenSource Cancel,
                                             PartialRelay Partials);
 
     /// <summary>
@@ -816,20 +821,20 @@ public sealed class SessionController
     private void SpeculationChanged(string? transcript)
     {
         if (State != SessionState.Recording || !_settings.PolishEnabled) return;
-        // As the clean-up would be given it once the key is released (see PolishAndDeliver).
-        var raw = transcript is null ? null : SpokenLayout.Edges(LaidOut(transcript)).Body;
-        if (raw != null && raw == _speculativePolish?.Raw) return;
+        // As the clean-up would be given it once the key is released (see Process).
+        var upcoming = transcript is null ? null : LaidOutTranscript(transcript);
+        if (upcoming != null && upcoming == _speculativePolish?.Layout) return;
         DropSpeculativePolish();
-        if (raw is null || raw.Trim().Length == 0) return;
+        if (upcoming is null || string.IsNullOrWhiteSpace(upcoming.Body)) return;
         // Only a transcript short enough for one request: a long one would go out as several at every pause, and its
         // parts are cleaned up in parallel once the key is released anyway.
-        if (SegmentedPolish.NeedsParts(raw)) return;
+        if (SegmentedPolish.NeedsParts(upcoming.Body)) return;
         var cancel = new CancellationTokenSource();
         var partials = new PartialRelay();
-        var task = Polish(raw, partials.Send, cancel.Token);
+        var task = Polish(upcoming.Body, upcoming.DictatedBreaks, partials.Send, cancel.Token);
         // A dropped clean-up's failure (usually its cancellation) is expected; observe it so it isn't reported.
         _ = task.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-        _speculativePolish = new SpeculativePolish(raw, Stopwatch.StartNew(), task, cancel, partials);
+        _speculativePolish = new SpeculativePolish(upcoming, Stopwatch.StartNew(), task, cancel, partials);
         Note("clean-up started ahead of time (speaker paused)");
     }
 
@@ -956,18 +961,20 @@ public sealed class SessionController
         return sent;
     }
 
-    private async Task<SegmentedPolishResult> Polish(string raw, Action<string>? onPartial, CancellationToken token)
+    /// <param name="dictatedLineBreaks"><paramref name="raw"/>'s line breaks were said as commands, and are kept (see <see cref="SpokenLayout"/>).</param>
+    private async Task<SegmentedPolishResult> Polish(string raw, bool dictatedLineBreaks, Action<string>? onPartial, CancellationToken token)
     {
         if (_settings.PolishEndpoint is not { } endpoint || !_settings.IsConfigured(_settings.PolishProvider))
         {
             throw ApiException.MissingApiKey(_settings.PolishProvider.DisplayName());
         }
-        var primary = Route(endpoint, _settings.PolishModel);
-        var backup = _settings.PolishBackupEndpoint is { } backupEndpoint ? Route(backupEndpoint, _settings.PolishBackupModel) : null;
+        var primary = Route(endpoint, _settings.PolishModel, dictatedLineBreaks);
+        var backup = _settings.PolishBackupEndpoint is { } backupEndpoint
+            ? Route(backupEndpoint, _settings.PolishBackupModel, dictatedLineBreaks) : null;
         return await SegmentedPolish.Run(raw, primary, backup, onPartial, token);
     }
 
-    private PolishRoute Route(ProviderEndpoint endpoint, string model)
+    private PolishRoute Route(ProviderEndpoint endpoint, string model, bool dictatedLineBreaks)
     {
         model = model.Trim();
         return new PolishRoute(new ApiClient(endpoint), new PolishOptions(
@@ -976,7 +983,8 @@ public sealed class SessionController
             _settings.ExtraInstructions,
             endpoint.Id == ProviderId.OpenRouter ? _modelInfo.GetValueOrDefault(model) : null,
             Misheard: _settings.MisheardHints,
-            Host: endpoint.Id == ProviderId.OpenRouter ? _settings.OpenRouterHost(model) : null));
+            Host: endpoint.Id == ProviderId.OpenRouter ? _settings.OpenRouterHost(model) : null,
+            DictatedLineBreaks: dictatedLineBreaks));
     }
 
     /// <summary>

@@ -305,7 +305,7 @@ public sealed class HotkeyMonitor
                 return false;
             }
             // Before a combination with the hotkey below, which could cancel the dictation instead.
-            if (down && IsSendKey(vk, repeat, time, hotkey)) return SendKeyPressed(vk);
+            if (down && !injected && IsSendKey(vk, repeat, time, hotkey)) return SendKeyPressed(vk);
             if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
             if (!down) return false;
             // Shift, Ctrl… pressed with the hotkey make no combo on their own (macOS doesn't count them either). AltGr
@@ -355,7 +355,7 @@ public sealed class HotkeyMonitor
             }
             // Otherwise the same key with other modifiers, which may be an action's shortcut (F5 dictates, Shift + F5 pastes).
         }
-        if (down && IsSendKey(vk, repeat, time, hotkey)) return SendKeyPressed(vk);
+        if (down && !injected && IsSendKey(vk, repeat, time, hotkey)) return SendKeyPressed(vk);
         if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
         if (!down) return false;
         if (_isDown && !injected && ModeChordKeys.Contains(vk))
@@ -393,7 +393,8 @@ public sealed class HotkeyMonitor
 
     /// <summary>
     /// Whether a key going down is the send key while recording (see <see cref="RecordingSendKey"/>): not an auto-repeat,
-    /// and not right with the hotkey still held (Right Ctrl + Enter…), which is left as it was.
+    /// and not right with the hotkey still held (Right Ctrl + Enter…), which is left as it was. Only from the keyboard (the
+    /// caller checks): an Enter other software sends meanwhile is its own, and goes through.
     /// </summary>
     private bool IsSendKey(int vk, bool repeat, double time, Hotkey hotkey)
     {

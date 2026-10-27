@@ -746,7 +746,7 @@ public sealed class HistoryPage : PageBase
             foreach (var path in media)
             {
                 if (list.Children.Count > 0) list.Children.Add(new CardDivider { Inset = 14 });
-                var name = Ui.Text(Path.GetFileName(path), 13);
+                var name = Ui.Text(System.IO.Path.GetFileName(path), 13);
                 name.TextTrimming = TextTrimming.CharacterEllipsis;
                 var length = Ui.Text("…", 12, foreground: Ui.Secondary);
                 length.HorizontalAlignment = HorizontalAlignment.Right;

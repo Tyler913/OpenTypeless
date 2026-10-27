@@ -221,10 +221,13 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("pressEnterAfterInsert", value);
     }
 
-    /// <summary>"New line" and "new paragraph" said on their own become line breaks (see <see cref="TypelessCore.SpokenLayout"/>).</summary>
+    /// <summary>
+    /// "New line" and "new paragraph" said on their own become line breaks (see <see cref="TypelessCore.SpokenLayout"/>). Off
+    /// until the user turns it on: a command word said on its own in a list ("spaces, new line, tabs") becomes a break too.
+    /// </summary>
     public bool SpokenLayoutCommands
     {
-        get => GetBool("spokenLayoutCommands", true);
+        get => GetBool("spokenLayoutCommands", false);
         set => SetValue("spokenLayoutCommands", value);
     }
 

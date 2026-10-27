@@ -33,8 +33,9 @@ final class AppSettings: ObservableObject {
     @AppStorage("restoreClipboard") var restoreClipboard: Bool = true
     /// Press Return once the text is pasted, so a chat message or AI prompt is sent without touching the keyboard.
     @AppStorage("pressEnterAfterInsert") var pressEnterAfterInsert: Bool = false
-    /// "New line" and "new paragraph" said on their own become line breaks (see `SpokenLayout`).
-    @AppStorage("spokenLayoutCommands") var spokenLayoutCommands: Bool = true
+    /// "New line" and "new paragraph" said on their own become line breaks (see `SpokenLayout`). Off until the user turns
+    /// it on: a command word said on its own in a list ("spaces, new line, tabs") becomes a break too.
+    @AppStorage("spokenLayoutCommands") var spokenLayoutCommands: Bool = false
     /// "Finish and send": the key that, pressed while recording, ends the dictation and sends it once it's pasted (see
     /// `SendKey`). Off until the user picks one; a choice this version can't read is off too.
     @AppStorage("sendKey") var sendKey: SendKey = .off

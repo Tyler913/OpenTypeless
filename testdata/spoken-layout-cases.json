@@ -1,5 +1,5 @@
 {
-  "_comment": "Spoken layout commands (SpokenLayout), shared by the macOS and Windows tests. cases: apply(input); output null = the transcript comes back exactly as it was. Cases with a \"limitation\" are known false positives, pinned so a change to them is deliberate: a command word said as its own clause in a list or as an answer becomes a break (one visible, undoable line break; the toggle turns it off). edges: the line breaks at the very start and end kept out of the clean-up. layouts: layout(input, enabled), what a dictation uses.",
+  "_comment": "Spoken layout commands (SpokenLayout), shared by the macOS and Windows tests. cases: apply(input); output null = the transcript comes back exactly as it was. Cases with a \"limitation\" are known false positives, pinned so a change to them is deliberate: a command word said as its own clause in a list or as an answer becomes a break (one visible, undoable line break; why the feature is off until turned on). edges: the line breaks at the very start and end kept out of the clean-up. layouts: layout(input, enabled), what a dictation uses.",
   "cases": [
     {
       "id": "en-commas",

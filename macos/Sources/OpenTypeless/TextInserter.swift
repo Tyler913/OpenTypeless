@@ -104,14 +104,14 @@ enum TextInserter {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
-    /// Presses Return in the frontmost app, after a paste, to send what was inserted, unless `shouldPress` says it's no
-    /// longer wanted by then. Returns whether it was pressed.
+    /// Presses Return in the frontmost app, with `flags` held (⇧Return, ⌘Return), after a paste, to send what was
+    /// inserted, unless `shouldPress` says it's no longer wanted by then. Returns whether it was pressed.
     @MainActor
-    static func pressReturn(if shouldPress: () -> Bool = { true }) async -> Bool {
+    static func pressReturn(flags: CGEventFlags = [], if shouldPress: () -> Bool = { true }) async -> Bool {
         // Let the app take in the pasted text first (web apps update their state asynchronously).
         await pause(.milliseconds(120))
         guard shouldPress() else { return false }
-        postKey(CGKeyCode(kVK_Return), flags: [])
+        postKey(CGKeyCode(kVK_Return), flags: flags)
         return true
     }
 

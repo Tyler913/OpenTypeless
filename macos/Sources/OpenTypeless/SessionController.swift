@@ -44,6 +44,9 @@ final class SessionController: ObservableObject {
     /// When the hotkey went down, by the key event's own time (`ProcessInfo.systemUptime` clock, see `HotkeyPress`).
     private var pressedAt: TimeInterval?
     private var handsFree = false
+    /// The send key that ended this recording (see `SendKey`): pressed in the app once the text is pasted there, for this
+    /// dictation only. Off unless it was pressed.
+    private var sendKey: SendKey = .off
     /// Second keys that switch the recording's mode while the hotkey is held (see `ModeChords`). None is registered yet;
     /// whatever registers one also gives the hotkey monitor its key, to keep it from the focused app.
     var modeChords = ModeChords<RecordingMode>()
@@ -216,6 +219,17 @@ final class SessionController: ObservableObject {
         case .ignore:
             break
         }
+    }
+
+    /// The send key went down while recording (see `SendKey`): the recording ends as if the hotkey were let go (or, hands-free,
+    /// pressed again), and once its text is pasted the same key is pressed in that app to send it.
+    func sendKeyPressed() {
+        guard state == .recording else { return }
+        let key = settings.sendKey
+        guard key != .off else { return }
+        note("send key \(key.rawValue) → stop, and send once the text is in")
+        sendKey = key
+        finishRecording()
     }
 
     /// The Mac is going to sleep or the screen was locked. A hands-free recording mustn't keep the microphone open on
@@ -420,6 +434,7 @@ final class SessionController: ObservableObject {
         deliverByPaste = true
         self.pressedAt = pressedAt
         handsFree = false
+        sendKey = .off
         mode = .dictation
         state = .recording
         lastError = nil
@@ -575,7 +590,8 @@ final class SessionController: ObservableObject {
                             ProcessInfo.processInfo.systemUptime - started))
             }
             record.chunkTexts = pipeline.completedTranscripts()
-            record.rawText = raw
+            // With "new line" and "new paragraph" said on their own as line breaks: what goes in when it isn't cleaned up.
+            record.rawText = laidOut(raw)
             // A new transcript supersedes a clean-up from an earlier run (a retry): History mustn't show that one if this
             // run inserts the raw text (clean-up off or failed). A retry that fails before this keeps the old result.
             record.polishedText = nil
@@ -611,28 +627,32 @@ final class SessionController: ObservableObject {
 
     private func polishAndDeliver(record: inout DictationRecord, pipeline: TranscriptionPipeline, generation: Int) async {
         let begun = ProcessInfo.processInfo.systemUptime
-        var text = record.rawText
+        // A line break said at the very start or end stays out of the clean-up, whose answer is trimmed, and goes back on
+        // around its text (see `SpokenLayout.edges`). Without one, `body` is the transcript itself.
+        let edges = SpokenLayout.edges(record.rawText)
+        var text = edges.body
         var notice: String?
         var polished: SegmentedPolishResult?
 
-        if settings.polishEnabled {
+        // Nothing to clean up when all that was said was "new line".
+        if settings.polishEnabled, !edges.body.allSatisfy(\.isWhitespace) {
             // When the speaker paused before letting go and said nothing more, the clean-up of this very transcript
             // started while they were still holding the key: take it over (often it's already done).
             let polishing: Task<SegmentedPolishResult, Error>
             var ahead = 0.0
             // One that already failed (while recording) gets a fresh attempt instead.
-            if let speculative = speculativePolish, speculative.raw == record.rawText, !speculative.outcome.failed {
+            if let speculative = speculativePolish, speculative.raw == edges.body, !speculative.outcome.failed {
                 speculativePolish = nil
                 polishing = speculative.task
                 // What it streams from now on moves this dictation's bar.
-                speculative.partials.target = onPolishPartial(expected: record.rawText)
+                speculative.partials.target = onPolishPartial(expected: edges.body)
                 ahead = ProcessInfo.processInfo.systemUptime - speculative.startedAt
                 let transcription = record.timing?.transcription ?? 0
                 record.timing?.polishHeadStart = max(0, ahead - transcription)
                 note(String(format: "clean-up started %.2fs ago, while recording", ahead))
             } else {
                 dropSpeculativePolish()
-                let raw = record.rawText
+                let raw = edges.body
                 let onPartial = onPolishPartial(expected: raw)
                 polishing = Task { try await self.polish(raw, onPartial: onPartial) }
             }
@@ -666,7 +686,7 @@ final class SessionController: ObservableObject {
                     // A part whose clean-up was unusable goes in as spoken, between the parts that were cleaned up.
                     if !fallbacks.isEmpty { notice = L("部分未整理，已插入原文", "Partly inserted without clean-up") }
                     text = outcome.text
-                    record.polishedText = outcome.text
+                    record.polishedText = edges.leading + outcome.text + edges.trailing
                     record.status = .done
                 }
             } catch {
@@ -686,7 +706,7 @@ final class SessionController: ObservableObject {
             hud.model.bar.reach(.delivered)
             let transcription = record.timing?.transcription ?? 0
             record.timing?.delivered = transcription + ProcessInfo.processInfo.systemUptime - begun
-            record.timing?.delivery = await deliver(text, notice: notice, generation: generation)
+            record.timing?.delivery = await deliver(edges.leading + text + edges.trailing, notice: notice, generation: generation)
         }
         // Esc came before the text was in place (or while it went in): `cancel` has kept the record as cancelled, and
         // so it stays, now with its clean-up.
@@ -694,6 +714,11 @@ final class SessionController: ObservableObject {
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
         account(&record, pipeline: pipeline, polished: polished, discarded: discarded)
         history.update(record)
+    }
+
+    /// `raw` with the layout commands said in it as line breaks, unless they're switched off (see `SpokenLayout`).
+    private func laidOut(_ raw: String) -> String {
+        settings.spokenLayoutCommands ? SpokenLayout.apply(raw) : raw
     }
 
     /// Whether the dictation `generation` is still the one under way, not cancelled or followed by another.
@@ -738,8 +763,10 @@ final class SessionController: ObservableObject {
 
     /// The pipeline has the whole transcript the recording would give if it ended now (the speaker paused), or no longer
     /// has one (they went on). Starts cleaning that transcript up, so the text can be ready when the key is released.
-    private func speculationChanged(_ raw: String?) {
+    private func speculationChanged(_ transcript: String?) {
         guard state == .recording, settings.polishEnabled else { return }
+        // As the clean-up would be given it once the key is released (see `polishAndDeliver`).
+        let raw = transcript.map { SpokenLayout.edges(laidOut($0)).body }
         if let raw, raw == speculativePolish?.raw { return }
         dropSpeculativePolish()
         guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -816,7 +843,11 @@ final class SessionController: ObservableObject {
         case .pasted:
             // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
             var sent = false
-            if settings.pressEnterAfterInsert {
+            if sendKey != .off {
+                // The key that ended the recording, in place of "Press Return after inserting".
+                sent = await send(with: sendKey, generation: generation)
+                guard isCurrent(generation) else { return "pasted" }
+            } else if settings.pressEnterAfterInsert {
                 // Not into another app that came to the front after the paste, nor once the screen locked.
                 sent = await TextInserter.pressReturn {
                     self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved
@@ -844,6 +875,24 @@ final class SessionController: ObservableObject {
                                      "No Accessibility permission — text copied to the clipboard")), hideAfter: 3)
             return "failed"
         }
+    }
+
+    /// Presses the send key that ended the recording in the app the text was just pasted into, under the same conditions as
+    /// the paste. Its keys are let go of first: Return read together with a modifier still held is another key (⇧Return
+    /// makes a new line in most chat boxes, and the hotkey's right ⌘ may still be down), so when they're still held after
+    /// a while the text is left unsent rather than sent the wrong way. Returns whether it was pressed.
+    private func send(with key: SendKey, generation: Int) async -> Bool {
+        guard let keys = key.hotkey else { return false }
+        guard await HotkeyMonitor.waitForRelease(of: keys, timeout: 2) else {
+            note("send key → not sent, its keys are still held")
+            return false
+        }
+        guard isCurrent(generation) else { return false }
+        let sent = await TextInserter.pressReturn(flags: key.flags) {
+            self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved
+        }
+        note("send key → \(sent ? "sent" : "not sent, the dictation was cancelled or focus moved")")
+        return sent
     }
 
     private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
@@ -1119,6 +1168,7 @@ final class SessionController: ObservableObject {
         pressedAt = nil
         pasteTarget = nil
         handsFree = false
+        sendKey = .off
         mode = .dictation
         processingTask = nil
     }

@@ -57,6 +57,12 @@ struct Hotkey: Codable, Equatable {
                  isModifierOnly: isModifierOnly)
     }
 
+    /// The modifiers (of those shortcuts are made of) that are down while it's held: a modifier on its own is one of them
+    /// (Fn isn't), a combination brings its own.
+    var heldModifiers: UInt64 {
+        (isModifierOnly ? modifierFlag : CGEventFlags(rawValue: modifiers)).intersection(Hotkey.comboModifiers).rawValue
+    }
+
     /// Whether a modifier-only hotkey's own key is down in `flags`. The shared ⌘ flag stays on while the other ⌘ is
     /// held, so with Right ⌘ as the hotkey and Left ⌘ down, letting go of Right ⌘ would go unseen: the side's own bit
     /// tells. Keys posted by software sometimes carry only the shared flag; then that is all there is to go by.
@@ -133,6 +139,26 @@ extension ShortcutAction {
     }
 }
 
+extension SendKey {
+    /// Return (36) and the keypad's Enter (76, also Fn+Return on a laptop), with ⇧ and ⌘ as `CGEventFlags`.
+    static let codes = SendKeyCodes(returnKeys: [36, 76], shift: CGEventFlags.maskShift.rawValue,
+                                    command: CGEventFlags.maskCommand.rawValue)
+
+    /// Its keys, as a shortcut is shown and waited on (see `HotkeyMonitor.waitForRelease`); nil when off.
+    var hotkey: Hotkey? {
+        modifiers(Self.codes).map { Hotkey(keyCode: 36, modifiers: $0, isModifierOnly: false, keyLabel: "Return") }
+    }
+
+    /// The modifiers it's pressed with in the focused app.
+    var flags: CGEventFlags {
+        CGEventFlags(rawValue: modifiers(Self.codes) ?? 0)
+    }
+
+    var title: String {
+        hotkey?.displayName ?? L("关闭", "Off")
+    }
+}
+
 extension ShortcutConflict {
     var message: String {
         switch self {
@@ -153,8 +179,8 @@ extension ShortcutConflict {
 /// Uses a default (active) tap because that only needs Accessibility permission, which the app needs
 /// anyway for pasting; a listen-only tap would also require Input Monitoring. Everything is passed
 /// through untouched except the keystrokes of a key-combination hotkey, which are swallowed so that
-/// e.g. ⌥Space doesn't also type a character into the focused app, Esc while a dictation is under way, and the keys
-/// of an action's shortcut or of a mode chord.
+/// e.g. ⌥Space doesn't also type a character into the focused app, Esc while a dictation is under way, the keys of an
+/// action's shortcut or of a mode chord, and the send key while recording.
 ///
 /// The press, release and other-key callbacks get the key event's own time (`ProcessInfo.systemUptime` clock),
 /// see `HotkeyPress`.
@@ -169,10 +195,17 @@ final class HotkeyMonitor {
     var onEscape: (() -> Void)?
     /// An action's shortcut went down (see `shortcuts`).
     var onAction: ((ShortcutAction) -> Void)?
+    /// The send key went down while recording (see `recordingSendKey`).
+    var onSendKey: (() -> Void)?
 
     /// Set while a dictation is recording or processing: Esc then cancels it and is kept from the focused app, where
     /// it would also interrupt a command-line AI tool or close a dialog. Main thread only, like the tap.
     var swallowsEscape = false
+
+    /// The "Finish and send" key while a dictation is recording, off otherwise (see `SendKey`): it then ends the
+    /// recording, and is kept from the focused app, which would send what's there before the text is in. Main thread
+    /// only, like the tap.
+    var recordingSendKey: SendKey = .off
 
     /// The shortcuts of actions besides dictating. Their keys are always kept from the focused app, whatever the
     /// session makes of them. Main thread only, like the tap.
@@ -195,6 +228,8 @@ final class HotkeyMonitor {
     private var source: CFRunLoopSource?
     private var retryTimer: Timer?
     private var isDown = false
+    /// When the hotkey last went down, by the key event's own time.
+    private var pressedAt: TimeInterval = 0
     /// An Esc key-down was swallowed: its auto-repeats and its key-up are swallowed too, even once the dictation has
     /// ended, so the focused app never sees half a key press.
     private var escapeSwallowed = false
@@ -265,7 +300,9 @@ final class HotkeyMonitor {
             if down != isDown {
                 isDown = down
                 HotkeyLog.debug("\(hotkey.displayName) \(down ? "down" : "up") · \(HotkeyLog.describe(event))")
-                fire(down ? onPress : onRelease, at: Self.time(of: event))
+                let time = Self.time(of: event)
+                if down { pressedAt = time }
+                fire(down ? onPress : onRelease, at: time)
             } else {
                 HotkeyLog.debug("\(hotkey.displayName) \(down ? "down" : "up") repeated, ignored · \(HotkeyLog.describe(event))")
             }
@@ -279,7 +316,8 @@ final class HotkeyMonitor {
                     if !isDown, event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
                         isDown = true
                         HotkeyLog.debug("\(hotkey.displayName) down · \(HotkeyLog.describe(event))")
-                        fire(onPress, at: Self.time(of: event))
+                        pressedAt = Self.time(of: event)
+                        fire(onPress, at: pressedAt)
                     }
                     return true
                 }
@@ -288,6 +326,17 @@ final class HotkeyMonitor {
             if repeated, swallowedKeys.contains(keyCode) { return true }
             // A new press: a key-up missed meanwhile (while recording a shortcut, say) mustn't swallow this one's.
             if !repeated { swallowedKeys.remove(keyCode) }
+            // Before a combination with a modifier-only hotkey below, which could cancel the dictation instead. Not right
+            // with the hotkey, though: Fn+Return, say, is left as it was.
+            if !repeated,
+               recordingSendKey.matches(keyCode: keyCode, modifiers: event.flags.intersection(Hotkey.comboModifiers).rawValue,
+                                        hotkeyModifiers: isDown ? hotkey.heldModifiers : 0, codes: SendKey.codes),
+               !(isDown && SendKey.isCombination(hotkeyPressedAt: pressedAt, at: Self.time(of: event))) {
+                HotkeyLog.debug("send key · \(HotkeyLog.describe(event))")
+                fire(onSendKey)
+                swallowedKeys.insert(keyCode)
+                return true
+            }
             if keyCode == 53 { // Escape
                 if repeated { return escapeSwallowed }
                 fire(onEscape)

@@ -120,6 +120,11 @@ struct GeneralPage: View {
                                     "Presses Return once the text is pasted, so a chat message or AI prompt is sent right away. Not pressed when the text only goes to the clipboard."),
                         isOn: $settings.pressEnterAfterInsert)
                 CardDivider(inset: 50)
+                CardRow(icon: "text.append", iconColor: .blue, title: L("说“换行”另起一行", "Say “new line” for a line break"),
+                        subtitle: L("单独说“换行”或“新段落”（前后稍作停顿），会换成换行或空一行；其他语言的说法也可以，比如 new line、new paragraph。在一句话中间说到这些词时照原样保留。",
+                                    "Say “new line” or “new paragraph” on its own, with a short pause before and after, for a line break or a blank line; 换行 / 新段落 and the other languages’ words work too. Said within a sentence, the words stay as they are."),
+                        isOn: $settings.spokenLayoutCommands)
+                CardDivider(inset: 50)
                 CardRow(icon: "speaker.wave.2.fill", iconColor: .pink, title: L("提示音", "Sounds"),
                         subtitle: L("开始和结束录音时播放轻提示音", "Soft chime when recording starts and stops"),
                         isOn: $settings.playSounds)
@@ -467,6 +472,22 @@ struct ShortcutPage: View {
                 CardDivider(inset: 50)
                 CardRow(icon: "escape", iconColor: .gray, title: L("Esc 取消", "Esc to cancel"),
                         subtitle: L("录音或处理过程中随时取消", "Cancel any time while recording or processing")) { EmptyView() }
+            }
+
+            CardSection(title: L("说完即发送", "Finish and send"),
+                        footer: L("只在文字粘贴进录音时所在的应用后才按；文字只复制到剪贴板、按了 Esc 或锁屏时不会发送。",
+                                  "Only pressed once the text is pasted into the app you were dictating in: not when it only goes to the clipboard, after Esc, or once the screen locks.")) {
+                CardRow(icon: "paperplane.fill", iconColor: .green, title: L("发送键", "Send key"),
+                        subtitle: L("录音时按下它会结束听写，文字插入后再在同一个应用里按一次这个键把它发出去。免手持时可以一步说完并发送。",
+                                    "Press it while recording to end the dictation; once the text is in, the same key is pressed in that app to send it. Hands-free, that ends and sends in one go.")) {
+                    Picker(L("发送键", "Send key"), selection: $settings.sendKey) {
+                        ForEach(SendKey.allCases, id: \.self) { key in
+                            Text(key.title).tag(key)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
             }
 
             CardSection(title: L("更多快捷键", "More shortcuts"),

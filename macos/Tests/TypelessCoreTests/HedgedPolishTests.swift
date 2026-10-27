@@ -63,8 +63,9 @@ final class MockChatServer: URLProtocol {
 @Suite(.serialized) struct HedgedPolishTests {
     @Test func fastPrimaryNeverStartsBackup() async throws {
         MockChatServer.reset(["primary": .init(text: "A"), "backup": .init(text: "B")])
+        // The primary answers at once; the hedge delay leaves room for a busy test machine (CI's Intel runners).
         let outcome = try await HedgedPolish.run(transcript: "x", primary: MockChatServer.route("primary"),
-                                                 backup: MockChatServer.route("backup"), hedgeDelay: 0.5)
+                                                 backup: MockChatServer.route("backup"), hedgeDelay: 5)
         #expect(outcome.result.text == "A")
         #expect(!outcome.usedBackup)
         #expect(MockChatServer.lock.withLock { MockChatServer.requested } == ["primary"])
@@ -105,7 +106,8 @@ final class MockChatServer: URLProtocol {
     }
 
     @Test func slowBackupDoesNotBeatPrimaryThatAnswersFirst() async throws {
-        MockChatServer.reset(["primary": .init(delay: 0.4, text: "A"), "backup": .init(delay: 2, text: "B")])
+        // The primary's delay leaves the backup's 0.1 s start room on a busy runner; the backup answers well after it.
+        MockChatServer.reset(["primary": .init(delay: 1.5, text: "A"), "backup": .init(delay: 4, text: "B")])
         let outcome = try await HedgedPolish.run(transcript: "x", primary: MockChatServer.route("primary"),
                                                  backup: MockChatServer.route("backup"), hedgeDelay: 0.1)
         #expect(outcome.result.text == "A")

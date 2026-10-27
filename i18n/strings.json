@@ -3860,15 +3860,6 @@
     "fr": "Sélectionnez du texte dans n'importe quelle app, maintenez le raccourci de dictée, appuyez aussi sur {0} et dites comment le modifier (« plus formel », « traduis en anglais », « corrige la grammaire ») : quand vous relâchez, la sélection est remplacée, et Annuler la rétablit. Posez une question à son sujet (« qu'est-ce que ça veut dire ? ») et la réponse est affichée et copiée. Rien ne change si aucun texte n'est sélectionné ; les champs de mot de passe et les terminaux ne sont jamais lus.",
     "de": "Wähle in einer beliebigen App Text aus, halte das Diktier-Tastenkürzel, drücke zusätzlich {0} und sag, wie er sich ändern soll („förmlicher“, „übersetze ins Englische“, „korrigiere die Grammatik“): Beim Loslassen wird die Auswahl ersetzt, und Widerrufen holt sie zurück. Frag nach dem Text („was bedeutet das?“), und die Antwort wird angezeigt und kopiert. Ohne Auswahl ändert sich nichts; Passwortfelder und Terminals werden nie gelesen."
   },
-  "Spoken instruction": {
-    "ja": "話した指示",
-    "ko": "말한 지시",
-    "es": "Instrucción hablada",
-    "pt": "Instrução falada",
-    "ru": "Произнесённая команда",
-    "fr": "Instruction dictée",
-    "de": "Gesprochene Anweisung"
-  },
   "Text in a terminal can't be edited by voice": {
     "ja": "ターミナルのテキストは音声で編集できません",
     "ko": "터미널의 텍스트는 음성으로 편집할 수 없습니다",

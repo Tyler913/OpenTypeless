@@ -99,8 +99,11 @@ failure handling. Only the system-integration layer and the look differ.
   Ctrl+C once the hotkey and the chord are let go of (`WaitForRelease` follows the swallowed chord key through the
   hook), the clipboard put back. There's no menu-bar Copy to press in between, as on macOS. Terminals, recognised as
   in the focus probe, are refused; so are line-copy editors (VS Code, Cursor, JetBrains, Sublime Text, Zed, by
-  executable) unless UI Automation reports the selection. The edit goes back only into the same foreground window
-  and focused element (`UIAutomation.SameElement`, UI Automation's `CompareElements`), checked again before Ctrl+V.
+  executable) unless UI Automation reports the selection. The edit goes back only into the same foreground window (by
+  its title too) and focused element (`UIAutomation.SameElement`, UI Automation's `CompareElements`), and, where the
+  selection can't be read again, only when no click or key went through since it was read: the keyboard hook counts the
+  non-modifier key-downs it lets through, and the mouse hook, on from the chord until the edit is done, the button
+  presses. The window, its title, the count and the lock are checked again right before Ctrl+V, as on macOS.
 
 ## Deliberate platform differences
 
@@ -146,5 +149,5 @@ These follow from how Windows works rather than from missing features:
 - **Providers**: six expandable cards: usage tags, configured pill, API key (password box + Paste), Base URL (+ Reset), get-a-key link, Test connection.
 - **Models**: STT provider / model (free text + browse, grouped by vendor when > 40) / spoken language; clean-up toggle / provider / model; backup model toggle / provider / model; missing-key banners.
 - **Vocabulary & Style**: vocabulary editor, "Learn from my corrections" with the learned terms (heard as…, date, remove = never learn again), preferences editor, translation (switch; target language picker with "Other…" and its name field; switch key picker).
-- **History**: recording retention picker with the space used; list + detail (status, error, timing, "Translation → …" for a translation, "Edited a selection (N characters)" for an edit, whose raw text is the "Spoken instruction" and which has no Re-transcribe, cleaned + raw text, Copy, Re-transcribe, Show in Explorer, Delete).
+- **History**: recording retention picker with the space used; list + detail (status, error, timing, "Translation → …" for a translation, "Edited a selection (N characters)" for an edit, which keeps only its instruction and has no Re-transcribe, cleaned + raw text, Copy, Re-transcribe, Show in Explorer, Delete).
 - UI language switching instantly, Esc cancel, max-duration auto stop, < 0.4 s accidental tap discarded, "No speech detected", truncation / answer detection fallbacks.

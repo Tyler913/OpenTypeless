@@ -304,6 +304,8 @@ private final class MockServer: URLProtocol {
     nonisolated(unsafe) static var requests = 0
     static let lock = NSLock()
     private var answered = false
+    /// The thread `startLoading` ran on: a URLProtocol's client has to hear from it there.
+    private var loadingThread: Thread?
 
     static func reset(status: Int = 200, failFirst: Int = 0, holding: Bool = false) {
         lock.withLock {
@@ -323,7 +325,9 @@ private final class MockServer: URLProtocol {
             defer { held = [] }
             return held
         }
-        waiting.forEach { $0.answer() }
+        waiting.forEach { held in
+            held.perform(#selector(answerOnItsThread), on: held.loadingThread ?? .main, with: nil, waitUntilDone: false)
+        }
     }
 
     static var counts: (current: Int, peak: Int, requests: Int) { lock.withLock { (current, peak, requests) } }
@@ -338,6 +342,7 @@ private final class MockServer: URLProtocol {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        loadingThread = Thread.current
         let hold = Self.lock.withLock { () -> Bool in
             Self.current += 1
             Self.requests += 1
@@ -356,6 +361,8 @@ private final class MockServer: URLProtocol {
             Self.held.removeAll { $0 === self }
         }
     }
+
+    @objc private func answerOnItsThread() { answer() }
 
     private func answer() {
         let status = Self.lock.withLock { () -> Int? in
@@ -377,7 +384,7 @@ private final class MockServer: URLProtocol {
     }
 }
 
-@Suite(.serialized) struct FilePipelineTests {
+@Suite(.serialized, .timeLimit(.minutes(1))) struct FilePipelineTests {
     private func pipeline(attempts: Int = 4, maxConcurrentRequests: Int = FileTranscription.maxConcurrentRequests,
                           preset: [Int: String] = [:]) -> TranscriptionPipeline {
         TranscriptionPipeline(client: APIClient(endpoint: .openRouter(apiKey: "test"), session: MockServer.session()),

@@ -51,8 +51,24 @@ import Testing
             #expect(tracker.sampleCount == audio.count)
             #expect(tracker.lastSpeechEnd() == item["lastSpeechEnd"] as? Int, "\(name)")
             for check in item["speechAfter"] as! [[String: Any]] {
-                let actual = tracker.speechAfter(check["sample"] as! Int, includePartial: check["includePartial"] as! Bool)
+                let actual = tracker.speechAfter(check["sample"] as! Int, before: check["before"] as? Int)
                 #expect(actual == check["expected"] as! Bool, "\(name): speech after \(check["sample"]!)")
+            }
+        }
+    }
+
+    @Test func chunksMatchSharedCases() throws {
+        for item in try Self.cases()["chunks"] as! [[String: Any]] {
+            let name = item["name"] as! String
+            let audio = Self.signal(item["segments"] as! [[String: Any]])
+            // Live (uneven blocks, as a microphone delivers them) and in one go (a retry of the saved recording) alike.
+            for block in [1234, 640, audio.count] {
+                let chunker = Chunker()
+                var chunks: [AudioChunk] = []
+                for i in stride(from: 0, to: audio.count, by: block) { chunks += chunker.append(Array(audio[i..<min(i + block, audio.count)])) }
+                if let tail = chunker.finish() { chunks.append(tail) }
+                #expect(chunks.dropFirst().map(\.startSample) == item["cuts"] as! [Int], "\(name), blocks of \(block)")
+                #expect(chunks.flatMap(\.samples) == audio && chunks.map(\.index) == Array(chunks.indices), "\(name)")
             }
         }
     }
@@ -213,14 +229,110 @@ extension PipelineTests {
         let announced = Signal<String>()
         let pipeline = TranscriptionPipeline(client: client(), options: .init(model: "m"),
                                              onSpeculation: { text in if let text, text.contains("][") { announced.send(text) } })
-        // 34 s of speech is cut once (at a pause, 18–28 s in); the rest is the tail.
-        let speech = (0..<AudioFormat.sampleCount(forSeconds: 34)).map { i -> Int16 in
-            AudioFormat.seconds(forSampleCount: i).truncatingRemainder(dividingBy: 7) < 0.2 ? 0 : Int16(6000 * sin(Double(i) * 0.2))
-        }
-        LatencyAudio.feed(pipeline, speech + LatencyAudio.silence(0.5))
+        // Cut once, at the pause 10 s in (8 s were pending); the 3 s after it are the tail, transcribed ahead of time at
+        // the next pause.
+        LatencyAudio.feed(pipeline, LatencyAudio.tone(10) + LatencyAudio.silence(0.5) + LatencyAudio.tone(3) + LatencyAudio.silence(0.5))
         let speculative = await announced.wait()
         #expect(try await pipeline.finish() == speculative)
         #expect(pipeline.tailWasSpeculative)
+    }
+
+    @Test func knowsWhenTheAudioEndsInACoveredPause() async throws {
+        _ = answerWithSampleCounts()
+        defer { MockOpenRouter.delay = nil }
+        let pipeline = TranscriptionPipeline(client: client(), options: .init(model: "m"))
+        LatencyAudio.feed(pipeline, LatencyAudio.tone(2))
+        // Still talking: whatever the microphone has yet to hand over matters.
+        #expect(!pipeline.endsInCoveredPause)
+        LatencyAudio.feed(pipeline, LatencyAudio.silence(0.5))
+        #expect(pipeline.endsInCoveredPause)
+        LatencyAudio.feed(pipeline, LatencyAudio.tone(0.5))
+        #expect(!pipeline.endsInCoveredPause)
+        // Waits for every request, so none reaches the next test's mock.
+        _ = try await pipeline.finish()
+    }
+
+    @Test func theKeysClickDoesNotVoidTheSpeculation() async throws {
+        let sent = answerWithSampleCounts(delay: 0.3)
+        defer { MockOpenRouter.delay = nil }
+        let pipeline = TranscriptionPipeline(client: client(), options: .init(model: "m"))
+        // The key clicks as it's let go, 60 ms before the recording stops.
+        LatencyAudio.feed(pipeline, LatencyAudio.tone(3) + LatencyAudio.silence(0.6))
+        pipeline.append(LatencyAudio.tone(0.03) + LatencyAudio.silence(0.06))
+        let text = try await pipeline.finish()
+        #expect(pipeline.tailWasSpeculative)
+        #expect(sent.all.count == 1)
+        #expect(text == "[\(sent.all.first ?? -1)]")
+    }
+
+    @Test func aWordSaidBeforeTheReleaseStillVoidsTheSpeculation() async throws {
+        let sent = answerWithSampleCounts(delay: 0.3)
+        defer { MockOpenRouter.delay = nil }
+        let pipeline = TranscriptionPipeline(client: client(), options: .init(model: "m"))
+        LatencyAudio.feed(pipeline, LatencyAudio.tone(3) + LatencyAudio.silence(0.6))
+        pipeline.append(LatencyAudio.tone(0.3))
+        _ = try await pipeline.finish()
+        #expect(!pipeline.tailWasSpeculative)
+        // The whole tail went out after all (the speculative request may reach the server after it, so not "last").
+        #expect(sent.all.contains(AudioFormat.sampleCount(forSeconds: 3.9)))
+    }
+
+    @Test func nothingIsLeftToSendAfterAPauseThatWasCutAt() async throws {
+        let sent = answerWithSampleCounts()
+        defer { MockOpenRouter.delay = nil }
+        let pipeline = TranscriptionPipeline(client: client(), options: .init(model: "m"))
+        // 9 s of speech, a pause (cut at, and sent, as it began), then the key's click: the tail is the rest of the
+        // pause and the click, nothing to transcribe.
+        LatencyAudio.feed(pipeline, LatencyAudio.tone(9) + LatencyAudio.silence(0.8))
+        pipeline.append(LatencyAudio.tone(0.03) + LatencyAudio.silence(0.05))
+        let text = try await pipeline.finish()
+        #expect(sent.all == [AudioFormat.sampleCount(forSeconds: 9.15)])
+        #expect(text == "[\(AudioFormat.sampleCount(forSeconds: 9.15))]")
+        #expect(pipeline.transcriptionProgress()?.total == 2)
+    }
+
+    @Test func aPauseBegunBeforeThePauseCutIsNotSentTwice() async throws {
+        let sent = answerWithSampleCounts()
+        defer { MockOpenRouter.delay = nil }
+        let pipeline = TranscriptionPipeline(client: client(), options: .init(model: "m"))
+        // Transcribed ahead of time 7.3 s in; the pause goes on past 8 s, which isn't cut at.
+        LatencyAudio.feed(pipeline, LatencyAudio.tone(7) + LatencyAudio.silence(2))
+        _ = try await pipeline.finish()
+        #expect(pipeline.tailWasSpeculative)
+        #expect(sent.all.count == 1)
+    }
+
+    @Test func latchWakesWaitersAndCancelledTasks() async throws {
+        let latch = AsyncLatch()
+        defer { latch.open() } // release tasks even if registration fails an assertion
+        // Inspect under the latch's own lock: a "started" signal before wait() or a sleep doesn't prove a waiter
+        // was registered. Reflection stays in the test so no production-only testing API is needed.
+        let lock = try #require(Mirror(reflecting: latch).children.first { $0.label == "lock" }?.value as? NSLock)
+        func pending() throws -> Int {
+            try lock.withLock {
+                let waiters = try #require(Mirror(reflecting: latch).children.first { $0.label == "waiters" }?.value
+                    as? [Int: CheckedContinuation<Void, Never>])
+                return waiters.count
+            }
+        }
+        func registered(_ count: Int) async throws {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while try pending() != count, ContinuousClock.now < deadline { await Task.yield() }
+            try #require(pending() == count, "waiters must be registered before cancelling or opening")
+        }
+        let cancelled = Task { await latch.wait() }
+        let waiting = Task { await latch.wait(); return true }
+        let alsoWaiting = Task { await latch.wait(); return true }
+        try await registered(3)
+        cancelled.cancel()
+        await cancelled.value // returns while the latch stays closed and the other two remain pending
+        #expect(try pending() == 2)
+        latch.open()
+        #expect(await waiting.value)
+        #expect(await alsoWaiting.value)
+        #expect(try pending() == 0)
+        latch.open() // idempotent; must not resume any continuation twice
+        await latch.wait() // already open
     }
 
     @Test func noSpeculationWithoutSpeech() async throws {
@@ -247,7 +359,9 @@ extension PipelineTests {
     @Test func preconnectWarmsEachHostOnceWithoutTheKey() async throws {
         let requests = Recorded<URLRequest>()
         MockOpenRouter.handler = { request, _ in
-            requests.add(request)
+            // A transcription or clean-up still on its way from an earlier test (one cancelled late) isn't this one's.
+            let path = request.url?.path ?? ""
+            if !path.hasSuffix("/transcriptions"), !path.hasSuffix("/chat/completions") { requests.add(request) }
             return (404, Data())
         }
         let now = Recorded<Double>()

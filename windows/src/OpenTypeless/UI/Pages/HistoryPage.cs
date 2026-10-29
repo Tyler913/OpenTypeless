@@ -1,9 +1,11 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Shapes;
 using OpenTypeless.Input;
 using OpenTypeless.Services;
@@ -34,12 +36,48 @@ public sealed class HistoryPage : PageBase
         VerticalContentAlignment = VerticalAlignment.Stretch,
     };
     private readonly DispatcherQueueTimer _searchDelay;
+    /// <summary>
+    /// The list is bound to <see cref="_entries"/> and updated in place, so only the rows on screen exist, a new or
+    /// changed dictation redraws just its row, and the list keeps its scroll position and selection.
+    /// </summary>
+    private readonly ListView _list;
+    private ObservableCollection<Entry> _entries = [];
+    private readonly Border _listCard = Card.Make();
+    private readonly TextBlock _noMatches = Ui.Text(L("没有匹配的听写", "No matching dictations"), 12, foreground: Ui.Secondary);
+    private readonly ContentControl _detailHost = new()
+    {
+        HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        VerticalContentAlignment = VerticalAlignment.Stretch,
+    };
+    private readonly Grid _split = new() { ColumnSpacing = 14 };
+    /// <summary>Set while the page itself changes the list, whose selection changes then aren't the user's.</summary>
+    private bool _syncing;
+    private bool _confirming;
     private string? _selection;
-    private string? _shownDetail;
+    /// <summary>What the detail was built from, so it's only rebuilt when that changes.</summary>
+    private (DictationRecord? Record, bool HasAudio, bool Idle)? _shownDetail;
 
     public HistoryPage(SessionController controller) : base(SettingsPage.History, scrolls: false)
     {
         _controller = controller;
+        _list = new ListView
+        {
+            SelectionMode = ListViewSelectionMode.Single,
+            Padding = new Thickness(0, 4, 0, 4),
+            // An empty holder; each row's content is filled in when it comes on screen (OnContainerContentChanging).
+            ItemTemplate = (DataTemplate)XamlReader.Load(
+                "<DataTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Border/></DataTemplate>"),
+        };
+        _list.ContainerContentChanging += OnContainerContentChanging;
+        _list.SelectionChanged += OnSelectionChanged;
+        _noMatches.HorizontalAlignment = HorizontalAlignment.Center;
+        _noMatches.VerticalAlignment = VerticalAlignment.Center;
+        _split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(270) });
+        _split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _split.Children.Add(_listCard);
+        Grid.SetColumn(_detailHost, 1);
+        _split.Children.Add(_detailHost);
+
         // The toolbar is built once, so typing in the search box survives new dictations arriving.
         var grid = new Grid { RowSpacing = 14 };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -48,7 +86,7 @@ public sealed class HistoryPage : PageBase
         Grid.SetRow(_content, 1);
         grid.Children.Add(_content);
         Body.Children.Add(grid);
-        // Every render rebuilds the whole list, so a burst of typing renders once, when it pauses.
+        // A new search rebuilds the whole list, so a burst of typing does that once, when it pauses.
         _searchDelay = DispatcherQueue.GetForCurrentThread().CreateTimer();
         _searchDelay.Interval = TimeSpan.FromMilliseconds(150);
         _searchDelay.IsRepeating = false;
@@ -70,7 +108,7 @@ public sealed class HistoryPage : PageBase
 
     private void OnHistoryChanged()
     {
-        Render();
+        Update();
         RefreshStorage();
     }
 
@@ -143,95 +181,197 @@ public sealed class HistoryPage : PageBase
         var today = DateTime.Today;
         if (day == today) return L("今天", "Today");
         if (day == today.AddDays(-1)) return L("昨天", "Yesterday");
-        var dates = Localization.Resolved.Culture().DateTimeFormat;
+        var dates = Formatting.DateCulture.DateTimeFormat;
         if (day.Year != today.Year) return day.ToString(dates.ShortDatePattern, dates);
         var weekday = dates.AbbreviatedDayNames[(int)day.DayOfWeek];
         var monthDay = day.ToString(dates.MonthDayPattern.Replace("MMMM", "MMM"), dates);
         return L($"{monthDay} {weekday}", $"{weekday}, {monthDay}");
     }
 
+    /// <summary>Shows the history from scratch: when the page opens and when the search changes.</summary>
     private void Render()
     {
         if (_history.Records.Count == 0)
         {
-            _shownDetail = null;
-            var hotkey = _settings.Hotkey.DisplayName;
-            _content.Content = new StackPanel
-            {
-                Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                Children =
-                {
-                    Ui.Icon(Glyphs.Microphone, 36, Ui.Tertiary),
-                    Ui.Text(L("还没有听写记录", "No dictations yet"), 14, FontWeights.Medium),
-                    Ui.Text(L($"按住 {hotkey} 说话，每次听写都会保存在这里。", $"Hold {hotkey} and talk. Every dictation is kept here."), 12, foreground: Ui.Secondary),
-                },
-            };
+            ShowEmpty();
             return;
         }
-
         var records = Filtered;
-        var selectedId = _selection != null && records.Any(r => r.Id == _selection) ? _selection : records.FirstOrDefault()?.Id;
-        var detailHost = new ContentControl { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
+        _listCard.Child = records.Count == 0 ? _noMatches : (UIElement)_list;
+        _syncing = true;
+        _entries = new ObservableCollection<Entry>(Entries(records));
+        _list.ItemsSource = _entries;
+        _syncing = false;
+        _content.Content = _split;
+        SelectAndShow(records);
+    }
 
-        FrameworkElement listContent;
-        if (records.Count == 0)
+    /// <summary>Brings the list up to date after a change to the history, changing only the entries that differ.</summary>
+    private void Update()
+    {
+        if (_history.Records.Count == 0 || !ReferenceEquals(_content.Content, _split))
         {
-            var none = Ui.Text(L("没有匹配的听写", "No matching dictations"), 12, foreground: Ui.Secondary);
-            none.HorizontalAlignment = HorizontalAlignment.Center;
-            none.VerticalAlignment = VerticalAlignment.Center;
-            listContent = none;
+            Render();
+            return;
+        }
+        var records = Filtered;
+        _listCard.Child = records.Count == 0 ? _noMatches : (UIElement)_list;
+        _syncing = true;
+        Sync(_entries, Entries(records));
+        _syncing = false;
+        SelectAndShow(records);
+    }
+
+    private void ShowEmpty()
+    {
+        _shownDetail = null;
+        _detailHost.Content = null;
+        _syncing = true;
+        _entries = [];
+        _list.ItemsSource = _entries;
+        _syncing = false;
+        var hotkey = _settings.Hotkey.DisplayName;
+        _content.Content = new StackPanel
+        {
+            Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                Ui.Icon(Glyphs.Microphone, 36, Ui.Tertiary),
+                Ui.Text(L("还没有听写记录", "No dictations yet"), 14, FontWeights.Medium),
+                Ui.Text(L($"按住 {hotkey} 说话，每次听写都会保存在这里。", $"Hold {hotkey} and talk. Every dictation is kept here."), 12, foreground: Ui.Secondary),
+            },
+        };
+    }
+
+    /// <summary>Selects the dictation the user picked, or the newest one when it's gone (or none was picked), and shows it.</summary>
+    private void SelectAndShow(List<DictationRecord> records)
+    {
+        var selectedId = _selection != null && records.Any(r => r.Id == _selection) ? _selection : records.FirstOrDefault()?.Id;
+        var entry = selectedId == null ? null : _entries.FirstOrDefault(e => e.Record?.Id == selectedId);
+        if (!ReferenceEquals(_list.SelectedItem, entry))
+        {
+            _syncing = true;
+            _list.SelectedItem = entry;
+            _syncing = false;
+        }
+        ShowDetail(entry?.Record);
+    }
+
+    private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncing || _list.SelectedItem is not Entry { Record: { } record }) return;
+        _selection = record.Id;
+        ShowDetail(record);
+    }
+
+    private void ShowDetail(DictationRecord? record)
+    {
+        // Rebuilt when the record changed (records are replaced, not edited), lost its recording, or the retry
+        // button's state would differ.
+        (DictationRecord? Record, bool HasAudio, bool Idle) shown =
+            (record, record?.HasAudio ?? false, _controller.State == SessionController.SessionState.Idle);
+        if (_shownDetail == shown) return;
+        _shownDetail = shown;
+        _detailHost.Content = record == null ? Card.Make() : Detail(record);
+    }
+
+    /// <summary>An item in the list: a day's header, or a dictation under it.</summary>
+    private sealed class Entry
+    {
+        public string Key { get; }
+        /// <summary>The header's text ("Today", "Fri, Sep 26"); null for a dictation.</summary>
+        public string? Title { get; }
+        public DictationRecord? Record { get; }
+
+        private Entry(string key, string? title, DictationRecord? record)
+        {
+            Key = key;
+            Title = title;
+            Record = record;
+        }
+
+        public static Entry Header(DateTime day) => new("day " + day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), DayTitle(day), null);
+
+        public static Entry Of(DictationRecord record) => new(record.Id, null, record);
+
+        /// <summary>Looks the same on screen. The store replaces a record when it's updated, so a changed one is a new object.</summary>
+        public bool LooksLike(Entry other) => ReferenceEquals(Record, other.Record) && Title == other.Title;
+    }
+
+    /// <summary>The records with a header before each day's first one.</summary>
+    private static List<Entry> Entries(List<DictationRecord> records)
+    {
+        var entries = new List<Entry>(records.Count + 32);
+        DateTime? currentDay = null;
+        foreach (var record in records)
+        {
+            var day = record.Date.LocalDateTime.Date;
+            if (day != currentDay)
+            {
+                currentDay = day;
+                entries.Add(Entry.Header(day));
+            }
+            entries.Add(Entry.Of(record));
+        }
+        return entries;
+    }
+
+    /// <summary>
+    /// Turns <paramref name="entries"/> into <paramref name="wanted"/> one insert, removal or replacement at a time:
+    /// a new dictation is one insert, an update one replacement, and the rest of the list is left alone.
+    /// </summary>
+    private static void Sync(ObservableCollection<Entry> entries, List<Entry> wanted)
+    {
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            var entry = wanted[i];
+            if (i >= entries.Count || entries[i].Key != entry.Key)
+            {
+                var found = -1;
+                for (var j = i + 1; j < entries.Count; j++)
+                {
+                    if (entries[j].Key == entry.Key)
+                    {
+                        found = j;
+                        break;
+                    }
+                }
+                if (found < 0)
+                {
+                    entries.Insert(i, entry);
+                    continue;
+                }
+                // Whatever sits before it in the list is no longer wanted there.
+                for (var j = found - 1; j >= i; j--) entries.RemoveAt(j);
+            }
+            if (!entries[i].LooksLike(entry)) entries[i] = entry;
+        }
+        while (entries.Count > wanted.Count) entries.RemoveAt(entries.Count - 1);
+    }
+
+    /// <summary>Fills a row as it comes on screen. Rows are reused for other entries, so each one sets everything it needs.</summary>
+    private void OnContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (args.InRecycleQueue || args.Item is not Entry entry || args.ItemContainer.ContentTemplateRoot is not Border holder) return;
+        var container = args.ItemContainer;
+        if (entry.Record is { } record)
+        {
+            container.ClearValue(UIElement.IsHitTestVisibleProperty);
+            container.ClearValue(Control.IsTabStopProperty);
+            container.ClearValue(FrameworkElement.MinHeightProperty);
+            container.ClearValue(Control.PaddingProperty);
+            holder.Child = Row(record);
         }
         else
         {
-            var list = new ListView { SelectionMode = ListViewSelectionMode.Single, Padding = new Thickness(0, 4, 0, 4) };
-            DateTime? currentDay = null;
-            foreach (var record in records)
-            {
-                var day = record.Date.LocalDateTime.Date;
-                if (day != currentDay)
-                {
-                    currentDay = day;
-                    // A day header between the rows; it can't be selected or focused.
-                    list.Items.Add(new ListViewItem
-                    {
-                        Content = Ui.Text(DayTitle(day), 11.5, FontWeights.SemiBold, Ui.Secondary),
-                        IsHitTestVisible = false,
-                        IsTabStop = false,
-                        MinHeight = 0,
-                        Padding = new Thickness(12, 10, 12, 2),
-                    });
-                }
-                var row = Row(record);
-                list.Items.Add(row);
-                if (record.Id == selectedId) list.SelectedItem = row;
-            }
-            list.SelectionChanged += (_, _) =>
-            {
-                if (list.SelectedItem is FrameworkElement { Tag: string id } && id != _shownDetail)
-                {
-                    _selection = id;
-                    ShowDetail(detailHost, id);
-                }
-            };
-            listContent = list;
+            // A day header between the rows; it can't be selected or focused.
+            container.IsHitTestVisible = false;
+            container.IsTabStop = false;
+            container.MinHeight = 0;
+            container.Padding = new Thickness(12, 10, 12, 2);
+            holder.Child = Ui.Text(entry.Title ?? "", 11.5, FontWeights.SemiBold, Ui.Secondary);
         }
-
-        var grid = new Grid { ColumnSpacing = 14 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(270) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.Children.Add(Card.Make(listContent));
-        Grid.SetColumn(detailHost, 1);
-        grid.Children.Add(detailHost);
-        _content.Content = grid;
-        _shownDetail = null;
-        ShowDetail(detailHost, selectedId);
-    }
-
-    private void ShowDetail(ContentControl host, string? id)
-    {
-        var record = _history.Records.FirstOrDefault(r => r.Id == id);
-        _shownDetail = record?.Id;
-        host.Content = record == null ? Card.Make() : Detail(record);
+        args.Handled = true;
     }
 
     private static string Preview(DictationRecord record)
@@ -254,7 +394,7 @@ public sealed class HistoryPage : PageBase
         var leading = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6,
-            Children = { Ui.Text(record.Date.ToLocalTime().ToString("t"), 11.5, FontWeights.Medium, Ui.Secondary) },
+            Children = { Ui.Text(record.Date.ToLocalTime().ToString("t", Formatting.DateCulture), 11.5, FontWeights.Medium, Ui.Secondary) },
         };
         if (record.Status != DictationStatus.Done)
         {
@@ -269,7 +409,7 @@ public sealed class HistoryPage : PageBase
         var text = Ui.Text(Preview(record), 13, foreground: record.FinalText.Length == 0 ? Ui.Secondary : null, wrap: true);
         text.MaxLines = 2;
         text.TextTrimming = TextTrimming.CharacterEllipsis;
-        return new StackPanel { Spacing = 3, Padding = new Thickness(0, 7, 0, 7), Tag = record.Id, Children = { meta, text } };
+        return new StackPanel { Spacing = 3, Padding = new Thickness(0, 7, 0, 7), Children = { meta, text } };
     }
 
     // MARK: Detail
@@ -293,7 +433,7 @@ public sealed class HistoryPage : PageBase
             Spacing = 3,
             Children =
             {
-                Ui.Text(record.Date.ToLocalTime().ToString("f"), 14, FontWeights.SemiBold),
+                Ui.Text(record.Date.ToLocalTime().ToString("f", Formatting.DateCulture), 14, FontWeights.SemiBold),
                 Ui.Text(string.Join(" · ", details), 11.5, foreground: Ui.Secondary),
             },
         });
@@ -400,8 +540,10 @@ public sealed class HistoryPage : PageBase
         buttons.Children.Add(leading);
         var delete = new Button { Content = Ui.Icon(Glyphs.Delete, 14, Palette.Brush(Tint.Red)) };
         Ui.Label(delete, L("删除", "Delete"));
-        delete.Click += (_, _) =>
+        delete.Click += async (_, _) =>
         {
+            // Text alone goes straight away; a recording can't be got back, so that asks first.
+            if (record.HasAudio && !await ConfirmDelete(record)) return;
             _selection = null;
             _history.Delete(record);
         };
@@ -427,5 +569,37 @@ public sealed class HistoryPage : PageBase
         Grid.SetRow(buttons, 4);
         layout.Children.Add(buttons);
         return Card.Make(layout);
+    }
+
+    private async Task<bool> ConfirmDelete(DictationRecord record)
+    {
+        // One dialog at a time: a second ShowAsync while one is open would throw.
+        if (_confirming || XamlRoot == null) return false;
+        _confirming = true;
+        try
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = L("删除这条听写？", "Delete this dictation?"),
+                Content = record.Status == DictationStatus.Failed
+                    ? L("这次听写还没转写成功，删除后录音也会删掉，无法再重试。",
+                        "It was never transcribed. Its recording is deleted too, so it can't be retried.")
+                    : L("录音也会一起删除，之后无法重新转写。",
+                        "Its recording is deleted too, so it can't be re-transcribed."),
+                PrimaryButtonText = L("删除", "Delete"),
+                CloseButtonText = L("取消", "Cancel"),
+                DefaultButton = ContentDialogButton.Close,
+            };
+            if (Application.Current.Resources.TryGetValue("DefaultContentDialogStyle", out var style) && style is Style dialogStyle)
+            {
+                dialog.Style = dialogStyle;
+            }
+            return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        }
+        finally
+        {
+            _confirming = false;
+        }
     }
 }

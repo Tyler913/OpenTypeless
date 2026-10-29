@@ -58,7 +58,7 @@ enum UISnapshots {
         }
 
         let model = HUDModel()
-        model.levels = (0..<18).map { i in Float(abs(sin(Double(i) * 0.7))) * 0.8 + 0.1 }
+        model.levels.values = (0..<18).map { i in Float(abs(sin(Double(i) * 0.7))) * 0.8 + 0.1 }
         model.startedAt = Date().addingTimeInterval(-83)
         model.bar.show(0.55)
         let phases: [(String, HUDModel.Phase)] = [
@@ -66,7 +66,9 @@ enum UISnapshots {
             ("hud-working", .working),
             ("hud-copied", .copied),
             ("hud-learned", .learned("Typeless、罗技")),
-            ("hud-error", .error(L("转写失败，可在菜单栏重试", "Failed — retry from the menu bar"))),
+            // A long, real error, to check that it wraps instead of losing its end.
+            ("hud-error", .error(L("需要麦克风权限：系统设置 → 隐私与安全性 → 麦克风",
+                                   "Microphone access needed: System Settings → Privacy & Security → Microphone"))),
         ]
         for (name, phase) in phases {
             model.phase = phase
@@ -74,7 +76,7 @@ enum UISnapshots {
             let hud = HUDView(model: model)
             let view = live ? AnyView(hud) : AnyView(hud.background(
                 LinearGradient(colors: [.orange, .pink, .blue], startPoint: .leading, endPoint: .trailing)))
-            try save(NSHostingView(rootView: view), size: NSSize(width: 380, height: 72), to: dir.appendingPathComponent("\(name).png"))
+            try save(NSHostingView(rootView: view), size: NSSize(width: 420, height: 100), to: dir.appendingPathComponent("\(name).png"))
         }
         if live { try checkPopover(controller: controller, dir: dir) }
         print("✓ snapshots in \(dir.path)")

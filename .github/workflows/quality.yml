@@ -19,6 +19,10 @@ jobs:
       - run: python -m pip install -r scripts/ci/requirements.txt
       - name: Check translations in both apps
         run: python i18n/check.py
+      # macos/scripts/build-app.sh and windows/Directory.Build.props, and for a release tag (1.2.3, v1.2.3 or V1.2.3)
+      # the tag too: fails in seconds, before either app is built.
+      - name: Check both apps have the same version (and the tag's)
+        run: python scripts/ci/check_version.py
       - name: Test CI gates, coverage reports, snapshots and packaging templates
         run: python -m unittest discover -s scripts/ci -p 'test_*.py' -v
       # The release binary, checked against the release's checksums: seconds, where building it with Go took a minute.

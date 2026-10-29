@@ -37,8 +37,33 @@ public sealed class HudController
         _window ??= new HudWindow(Model);
         _window.ShowHud();
 
-        if (autoHideAfter is { } seconds) HideAfter(seconds);
+        if (autoHideAfter is { } seconds) HideAfter(Message(phase) is { } message ? DisplayTime(message, seconds) : seconds);
     }
+
+    /// <summary>The text a notice shows (its length decides how long it stays up).</summary>
+    internal static string? Message(HudPhase phase) => phase switch
+    {
+        HudPhase.Learned learned => L("已加入词汇表：", "Added to vocabulary: ") + learned.Terms,
+        HudPhase.Error error => error.Message,
+        _ => null,
+    };
+
+    /// <summary>
+    /// How long a notice stays up: what the caller asked for, plus reading time (about 15 characters a second) for
+    /// whatever goes past the first line, up to 12 s. Chinese, Japanese and Korean characters count double: they are
+    /// twice as wide. The same rule as the macOS capsule.
+    /// </summary>
+    internal static double DisplayTime(string message, double requested)
+    {
+        var width = 0;
+        foreach (var rune in message.EnumerateRunes()) width += IsWide(rune.Value) ? 2 : 1;
+        var extra = Math.Max(0, width - 50) / 15.0;
+        return Math.Min(requested + extra, Math.Max(requested, 12));
+    }
+
+    private static bool IsWide(int c) =>
+        c is (>= 0x1100 and <= 0x115F) or (>= 0x2E80 and <= 0xA4CF) or (>= 0xAC00 and <= 0xD7A3) or (>= 0xF900 and <= 0xFAFF)
+            or (>= 0xFE30 and <= 0xFE4F) or (>= 0xFF00 and <= 0xFF60) or (>= 0xFFE0 and <= 0xFFE6);
 
     /// <summary>Transcribing and cleaning up, with the bar starting from empty.</summary>
     public void ShowWorking(bool polishes)
@@ -86,8 +111,14 @@ public sealed class HudWindow : Window
     /// <summary>Extra height for the live preview line above the level bars.</summary>
     private const double PreviewDips = 26;
     private const double BottomMarginDips = 28;
+    /// <summary>Space above and below a notice that wraps onto more lines.</summary>
+    private const double NoticePaddingDips = 11;
+    /// <summary>A notice's text: up to three lines this wide, so the end of an error (often what to do) still shows.</summary>
+    private const double NoticeWidthDips = 340;
+    private const int NoticeLines = 3;
 
     private readonly HudModel _model;
+    private readonly ActiveAcrylicBackdrop _backdrop = new();
     /// <summary>The processing bar behind <see cref="_root"/>, which holds the capsule's content.</summary>
     private readonly Grid _frame = new();
     private readonly Grid _root = new() { Padding = new Thickness(16, 0, 16, 0) };
@@ -119,7 +150,7 @@ public sealed class HudWindow : Window
         WindowHelpers.AddExtendedStyle(Hwnd, Win32.WS_EX_NOACTIVATE | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST);
         _subclass = Subclass;
         Win32.SetWindowSubclass(Hwnd, _subclass, 1, 0);
-        SystemBackdrop = new ActiveAcrylicBackdrop();
+        SystemBackdrop = _backdrop;
 
         _bars = new LevelBars();
         // Same-width digits, like the macOS timer's monospacedDigit(): the row doesn't shift every second.
@@ -143,6 +174,18 @@ public sealed class HudWindow : Window
         _model.PhaseChanged += Render;
         _model.LevelsChanged += UpdateLevels;
         _model.PreviewChanged += OnPreviewChanged;
+        _preview.Foreground = Ui.Secondary;
+        _frame.ActualThemeChanged += (_, _) => OnThemeChanged();
+        Render();
+    }
+
+    /// <summary>
+    /// Windows switched between light and dark while the capsule exists: the acrylic follows, and the brushes picked
+    /// up in code (which don't change by themselves) are fetched again by redrawing.
+    /// </summary>
+    private void OnThemeChanged()
+    {
+        _backdrop.SetTheme(_frame.ActualTheme);
         _preview.Foreground = Ui.Secondary;
         Render();
     }
@@ -206,23 +249,15 @@ public sealed class HudWindow : Window
                 row.Children.Add(Ui.Icon(Glyphs.Paste, 14, Ui.Secondary));
                 row.Children.Add(Label(L("已复制到剪贴板", "Copied to clipboard")));
                 break;
-            case HudPhase.Learned learned:
+            case HudPhase.Learned:
                 row.Spacing = 8;
                 row.Children.Add(Ui.Icon(Glyphs.Dictionary, 14, Palette.Theme("AccentTextFillColorPrimaryBrush")));
-                var terms = Label(L("已加入词汇表：", "Added to vocabulary: ") + learned.Terms);
-                terms.MaxWidth = 340;
-                terms.TextTrimming = TextTrimming.CharacterEllipsis;
-                terms.TextWrapping = TextWrapping.NoWrap;
-                row.Children.Add(terms);
+                row.Children.Add(Notice(HudController.Message(_model.Phase) ?? ""));
                 break;
             case HudPhase.Error error:
                 row.Spacing = 8;
                 row.Children.Add(Ui.Icon(Glyphs.Warning, 14, Palette.Brush(Tint.Orange)));
-                var text = Label(error.Message);
-                text.MaxWidth = 340;
-                text.TextTrimming = TextTrimming.CharacterEllipsis;
-                text.TextWrapping = TextWrapping.NoWrap;
-                row.Children.Add(text);
+                row.Children.Add(Notice(error.Message));
                 break;
         }
         if (ShowsPreview)
@@ -336,6 +371,17 @@ public sealed class HudWindow : Window
 
     private static TextBlock Label(string text) => new() { Text = text, FontSize = 13, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center };
 
+    /// <summary>A notice's text, wrapping onto up to three lines (the capsule grows to fit, see <see cref="Resize"/>).</summary>
+    private static TextBlock Notice(string text)
+    {
+        var block = Label(text);
+        block.MaxWidth = NoticeWidthDips;
+        block.TextWrapping = TextWrapping.Wrap;
+        block.MaxLines = NoticeLines;
+        block.TextTrimming = TextTrimming.CharacterEllipsis;
+        return block;
+    }
+
     private void UpdateLevels() => _bars.SetLevels(_model.Levels, animated: true);
 
     private void UpdateElapsed()
@@ -349,10 +395,18 @@ public sealed class HudWindow : Window
     {
         _previewShown = ShowsPreview;
         var heightDips = _previewShown ? HeightDips + PreviewDips : HeightDips;
-        _root.Measure(new Windows.Foundation.Size(double.PositiveInfinity, heightDips));
+        // Unbounded height, so a notice that wraps reports all of its lines.
+        _root.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
         var contentWidth = _root.DesiredSize.Width;
-        if (contentWidth <= 1) contentWidth = EstimatedWidth();
+        var contentHeight = _root.DesiredSize.Height;
+        if (contentWidth <= 1)
+        {
+            contentWidth = EstimatedWidth();
+            contentHeight = EstimatedHeight();
+        }
         var widthDips = Math.Clamp(contentWidth + 4, 120, 420);
+        // One line keeps the usual height; more lines grow the capsule upwards from its bottom edge.
+        if (HudController.Message(_model.Phase) != null) heightDips = Math.Max(heightDips, Math.Ceiling(contentHeight) + 2 * NoticePaddingDips);
 
         if (position || _centerX == int.MinValue)
         {
@@ -390,6 +444,11 @@ public sealed class HudWindow : Window
         HudPhase.Error e => Math.Min(372, 40 + e.Message.Length * 13),
         _ => 120,
     };
+
+    /// <summary>A notice's height before XAML has measured it: about 13 dips per character, 18 per line.</summary>
+    private double EstimatedHeight() => HudController.Message(_model.Phase) is { } message
+        ? Math.Min(NoticeLines, Math.Ceiling(message.Length * 13 / NoticeWidthDips)) * 18
+        : 0;
 
     /// <summary>Clicks never activate the capsule (the text field keeps focus) and fall through to what's below.</summary>
     private nint Subclass(nint hwnd, uint msg, nint wParam, nint lParam, nuint id, nuint data)

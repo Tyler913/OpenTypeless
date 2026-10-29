@@ -85,6 +85,8 @@ public sealed partial class SettingsWindow : Window
 
     public void CloseForExit()
     {
+        // A tick after Close would set the pill's text on a torn-down window (E_UNEXPECTED, and the process ends).
+        _refresh.Stop();
         _allowClose = true;
         _settings.PropertyChanged -= OnSettingsChanged;
         Close();

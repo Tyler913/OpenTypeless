@@ -403,9 +403,11 @@ extension PipelineTests {
             latency: latency)
     }
 
-    private func runWithBackup(_ latency: TranscriptionLatency) async throws -> (String, TranscriptionPipeline) {
+    /// One chunk of `seconds`, sent when the recording ends: up to `TranscriptionPipeline.raceSeconds` it goes to both
+    /// routes at once.
+    private func runWithBackup(_ latency: TranscriptionLatency, seconds: Double = 2) async throws -> (String, TranscriptionPipeline) {
         let pipeline = pipelineWithBackup(latency)
-        pipeline.append(tone(seconds: 2))
+        pipeline.append(tone(seconds: seconds))
         return (try await pipeline.finish(), pipeline)
     }
 
@@ -414,10 +416,30 @@ extension PipelineTests {
         MockOpenRouter.delay = { [self] body in model(body) == "primary" ? 1.5 : 0 }
         defer { MockOpenRouter.delay = nil }
         let start = Date()
-        let (text, pipeline) = try await runWithBackup(TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1))
+        // Too long to be raced, so the backup waits until the primary is late.
+        let (text, pipeline) = try await runWithBackup(TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1), seconds: 12)
         #expect(text == "backup")
         #expect(Date().timeIntervalSince(start) < 1.4)
         #expect(pipeline.backupChunkCount() == 1 && pipeline.requestUsages().isEmpty)
+        #expect(pipeline.lastChunkUsedBackup == true)
+    }
+
+    @Test func shortLastChunkIsRacedAtOnce() async throws {
+        let models = Recorded<String>()
+        MockOpenRouter.handler = { [self] _, body in
+            models.add(model(body))
+            return (200, Data(#"{"text":"\#(model(body))"}"#.utf8))
+        }
+        MockOpenRouter.delay = { [self] body in model(body) == "primary" ? 1.5 : 0.2 }
+        defer { MockOpenRouter.delay = nil }
+        let start = Date()
+        // The primary isn't late for another 5 s, but the user is waiting on this chunk now.
+        let (text, pipeline) = try await runWithBackup(TranscriptionLatency(minimumDelay: 5, maximumDelay: 5),
+                                                       seconds: TranscriptionPipeline.raceSeconds - 1)
+        #expect(text == "backup")
+        #expect(Date().timeIntervalSince(start) < 1.2)
+        #expect(Set(models.all) == ["primary", "backup"])
+        #expect(pipeline.lastChunkUsedBackup == true)
     }
 
     @Test func chunkSentWhileTalkingIsOnlyHedgedOnceTheRecordingEnds() async throws {
@@ -445,7 +467,8 @@ extension PipelineTests {
                 : (200, Data(#"{"text":"backup"}"#.utf8))
         }
         let start = Date()
-        let (text, pipeline) = try await runWithBackup(TranscriptionLatency(minimumDelay: 20, maximumDelay: 20))
+        // Too long to be raced: the backup is asked because the primary failed.
+        let (text, pipeline) = try await runWithBackup(TranscriptionLatency(minimumDelay: 20, maximumDelay: 20), seconds: 12)
         #expect(text == "backup")
         #expect(Date().timeIntervalSince(start) < 5) // didn't wait for the 20 s delay
         #expect(pipeline.backupChunkCount() == 1)
@@ -458,11 +481,13 @@ extension PipelineTests {
             return (200, Data(#"{"text":"primary"}"#.utf8))
         }
         let latency = TranscriptionLatency(minimumDelay: 5, maximumDelay: 5)
-        let (text, pipeline) = try await runWithBackup(latency)
+        // Longer than `raceSeconds`, so the backup is only asked once the primary is late.
+        let (text, pipeline) = try await runWithBackup(latency, seconds: TranscriptionPipeline.raceSeconds + 2)
         #expect(text == "primary")
         #expect(models == ["primary"])
         #expect(latency.samples == 1)
         #expect(pipeline.backupChunkCount() == 0)
+        #expect(pipeline.lastChunkUsedBackup == false)
     }
 
     @Test func connectionCheckTimesSeveralRoundTrips() async throws {

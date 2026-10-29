@@ -26,8 +26,14 @@ public static class VocabularyHints
 
     /// <summary>At most this many terms are sent, the first ones in the list.</summary>
     public const int MaxTerms = 100;
-    /// <summary>Whisper reads only the last 224 tokens of a prompt, so a prompt is kept well under that.</summary>
-    public const int MaxPromptCharacters = 600;
+    /// <summary>
+    /// Whisper reads only the last 224 tokens of a prompt, dropping the first terms of a longer one, so a prompt is kept
+    /// under half of that by <see cref="TokenEstimate"/>. Counting characters instead let 600 Chinese characters through,
+    /// far over the limit. The estimate counts one token per Chinese character and per four other characters, where
+    /// Whisper's tokenizer often needs two for a Chinese character (and for a comma and space): the margin covers that. In
+    /// English it is about 400 characters.
+    /// </summary>
+    public const int MaxPromptTokens = 100;
 
     private static readonly string[] OpenAIPromptModels =
         ["openai/gpt-4o-transcribe", "openai/gpt-4o-mini-transcribe", "openai/gpt-transcribe", "openai/whisper-1"];
@@ -65,7 +71,7 @@ public static class VocabularyHints
         foreach (var term in terms)
         {
             var next = prompt.Length == 0 ? term : prompt + ", " + term;
-            if (next.Length > MaxPromptCharacters) break;
+            if (TokenEstimate.Count(next) > MaxPromptTokens) break;
             prompt = next;
         }
         return prompt;

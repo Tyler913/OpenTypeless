@@ -102,6 +102,8 @@ public sealed class UsageLedger
     public const int Version = 1;
 
     private readonly SortedDictionary<string, DayUsage> _days = new(StringComparer.Ordinal);
+    /// <summary>Standing in for a file that couldn't be read this session, so never saved over it.</summary>
+    private bool _unreadable;
 
     public IReadOnlyDictionary<string, DayUsage> Days => _days;
 
@@ -253,41 +255,57 @@ public sealed class UsageLedger
 
     public string ToJson() => JsonSerializer.Serialize(new Stored { Days = new Dictionary<string, DayUsage>(_days) }, Json);
 
-    public static UsageLedger FromJson(string json)
+    /// <summary>An unreadable file gives an empty ledger rather than blocking the app.</summary>
+    public static UsageLedger FromJson(string json) => TryFromJson(json) ?? new UsageLedger();
+
+    /// <summary>Null when the text isn't a saved ledger.</summary>
+    internal static UsageLedger? TryFromJson(string json)
     {
-        var ledger = new UsageLedger();
         try
         {
-            var stored = JsonSerializer.Deserialize<Stored>(json, Json);
-            foreach (var (key, day) in stored?.Days ?? [])
+            if (JsonSerializer.Deserialize<Stored>(json, Json) is not { } stored) return null;
+            var ledger = new UsageLedger();
+            foreach (var (key, day) in stored.Days ?? [])
             {
                 if (ParseKey(key) != null && day != null) ledger._days[key] = day;
             }
+            return ledger;
         }
-        catch (JsonException) { }
-        return ledger;
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
-    /// <summary>Null when there's no file yet (first run of a version that keeps it).</summary>
+    /// <summary>
+    /// Null when there's no file yet (first run of a version that keeps it). A file that can't be parsed is moved aside
+    /// (see <see cref="SafeFile"/>) before an empty ledger takes its place, so the next save doesn't overwrite the
+    /// lifetime totals. One that still can't be read after a few tries is held by another program, not damaged: it
+    /// stays, and the empty ledger standing in for it this session is never saved.
+    /// </summary>
     public static UsageLedger? Load(string path)
     {
+        if (!File.Exists(path)) return null;
+        string text;
         try
         {
-            return File.Exists(path) ? FromJson(File.ReadAllText(path)) : null;
+            text = SafeFile.ReadAllText(path);
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new UsageLedger();
+            return new UsageLedger { _unreadable = true };
         }
+        if (TryFromJson(text) is { } ledger) return ledger;
+        // Not moved aside (the folder is read-only, say): then it's the only copy, and isn't saved over either.
+        return SafeFile.MoveAside(path) == null ? new UsageLedger { _unreadable = true } : new UsageLedger();
     }
 
     public void Save(string path)
     {
+        if (_unreadable) return;
         try
         {
-            var temp = path + ".tmp";
-            File.WriteAllText(temp, ToJson());
-            File.Move(temp, path, overwrite: true);
+            SafeFile.WriteAllText(path, ToJson());
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }

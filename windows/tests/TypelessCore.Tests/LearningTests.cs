@@ -50,6 +50,7 @@ public class HedgedPolishTests
         Assert.Equal("A", outcome.Result.Text);
         Assert.False(outcome.UsedBackup);
         Assert.Equal(["primary"], server.Requested);
+        Assert.Empty(outcome.Cancelled ?? []);
     }
 
     [Fact]
@@ -61,6 +62,11 @@ public class HedgedPolishTests
         Assert.True(outcome.UsedBackup);
         Assert.Equal("backup", outcome.Model);
         Assert.True(outcome.TotalSeconds < 1.5);
+        // The primary's request was sent, then cancelled: what it read is estimated and billed with the answer.
+        var cancelled = Assert.Single(outcome.Cancelled ?? []);
+        Assert.Equal("primary", cancelled.Model);
+        Assert.True(cancelled.Usage.Estimated);
+        Assert.True(cancelled.Usage.InputTokens > 1000);
     }
 
     [Fact]
@@ -81,12 +87,15 @@ public class HedgedPolishTests
         var outcome = await HedgedPolish.Run("x", server.Route("primary"), server.Route("backup"), hedgeDelay: 5);
         Assert.Equal("B", outcome.Result.Text);
         Assert.True(outcome.TotalSeconds < 2);
+        // A request that failed isn't billed.
+        Assert.Empty(outcome.Cancelled ?? []);
     }
 
     [Fact]
     public async Task SlowBackupDoesNotBeatPrimaryThatAnswersFirst()
     {
-        var server = new MockChatServer(new() { ["primary"] = new(Delay: 0.4, Text: "A"), ["backup"] = new(Delay: 2, Text: "B") });
+        // The primary's delay leaves the backup's 0.1 s start room on a busy runner; the backup answers well after it.
+        var server = new MockChatServer(new() { ["primary"] = new(Delay: 1.5, Text: "A"), ["backup"] = new(Delay: 4, Text: "B") });
         var outcome = await HedgedPolish.Run("x", server.Route("primary"), server.Route("backup"), hedgeDelay: 0.1);
         Assert.Equal("A", outcome.Result.Text);
         Assert.Equal(["backup", "primary"], server.Requested.Order());

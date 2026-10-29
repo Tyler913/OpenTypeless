@@ -12,6 +12,35 @@ namespace TypelessCore.Tests;
 [Collection("MockServer")]
 public class LatencyTests
 {
+
+    [Fact]
+    public async Task RecordingEndWakesPendingWaitersAndCancellationOnlyReleasesItsWaiter()
+    {
+        var pipeline = new TranscriptionPipeline(Client(), new TranscriptionOptions("m"));
+        // Windows uses TaskCompletionSource/WaitAsync in place of Swift's AsyncLatch. Exercise its production
+        // wait path with zero hedge delay: invoking this async method runs synchronously up to registration.
+        var late = typeof(TranscriptionPipeline).GetMethod("Late", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        Task Wait(CancellationToken token) => (Task)late.Invoke(pipeline, [0.0, token])!;
+        using var cancellation = new CancellationTokenSource();
+        var cancelled = Wait(cancellation.Token);
+        var waiting = Wait(CancellationToken.None);
+        var alsoWaiting = Wait(CancellationToken.None);
+        try
+        {
+            Assert.False(cancelled.IsCompleted);
+            Assert.False(waiting.IsCompleted);
+            Assert.False(alsoWaiting.IsCompleted);
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.False(waiting.IsCompleted);
+            Assert.False(alsoWaiting.IsCompleted);
+            Assert.Equal("", await pipeline.Finish());
+            await Task.WhenAll(waiting, alsoWaiting).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(Wait(CancellationToken.None).IsCompletedSuccessfully);
+        }
+        finally { await pipeline.Finish(); }
+    }
+
     /// <summary>testdata/voice-activity-cases.json, shared with the macOS tests so both apps agree.</summary>
     private static JsonObject Cases([CallerFilePath] string source = "") =>
         JsonNode.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(source)!, "..", "..", "..", "testdata", "voice-activity-cases.json")))!.AsObject();
@@ -69,8 +98,31 @@ public class LatencyTests
             Assert.True((int?)item["lastSpeechEnd"] == tracker.LastSpeechEnd(), $"{name}: last speech ended at {tracker.LastSpeechEnd()}");
             foreach (var check in item["speechAfter"]!.AsArray())
             {
-                var actual = tracker.SpeechAfter((int)check!["sample"]!, (bool)check["includePartial"]!);
+                var actual = tracker.SpeechAfter((int)check!["sample"]!, before: (int?)check["before"]);
                 Assert.True((bool)check["expected"]! == actual, $"{name}: speech after {check["sample"]} = {actual}");
+            }
+        }
+    }
+
+    [Fact]
+    public void ChunksMatchSharedCases()
+    {
+        foreach (var item in Cases()["chunks"]!.AsArray())
+        {
+            var name = (string)item!["name"]!;
+            var audio = Signal(item["segments"]!);
+            var expected = item["cuts"]!.AsArray().Select(n => (int)n!).ToList();
+            // Live (uneven blocks, as a microphone delivers them) and in one go (a retry of the saved recording) alike.
+            foreach (var block in new[] { 1234, 640, audio.Length })
+            {
+                var chunker = new Chunker();
+                var chunks = new List<AudioChunk>();
+                for (var i = 0; i < audio.Length; i += block) chunks.AddRange(chunker.Append(audio.AsSpan(i, Math.Min(block, audio.Length - i))));
+                if (chunker.Finish() is { } tail) chunks.Add(tail);
+                var cuts = chunks.Skip(1).Select(c => c.StartSample).ToList();
+                Assert.True(expected.SequenceEqual(cuts), $"{name}, blocks of {block}: cut at {string.Join(", ", cuts)}");
+                Assert.Equal(audio, chunks.SelectMany(c => c.Samples));
+                Assert.Equal(Enumerable.Range(0, chunks.Count), chunks.Select(c => c.Index));
             }
         }
     }
@@ -217,13 +269,96 @@ public class LatencyTests
         var announced = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var pipeline = new TranscriptionPipeline(Client(), new TranscriptionOptions("m"),
                                                  onSpeculation: text => { if (text != null && text.Contains("][")) announced.TrySetResult(text); });
-        // 34 s of speech is cut once (at a pause, 18–28 s in); the rest is the tail.
-        var speech = Enumerable.Range(0, AudioFormat.SampleCount(34))
-            .Select(i => AudioFormat.Seconds(i) % 7 < 0.2 ? (short)0 : (short)(6000 * Math.Sin(i * 0.2))).ToArray();
-        Feed(pipeline, Concat(speech, Silence(0.5)));
+        // Cut once, at the pause 10 s in (8 s were pending); the 3 s after it are the tail, transcribed ahead of time at the
+        // next pause.
+        Feed(pipeline, Concat(Tone(10), Silence(0.5), Tone(3), Silence(0.5)));
         var speculative = await announced.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(speculative, await pipeline.Finish());
         Assert.True(pipeline.TailWasSpeculative);
+    }
+
+    [Fact]
+    public async Task KnowsWhenTheAudioEndsInACoveredPause()
+    {
+        AnswerWithSampleCounts();
+        var pipeline = new TranscriptionPipeline(Client(), new TranscriptionOptions("m"));
+        Feed(pipeline, Tone(2));
+        // Still talking: whatever the microphone has yet to hand over matters.
+        Assert.False(pipeline.EndsInCoveredPause);
+        Feed(pipeline, Silence(0.5));
+        Assert.True(pipeline.EndsInCoveredPause);
+        Feed(pipeline, Tone(0.5));
+        Assert.False(pipeline.EndsInCoveredPause);
+        // Waits for every request, so none reaches the next test's mock.
+        await pipeline.Finish();
+    }
+
+    [Fact]
+    public async Task TheKeysClickDoesNotVoidTheSpeculation()
+    {
+        var sent = AnswerWithSampleCounts(delay: 0.3);
+        try
+        {
+            var pipeline = new TranscriptionPipeline(Client(), new TranscriptionOptions("m"));
+            // The key clicks as it's let go, 60 ms before the recording stops.
+            Feed(pipeline, Concat(Tone(3), Silence(0.6)));
+            pipeline.Append(Concat(Tone(0.03), Silence(0.06)));
+            var text = await pipeline.Finish();
+            Assert.True(pipeline.TailWasSpeculative);
+            Assert.Single(sent);
+            Assert.Equal($"[{sent[0]}]", text);
+        }
+        finally
+        {
+            MockOpenRouter.Delay = null;
+        }
+    }
+
+    [Fact]
+    public async Task AWordSaidBeforeTheReleaseStillVoidsTheSpeculation()
+    {
+        var sent = AnswerWithSampleCounts(delay: 0.3);
+        try
+        {
+            var pipeline = new TranscriptionPipeline(Client(), new TranscriptionOptions("m"));
+            Feed(pipeline, Concat(Tone(3), Silence(0.6)));
+            pipeline.Append(Tone(0.3));
+            await pipeline.Finish();
+            Assert.False(pipeline.TailWasSpeculative);
+            // The whole tail went out after all (the speculative request may reach the server after it, so not "last").
+            lock (MockOpenRouter.Lock) Assert.Contains(AudioFormat.SampleCount(3.9), sent);
+        }
+        finally
+        {
+            MockOpenRouter.Delay = null;
+        }
+    }
+
+    [Fact]
+    public async Task NothingIsLeftToSendAfterAPauseThatWasCutAt()
+    {
+        var sent = AnswerWithSampleCounts();
+        var pipeline = new TranscriptionPipeline(Client(), new TranscriptionOptions("m"));
+        // 9 s of speech, a pause (cut at, and sent, as it began), then the key's click: the tail is the rest of the pause
+        // and the click, nothing to transcribe.
+        Feed(pipeline, Concat(Tone(9), Silence(0.8)));
+        pipeline.Append(Concat(Tone(0.03), Silence(0.05)));
+        var text = await pipeline.Finish();
+        Assert.Equal([AudioFormat.SampleCount(9.15)], sent);
+        Assert.Equal($"[{AudioFormat.SampleCount(9.15)}]", text);
+        Assert.Equal(2, pipeline.TranscriptionProgress()?.Total);
+    }
+
+    [Fact]
+    public async Task APauseBegunBeforeThePauseCutIsNotSentTwice()
+    {
+        var sent = AnswerWithSampleCounts();
+        var pipeline = new TranscriptionPipeline(Client(), new TranscriptionOptions("m"));
+        // Transcribed ahead of time 7.3 s in; the pause goes on past 8 s, which isn't cut at.
+        Feed(pipeline, Concat(Tone(7), Silence(2)));
+        await pipeline.Finish();
+        Assert.True(pipeline.TailWasSpeculative);
+        Assert.Single(sent);
     }
 
     [Fact]
@@ -262,7 +397,12 @@ public class LatencyTests
         var requests = new List<(HttpMethod Method, string Url, bool HasKey)>();
         MockOpenRouter.Handler = (request, _) =>
         {
-            lock (MockOpenRouter.Lock) requests.Add((request.Method, request.RequestUri!.AbsoluteUri, request.Headers.Contains("Authorization")));
+            // A transcription or clean-up still on its way from an earlier test (one cancelled late) isn't this one's.
+            var path = request.RequestUri!.AbsolutePath;
+            if (!path.EndsWith("/transcriptions", StringComparison.Ordinal) && !path.EndsWith("/chat/completions", StringComparison.Ordinal))
+            {
+                lock (MockOpenRouter.Lock) requests.Add((request.Method, request.RequestUri!.AbsoluteUri, request.Headers.Contains("Authorization")));
+            }
             return (404, []);
         };
         var now = 100.0;

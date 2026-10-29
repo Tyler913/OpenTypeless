@@ -15,24 +15,48 @@ final class HUDModel: ObservableObject {
         /// New words were learned from the user's fixes to the last dictation.
         case learned(String)
         case error(String)
+
+        /// The text a notice shows (its length decides how long it stays up).
+        var message: String? {
+            switch self {
+            case let .learned(terms): return L("已加入词汇表：", "Added to vocabulary: ") + terms
+            case let .error(message): return message
+            default: return nil
+            }
+        }
     }
 
     @Published var phase: Phase = .hidden
-    @Published var levels: [Float] = Array(repeating: 0, count: 18)
     @Published var startedAt = Date()
     /// Live preview of what's being said (empty when it's off or hasn't heard anything yet).
     @Published var preview = ""
     let bar = ProcessingBar()
+    let levels = InputLevels()
 
     func push(level: Float) {
-        // Perceptual scaling so normal speech fills the bars.
-        let scaled = min(1, sqrt(level) * 3.2)
-        levels.removeFirst()
-        levels.append(scaled)
+        levels.push(level)
     }
 
     func resetLevels() {
-        levels = Array(repeating: 0, count: levels.count)
+        levels.reset()
+    }
+}
+
+/// The recent input levels the capsule's bars show. Its own object, so the ~20 updates a second redraw only the bars,
+/// not the whole capsule.
+@MainActor
+final class InputLevels: ObservableObject {
+    @Published var values: [Float] = Array(repeating: 0, count: 18)
+
+    func push(_ level: Float) {
+        // Perceptual scaling so normal speech fills the bars.
+        let scaled = min(1, sqrt(level) * 3.2)
+        values.removeFirst()
+        values.append(scaled)
+    }
+
+    func reset() {
+        values = Array(repeating: 0, count: values.count)
     }
 }
 
@@ -105,8 +129,24 @@ final class HUDController {
         if let autoHideAfter {
             let work = DispatchWorkItem { [weak self] in self?.show(.hidden) }
             hideWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + autoHideAfter, execute: work)
+            let delay = phase.message.map { Self.displayTime(for: $0, requested: autoHideAfter) } ?? autoHideAfter
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
         }
+    }
+
+    /// How long a notice stays up: what the caller asked for, plus reading time (about 15 characters a second) for
+    /// whatever goes past the first line, up to 12 s. Chinese, Japanese and Korean characters count double: they are
+    /// twice as wide. The same rule as the Windows capsule.
+    static func displayTime(for message: String, requested: Double) -> Double {
+        let width = message.unicodeScalars.reduce(0) { $0 + (isWide($1.value) ? 2 : 1) }
+        let extra = Double(max(0, width - 50)) / 15
+        return min(requested + extra, max(requested, 12))
+    }
+
+    private static func isWide(_ scalar: UInt32) -> Bool {
+        (0x1100...0x115F).contains(scalar) || (0x2E80...0xA4CF).contains(scalar) || (0xAC00...0xD7A3).contains(scalar)
+            || (0xF900...0xFAFF).contains(scalar) || (0xFE30...0xFE4F).contains(scalar) || (0xFF00...0xFF60).contains(scalar)
+            || (0xFFE0...0xFFE6).contains(scalar)
     }
 
     /// Transcribing and cleaning up, with the bar starting from empty.
@@ -168,14 +208,16 @@ struct HUDView: View {
                         .glassEffect(.regular, in: .capsule)
                         .transition(.opacity)
                 }
+                // A capsule while it holds one line; a notice that wraps grows into a rounded rectangle.
                 content
                     .font(.system(size: 13, weight: .medium))
                     .padding(.horizontal, 14)
-                    .frame(height: 36)
+                    .padding(.vertical, 8)
+                    .frame(minHeight: 36)
                     .background {
                         if model.phase == .working { ProgressFill(bar: model.bar).transition(.opacity) }
                     }
-                    .glassEffect(.regular, in: .capsule)
+                    .glassEffect(.regular, in: .rect(cornerRadius: 18))
                     .glassEffectID("hud", in: glass)
             }
             .animation(.easeOut(duration: 0.15), value: model.preview.isEmpty)
@@ -193,7 +235,7 @@ struct HUDView: View {
         case .recording:
             HStack(spacing: 10) {
                 Circle().fill(.red).frame(width: 7, height: 7)
-                LevelBars(levels: model.levels)
+                LiveLevelBars(levels: model.levels)
                 TimelineView(.periodic(from: .now, by: 0.5)) { context in
                     Text(elapsed(context.date)).monospacedDigit()
                 }
@@ -206,18 +248,11 @@ struct HUDView: View {
                 Image(systemName: "doc.on.clipboard").foregroundStyle(.secondary)
                 Text(L("已复制到剪贴板", "Copied to clipboard"))
             }
-        case let .learned(terms):
-            HStack(spacing: 7) {
-                Image(systemName: "character.book.closed.fill").foregroundStyle(.tint)
-                Text(L("已加入词汇表：", "Added to vocabulary: ") + terms).lineLimit(1).truncationMode(.tail)
-            }
-            .frame(maxWidth: 340)
+        case .learned:
+            NoticeRow(symbol: "character.book.closed.fill", tint: .tint, text: model.phase.message ?? "")
         case let .error(message):
-            HStack(spacing: 7) {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                Text(message).lineLimit(1).truncationMode(.tail)
-            }
-            .frame(maxWidth: 340)
+            // Up to three lines: the end of an error is often what to do about it ("… → Privacy & Security → Microphone").
+            NoticeRow(symbol: "exclamationmark.triangle.fill", tint: .orange, text: message)
         }
     }
 
@@ -271,6 +306,30 @@ struct ProgressFill: View {
         }
         .clipShape(.capsule)
         .allowsHitTesting(false)
+    }
+}
+
+/// A notice in the capsule: an icon and up to three lines of text.
+private struct NoticeRow<Tint: ShapeStyle>: View {
+    let symbol: String
+    let tint: Tint
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Image(systemName: symbol).foregroundStyle(tint)
+            Text(text).lineLimit(3).truncationMode(.tail).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: 340)
+    }
+}
+
+/// The level bars, watching the levels themselves (see `InputLevels`).
+private struct LiveLevelBars: View {
+    @ObservedObject var levels: InputLevels
+
+    var body: some View {
+        LevelBars(levels: levels.values)
     }
 }
 

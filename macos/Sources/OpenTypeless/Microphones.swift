@@ -55,6 +55,12 @@ enum Microphones {
         all().first { $0.uid == uid }?.id
     }
 
+    /// Calls `handler` on the main queue whenever a device is connected or disconnected, for as long as the app runs.
+    static func observeDeviceList(_ handler: @escaping @Sendable () -> Void) {
+        var address = address(kAudioHardwarePropertyDevices)
+        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main) { _, _ in handler() }
+    }
+
     /// The device ID of the system's current default output, if there is one.
     static var defaultOutputID: AudioDeviceID? {
         guard let id = uint32(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultOutputDevice),

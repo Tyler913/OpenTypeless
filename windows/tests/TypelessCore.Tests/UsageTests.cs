@@ -476,10 +476,14 @@ public class BackupTranscriptionTests
                                          backup: new TranscriptionRoute(client, new TranscriptionOptions("backup")), latency: latency);
     }
 
-    private static async Task<(string Text, TranscriptionPipeline Pipeline)> Run(TranscriptionLatency latency)
+    /// <summary>
+    /// One chunk of <paramref name="seconds"/>, sent when the recording ends: up to <see cref="TranscriptionPipeline.RaceSeconds"/>
+    /// it goes to both routes at once.
+    /// </summary>
+    private static async Task<(string Text, TranscriptionPipeline Pipeline)> Run(TranscriptionLatency latency, double seconds = 2)
     {
         var pipeline = PipelineWithBackup(latency);
-        pipeline.Append(Tone(2));
+        pipeline.Append(Tone(seconds));
         return (await pipeline.Finish(), pipeline);
     }
 
@@ -491,11 +495,39 @@ public class BackupTranscriptionTests
         try
         {
             var clock = System.Diagnostics.Stopwatch.StartNew();
-            var (text, pipeline) = await Run(new TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1));
+            // Too long to be raced, so the backup waits until the primary is late.
+            var (text, pipeline) = await Run(new TranscriptionLatency(minimumDelay: 0.1, maximumDelay: 0.1), seconds: 12);
             Assert.Equal("backup", text);
             Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1.4));
             Assert.Equal(1, pipeline.BackupChunkCount());
             Assert.Empty(pipeline.Usages());
+            Assert.True(pipeline.LastChunkUsedBackup);
+        }
+        finally
+        {
+            MockOpenRouter.Delay = null;
+        }
+    }
+
+    [Fact]
+    public async Task ShortLastChunkIsRacedAtOnce()
+    {
+        var models = new List<string>();
+        MockOpenRouter.Handler = (_, body) =>
+        {
+            lock (models) models.Add(Model(body));
+            return (200, MockOpenRouter.Utf8($"{{\"text\":\"{Model(body)}\"}}"));
+        };
+        MockOpenRouter.Delay = body => Model(body) == "primary" ? 1.5 : 0.2;
+        try
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            // The primary isn't late for another 5 s, but the user is waiting on this chunk now.
+            var (text, pipeline) = await Run(new TranscriptionLatency(minimumDelay: 5, maximumDelay: 5), seconds: TranscriptionPipeline.RaceSeconds - 1);
+            Assert.Equal("backup", text);
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1.2), $"took {clock.Elapsed.TotalSeconds:0.00} s");
+            lock (models) Assert.Equal(["backup", "primary"], models.Order());
+            Assert.True(pipeline.LastChunkUsedBackup);
         }
         finally
         {
@@ -537,7 +569,8 @@ public class BackupTranscriptionTests
             ? (401, MockOpenRouter.Utf8("""{"error":{"message":"bad key"}}"""))
             : (200, MockOpenRouter.Utf8("""{"text":"backup"}"""));
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        var (text, pipeline) = await Run(new TranscriptionLatency(minimumDelay: 20, maximumDelay: 20));
+        // Too long to be raced: the backup is asked because the primary failed.
+        var (text, pipeline) = await Run(new TranscriptionLatency(minimumDelay: 20, maximumDelay: 20), seconds: 12);
         Assert.Equal("backup", text);
         Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5)); // didn't wait for the 20 s delay
         Assert.Equal(1, pipeline.BackupChunkCount());
@@ -553,11 +586,13 @@ public class BackupTranscriptionTests
             return (200, MockOpenRouter.Utf8("""{"text":"primary"}"""));
         };
         var latency = new TranscriptionLatency(minimumDelay: 5, maximumDelay: 5);
-        var (text, pipeline) = await Run(latency);
+        // Longer than `RaceSeconds`, so the backup is only asked once the primary is late.
+        var (text, pipeline) = await Run(latency, seconds: TranscriptionPipeline.RaceSeconds + 2);
         Assert.Equal("primary", text);
         Assert.Equal(["primary"], models);
         Assert.Equal(1, latency.Samples);
         Assert.Equal(0, pipeline.BackupChunkCount());
+        Assert.False(pipeline.LastChunkUsedBackup);
     }
 }
 

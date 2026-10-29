@@ -116,6 +116,24 @@ struct CardRow<Trailing: View>: View {
     }
 }
 
+extension CardRow where Trailing == RowSwitch {
+    /// A row ending in an on/off switch.
+    init(icon: String? = nil, iconColor: Color = .accentColor, title: String, subtitle: String? = nil, isOn: Binding<Bool>) {
+        self.init(icon: icon, iconColor: iconColor, title: title, subtitle: subtitle) { RowSwitch(title: title, isOn: isOn) }
+    }
+}
+
+/// The switch at the end of a row. It carries the row's title as its hidden label, so VoiceOver says what it turns on
+/// (the title the row shows is a separate text).
+struct RowSwitch: View {
+    let title: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(title, isOn: $isOn).toggleStyle(.switch).labelsHidden()
+    }
+}
+
 struct CardDivider: View {
     var inset: CGFloat = 14
 
@@ -214,14 +232,28 @@ struct HoverButtonStyle: ButtonStyle {
     }
 }
 
+extension Locale {
+    /// The locale dates and times are written in: the system's own format when it's in the app's language (so an
+    /// English UI in the UK still writes 26/09 and 24-hour time), otherwise the usual one for the app's language.
+    static var app: Locale {
+        let language = AppLanguage.resolved
+        return AppLanguage.matching(Locale.current.identifier) == language ? .current : language.locale
+    }
+}
+
 extension Date {
-    /// "14:32" today, "Yesterday 09:10", otherwise "9/26 18:02".
+    /// "14:32" today, "Yesterday 09:10", otherwise "9/26 18:02" (in the app's language: "26.9. 18:02" in German).
     var shortStamp: String {
         let calendar = Calendar.current
-        let time = formatted(date: .omitted, time: .shortened)
+        let time = appFormatted(time: .shortened)
         if calendar.isDateInToday(self) { return time }
         if calendar.isDateInYesterday(self) { return L("昨天", "Yesterday") + " " + time }
-        return formatted(.dateTime.month(.defaultDigits).day()) + " " + time
+        return formatted(.dateTime.month(.defaultDigits).day().locale(.app)) + " " + time
+    }
+
+    /// The date and/or the time in the app's language (see `Locale.app`).
+    func appFormatted(date: Date.FormatStyle.DateStyle = .omitted, time: Date.FormatStyle.TimeStyle = .omitted) -> String {
+        formatted(Date.FormatStyle(date: date, time: time, locale: .app))
     }
 }
 

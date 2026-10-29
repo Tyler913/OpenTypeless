@@ -28,33 +28,63 @@ public sealed class AppSettings : INotifyPropertyChanged
     private readonly object _lock = new();
     private readonly string _path;
     private readonly JsonObject _store;
-    private Dictionary<string, string> _apiKeys;
+    /// <summary>False when the settings file is there but couldn't be read: the defaults run and nothing is saved over it.</summary>
+    private readonly bool _writable = true;
+    /// <summary>The saved keys only: OPENROUTER_API_KEY overrides one in <see cref="ApiKey"/> but never lands in here.</summary>
+    private readonly Dictionary<string, string> _apiKeys;
 
     private AppSettings()
     {
         _path = AppPaths.SettingsFile;
-        JsonObject? loaded = null;
-        try
-        {
-            // Read as text so a byte-order mark (e.g. after hand-editing in Notepad) is handled.
-            if (File.Exists(_path)) loaded = JsonNode.Parse(File.ReadAllText(_path)) as JsonObject;
-        }
-        catch (JsonException)
-        {
-            // A corrupt file falls back to defaults rather than blocking launch.
-        }
-        _store = loaded ?? new JsonObject();
+        var existed = File.Exists(_path);
+        _store = existed ? LoadStore(_path, out _writable) : new JsonObject();
         // The hotkey is always stored, so a new default only reaches new installs: one that ran before without
         // choosing a hotkey had Right Ctrl, the default until 1.4.0, and keeps it.
         if (_store["hotkey"] == null)
         {
-            _store["hotkey"] = JsonSerializer.SerializeToNode(File.Exists(_path) ? Hotkey.RightControl : Hotkey.Default);
+            _store["hotkey"] = JsonSerializer.SerializeToNode(existed ? Hotkey.RightControl : Hotkey.Default);
             Save();
         }
-        // In CLI mode with OPENROUTER_API_KEY set, don't touch the credential store.
-        var cli = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENROUTER_API_KEY"));
-        _apiKeys = cli ? new() : Credentials.Load();
+        // Loaded even when OPENROUTER_API_KEY is set: it only stands in for the OpenRouter key, and the app launched
+        // with it still needs the others (and must not save over them when one is edited).
+        _apiKeys = Credentials.Load();
         Localization.Preference = () => GetString(Localization.SettingsKey, "system");
+    }
+
+    /// <summary>
+    /// The saved settings. One that can't be parsed is moved aside (see <see cref="SafeFile"/>) and the defaults start,
+    /// rather than blocking launch or being saved over it. One that still can't be read after a few tries is held by
+    /// another program (antivirus, OneDrive) rather than damaged: it stays, the defaults run for this session, and
+    /// <paramref name="writable"/> is false so nothing is saved over it.
+    /// </summary>
+    private static JsonObject LoadStore(string path, out bool writable)
+    {
+        writable = true;
+        string text;
+        try
+        {
+            // Read as text so a byte-order mark (e.g. after hand-editing in Notepad) is handled.
+            text = SafeFile.ReadAllText(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Debug("settings", $"can't read {path}, not saving over it this session: {e.Message}");
+            writable = false;
+            return new JsonObject();
+        }
+        try
+        {
+            if (JsonNode.Parse(text) is JsonObject loaded) return loaded;
+        }
+        catch (JsonException e)
+        {
+            AppLog.Debug("settings", $"can't parse {path}: {e.Message}");
+        }
+        var aside = SafeFile.MoveAside(path);
+        AppLog.Debug("settings", aside != null ? $"damaged settings moved to {aside}" : "damaged settings couldn't be moved aside");
+        // Not moved aside: it's the only copy, so it isn't saved over either.
+        writable = aside != null;
+        return new JsonObject();
     }
 
     // MARK: Stored values
@@ -295,22 +325,40 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     // MARK: Providers
 
+    /// <summary>The key requests use: OPENROUTER_API_KEY, when set, in place of the saved OpenRouter key.</summary>
     public string ApiKey(ProviderId id)
     {
-        if (id == ProviderId.OpenRouter && Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") is { Length: > 0 } env) return env;
+        if (id == ProviderId.OpenRouter && OpenRouterKeyFromEnvironment is { } env) return env;
+        return SavedApiKey(id);
+    }
+
+    /// <summary>The key saved in Settings, which is what a key field shows and edits, so OPENROUTER_API_KEY is never saved.</summary>
+    public string SavedApiKey(ProviderId id)
+    {
         lock (_lock) return _apiKeys.GetValueOrDefault(id.RawValue(), "");
     }
 
-    public void SetApiKey(string key, ProviderId id)
+    public static string? OpenRouterKeyFromEnvironment =>
+        Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") is { Length: > 0 } env ? env : null;
+
+    /// <summary>
+    /// Saves the key. False when Credential Manager refused it: the key still works until the app quits, but the
+    /// caller should say it wasn't saved.
+    /// </summary>
+    public bool SetApiKey(string key, ProviderId id)
     {
         var trimmed = key.Trim();
+        bool saved;
         lock (_lock)
         {
-            if (_apiKeys.GetValueOrDefault(id.RawValue(), "") == trimmed) return;
+            if (_apiKeys.GetValueOrDefault(id.RawValue(), "") == trimmed) return true;
+            // On top of what's stored now, not only what was read at launch, so a key never read here isn't erased.
+            foreach (var (name, value) in Credentials.Load()) _apiKeys.TryAdd(name, value);
             if (trimmed.Length == 0) _apiKeys.Remove(id.RawValue()); else _apiKeys[id.RawValue()] = trimmed;
-            Credentials.Save(new Dictionary<string, string>(_apiKeys));
+            saved = Credentials.Save(new Dictionary<string, string>(_apiKeys));
         }
         Raise("ApiKeys");
+        return saved;
     }
 
     public string BaseUrl(ProviderId id)
@@ -593,15 +641,16 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     private void Save()
     {
+        if (!_writable) return;
         try
         {
-            var temp = _path + ".tmp";
-            File.WriteAllText(temp, _store.ToJsonString(FileJson));
-            File.Move(temp, _path, overwrite: true);
+            // Flushed to disk before it replaces the old file, so a power cut can't leave a file of zeros.
+            SafeFile.WriteAllText(_path, _store.ToJsonString(FileJson));
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             // Best effort: the next change writes again.
+            AppLog.Debug("settings", $"can't save {_path}: {e.Message}");
         }
     }
 

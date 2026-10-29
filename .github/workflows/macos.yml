@@ -1,6 +1,9 @@
 # Builds the macOS app natively for Apple silicon and for Intel, each on its own runner: runs the tests (and, once,
-# the performance budgets), then packages the app as a disk image and a zip, checks them and renders the UI from the
-# packaged app (download both from the run's Artifacts).
+# the performance budgets, except for a release tag), then packages the app as a disk image and a zip, checks them and
+# renders the UI from the packaged app (download both from the run's Artifacts).
+#
+# The long steps have their own time limits, at least twice their longest recent runs, so a hung step fails in minutes
+# instead of holding the runner until the job's limit (a build once hung for 35 minutes on the Intel runner).
 #
 #   ci.yml calls it          when a push or pull request changes macos/
 #   release.yml calls it     for a tag like `1.0.2`
@@ -9,6 +12,11 @@ name: macOS build
 
 on:
   workflow_call:
+    secrets: # release.yml passes them; CI doesn't, so pull requests are signed ad hoc
+      MACOS_SIGNING_CERTIFICATE:
+        required: false
+      MACOS_SIGNING_CERTIFICATE_PASSWORD:
+        required: false
   workflow_dispatch:
 
 permissions:
@@ -48,6 +56,7 @@ jobs:
 
       # The same scripts used locally.
       - name: Test with coverage
+        timeout-minutes: 10 # 1.5-2.5 minutes on Apple silicon, 2.5-5 on Intel
         run: |
           mkdir -p "$RUNNER_TEMP/tests-macos"
           set -o pipefail
@@ -64,13 +73,17 @@ jobs:
 
       # Time budgets for the work that runs while you dictate and on the main thread, in a release build like the
       # app's (Tests/TypelessCoreTests/PerformanceTests.swift). The timings are on the run's summary page.
-      # Once is enough, on the Apple silicon runner (the Intel one is slower hardware, not slower code).
+      # Once is enough, on the Apple silicon runner (the Intel one is slower hardware, not slower code). Not for a
+      # release tag: the pull request that changed the code already met them, and a timing flake mustn't block a
+      # release.
       - name: Performance
-        if: matrix.arch == 'arm64'
+        if: matrix.arch == 'arm64' && !startsWith(github.ref, 'refs/tags/')
+        timeout-minutes: 5 # 1-1.5 minutes
         run: scripts/perf.sh
 
-      # Releases are signed with a stable self-signed certificate so that in-app updates keep macOS permissions
-      # (see scripts/create-release-cert.sh). Without the secrets, e.g. for pull requests, the zip is signed ad hoc.
+      # Releases are signed with a stable self-signed certificate (see scripts/create-release-cert.sh): an installed
+      # copy only accepts an in-app update signed with the same certificate (Updater.swift), and macOS keeps its
+      # permissions. So a release tag fails without the secrets; other builds, e.g. pull requests, sign ad hoc.
       - name: Import the release signing certificate
         env:
           CERTIFICATE: ${{ secrets.MACOS_SIGNING_CERTIFICATE }}
@@ -78,7 +91,8 @@ jobs:
         run: |
           if [[ -z "$CERTIFICATE" ]]; then
             if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-              echo "::warning::No MACOS_SIGNING_CERTIFICATE secret: this release is signed ad hoc, so macOS asks for permissions again after users update"
+              echo "::error::No MACOS_SIGNING_CERTIFICATE secret: a release signed ad hoc would never reach installed copies, which only accept updates signed with the release certificate"
+              exit 1
             fi
             exit 0
           fi
@@ -99,12 +113,18 @@ jobs:
           echo "OPENTYPELESS_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 
       - name: Build and package
+        timeout-minutes: 10 # 1-1.5 minutes on Apple silicon, 1.5-3 on Intel
         run: scripts/build-app.sh --package
 
       # What a user gets: the disk image holds a valid, signed app for this processor and a link to Applications, the
       # zip the same app, and the packaged app starts and draws every page (the PNGs are in the snapshots artifact).
+      # For a release tag, both apps must be signed with the release certificate that installed copies check updates
+      # against: RELEASE_CERTIFICATE_LEAF is its SHA-1, as codesign shows it in the designated requirement. A new
+      # certificate changes it, and copies signed with the old one won't take updates signed with the new one.
       - name: Check the packages and all UI snapshots
         timeout-minutes: 15
+        env:
+          RELEASE_CERTIFICATE_LEAF: 6b3de3f8126020d96dc45a9db41b0b8e4128edec
         run: |
           platform="macOS-${{ matrix.arch }}"
           expected="$([[ "${{ matrix.arch }}" == arm64 ]] && echo arm64 || echo x86_64)"
@@ -120,6 +140,16 @@ jobs:
           [[ "$archs" == "$expected" ]] || { echo "::error::The app is built for $archs, not $expected"; exit 1; }
           ditto -x -k "$zip" "$RUNNER_TEMP/zip"
           cmp "$app/Contents/MacOS/OpenTypeless" "$RUNNER_TEMP/zip/OpenTypeless.app/Contents/MacOS/OpenTypeless"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            for signed in "$app" "$RUNNER_TEMP/zip/OpenTypeless.app"; do
+              requirement="$(codesign -d -r- "$signed" 2>&1)"
+              if [[ "$requirement" != *"certificate leaf = H\"$RELEASE_CERTIFICATE_LEAF\""* ]]; then
+                echo "$requirement"
+                echo "::error::$signed isn't signed with the release certificate (leaf $RELEASE_CERTIFICATE_LEAF), so installed copies would refuse this update"
+                exit 1
+              fi
+            done
+          fi
           python ../scripts/ci/run_snapshots.py "$app/Contents/MacOS/OpenTypeless" "$RUNNER_TEMP/snapshots"
 
       # A minute of synthetic speech through the packaged app's own pipeline (--transcribe-file --realtime) against a

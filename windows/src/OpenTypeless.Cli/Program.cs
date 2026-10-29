@@ -18,6 +18,8 @@ public static class Program
             return await Cli.Transcribe(args[transcribe + 1], polish: !args.Contains("--no-polish"),
                                         realtime: args.Contains("--realtime"), chunksOnly: args.Contains("--chunks-only"));
         }
+        var polishText = Array.IndexOf(args, "--polish-text");
+        if (polishText >= 0 && polishText + 1 < args.Length) return await Cli.PolishText(args[polishText + 1]);
         if (args.Contains("--eval-polish")) return await PolishEval.Run(args);
 
         Console.Error.WriteLine("""
@@ -27,6 +29,8 @@ public static class Program
                   Full pipeline on an audio file (WAV, MP3, M4A, WMA, FLAC…); --realtime feeds audio at speaking speed.
               OpenTypeless.Cli --transcribe-file <audio> --chunks-only
                   Shows where the chunker cuts.
+              OpenTypeless.Cli --polish-text <file>
+                  Only the clean-up, as the app does it, on a transcript saved as text.
               OpenTypeless.Cli --eval-polish <cases.json> --models <ids> --out <path> [...]
                   Evaluates clean-up prompts and models (see eval/README.md).
 
@@ -115,6 +119,32 @@ public static class Cli
         Console.WriteLine($"\n===== Raw transcript ({TextMetrics.CharacterCount(raw)} chars) =====\n{raw}\n");
 
         if (!polish) return 0;
+        return await CleanUp(raw);
+    }
+
+    /// <summary><c>--polish-text &lt;file&gt;</c>: the clean-up alone, on a transcript in a text file.</summary>
+    public static async Task<int> PolishText(string path)
+    {
+        string raw;
+        try
+        {
+            raw = await File.ReadAllTextAsync(path);
+        }
+        catch (Exception error)
+        {
+            Log($"❌ Can't read {path}: {error.Message}");
+            return 1;
+        }
+        var settings = AppSettings.Shared;
+        Log($"📝 {Path.GetFileName(path)}: {TextMetrics.CharacterCount(raw)} chars, {WordCount.Count(raw)} words; clean-up: "
+            + $"{settings.PolishProvider.DisplayName()} / {settings.PolishModel}");
+        return await CleanUp(raw);
+    }
+
+    /// <summary>Cleans <paramref name="raw"/> up the way the app does (in parts when it's long, each part checked) and prints the result.</summary>
+    public static async Task<int> CleanUp(string raw)
+    {
+        var settings = AppSettings.Shared;
         if (settings.PolishEndpoint is not { } polishEndpoint)
         {
             Log("❌ The clean-up provider's base URL is invalid");
@@ -135,16 +165,20 @@ public static class Cli
                 endpoint.Id == ProviderId.OpenRouter ? models?.FirstOrDefault(m => m.Id == model) : null,
                 Misheard: settings.MisheardHints,
                 Host: endpoint.Id == ProviderId.OpenRouter ? settings.OpenRouterHost(model) : null));
-            var outcome = await HedgedPolish.Run(raw, Route(polishEndpoint, settings.PolishModel.Trim()),
-                                                 backupEndpoint is null ? null : Route(backupEndpoint, settings.PolishBackupModel.Trim()));
-            var result = outcome.Result;
+            var outcome = await SegmentedPolish.Run(raw, Route(polishEndpoint, settings.PolishModel.Trim()),
+                                                    backupEndpoint is null ? null : Route(backupEndpoint, settings.PolishBackupModel.Trim()));
             Log($"⏱  Clean-up took {polishStart.Elapsed.TotalSeconds:0.0} s (first token {outcome.FirstTokenSeconds:0.00} s, "
-                + $"{(outcome.UsedBackup ? "backup " : "")}{outcome.Model}){(result.Truncated ? " (truncated)" : "")}");
-            if (Prompts.LooksLikeAnAnswer(raw, result.Text))
+                + $"{(outcome.UsedBackup ? "backup " : "")}{outcome.Model}), {outcome.Parts.Count} part(s)");
+            for (var i = 0; i < outcome.Parts.Count; i++)
             {
-                Log("⚠️ Output is much longer than the input; the app would fall back to the raw transcript");
+                var part = outcome.Parts[i];
+                var kept = part.Answer is { } answer ? WordCount.Count(answer.Result.Text) : 0;
+                var similarity = part.Answer is { } a ? PolishMetrics.Similarity(part.Transcript, a.Result.Text) : 0;
+                Log($"   part {i + 1}: {WordCount.Count(part.Transcript)} → {kept} words, similarity {similarity:0.00}"
+                    + (part.Fallback is { } fallback ? $" — inserted as spoken ({fallback.ToString().ToLowerInvariant()})" : ""));
+                if (part.Error is { } error) Log($"     {error.Message}");
             }
-            Console.WriteLine($"===== Cleaned up ({TextMetrics.CharacterCount(result.Text)} chars) =====\n{result.Text}\n");
+            Console.WriteLine($"===== Cleaned up ({TextMetrics.CharacterCount(outcome.Text)} chars, {WordCount.Count(outcome.Text)} words) =====\n{outcome.Text}\n");
             return 0;
         }
         catch (Exception error)

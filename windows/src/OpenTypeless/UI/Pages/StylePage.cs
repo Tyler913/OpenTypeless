@@ -89,7 +89,7 @@ public sealed class StylePage : PageBase
         heard.VerticalAlignment = VerticalAlignment.Center;
         var term = Ui.Text(learned.Term, 13, FontWeights.Medium);
         term.VerticalAlignment = VerticalAlignment.Center;
-        var date = Ui.Text(learned.Date.ToLocalTime().ToString("d"), 11, foreground: Ui.Tertiary);
+        var date = Ui.Text(learned.Date.ToLocalTime().ToString("d", Formatting.DateCulture), 11, foreground: Ui.Tertiary);
         date.VerticalAlignment = VerticalAlignment.Center;
         var forget = new Button
         {

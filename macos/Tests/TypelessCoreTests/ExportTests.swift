@@ -82,16 +82,6 @@ import Testing
         #expect(HistoryExport.usd(.infinity) == "0.000000")
     }
 
-    @Test func thousandsOfDictationsExportQuickly() {
-        let entry = HistoryExport.Entry(date: Date(timeIntervalSince1970: 1_791_786_725), utcOffsetMinutes: 480, duration: 42,
-                                        status: "done", finalText: String(repeating: "明天下午三点开会，记得带上报告。", count: 20),
-                                        rawText: String(repeating: "嗯明天下午三点开会 记得带上那个报告", count: 20), cost: 0.0005)
-        let entries = Array(repeating: entry, count: 5000)
-        let start = Date()
-        for format in HistoryExport.Format.allCases { _ = HistoryExport.data(entries, format: format) }
-        #expect(Date().timeIntervalSince(start) < 10)
-    }
-
     @Test func vocabularyFilesMatchSharedCases() throws {
         let vocabulary = try Self.cases()["vocabulary"] as! [String: Any]
         let terms = (vocabulary["terms"] as! [[String: Any]]).map {

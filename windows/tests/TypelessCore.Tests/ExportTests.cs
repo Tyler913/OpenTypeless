@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -107,18 +106,6 @@ public class ExportTests
         Assert.Equal("", HistoryExport.ToMarkdown([]));
         Assert.Equal("0.0", HistoryExport.Seconds(double.NaN));
         Assert.Equal("0.000000", HistoryExport.Usd(double.PositiveInfinity));
-    }
-
-    [Fact]
-    public void ThousandsOfDictationsExportQuickly()
-    {
-        var entry = new HistoryExport.Entry(DateTimeOffset.FromUnixTimeSeconds(1_791_786_725), 480, 42, "done",
-                                            string.Concat(Enumerable.Repeat("明天下午三点开会，记得带上报告。", 20)),
-                                            string.Concat(Enumerable.Repeat("嗯明天下午三点开会 记得带上那个报告", 20)), 0.0005);
-        var entries = Enumerable.Repeat(entry, 5000).ToList();
-        var watch = Stopwatch.StartNew();
-        foreach (var format in Enum.GetValues<HistoryExport.Format>()) HistoryExport.Data(entries, format);
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"took {watch.Elapsed}");
     }
 
     [Fact]

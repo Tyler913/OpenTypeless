@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 
@@ -104,14 +103,12 @@ public class SnippetTests
         Assert.Equal(new[] { "Claude", "claude", " x " }, SnippetExpander.Vocabulary([], ["Claude", "claude", " x "]));
     }
 
+    /// <summary>How long this takes is a performance budget (PerformanceTests.SnippetsInALongDictation).</summary>
     [Fact]
-    public void LongTextStaysFast()
+    public void LongTextExpandsEveryTrigger()
     {
         var snippets = Enumerable.Range(0, 50).Select(i => new Snippet { Trigger = $"trigger number {i}", Expansion = $"expansion {i}" }).ToList();
         var text = string.Concat(Enumerable.Repeat("我们今天讨论了缓存和数据库的性能，then trigger number 7 again. ", 400));
-        var watch = Stopwatch.StartNew();
-        var expanded = SnippetExpander.Expand(text, snippets);
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1));
-        Assert.Equal(401, expanded.Split("expansion 7").Length);
+        Assert.Equal(401, SnippetExpander.Expand(text, snippets).Split("expansion 7").Length);
     }
 }

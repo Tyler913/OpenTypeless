@@ -159,6 +159,35 @@ public class PerformanceTests
         });
         Assert.Equal(53 * 7, cells);
     }
+
+    /// <summary>
+    /// Snippets are expanded in the whole dictation between the clean-up and the paste, while the user waits for the
+    /// text: 50 snippets in a dictation of about 24,000 characters with a trigger in every sentence.
+    /// </summary>
+    [PerformanceFact]
+    public void SnippetsInALongDictation()
+    {
+        var snippets = Enumerable.Range(0, 50).Select(i => new Snippet { Trigger = $"trigger number {i}", Expansion = $"expansion {i}" }).ToList();
+        var text = string.Concat(Enumerable.Repeat("我们今天讨论了缓存和数据库的性能，then trigger number 7 again. ", 400));
+        var expanded = "";
+        Performance.Measure("Snippets: 50 in a 24,000-character dictation", budget: 100,
+            () => expanded = SnippetExpander.Expand(text, snippets));
+        Assert.Equal(401, expanded.Split("expansion 7").Length);
+    }
+
+    /// <summary>Exporting History writes every dictation in one go: 5,000 dictations of 300–400 characters, in each format.</summary>
+    [PerformanceFact]
+    public void ExportingThousandsOfDictations()
+    {
+        var entry = new HistoryExport.Entry(DateTimeOffset.FromUnixTimeSeconds(1_791_786_725), 480, 42, "done",
+                                            string.Concat(Enumerable.Repeat("明天下午三点开会，记得带上报告。", 20)),
+                                            string.Concat(Enumerable.Repeat("嗯明天下午三点开会 记得带上那个报告", 20)), 0.0005);
+        var entries = Enumerable.Repeat(entry, 5000).ToList();
+        var bytes = 0;
+        Performance.Measure("Export History: 5,000 dictations in every format", budget: 2000,
+            () => bytes = Enum.GetValues<HistoryExport.Format>().Sum(format => HistoryExport.Data(entries, format).Length));
+        Assert.True(bytes > 0);
+    }
 }
 
 /// <summary>A test that only runs with OPENTYPELESS_PERF=1 (see <see cref="PerformanceTests"/>).</summary>

@@ -129,6 +129,31 @@ struct PerformanceTests {
         }
         XCTAssertEqual(cells, 53 * 7)
     }
+
+    /// Snippets are expanded in the whole dictation between the clean-up and the paste, while the user waits for the
+    /// text: 50 snippets in a dictation of about 24,000 characters with a trigger in every sentence.
+    @Test func snippetsInALongDictation() {
+        let snippets = (0..<50).map { Snippet(trigger: "trigger number \($0)", expansion: "expansion \($0)") }
+        let text = String(repeating: "我们今天讨论了缓存和数据库的性能，then trigger number 7 again. ", count: 400)
+        var expanded = ""
+        Performance.measure("Snippets: 50 in a 24,000-character dictation", budget: 100) {
+            expanded = SnippetExpander.expand(text, with: snippets)
+        }
+        XCTAssertEqual(expanded.components(separatedBy: "expansion 7").count, 401)
+    }
+
+    /// Exporting History writes every dictation in one go: 5,000 dictations of 300–400 characters, in each format.
+    @Test func exportingThousandsOfDictations() {
+        let entry = HistoryExport.Entry(date: Date(timeIntervalSince1970: 1_791_786_725), utcOffsetMinutes: 480, duration: 42,
+                                        status: "done", finalText: String(repeating: "明天下午三点开会，记得带上报告。", count: 20),
+                                        rawText: String(repeating: "嗯明天下午三点开会 记得带上那个报告", count: 20), cost: 0.0005)
+        let entries = Array(repeating: entry, count: 5000)
+        var bytes = 0
+        Performance.measure("Export History: 5,000 dictations in every format", budget: 2000) {
+            bytes = HistoryExport.Format.allCases.reduce(0) { $0 + HistoryExport.data(entries, format: $1).count }
+        }
+        XCTAssertTrue(bytes > 0)
+    }
 }
 
 enum Performance {

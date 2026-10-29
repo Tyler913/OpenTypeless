@@ -11,6 +11,9 @@ in order of appearance:
 
 A translation may reorder the placeholders but must use each of them exactly as the key does.
 
+The macOS app compiles strings.json in as a Swift string (see swift_table.py): when that file is out of date, this
+regenerates it and reports it, so commit the regenerated file.
+
     python3 i18n/check.py            report missing, unused and malformed entries (exit 1 if any)
     python3 i18n/check.py --list     print every English key found in the code, with its Chinese text
 """
@@ -19,6 +22,8 @@ import json
 import os
 import re
 import sys
+
+import swift_table
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LANGUAGES = ["ja", "ko", "es", "pt", "ru", "fr", "de"]
@@ -115,9 +120,9 @@ def scan():
     for base, swift in (("macos/Sources", True), ("windows/src", False)):
         for folder, _, files in os.walk(os.path.join(ROOT, base)):
             for name in sorted(files):
-                if not name.endswith(".swift" if swift else ".cs"):
-                    continue
                 path = os.path.join(folder, name)
+                if not name.endswith(".swift" if swift else ".cs") or path == swift_table.TARGET:
+                    continue
                 src = open(path, encoding="utf-8").read()
                 for match in re.finditer(r"(?<![\w.])L\(", src):
                     line_start = src.rfind("\n", 0, match.start()) + 1
@@ -172,6 +177,9 @@ def main():
                 problems.append(f"{key!r}: the {language} translation has different placeholders")
         for language in translations.keys() - set(LANGUAGES):
             problems.append(f"{key!r}: unknown language {language!r}")
+
+    if swift_table.write():
+        problems.append(f"{os.path.relpath(swift_table.TARGET, ROOT)} was out of date with strings.json: regenerated it, commit it")
 
     for problem in problems:
         print(problem)

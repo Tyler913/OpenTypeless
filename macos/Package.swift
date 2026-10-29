@@ -20,7 +20,6 @@ let package = Package(
     targets: [
         .target(
             name: "TypelessCore",
-            resources: [.embedInCode("Resources/strings.json")],
             swiftSettings: swiftSettings
         ),
         .executableTarget(

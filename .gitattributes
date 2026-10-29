@@ -4,3 +4,5 @@
 * text=auto eol=lf
 *.png binary
 *.ico binary
+# Generated from i18n/strings.json by i18n/swift_table.py: collapsed in GitHub diffs.
+macos/Sources/TypelessCore/TranslationsJSON.swift linguist-generated

@@ -113,9 +113,9 @@ func localized(_ zh: LocalizedText, _ en: LocalizedText, in language: AppLanguag
 }
 
 enum Translations {
-    /// English template → language code → translation, from i18n/strings.json.
+    /// English template → language code → translation, from i18n/strings.json (`json`, in TranslationsJSON.swift).
     static let table: [String: [String: String]] =
-        (try? JSONDecoder().decode([String: [String: String]].self, from: Data(PackageResources.strings_json))) ?? [:]
+        (try? JSONDecoder().decode([String: [String: String]].self, from: Data(json.utf8))) ?? [:]
 
     /// Replaces each {n} in the template with the n-th argument.
     static func fill(_ template: String, with arguments: [String]) -> String {

@@ -117,6 +117,8 @@ public sealed class HotkeyMonitor
     private nint _mouseHook;
     private Win32.LowLevelMouseProc? _mouseProc;
     private volatile Action<MouseButton>? _onClick;
+    private volatile bool _countsInput;
+    private long _inputCount;
 
     /// <summary>
     /// Calls <paramref name="onClick"/> (on the UI thread) when a mouse button goes down anywhere, or the left one up;
@@ -125,7 +127,26 @@ public sealed class HotkeyMonitor
     public void WatchClicks(Action<MouseButton>? onClick)
     {
         _onClick = onClick;
-        if (_threadId != 0) Win32.PostThreadMessage(_threadId, WM_WATCH_CLICKS, onClick != null ? 1 : 0, 0);
+        UpdateMouseHook();
+    }
+
+    /// <summary>
+    /// How many key-downs (auto-repeats too, modifiers on their own not) went through to the focused app, not counting the
+    /// keys this app sends itself, and, while <see cref="CountInput"/> is on, how many mouse buttons went down: a click or key while a
+    /// selection is being edited may have moved it (see <see cref="SelectionCommand.DeliveryOf"/>). Any thread.
+    /// </summary>
+    public long InputCount => Interlocked.Read(ref _inputCount);
+
+    /// <summary>Counts mouse buttons going down in <see cref="InputCount"/> too (the mouse hook is on meanwhile), or stops.</summary>
+    public void CountInput(bool on)
+    {
+        _countsInput = on;
+        UpdateMouseHook();
+    }
+
+    private void UpdateMouseHook()
+    {
+        if (_threadId != 0) Win32.PostThreadMessage(_threadId, WM_WATCH_CLICKS, _onClick != null || _countsInput ? 1 : 0, 0);
     }
 
     /// <summary>Starts the hook thread. Callbacks are delivered on the calling (UI) thread.</summary>
@@ -197,6 +218,8 @@ public sealed class HotkeyMonitor
             if (info.dwExtraInfo != Win32.InjectedSignature)
             {
                 if (Handle((int)wParam, info)) return 1;
+                // A modifier on its own (the hotkey's, say) moves no selection.
+                if ((int)wParam is Win32.WM_KEYDOWN or Win32.WM_SYSKEYDOWN && !IsModifier((int)info.vkCode)) Interlocked.Increment(ref _inputCount);
                 if (KeyObserver is { } observer && (int)wParam is Win32.WM_KEYDOWN or Win32.WM_SYSKEYDOWN) observer(Typed(info));
             }
         }
@@ -205,6 +228,10 @@ public sealed class HotkeyMonitor
 
     private nint MouseProc(int nCode, nint wParam, nint lParam)
     {
+        if (nCode >= 0 && _countsInput && (int)wParam is Win32.WM_LBUTTONDOWN or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN)
+        {
+            Interlocked.Increment(ref _inputCount);
+        }
         if (nCode >= 0 && (int)wParam is Win32.WM_LBUTTONDOWN or (int)Win32.WM_LBUTTONUP or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN
             && _onClick is { } onClick)
         {
@@ -411,19 +438,25 @@ public sealed class HotkeyMonitor
     /// <summary>
     /// Waits until none of <paramref name="shortcut"/>'s keys is physically held any more (its key, and any of Ctrl, Alt,
     /// Shift and Win): a Ctrl+V sent meanwhile would be read together with them, as another shortcut altogether. Returns
-    /// false when they're still held after <paramref name="timeout"/>. The key itself is followed through the hook: its
-    /// presses were swallowed, so <c>GetAsyncKeyState</c> never heard of them (modifiers always go through).
+    /// false when they're still held after <paramref name="timeout"/>, or once <paramref name="cancellationToken"/> is
+    /// cancelled. The key itself is followed through the hook: its presses were swallowed, so <c>GetAsyncKeyState</c>
+    /// never heard of them (modifiers always go through, except a mode chord's: <paramref name="alsoKeys"/>, followed the
+    /// same way).
     /// </summary>
-    public async Task<bool> WaitForRelease(Hotkey shortcut, TimeSpan timeout)
+    public async Task<bool> WaitForRelease(Hotkey shortcut, TimeSpan timeout, IReadOnlyCollection<int>? alsoKeys = null,
+                                           CancellationToken cancellationToken = default)
     {
         var clock = Stopwatch.StartNew();
-        while (true)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            var keyHeld = !shortcut.IsModifierOnly && _held.IsHeld(shortcut.KeyCode, unchecked((uint)Environment.TickCount));
+            var now = unchecked((uint)Environment.TickCount);
+            var keyHeld = (!shortcut.IsModifierOnly && _held.IsHeld(shortcut.KeyCode, now))
+                          || (alsoKeys?.Any(key => _held.IsHeld(key, now)) ?? false);
             if (CurrentModifiers() == HotkeyModifiers.None && !keyHeld) return true;
             if (clock.Elapsed >= timeout) return false;
-            await Task.Delay(20);
+            try { await Task.Delay(20, cancellationToken); } catch (OperationCanceledException) { return false; }
         }
+        return false;
     }
 
     /// <summary>The scan code of the Left Ctrl that AltGr layouts send along with Right Alt.</summary>

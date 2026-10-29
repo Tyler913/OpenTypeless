@@ -151,7 +151,7 @@ public static class FocusProbe
     private static readonly HashSet<string> TerminalClasses = ["ConsoleWindowClass", "CASCADIA_HOSTING_WINDOW_CLASS", "PuTTY", "mintty"];
     private static readonly string[] TerminalExecutables = ["windowsterminal", "openconsole", "wezterm-gui", "alacritty", "mintty", "putty", "kitty"];
 
-    private static bool IsTerminal(nint window, uint pid)
+    internal static bool IsTerminal(nint window, uint pid)
     {
         if (TerminalClasses.Contains(Win32.ClassName(window))) return true;
         var exe = Win32.ProcessImagePath(pid);

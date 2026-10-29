@@ -282,7 +282,8 @@ public sealed class PopoverWindow : Window
     {
         if (_controller.State != SessionController.SessionState.Idle) return null;
         var last = _history.Records.FirstOrDefault();
-        return last is { Status: DictationStatus.Failed, HasAudio: true, IsFile: false } ? last : null;
+        // An edit of a selection can't be run again without its selection.
+        return last is { Status: DictationStatus.Failed, HasAudio: true, IsFile: false, IsCommand: false } ? last : null;
     }
 
     private FrameworkElement Recent()

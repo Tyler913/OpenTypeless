@@ -44,6 +44,7 @@ public sealed class HudController
     internal static string? Message(HudPhase phase) => phase switch
     {
         HudPhase.Learned learned => L("已加入词汇表：", "Added to vocabulary: ") + learned.Terms,
+        HudPhase.Answer answer => L("答案已复制：", "Answer copied: ") + answer.Text,
         HudPhase.Error error => error.Message,
         _ => null,
     };
@@ -258,6 +259,12 @@ public sealed class HudWindow : Window
                 row.Children.Add(Ui.Icon(Glyphs.Dictionary, 14, Palette.Theme("AccentTextFillColorPrimaryBrush")));
                 row.Children.Add(Notice(HudController.Message(_model.Phase) ?? ""));
                 break;
+            case HudPhase.Answer:
+                // The start of it; the whole answer is on the clipboard.
+                row.Spacing = 8;
+                row.Children.Add(Ui.Icon(Glyphs.Message, 14, Palette.Theme("AccentTextFillColorPrimaryBrush")));
+                row.Children.Add(Notice(HudController.Message(_model.Phase) ?? ""));
+                break;
             case HudPhase.Error error:
                 row.Spacing = 8;
                 row.Children.Add(Ui.Icon(Glyphs.Warning, 14, Palette.Brush(Tint.Orange)));
@@ -459,6 +466,7 @@ public sealed class HudWindow : Window
         HudPhase.Working => 160,
         HudPhase.Copied => 170,
         HudPhase.Learned l => Math.Min(372, 150 + l.Terms.Length * 9),
+        HudPhase.Answer a => Math.Min(372, 150 + a.Text.Length * 13),
         HudPhase.Error e => Math.Min(372, 40 + e.Message.Length * 13),
         _ => 120,
     };

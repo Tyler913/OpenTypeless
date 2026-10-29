@@ -202,7 +202,7 @@ public static class TextInserter
 
     /// <summary>
     /// The text selected in the foreground app, read by pressing Ctrl+C; the clipboard is put back as it was. Null when
-    /// nothing was copied (no selection, or the app didn't answer).
+    /// nothing was copied within 400 ms (no selection, or the app didn't answer).
     /// </summary>
     public static async Task<string?> CopySelection()
     {
@@ -218,7 +218,14 @@ public static class TextInserter
         Win32.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Win32.INPUT>());
         var clock = Stopwatch.StartNew();
         while (Win32.GetClipboardSequenceNumber() == before && clock.ElapsedMilliseconds < 400) await Task.Delay(20);
-        if (Win32.GetClipboardSequenceNumber() == before) return null;
+        if (Win32.GetClipboardSequenceNumber() == before)
+        {
+            // An app that copies only just after that still has the clipboard put back (a moment later), so its copy is
+            // never left there to be taken for the user's own clipboard.
+            await Task.Delay(250);
+            if (Win32.GetClipboardSequenceNumber() != before) saved.Restore();
+            return null;
+        }
         await Task.Delay(30); // let the app finish writing its formats
         var text = ClipboardSnapshot.ReadText();
         saved.Restore();

@@ -309,6 +309,30 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("translationChord", value.RawValue());
     }
 
+    /// <summary>
+    /// Command mode: holding the hotkey and pressing <see cref="CommandChord"/> edits the text selected in the app in front
+    /// by what is said (see <see cref="SelectionCommand"/>). Off until the user turns it on: while it's on, the chord's key
+    /// pressed with the hotkey is kept from the app in front.
+    /// </summary>
+    public bool CommandModeEnabled
+    {
+        get => GetBool("commandModeEnabled", false);
+        set => SetValue("commandModeEnabled", value);
+    }
+
+    /// <summary>
+    /// One of the modifiers translation's chord is chosen from (see <see cref="TypelessCore.TranslationChord"/>); one
+    /// translation mode also has is left to translation (see <see cref="SelectionCommand.ChordKeys"/>).
+    /// </summary>
+    public TranslationChord CommandChord
+    {
+        get => TranslationChords.Parse(GetString("commandChord", "")) ?? TypelessCore.TranslationChord.Control;
+        set => SetValue("commandChord", value.RawValue());
+    }
+
+    /// <summary>Whether command mode's chord is the same as translation's, while both are on: then it does nothing.</summary>
+    public bool CommandChordClashes => CommandModeEnabled && TranslationTarget != null && CommandChord == TranslationChord;
+
     /// <summary>What <see cref="TranslationLanguage"/> holds when the language is typed in.</summary>
     public const string OtherTranslationLanguage = "other";
 

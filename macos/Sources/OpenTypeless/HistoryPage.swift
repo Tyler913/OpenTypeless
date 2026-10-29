@@ -438,7 +438,8 @@ private struct HistoryDetail: View {
                             Label(L("重新转写", "Re-transcribe"), systemImage: "arrow.clockwise")
                         }
                         .help(L("用保存的音频重新转写", "Transcribes the saved audio again"))
-                    } else if record.hasAudio {
+                    } else if record.hasAudio, !record.isCommand {
+                        // An edit of a selection can't be run again without its selection, which isn't kept.
                         Button { controller.retry(record, paste: false) } label: {
                             Label(L("重新转写", "Re-transcribe"), systemImage: "arrow.clockwise")
                         }
@@ -535,7 +536,8 @@ private struct HistoryDetail: View {
     }
 
     /// "0:42 · 123 words · $0.0012 · Slack" (the words said, not what snippets put in; the app profile it was made with,
-    /// if any), and "Translation → English" for a translation dictation.
+    /// if any), and "Translation → English" for a translation dictation or "Edited a selection (240 characters)" for an
+    /// edit.
     private var details: String {
         var parts = [record.duration.durationLabel]
         let words = WordCount.count(record.finalText)
@@ -543,6 +545,10 @@ private struct HistoryDetail: View {
         if let cost = record.cost { parts.append(UsageFormat.money(cost)) }
         if let translation = record.translation {
             parts.append(L("翻译 → \(translation.displayName)", "Translation → \(translation.displayName)"))
+        }
+        if record.isCommand {
+            let length = record.selectionLength.map { UsageFormat.count($0) } ?? "?"
+            parts.append(L("编辑选中文字（\(length) 字符）", "Edited a selection (\(length) characters)"))
         }
         if let profile = record.profileName { parts.append(profile) }
         return parts.joined(separator: " · ")

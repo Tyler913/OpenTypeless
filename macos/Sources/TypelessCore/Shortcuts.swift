@@ -112,11 +112,15 @@ public enum LastDictation {
         /// Its text (cleaned up, or as transcribed) isn't empty.
         public var hasText: Bool
         public var hasAudio: Bool
+        /// An edit of a selection by voice (see `SelectionCommand`), not a dictation: its text replaced a selection, and
+        /// without that selection (which isn't kept) it can't be run again.
+        public var isCommand: Bool
 
-        public init(kind: HistoryPruning.Kind, hasText: Bool, hasAudio: Bool) {
+        public init(kind: HistoryPruning.Kind, hasText: Bool, hasAudio: Bool, isCommand: Bool = false) {
             self.kind = kind
             self.hasText = hasText
             self.hasAudio = hasAudio
+            self.isCommand = isCommand
         }
     }
 
@@ -130,9 +134,10 @@ public enum LastDictation {
     }
 
     /// `entries` are newest first, as History keeps them. Passed over: dictations still under way, cancelled ones (the
-    /// user threw them away with Esc), ones that heard no speech, and failed ones whose recording is gone.
+    /// user threw them away with Esc), ones that heard no speech, failed ones whose recording is gone, and edits of a
+    /// selection by voice.
     public static func choose(_ entries: [Entry]) -> Choice {
-        for (index, entry) in entries.enumerated() {
+        for (index, entry) in entries.enumerated() where !entry.isCommand {
             switch entry.kind {
             case .finished where entry.hasText: return .paste(index)
             case .failed where entry.hasAudio: return .retry(index)

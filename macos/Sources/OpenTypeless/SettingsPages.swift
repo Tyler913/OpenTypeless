@@ -481,7 +481,15 @@ struct ShortcutPage: View {
                             subtitle: L("插入时翻译成：\(target.displayName)（在「词汇与风格」里设置）",
                                         "Inserted translated into \(target.displayName) (set up under Vocabulary & Style)")) { EmptyView() }
                 }
+                if settings.commandModeEnabled, !settings.commandChordClashes {
+                    let key = settings.commandChord.keyCap
+                    CardDivider(inset: 50)
+                    CardRow(icon: "wand.and.stars", iconColor: .pink, title: L("按住 + \(key)：编辑选中的文字", "Hold + \(key): edit the selection"),
+                            subtitle: L("说出怎么改，选中的文字会被替换", "Say how to change it, and the selection is replaced")) { EmptyView() }
+                }
             }
+
+            CommandModeSection(settings: settings)
 
             CardSection(title: L("更多快捷键", "More shortcuts"),
                         footer: L("在两次听写之间按下时生效。可以是 ⌃ ⌥ ⇧ ⌘ 组合键（如 ⌃⌘V），也可以是 F1–F20。",
@@ -552,6 +560,37 @@ struct ShortcutPage: View {
             }
         }
         actionRecorder.start()
+    }
+}
+
+/// Command mode: on or off, and the key that, pressed while the dictation shortcut is held, makes the recording an
+/// instruction for the text selected in the app in front (see `SelectionCommand`).
+private struct CommandModeSection: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        let chord = settings.commandChord
+        CardSection(title: L("用语音编辑选中的文字", "Edit selected text by voice"),
+                    footer: L("选中任意应用里的文字，按住听写快捷键时再按一下 \(chord.label)，说出怎么改（“正式一点”“翻译成英文”“修正语法”），松开后选中的文字就会被替换，可以用撤销恢复。问关于它的问题（“这是什么意思”），答案会显示并复制。没有选中文字时什么都不会改；密码框和终端不会被读取。",
+                              "Select text in any app, hold the dictation shortcut and press \(chord.label) too, and say how to change it (“more formal”, “translate to English”, “fix the grammar”): when you let go, the selection is replaced, and Undo brings it back. Ask about it (“what does this mean”) and the answer is shown and copied. Nothing changes when no text is selected; password fields and terminals are never read.")) {
+            CardRow(icon: "wand.and.stars", iconColor: .pink, title: L("编辑模式", "Command mode"),
+                    subtitle: L("按住听写快捷键时再按一下 \(chord.label)，这次说的话会用来修改选中的文字",
+                                "Hold the dictation shortcut and press \(chord.label) too: what you say edits the selected text"),
+                    isOn: $settings.commandModeEnabled)
+            if settings.commandModeEnabled {
+                CardDivider(inset: 50)
+                CardRow(icon: "keyboard", iconColor: .blue, title: L("切换键", "Switch key"),
+                        subtitle: settings.commandChordClashes
+                            ? L("和翻译模式的切换键相同，请换一个", "Translation mode uses this key too — pick another")
+                            : L("按住听写快捷键时按下它（左右两边都可以）", "Pressed while you hold the dictation shortcut (either side)")) {
+                    Picker(L("切换键", "Switch key"), selection: $settings.commandChord) {
+                        ForEach(TranslationChord.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+            }
+        }
     }
 }
 

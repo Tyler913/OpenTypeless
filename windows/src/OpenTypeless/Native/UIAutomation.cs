@@ -1,13 +1,14 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using TypelessCore;
 
 namespace OpenTypeless.Native;
 
 /// <summary>
-/// The slice of the UI Automation client API the edit watcher and the paste need: the focused element, whether it's still
-/// the same element, its text, and the text around its cursor. Calls go into the other app's process, so make them off
-/// the UI thread.
+/// The slice of the UI Automation client API the edit watcher, the paste and command mode need: the focused element,
+/// whether it's still the same element, its text, the text around its cursor, and the text selected in it. Calls go into
+/// the other app's process, so make them off the UI thread.
 /// </summary>
 internal static class UIAutomation
 {
@@ -56,6 +57,36 @@ internal static class UIAutomation
 
     public static bool IsPassword(IUIAutomationElement element) =>
         element.GetCurrentPropertyValue(UIA_IsPasswordPropertyId, out var value) == 0 && value is true;
+
+    /// <summary>
+    /// The text selected in the element (<c>TextPattern.GetSelection</c>, its ranges joined): <see cref="SelectionProbe.Empty"/>
+    /// when it has a text pattern and nothing is selected, <see cref="SelectionProbe.Unavailable"/> when it has none (or
+    /// didn't answer). Up to <paramref name="maxLength"/> characters a range.
+    /// </summary>
+    public static SelectionProbe SelectedText(IUIAutomationElement element, int maxLength)
+    {
+        try
+        {
+            if (element.GetCurrentPropertyValue(UIA_IsTextPatternAvailablePropertyId, out var hasText) != 0 || hasText is not true
+                || element.GetCurrentPattern(UIA_TextPatternId, out var pattern) != 0 || pattern is not IUIAutomationTextPattern textPattern
+                || textPattern.GetSelection(out var ranges) != 0 || ranges == null || ranges.GetLength(out var count) != 0)
+            {
+                return new SelectionProbe.Unavailable();
+            }
+            var parts = new List<string>();
+            for (var i = 0; i < count; i++)
+            {
+                if (ranges.GetElement(i, out var range) != 0 || range == null) return new SelectionProbe.Unavailable();
+                if (range.GetText(maxLength, out var text) != 0) return new SelectionProbe.Unavailable();
+                if (!string.IsNullOrEmpty(text)) parts.Add(text);
+            }
+            return parts.Count == 0 ? new SelectionProbe.Empty() : new SelectionProbe.Text(string.Join("\n", parts));
+        }
+        catch (Exception e) when (e is COMException or InvalidCastException)
+        {
+            return new SelectionProbe.Unavailable();
+        }
+    }
 
     /// <summary>The element's text: its value, or for documents (Word, rich editors) the whole text range. Null if unreadable.</summary>
     public static string? Text(IUIAutomationElement element, int maxLength)

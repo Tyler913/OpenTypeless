@@ -44,11 +44,19 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var profileID: String?
     /// That profile's name, for History.
     var profileName: String?
-    /// "translate" for a translation dictation (see `TranslationTarget.recordMode`), nil for plain dictation: records from
-    /// before translation, and older versions reading newer ones, see a dictation.
+    /// "translate" for a translation dictation (see `TranslationTarget.recordMode`), "command" for an edit of a selection
+    /// by voice (see `SelectionCommand.recordMode`), nil for plain dictation: records from before translation, and older
+    /// versions reading newer ones, see a dictation.
     var mode: String?
     /// The language a translation dictation is written in (`TranslationTarget.id`).
     var targetLanguage: String?
+    /// How many characters the selection an edit worked on had. Neither the selection nor the rewrite (or the answer to
+    /// a question about it) is kept: they can be anything the user had open (a contract, a private message), and History
+    /// keeps entries for days. Only its instruction is, as the transcript.
+    var selectionLength: Int?
+
+    /// An edit of a selection by voice rather than a dictation. Without its selection it can't be run again.
+    var isCommand: Bool { SelectionCommand.isCommand(mode: mode) }
 
     /// What a translation dictation is translated into; nil for plain dictation. A retry translates it again.
     var translation: TranslationTarget? {
@@ -58,6 +66,7 @@ struct DictationRecord: Codable, Identifiable, Equatable {
             targetLanguage = newValue?.id
         }
     }
+
     /// Where the audio came from: nil for a dictation, `.file` for a transcribed audio or video file (see FileTranscriber).
     var source: RecordSource?
     /// The name of the file it was transcribed from.

@@ -202,6 +202,11 @@ final class HotkeyMonitor {
     /// Keys that switch the recording's mode while the hotkey is held (see `ModeChords`); kept from the focused app then.
     var modeChordKeys: Set<Int64> = []
 
+    /// How many key-downs (auto-repeats too) went through to the focused app, not counting the ones this app posts itself:
+    /// a key typed while a selection is being edited may have changed it (see `SelectedText.InputMark`). Main thread
+    /// only, like the tap.
+    private(set) var keysLetThrough = 0
+
     var hotkey: Hotkey = .fn {
         didSet { isDown = false }
     }
@@ -251,6 +256,9 @@ final class HotkeyMonitor {
                 guard let refcon else { return Unmanaged.passUnretained(event) }
                 let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
                 if monitor.handle(type: type, event: event) { return nil }
+                if type == .keyDown, event.getIntegerValueField(.eventSourceUserData) != TextInserter.eventSignature {
+                    monitor.keysLetThrough &+= 1
+                }
                 monitor.stripSuppressedModifiers(from: event, type: type)
                 return Unmanaged.passUnretained(event)
             },
@@ -491,12 +499,16 @@ final class HotkeyMonitor {
 
     /// Waits until none of `shortcut`'s keys is physically held any more (its key, and any of ⌃⌥⇧⌘), so that what is
     /// sent next isn't read together with them: a posted ⌘V carries its own flags, but some apps go by the modifiers
-    /// held at the time. Returns false when they're still held after `timeout`.
+    /// held at the time. A modifier on its own (the dictation hotkey, Fn say) is its key. Returns false when they're
+    /// still held after `timeout`.
     static func waitForRelease(of shortcut: Hotkey, timeout: TimeInterval = 3) async -> Bool {
         let deadline = ProcessInfo.processInfo.systemUptime + timeout
         while !Task.isCancelled {
-            let modifiers = CGEventSource.flagsState(.hidSystemState).intersection(Hotkey.comboModifiers)
-            let keyHeld = !shortcut.isModifierOnly && CGEventSource.keyState(.hidSystemState, key: CGKeyCode(shortcut.keyCode))
+            let flags = CGEventSource.flagsState(.hidSystemState)
+            let modifiers = flags.intersection(Hotkey.comboModifiers)
+            let keyHeld = shortcut.isModifierOnly
+                ? shortcut.isHeld(in: flags)
+                : CGEventSource.keyState(.hidSystemState, key: CGKeyCode(shortcut.keyCode))
             if modifiers.isEmpty, !keyHeld { return true }
             if ProcessInfo.processInfo.systemUptime >= deadline { return false }
             try? await Task.sleep(nanoseconds: 20_000_000)

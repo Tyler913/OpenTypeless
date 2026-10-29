@@ -165,8 +165,9 @@ struct MenuPopoverView: View {
 
     /// The last dictation, when it failed. A transcribed file is retried from History instead: its text is never pasted.
     private var failedRecord: DictationRecord? {
+        // An edit of a selection can't be run again without its selection.
         guard controller.state == .idle, let last = history.records.first, !last.isFile,
-              last.status == .failed, last.hasAudio else { return nil }
+              last.status == .failed, last.hasAudio, !last.isCommand else { return nil }
         return last
     }
 

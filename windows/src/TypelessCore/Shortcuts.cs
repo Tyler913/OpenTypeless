@@ -116,7 +116,11 @@ public sealed class ShortcutMap
 public static class LastDictation
 {
     /// <param name="HasText">Its text (cleaned up, or as transcribed) isn't empty.</param>
-    public readonly record struct Entry(HistoryPruning.Kind Kind, bool HasText, bool HasAudio);
+    /// <param name="IsCommand">
+    /// An edit of a selection by voice (see <see cref="SelectionCommand"/>), not a dictation: its text replaced a selection,
+    /// and without that selection (which isn't kept) it can't be run again.
+    /// </param>
+    public readonly record struct Entry(HistoryPruning.Kind Kind, bool HasText, bool HasAudio, bool IsCommand = false);
 
     public abstract record Choice
     {
@@ -130,13 +134,15 @@ public static class LastDictation
 
     /// <summary>
     /// <paramref name="entries"/> are newest first, as History keeps them. Passed over: dictations still under way,
-    /// cancelled ones (the user threw them away with Esc), ones that heard no speech, and failed ones whose recording is gone.
+    /// cancelled ones (the user threw them away with Esc), ones that heard no speech, failed ones whose recording is gone,
+    /// and edits of a selection by voice.
     /// </summary>
     public static Choice Choose(IReadOnlyList<Entry> entries)
     {
         for (var index = 0; index < entries.Count; index++)
         {
             var entry = entries[index];
+            if (entry.IsCommand) continue;
             if (entry.Kind == HistoryPruning.Kind.Finished && entry.HasText) return new Choice.Paste(index);
             if (entry.Kind == HistoryPruning.Kind.Failed && entry.HasAudio) return new Choice.Retry(index);
         }

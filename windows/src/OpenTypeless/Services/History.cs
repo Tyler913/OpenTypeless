@@ -68,8 +68,9 @@ public sealed class DictationRecord
     [JsonPropertyName("profileID")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ProfileId { get; set; }
     /// <summary>That profile's name, for History.</summary>
     [JsonPropertyName("profileName")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ProfileName { get; set; }
-    /// "translate" for a translation dictation (see <see cref="TranslationTarget.RecordMode"/>), null for plain dictation:
-    /// records from before translation, and older versions reading newer ones, see a dictation.
+    /// "translate" for a translation dictation (see <see cref="TranslationTarget.RecordMode"/>), "command" for an edit of a
+    /// selection by voice (see <see cref="SelectionCommand.RecordMode"/>), null for plain dictation: records from before
+    /// translation, and older versions reading newer ones, see a dictation.
     /// </summary>
     [JsonPropertyName("mode")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Mode { get; set; }
     /// <summary>The language a translation dictation is written in (<see cref="TranslationTarget.Id"/>).</summary>
@@ -94,6 +95,16 @@ public sealed class DictationRecord
             TargetLanguage = value?.Id;
         }
     }
+
+    /// <summary>
+    /// How many characters the selection an edit worked on had. Neither the selection nor the rewrite (or the answer to
+    /// a question about it) is kept: they can be anything the user had open (a contract, a private message), and History
+    /// keeps entries for days. Only its instruction is, as the transcript.
+    /// </summary>
+    [JsonPropertyName("selectionLength")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? SelectionLength { get; set; }
+
+    /// <summary>An edit of a selection by voice rather than a dictation. Without its selection it can't be run again.</summary>
+    [JsonIgnore] public bool IsCommand => SelectionCommand.IsCommand(Mode);
 
     /// <summary>What the speaker said: cleaned up, or as transcribed. Word counts go by it, not by what snippets put in.</summary>
     [JsonIgnore] public string FinalText => PolishedText ?? RawText;

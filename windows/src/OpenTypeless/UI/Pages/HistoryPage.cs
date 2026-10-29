@@ -602,6 +602,11 @@ public sealed class HistoryPage : PageBase
         if (words > 0) details.Add(L($"{UsageFormat.Count(words)} 字", $"{UsageFormat.Count(words)} words"));
         if (record.Cost is { } cost) details.Add(UsageFormat.Money(cost));
         if (record.Translation is { } translation) details.Add(L($"翻译 → {translation.DisplayName}", $"Translation → {translation.DisplayName}"));
+        if (record.IsCommand)
+        {
+            var length = record.SelectionLength is { } count ? UsageFormat.Count(count) : "?";
+            details.Add(L($"编辑选中文字（{length} 字符）", $"Edited a selection ({length} characters)"));
+        }
         // The app profile it was made with, if any.
         if (record.ProfileName is { } profile) details.Add(profile);
 
@@ -739,7 +744,8 @@ public sealed class HistoryPage : PageBase
             };
             ToolTipService.SetToolTip(retry, L("完成后复制到剪贴板", "Copies the result to the clipboard"));
             retry.Click += (_, _) => _controller.Retry(record, paste: false);
-            leading.Children.Add(retry);
+            // An edit of a selection can't be run again without its selection, which isn't kept.
+            if (!record.IsCommand) leading.Children.Add(retry);
         }
         if (record.HasAudio)
         {

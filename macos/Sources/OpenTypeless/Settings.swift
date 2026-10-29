@@ -64,6 +64,14 @@ final class AppSettings: ObservableObject {
     @AppStorage("translationOtherLanguage") var translationOtherLanguage: String = ""
     @AppStorage("translationChord") var translationChord: TranslationChord = .shift
 
+    /// Command mode: holding the hotkey and pressing `commandChord` edits the text selected in the app in front by what
+    /// is said (see `SelectionCommand`). Off until the user turns it on: while it's on, the chord's key pressed with
+    /// the hotkey is kept from the app in front.
+    @AppStorage("commandModeEnabled") var commandModeEnabled: Bool = false
+    /// One of the modifiers translation's chord is chosen from (see `TranslationChord`); one translation mode also has
+    /// is left to translation (see `SelectionCommand.chordKeys`).
+    @AppStorage("commandChord") var commandChord: TranslationChord = .control
+
     /// Learn vocabulary from the fixes the user makes to dictated text (see EditWatcher).
     @AppStorage("learnFromEdits") var learnFromEdits: Bool = true
     @Published private(set) var learnedTerms: [LearnedTerm]
@@ -165,6 +173,11 @@ final class AppSettings: ObservableObject {
         guard translationEnabled else { return nil }
         return TranslationTarget(translationLanguage == Self.otherTranslationLanguage ? translationOtherLanguage
                                                                                       : translationLanguage)
+    }
+
+    /// Whether command mode's chord is the same as translation's, while both are on: then it does nothing.
+    var commandChordClashes: Bool {
+        commandModeEnabled && translationTarget != nil && commandChord == translationChord
     }
 
     // MARK: Providers

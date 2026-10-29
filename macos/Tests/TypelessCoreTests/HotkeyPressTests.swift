@@ -25,6 +25,35 @@ import Testing
         #expect(HotkeyPress.eventTime(100.5, now: 100) == 100) // in the future
         #expect(HotkeyPress.eventTime(80, now: 100) == 100) // implausibly old
     }
+
+    private enum Mode: Equatable, Sendable { case dictation, translate }
+
+    @Test func withNoChordRegisteredOtherKeysAreReadAsBefore() {
+        let chords = ModeChords<Mode>()
+        #expect(chords.isEmpty)
+        #expect(chords.otherKey(18, pressedAt: 50, at: 50.4, handsFree: false) == .cancel)
+        #expect(chords.otherKey(18, pressedAt: 50, at: 51, handsFree: false) == .ignore)
+        #expect(chords.otherKey(18, pressedAt: 50, at: 50.4, handsFree: true) == .ignore)
+    }
+
+    @Test func aRegisteredChordSwitchesTheModeInsteadOfCancelling() {
+        var chords = ModeChords<Mode>()
+        chords.register(17, mode: .translate)
+        #expect(chords.keys == [17])
+        #expect(chords.mode(for: 17) == .translate)
+        // Straight after the press, where any other key would cancel…
+        #expect(chords.otherKey(17, pressedAt: 50, at: 50.2, handsFree: false) == .switchMode(.translate))
+        // …and long after it, for as long as the hotkey is held.
+        #expect(chords.otherKey(17, pressedAt: 50, at: 58, handsFree: false) == .switchMode(.translate))
+        // Keys that aren't registered still make a combination.
+        #expect(chords.otherKey(18, pressedAt: 50, at: 50.2, handsFree: false) == .cancel)
+
+        chords.register(17, mode: .dictation)
+        #expect(chords.otherKey(17, pressedAt: 50, at: 50.2, handsFree: false) == .switchMode(.dictation))
+        chords.unregister(17)
+        #expect(chords.isEmpty)
+        #expect(chords.otherKey(17, pressedAt: 50, at: 50.2, handsFree: false) == .cancel)
+    }
 }
 
 extension HotkeyPressTests {

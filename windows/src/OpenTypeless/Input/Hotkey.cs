@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using OpenTypeless.Native;
+using TypelessCore;
 
 namespace OpenTypeless.Input;
 
@@ -91,6 +92,20 @@ public sealed record Hotkey(
     [JsonIgnore]
     public bool ShadowsCommonShortcut => !IsModifierOnly && Modifiers == HotkeyModifiers.Control;
 
+    /// <summary>
+    /// Ctrl + Alt with a key that types something is AltGr on layouts such as German or French (AltGr + Q is @ there),
+    /// so as a shortcut, which is kept from the focused app, it would take those characters away.
+    /// </summary>
+    [JsonIgnore]
+    public bool BlocksAltGr =>
+        !IsModifierOnly
+        && (Modifiers & (HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.Win)) == (HotkeyModifiers.Control | HotkeyModifiers.Alt)
+        && KeyCode is >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A or >= 0xBA and <= 0xC0 or >= 0xDB and <= 0xDF or 0xE2;
+
+    /// <summary>As shortcuts are compared (see <see cref="ShortcutMap"/>).</summary>
+    [JsonIgnore]
+    public KeyChord Chord => new(KeyCode, (int)Modifiers, IsModifierOnly);
+
     public static string ModifierName(int keyCode)
     {
         var left = L("左 ", "Left ");
@@ -118,4 +133,29 @@ public sealed record Hotkey(
         var ch = Win32.MapVirtualKey((uint)keyCode, 2 /* MAPVK_VK_TO_CHAR */) & 0x7FFF;
         return ch > 0x20 ? char.ToUpperInvariant((char)ch).ToString() : $"#{keyCode}";
     }
+}
+
+public static class ShortcutActionText
+{
+    public static string Title(this ShortcutAction action) => action switch
+    {
+        ShortcutAction.PasteLastDictation => L("粘贴上一次听写", "Paste last dictation"),
+        _ => action.ToString(),
+    };
+
+    public static string Subtitle(this ShortcutAction action) => action switch
+    {
+        ShortcutAction.PasteLastDictation => L("把最近一次听写的文字再插入到光标处；如果它转写失败了，会先重新转写",
+                                               "Inserts your latest dictation at the cursor again; if it failed, it's transcribed again first"),
+        _ => "",
+    };
+
+    public static string Message(this ShortcutConflict conflict) => conflict switch
+    {
+        ShortcutConflict.ModifierOnly => L("单独的修饰键不能用作这个快捷键，请再加一个键。", "A modifier on its own can't be used here — add a key to it."),
+        ShortcutConflict.Escape => L("Esc 用来取消听写，请换一个键。", "Esc cancels a dictation — pick another key."),
+        ShortcutConflict.Dictation => L("这是听写快捷键，请换一个。", "That's the dictation shortcut — pick another."),
+        ShortcutConflict.Action taken => L($"已被「{taken.Other.Title()}」使用，请换一个。", $"Already used by “{taken.Other.Title()}” — pick another."),
+        _ => "",
+    };
 }

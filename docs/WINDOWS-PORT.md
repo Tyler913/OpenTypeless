@@ -77,6 +77,16 @@ failure handling. Only the system-integration layer and the look differ.
 - Modifier-only: Right Alt (default), Right Ctrl, Right Shift, and any modifier the user records (Left/Right Ctrl, Alt, Shift, Win).
 - Combination: any of Ctrl / Alt / Shift / Win + a key, or F1–F24 alone. A plain letter is refused with the same message.
 - `ShadowsCommonShortcut` = only Ctrl + key (the Windows analogue of ⌘ + key).
+- Action shortcuts (Paste last dictation, see DESIGN.md) are matched in the same hook with `ShortcutMap` against
+  `CurrentModifiers()`; their key-down, auto-repeats and key-up are swallowed until the key is let go, whatever is held
+  with it by then, and one with Alt or Win sends the masking key so letting go doesn't open the menu bar or Start, or
+  switch the layout with Alt + Shift. A low-level hook gets no repeat flag, and `GetAsyncKeyState` never hears of the
+  presses it swallows, so `HeldKeys` follows the keys down from the hook's own events (a key-down for a key already down
+  is a repeat; one not seen for 1.5 s had its key-up missed). The paste waits until the modifiers and the action's key
+  are let go, because `SendInput`'s Ctrl+V would combine with them, and leaves menu mode first. Its target is the window
+  in front when the shortcut was pressed, or before the tray panel opened (unknown when that was the taskbar: then the
+  window in front once the panel closes). `BlocksAltGr` (Ctrl + Alt with a character key) shows the AltGr notice for an
+  action's shortcut.
 
 ## Deliberate platform differences
 
@@ -116,9 +126,9 @@ These follow from how Windows works rather than from missing features:
 
 ## UI parity checklist
 
-- **Popover**: header (tile, name, status pill), setup warnings with Fix, last failed dictation with Retry, 5 recent items (click to copy, check mark; with none yet, "Hold [keys] and speak" and the tip), footer (Settings, History, Quit).
+- **Popover**: header (tile, name, status pill), setup warnings with Fix, last failed dictation with Retry, 5 recent items (click to copy, check mark; with none yet, "Hold [keys] and speak" and the tip), footer (Settings, History, Paste last dictation, Quit).
 - **General**: permissions, language (System or one of the nine UI languages), open at login (+ error / approval footer), restore clipboard, sounds, maximum recording (1–60 min).
-- **Shortcut**: current keys (large key caps), record / cancel, presets, how it works, warnings.
+- **Shortcut**: current keys (large key caps), record / cancel, presets, how it works, more shortcuts (record / change / clear per action, refusal reason), warnings.
 - **Providers**: six expandable cards: usage tags, configured pill, API key (password box + Paste), Base URL (+ Reset), get-a-key link, Test connection.
 - **Models**: STT provider / model (free text + browse, grouped by vendor when > 40) / spoken language; clean-up toggle / provider / model; backup model toggle / provider / model; missing-key banners.
 - **Vocabulary & Style**: vocabulary editor, "Learn from my corrections" with the learned terms (heard as…, date, remove = never learn again), preferences editor.

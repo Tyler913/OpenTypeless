@@ -290,6 +290,9 @@ final class HotkeyRecorder: ObservableObject {
     @Published var isRecording = false
     @Published var message: String?
     var onRecorded: ((Hotkey) -> Void)?
+    /// False for an action's shortcut, which fires as its keys go down: a modifier on its own would fire with every
+    /// other shortcut that uses it.
+    var allowsModifierOnly = true
 
     private var monitor: Any?
     private var observers: [NSObjectProtocol] = []
@@ -319,6 +322,9 @@ final class HotkeyRecorder: ObservableObject {
     }
 
     func stop() {
+        // A page has two recorders (the dictation hotkey's, the actions'): stopping the idle one mustn't switch the
+        // dictation shortcut back on while the other is recording.
+        guard isRecording else { return }
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
         observers.forEach(NotificationCenter.default.removeObserver)
@@ -346,7 +352,11 @@ final class HotkeyRecorder: ObservableObject {
                 pendingModifier = code
                 sawKeyDown = false
             } else if pendingModifier == code, !sawKeyDown {
-                finish(Hotkey(keyCode: code, isModifierOnly: true))
+                if allowsModifierOnly {
+                    finish(Hotkey(keyCode: code, isModifierOnly: true))
+                } else {
+                    message = ShortcutConflict.modifierOnly.message
+                }
             }
             return nil
         }
@@ -355,8 +365,11 @@ final class HotkeyRecorder: ObservableObject {
         let mods = event.modifierFlags.intersection([.command, .option, .control, .shift])
         if code == 53, mods.isEmpty { stop(); return nil }
         if mods.isEmpty, Hotkey.functionKeys[code] == nil {
-            message = L("单独的字母键会影响正常打字，请搭配 ⌃ ⌥ ⇧ ⌘ 使用，或者只按一个修饰键 / F1–F20。",
-                        "A plain key would break normal typing — combine it with ⌃ ⌥ ⇧ ⌘, or press a single modifier / F1–F20.")
+            message = allowsModifierOnly
+                ? L("单独的字母键会影响正常打字，请搭配 ⌃ ⌥ ⇧ ⌘ 使用，或者只按一个修饰键 / F1–F20。",
+                    "A plain key would break normal typing — combine it with ⌃ ⌥ ⇧ ⌘, or press a single modifier / F1–F20.")
+                : L("单独的字母键会影响正常打字，请搭配 ⌃ ⌥ ⇧ ⌘ 使用，或者用 F1–F20。",
+                    "A plain key would break normal typing — combine it with ⌃ ⌥ ⇧ ⌘, or use F1–F20.")
             return nil
         }
         var flags: CGEventFlags = []
@@ -378,6 +391,9 @@ final class HotkeyRecorder: ObservableObject {
 struct ShortcutPage: View {
     @ObservedObject var settings: AppSettings
     @StateObject private var recorder = HotkeyRecorder()
+    /// Records the actions' shortcuts; `recordingAction` says whose.
+    @StateObject private var actionRecorder = HotkeyRecorder()
+    @State private var recordingAction: ShortcutAction?
 
     var body: some View {
         let hotkey = settings.hotkey
@@ -397,7 +413,17 @@ struct ShortcutPage: View {
                             Button(L("取消", "Cancel")) { recorder.stop() }
                         } else {
                             Button {
-                                recorder.onRecorded = { settings.hotkey = $0 }
+                                actionRecorder.stop()
+                                recorder.onRecorded = { recorded in
+                                    // An action's keys would start a dictation instead, and the action would never fire.
+                                    if !recorded.isModifierOnly,
+                                       let taken = settings.shortcutMap.action(keyCode: recorded.chord.keyCode,
+                                                                               modifiers: recorded.chord.modifiers) {
+                                        recorder.message = ShortcutConflict.action(taken).message
+                                    } else {
+                                        settings.hotkey = recorded
+                                    }
+                                }
                                 recorder.start()
                             } label: {
                                 Label(L("录制快捷键", "Record shortcut"), systemImage: "record.circle")
@@ -443,6 +469,18 @@ struct ShortcutPage: View {
                         subtitle: L("录音或处理过程中随时取消", "Cancel any time while recording or processing")) { EmptyView() }
             }
 
+            CardSection(title: L("更多快捷键", "More shortcuts"),
+                        footer: L("在两次听写之间按下时生效。可以是 ⌃ ⌥ ⇧ ⌘ 组合键（如 ⌃⌘V），也可以是 F1–F20。",
+                                  "They work between dictations. Use a combination with ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) or F1–F20.")) {
+                ForEach(Array(ShortcutAction.allCases.enumerated()), id: \.element) { index, action in
+                    if index > 0 { CardDivider(inset: 50) }
+                    actionRow(action)
+                }
+            }
+            if let message = actionRecorder.message {
+                Banner(symbol: "exclamationmark.triangle.fill", color: .orange, text: message) { EmptyView() }
+            }
+
             if hotkey == .fn {
                 Banner(symbol: "globe", color: .blue,
                        text: L("建议把「系统设置 → 键盘 → 按下 🌐 键时」设为「不执行任何操作」，避免轻点 Fn 时弹出表情面板。",
@@ -450,14 +488,56 @@ struct ShortcutPage: View {
                     Button(L("打开键盘设置", "Keyboard Settings")) { Permissions.openKeyboardSettings() }.controlSize(.small)
                 }
             }
-            if hotkey.shadowsCommonShortcut {
+            if hotkey.shadowsCommonShortcut
+                || ShortcutAction.allCases.contains(where: { settings.shortcut(for: $0)?.shadowsCommonShortcut == true }) {
                 Banner(symbol: "exclamationmark.triangle.fill", color: .orange,
                        text: L("这个组合会在所有应用里覆盖同名的系统快捷键。", "This combination overrides the same shortcut in every app.")) {
                     EmptyView()
                 }
             }
         }
-        .onDisappear { recorder.stop() }
+        .onDisappear {
+            recorder.stop()
+            actionRecorder.stop()
+        }
+    }
+
+    /// An action, its shortcut, and buttons to record or clear it.
+    private func actionRow(_ action: ShortcutAction) -> some View {
+        CardRow(icon: action.symbol, iconColor: .teal, title: action.title, subtitle: action.subtitle) {
+            HStack(spacing: 8) {
+                if actionRecorder.isRecording, recordingAction == action {
+                    Text(L("请按下新的快捷键…", "Press the new shortcut…")).font(.system(size: 12)).foregroundStyle(.secondary)
+                    Button(L("取消", "Cancel")) { actionRecorder.stop() }.controlSize(.small)
+                } else if let shortcut = settings.shortcut(for: action) {
+                    KeyCaps(caps: shortcut.keyCaps)
+                    Button(L("更改", "Change")) { record(action) }.controlSize(.small)
+                    Button { settings.setShortcut(nil, for: action) } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .help(L("清除快捷键", "Clear shortcut"))
+                        .accessibilityLabel(L("清除快捷键", "Clear shortcut"))
+                } else {
+                    Button(L("录制快捷键", "Record shortcut")) { record(action) }.controlSize(.small)
+                }
+            }
+        }
+    }
+
+    /// Records `action`'s shortcut; one that clashes (see `ShortcutConflict`) is refused, with the reason shown.
+    private func record(_ action: ShortcutAction) {
+        recorder.stop()
+        recordingAction = action
+        actionRecorder.allowsModifierOnly = false
+        actionRecorder.onRecorded = { recorded in
+            if let conflict = settings.shortcutMap.conflict(recorded.chord, for: action, dictation: settings.hotkey.chord,
+                                                            escapeKeyCode: 53) {
+                actionRecorder.message = conflict.message
+            } else {
+                settings.setShortcut(recorded, for: action)
+            }
+        }
+        actionRecorder.start()
     }
 }
 

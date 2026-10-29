@@ -29,10 +29,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setUpStatusItem()
 
         hotkey.hotkey = settings.hotkey
+        hotkey.shortcuts = settings.shortcutMap
+        hotkey.modeChordKeys = controller.modeChords.keys
         hotkey.onPress = { [weak self] time in self?.controller.hotkeyPressed(at: time) }
         hotkey.onRelease = { [weak self] time in self?.controller.hotkeyReleased(at: time) }
-        hotkey.onOtherKey = { [weak self] time in self?.controller.otherKeyPressed(at: time) }
+        hotkey.onOtherKey = { [weak self] key, time in self?.controller.otherKeyPressed(key, at: time) }
         hotkey.onEscape = { [weak self] in self?.controller.escapePressed() }
+        hotkey.onAction = { [weak self] action in
+            guard let self else { return }
+            self.controller.perform(action, shortcut: self.settings.shortcut(for: action))
+        }
         hotkey.start()
 
         settings.objectWillChange
@@ -40,6 +46,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] in
                 guard let self else { return }
                 if self.hotkey.hotkey != self.settings.hotkey { self.hotkey.hotkey = self.settings.hotkey }
+                let shortcuts = self.settings.shortcutMap
+                if self.hotkey.shortcuts != shortcuts { self.hotkey.shortcuts = shortcuts }
                 if self.menuLanguage != AppLanguage.resolved { self.setUpMainMenu() }
                 self.controller.updateWarmMicrophone()
             }

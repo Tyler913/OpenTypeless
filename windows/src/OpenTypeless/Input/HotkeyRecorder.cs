@@ -1,4 +1,5 @@
 using Microsoft.UI.Dispatching;
+using TypelessCore;
 
 namespace OpenTypeless.Input;
 
@@ -13,7 +14,12 @@ public sealed class HotkeyRecorder
     public Action<Hotkey>? OnRecorded;
 
     public bool IsRecording { get; private set; }
-    public string? Message { get; private set; }
+    public string? Message { get; set; }
+    /// <summary>
+    /// False for an action's shortcut, which fires as its keys go down: a modifier on its own would fire with every other
+    /// shortcut that uses it.
+    /// </summary>
+    public bool AllowsModifierOnly { get; set; } = true;
 
     private readonly Func<bool> _isTargetInFront;
     private readonly DispatcherQueue _dispatcher;
@@ -41,11 +47,13 @@ public sealed class HotkeyRecorder
 
     public void Stop()
     {
+        // A page has two recorders (the dictation hotkey's, the actions'): stopping the idle one mustn't switch the
+        // dictation shortcut back on, nor stop listening, while the other is recording.
+        if (!IsRecording) return;
         HotkeyMonitor.Shared.Recorder = null;
-        var was = IsRecording;
         IsRecording = false;
         HotkeyMonitor.Shared.IsSuspended = false;
-        if (was) Changed?.Invoke();
+        Changed?.Invoke();
     }
 
     /// <summary>Runs on the hook thread; must return quickly.</summary>
@@ -66,7 +74,22 @@ public sealed class HotkeyRecorder
             else
             {
                 _heldModifiers.Remove(code);
-                if (_pendingModifier == code && !_sawKeyDown) Finish(new Hotkey(code, HotkeyModifiers.None, true));
+                if (_pendingModifier == code && !_sawKeyDown)
+                {
+                    if (AllowsModifierOnly)
+                    {
+                        Finish(new Hotkey(code, HotkeyModifiers.None, true));
+                    }
+                    else
+                    {
+                        _pendingModifier = null;
+                        _dispatcher.TryEnqueue(() =>
+                        {
+                            Message = new ShortcutConflict.ModifierOnly().Message();
+                            Changed?.Invoke();
+                        });
+                    }
+                }
             }
             return true;
         }
@@ -85,8 +108,11 @@ public sealed class HotkeyRecorder
         {
             _dispatcher.TryEnqueue(() =>
             {
-                Message = L("单独的字母键会影响正常打字，请搭配 Ctrl / Alt / Shift / Win 使用，或者只按一个修饰键 / F1–F24。",
-                            "A plain key would break normal typing — combine it with Ctrl / Alt / Shift / Win, or press a single modifier / F1–F24.");
+                Message = AllowsModifierOnly
+                    ? L("单独的字母键会影响正常打字，请搭配 Ctrl / Alt / Shift / Win 使用，或者只按一个修饰键 / F1–F24。",
+                        "A plain key would break normal typing — combine it with Ctrl / Alt / Shift / Win, or press a single modifier / F1–F24.")
+                    : L("单独的字母键会影响正常打字，请搭配 Ctrl / Alt / Shift / Win 使用，或者用 F1–F24。",
+                        "A plain key would break normal typing — combine it with Ctrl / Alt / Shift / Win, or use F1–F24.");
                 Changed?.Invoke();
             });
             return true;

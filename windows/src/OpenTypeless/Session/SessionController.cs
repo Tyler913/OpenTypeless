@@ -17,6 +17,9 @@ internal sealed class SampleCounter
     public double Seconds => AudioFormat.Seconds((int)Interlocked.Read(ref _count));
 }
 
+/// <summary>What a recording is for. Only plain dictation so far; a mode chord (see <see cref="ModeChords{TMode}"/>) switches it while recording.</summary>
+public enum RecordingMode { Dictation }
+
 /// <summary>Orchestrates one dictation: hotkey → record → chunked STT → polish → paste. UI-thread only.</summary>
 public sealed class SessionController
 {
@@ -68,11 +71,27 @@ public sealed class SessionController
     private double? _pressedAt;
     private bool _handsFree;
     /// <summary>
+    /// Second keys that switch the recording's mode while the hotkey is held (see <see cref="ModeChords{TMode}"/>). None is
+    /// registered yet; whatever registers one also gives the hotkey hook its key, to keep it from the focused app.
+    /// </summary>
+    public ModeChords<RecordingMode> ModeChords { get; } = new();
+    /// <summary>What the running recording is for; plain dictation at every start.</summary>
+    public RecordingMode Mode { get; private set; } = RecordingMode.Dictation;
+    /// <summary>
+    /// The "Paste last dictation" waiting for its keys to be let go, or pasting, by its number. A new dictation, Esc or the
+    /// session locking drops it (null), and what it still had to do is left undone. Pressing it again meanwhile does nothing.
+    /// </summary>
+    private int? _pendingPasteLast;
+    private int _pasteLastCount;
+    /// <summary>
     /// Which dictation is current: bumped whenever one ends or is cancelled, so work still out for an earlier one (its
     /// paste, its Enter, its reset) can tell it's no longer wanted and leaves the next dictation alone.
     /// </summary>
     private int _generation;
-    /// <summary>The foreground window when the recording stopped, where the text is meant to go (0 for a retry).</summary>
+    /// <summary>
+    /// The foreground window when the recording stopped, where the text is meant to go (for a retry, the window "Paste last
+    /// dictation" was asked for in, or 0).
+    /// </summary>
     private nint _pasteTarget;
     /// <summary>Between the session locking (or sleep) and unlocking: no warm microphone meanwhile.</summary>
     private bool _isLocked;
@@ -200,13 +219,24 @@ public sealed class SessionController
         else FinishRecording();
     }
 
-    /// <summary>Right Ctrl + C and similar combos shouldn't start a dictation.</summary>
-    public void OtherKeyPressed(double at)
+    /// <summary>
+    /// Another key went down while the hotkey was held: a registered chord switches the recording's mode; otherwise
+    /// Right Ctrl + C and similar combos shouldn't start a dictation.
+    /// </summary>
+    public void OtherKeyPressed(int keyCode, double at)
     {
-        if (State != SessionState.Recording || _handsFree || _pressedAt is not { } pressedAt
-            || !HotkeyPress.IsCombo(pressedAt, at)) return;
-        Note("cancelled — another key was pressed with the shortcut (treated as a key combo)");
-        Cancel(silently: true);
+        if (State != SessionState.Recording || _pressedAt is not { } pressedAt) return;
+        switch (ModeChords.OtherKey(keyCode, pressedAt, at, _handsFree))
+        {
+            case OtherKeyOutcome<RecordingMode>.SwitchMode chord when chord.Mode != Mode:
+                Note($"mode → {chord.Mode} (chord key {keyCode})");
+                Mode = chord.Mode;
+                break;
+            case OtherKeyOutcome<RecordingMode>.Cancel:
+                Note("cancelled — another key was pressed with the shortcut (treated as a key combo)");
+                Cancel(silently: true);
+                break;
+        }
     }
 
     /// <summary>
@@ -218,6 +248,8 @@ public sealed class SessionController
     {
         // A warm microphone doesn't stay on behind the lock screen either; see SystemUnlocked.
         _isLocked = true;
+        // Nor does a "Paste last dictation" still waiting go ahead once the session is unlocked again.
+        DropPendingPasteLast(reason);
         switch (State)
         {
             case SessionState.Recording:
@@ -243,7 +275,11 @@ public sealed class SessionController
 
     public void EscapePressed()
     {
-        if (State == SessionState.Idle) return;
+        if (State == SessionState.Idle)
+        {
+            DropPendingPasteLast("Esc");
+            return;
+        }
         if (State == SessionState.Recording && CancelPolicy.Keeps(_counter.Seconds - _preRollSeconds)) KeepCancelledRecording();
         else Cancel(silently: false);
     }
@@ -311,6 +347,8 @@ public sealed class SessionController
         WarmConnections(dictation.PolishEnabled);
         // Someone is dictating, so the session is unlocked, whatever notification was missed (a resume without a lock).
         _isLocked = false;
+        // The new dictation is what the user is after now.
+        DropPendingPasteLast("a dictation started");
         if (_settings.SttEndpoint is not { } sttEndpoint || !_settings.IsConfigured(_settings.SttProvider))
         {
             Note("not started — speech-to-text provider not configured");
@@ -407,6 +445,7 @@ public sealed class SessionController
         _deliverByPaste = true;
         _pressedAt = pressedAt;
         _handsFree = false;
+        Mode = RecordingMode.Dictation;
         State = SessionState.Recording;
         LastError = null;
         Hud.Model.ResetLevels();
@@ -962,10 +1001,138 @@ public sealed class SessionController
         UsageStore.Shared.Record(record, transcription, cleanup, unpriced);
     }
 
+    // MARK: - Action shortcuts
+
+    /// <summary>
+    /// An action's shortcut was pressed (see <see cref="ShortcutAction"/>). Only between dictations: while one is under way
+    /// its keys do nothing (they're kept from the focused app all the same).
+    /// </summary>
+    /// <param name="shortcut">The keys that were pressed.</param>
+    public void Perform(ShortcutAction action, Hotkey? shortcut)
+    {
+        if (State != SessionState.Idle)
+        {
+            Note($"{action.RawValue()} ignored — a dictation is under way");
+            return;
+        }
+        switch (action)
+        {
+            case ShortcutAction.PasteLastDictation:
+                PasteLastDictation(shortcut, Win32.GetForegroundWindow());
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Puts the newest finished dictation at the cursor again, the way a dictation's text goes in: pasted, with the
+    /// clipboard put back afterwards, or left on the clipboard when it can't be. When the newest one failed with its
+    /// recording saved, re-sends that instead and pastes the result (see <see cref="LastDictation"/>).
+    /// </summary>
+    /// <param name="shortcut">
+    /// The keys that asked for it, let go of before anything is pasted: Ctrl+V sent while they're held would be read
+    /// together with them, as another shortcut altogether. Null from the tray panel, which first has to give focus back
+    /// to the app the text goes to.
+    /// </param>
+    /// <param name="target">
+    /// The window the text goes to, only while it's still in front (otherwise the clipboard): the one in front when the
+    /// shortcut was pressed, or before the tray panel opened. 0 when that isn't known: then whichever is in front.
+    /// </param>
+    public void PasteLastDictation(Hotkey? shortcut, nint target)
+    {
+        if (State != SessionState.Idle || _pendingPasteLast != null) return;
+        var id = ++_pasteLastCount;
+        _pendingPasteLast = id;
+        _ = Run();
+
+        async Task Run()
+        {
+            try
+            {
+                var released = true;
+                if (shortcut != null) released = await HotkeyMonitor.Shared.WaitForRelease(shortcut, TimeSpan.FromSeconds(3));
+                else await Task.Delay(300);
+                await PasteLast(id, target, released);
+            }
+            finally
+            {
+                if (_pendingPasteLast == id) _pendingPasteLast = null;
+            }
+        }
+    }
+
+    /// <param name="released">False when the shortcut's keys were still held after a while; the text then goes to the clipboard.</param>
+    private async Task PasteLast(int id, nint target, bool released)
+    {
+        // Dropped meanwhile: by Esc, the session locking, or a dictation started while the keys were still held.
+        if (!PasteLastIsCurrent(id)) return;
+        var records = _history.Records.ToList();
+        var entries = records.Select(r => new LastDictation.Entry(
+            r.Status.PruningKind(),
+            r.FinalText.Trim().Length > 0,
+            // Only a failed one is ever re-sent, so only its recording is looked for on disk.
+            r.Status == DictationStatus.Failed && r.HasAudio)).ToList();
+        switch (LastDictation.Choose(entries))
+        {
+            case LastDictation.Choice.Retry retry:
+                Note("paste last dictation → the newest one failed: retried");
+                // Its text goes in like a dictation's: only into the target, while it's still in front (see FocusMoved).
+                Retry(records[retry.Index], paste: released && !_isLocked, target: target);
+                return;
+            case LastDictation.Choice.Paste paste:
+                var text = records[paste.Index].FinalText;
+                if (released) await TextInserter.LeaveMenuMode();
+                if (!PasteLastIsCurrent(id)) return;
+                // The keys still held, another window in front, or focus on something that can't take text: the clipboard.
+                var editable = released && IsInFront(target) && await FocusProbe.FocusedTarget() != FocusProbe.Target.NotEditable;
+                if (!PasteLastIsCurrent(id)) return;
+                if (!editable)
+                {
+                    Note("paste last dictation → clipboard");
+                    TextInserter.CopyToClipboard(text);
+                    Hud.Show(new HudPhase.Copied(), 1.6);
+                    return;
+                }
+                var outcome = await TextInserter.Insert(text, _settings.RestoreClipboard, () => PasteLastIsCurrent(id) && IsInFront(target));
+                Note($"paste last dictation → {outcome}");
+                // Esc, the session locking or a new dictation while it went in: that leaves the HUD and the clipboard alone.
+                if (!PasteLastIsCurrent(id)) return;
+                switch (outcome)
+                {
+                    case TextInserter.Outcome.NotPasted:
+                        Hud.Show(new HudPhase.Copied(), 1.6);
+                        break;
+                    case TextInserter.Outcome.Skipped:
+                        // Another window came to the front just as Ctrl+V was due.
+                        TextInserter.CopyToClipboard(text);
+                        Hud.Show(new HudPhase.Copied(), 1.6);
+                        break;
+                }
+                return;
+            default:
+                Note("paste last dictation → nothing to paste");
+                Hud.Show(new HudPhase.Error(L("还没有可以粘贴的听写", "No dictation to paste yet")), 2);
+                return;
+        }
+    }
+
+    /// <summary>Whether the "Paste last dictation" <paramref name="id"/> is still wanted: not dropped, and no dictation under way.</summary>
+    private bool PasteLastIsCurrent(int id) => _pendingPasteLast == id && State == SessionState.Idle && !_isLocked;
+
+    private void DropPendingPasteLast(string reason)
+    {
+        if (_pendingPasteLast == null) return;
+        _pendingPasteLast = null;
+        Note($"paste last dictation dropped — {reason}");
+    }
+
+    /// <summary>Whether <paramref name="window"/> is in front (0: it couldn't be told, so there's nothing to check).</summary>
+    private static bool IsInFront(nint window) => window == 0 || Win32.GetForegroundWindow() == window;
+
     // MARK: - Retry / cancel
 
     /// <summary>Re-runs a saved dictation. Chunks that already succeeded are reused; only failed ones are re-sent.</summary>
-    public void Retry(DictationRecord saved, bool paste)
+    /// <param name="target">The window its text is pasted into, only while that window is in front (0: whichever is in front then).</param>
+    public void Retry(DictationRecord saved, bool paste, nint target = 0)
     {
         if (State != SessionState.Idle) return;
         if (_settings.SttEndpoint is not { } endpoint) return;
@@ -1000,6 +1167,7 @@ public sealed class SessionController
         _history.Update(record);
         _record = record;
         _dictationSettings = dictation;
+        _pasteTarget = target;
         State = SessionState.Processing;
         Hud.ShowWorking(dictation.PolishEnabled);
 
@@ -1103,6 +1271,7 @@ public sealed class SessionController
         _pressedAt = null;
         _pasteTarget = 0;
         _handsFree = false;
+        Mode = RecordingMode.Dictation;
         _processing = null;
     }
 

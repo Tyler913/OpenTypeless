@@ -31,6 +31,11 @@ public sealed class PopoverWindow : Window
     private DateTimeOffset _hiddenAt = DateTimeOffset.MinValue;
     private string? _copiedId;
     private (Updater.UpdatePhase, bool) _updateState;
+    /// <summary>
+    /// The window in front before the panel opened, where "Paste last dictation" goes; 0 when that was this app, the
+    /// desktop or the taskbar (a click on the tray icon may already have made the taskbar the window in front).
+    /// </summary>
+    private nint _windowBefore;
 
     public nint Hwnd { get; }
     public bool IsOpen { get; private set; }
@@ -86,6 +91,11 @@ public sealed class PopoverWindow : Window
     public void Open(Win32.RECT anchor)
     {
         _anchor = anchor;
+        var front = Win32.GetForegroundWindow();
+        Win32.GetWindowThreadProcessId(front, out var owner);
+        _windowBefore = owner == (uint)Environment.ProcessId
+                        || Win32.ClassName(front) is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" or "Progman" or "WorkerW"
+            ? 0 : front;
         _root.Children.Clear();
         _root.Children.Add(BuildContent());
         IsOpen = true;
@@ -361,6 +371,7 @@ public sealed class PopoverWindow : Window
         var grid = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 2, 0, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -381,10 +392,28 @@ public sealed class PopoverWindow : Window
         Grid.SetColumn(history, 1);
         grid.Children.Add(history);
 
+        // Puts the newest dictation at the cursor of the window that had focus before the panel opened; its tooltip shows
+        // the shortcut, when there is one.
+        var action = ShortcutAction.PasteLastDictation;
+        var pasteLast = new Button
+        {
+            Content = Ui.Icon(Glyphs.Paste, 14),
+            IsEnabled = _controller.State == SessionController.SessionState.Idle && _history.Records.Count > 0,
+        };
+        Ui.Label(pasteLast, action.Title());
+        ToolTipService.SetToolTip(pasteLast, action.Title() + (_settings.Shortcut(action) is { } shortcut ? $" ({shortcut.DisplayName})" : ""));
+        pasteLast.Click += (_, _) =>
+        {
+            Dismiss();
+            _controller.PasteLastDictation(null, _windowBefore);
+        };
+        Grid.SetColumn(pasteLast, 2);
+        grid.Children.Add(pasteLast);
+
         var quit = new Button { Content = Ui.Icon(Glyphs.Power, 14) };
         Ui.Label(quit, L("退出 OpenTypeless", "Quit OpenTypeless"));
         quit.Click += (_, _) => _quit();
-        Grid.SetColumn(quit, 3);
+        Grid.SetColumn(quit, 4);
         grid.Children.Add(quit);
         return grid;
     }

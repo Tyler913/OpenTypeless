@@ -3374,6 +3374,141 @@
     "fr": "Son enregistrement est aussi supprimé : impossible de la retranscrire ensuite.",
     "de": "Die Aufnahme wird mitgelöscht und kann nicht neu transkribiert werden."
   },
+  "Paste last dictation": {
+    "ja": "前回の音声入力を貼り付け",
+    "ko": "마지막 받아쓰기 붙여넣기",
+    "es": "Pegar el último dictado",
+    "pt": "Colar o último ditado",
+    "ru": "Вставить последнюю диктовку",
+    "fr": "Coller la dernière dictée",
+    "de": "Letztes Diktat einfügen"
+  },
+  "Inserts your latest dictation at the cursor again; if it failed, it's transcribed again first": {
+    "ja": "最新の音声入力をもう一度カーソル位置に挿入します。失敗していた場合は、先に文字起こしをやり直します",
+    "ko": "가장 최근 받아쓰기를 커서 위치에 다시 넣습니다. 실패했다면 먼저 다시 전사합니다",
+    "es": "Vuelve a insertar tu último dictado en el cursor; si falló, primero se transcribe de nuevo",
+    "pt": "Insere de novo o seu último ditado no cursor; se ele falhou, é transcrito novamente antes",
+    "ru": "Снова вставляет последнюю диктовку в позицию курсора; если она не удалась, сначала распознаёт её заново",
+    "fr": "Réinsère votre dernière dictée au curseur ; si elle a échoué, elle est d’abord retranscrite",
+    "de": "Fügt dein letztes Diktat erneut am Cursor ein; ist es fehlgeschlagen, wird es zuerst neu transkribiert"
+  },
+  "A modifier on its own can't be used here — add a key to it.": {
+    "ja": "修飾キー単独はここでは使えません。ほかのキーと組み合わせてください。",
+    "ko": "보조 키 하나만으로는 여기서 쓸 수 없습니다. 다른 키와 함께 누르세요.",
+    "es": "Aquí no se puede usar un modificador solo: añádele una tecla.",
+    "pt": "Um modificador sozinho não pode ser usado aqui — combine-o com outra tecla.",
+    "ru": "Одну клавишу-модификатор здесь использовать нельзя — добавьте к ней ещё клавишу.",
+    "fr": "Un modificateur seul ne peut pas servir ici — ajoutez-lui une touche.",
+    "de": "Eine Sondertaste allein geht hier nicht – nimm noch eine Taste dazu."
+  },
+  "Esc cancels a dictation — pick another key.": {
+    "ja": "Esc は音声入力のキャンセルに使います。別のキーを選んでください。",
+    "ko": "Esc는 받아쓰기를 취소하는 키입니다. 다른 키를 고르세요.",
+    "es": "Esc cancela un dictado: elige otra tecla.",
+    "pt": "O Esc cancela um ditado — escolha outra tecla.",
+    "ru": "Esc отменяет диктовку — выберите другую клавишу.",
+    "fr": "Échap annule une dictée — choisissez une autre touche.",
+    "de": "Esc bricht ein Diktat ab – wähle eine andere Taste."
+  },
+  "That's the dictation shortcut — pick another.": {
+    "ja": "これは音声入力のショートカットです。別のものを選んでください。",
+    "ko": "받아쓰기 단축키입니다. 다른 조합을 고르세요.",
+    "es": "Ese es el atajo de dictado: elige otro.",
+    "pt": "Esse é o atalho de ditado — escolha outro.",
+    "ru": "Это сочетание для диктовки — выберите другое.",
+    "fr": "C’est le raccourci de dictée — choisissez-en un autre.",
+    "de": "Das ist das Diktierkürzel – wähle ein anderes."
+  },
+  "Already used by “{0}” — pick another.": {
+    "ja": "「{0}」で使用中です。別のものを選んでください。",
+    "ko": "“{0}”에서 이미 쓰고 있습니다. 다른 조합을 고르세요.",
+    "es": "Ya lo usa «{0}»: elige otro.",
+    "pt": "Já está em uso por “{0}” — escolha outro.",
+    "ru": "Уже используется для «{0}» — выберите другое.",
+    "fr": "Déjà utilisé par « {0} » — choisissez-en un autre.",
+    "de": "Wird schon für „{0}“ verwendet – wähle ein anderes."
+  },
+  "A plain key would break normal typing — combine it with ⌃ ⌥ ⇧ ⌘, or use F1–F20.": {
+    "ja": "単独の文字キーは通常の入力を妨げます。⌃ ⌥ ⇧ ⌘ と組み合わせるか、F1–F20 を使ってください。",
+    "ko": "일반 키만 쓰면 평소 타이핑에 방해가 됩니다. ⌃ ⌥ ⇧ ⌘와 조합하거나 F1–F20을 쓰세요.",
+    "es": "Una tecla normal interferiría al escribir: combínala con ⌃ ⌥ ⇧ ⌘, o usa F1–F20.",
+    "pt": "Uma tecla comum atrapalharia a digitação — combine com ⌃ ⌥ ⇧ ⌘ ou use F1–F20.",
+    "ru": "Обычная клавиша помешает набору — сочетайте её с ⌃ ⌥ ⇧ ⌘ или используйте F1–F20.",
+    "fr": "Une touche simple gênerait la saisie — combinez-la avec ⌃ ⌥ ⇧ ⌘, ou utilisez F1–F20.",
+    "de": "Eine normale Taste würde das Tippen stören – kombiniere sie mit ⌃ ⌥ ⇧ ⌘ oder nimm F1–F20."
+  },
+  "A plain key would break normal typing — combine it with Ctrl / Alt / Shift / Win, or use F1–F24.": {
+    "ja": "単独の文字キーは通常の入力を妨げます。Ctrl / Alt / Shift / Win と組み合わせるか、F1–F24 を使ってください。",
+    "ko": "일반 키만 쓰면 평소 타이핑에 방해가 됩니다. Ctrl / Alt / Shift / Win과 조합하거나 F1–F24를 쓰세요.",
+    "es": "Una tecla normal interferiría al escribir: combínala con Ctrl / Alt / Shift / Win, o usa F1–F24.",
+    "pt": "Uma tecla comum atrapalharia a digitação — combine com Ctrl / Alt / Shift / Win ou use F1–F24.",
+    "ru": "Обычная клавиша помешает набору — сочетайте её с Ctrl / Alt / Shift / Win или используйте F1–F24.",
+    "fr": "Une touche simple gênerait la saisie — combinez-la avec Ctrl / Alt / Shift / Win, ou utilisez F1–F24.",
+    "de": "Eine normale Taste würde das Tippen stören – kombiniere sie mit Ctrl / Alt / Shift / Win oder nimm F1–F24."
+  },
+  "More shortcuts": {
+    "ja": "その他のショートカット",
+    "ko": "기타 단축키",
+    "es": "Más atajos",
+    "pt": "Mais atalhos",
+    "ru": "Другие сочетания",
+    "fr": "Autres raccourcis",
+    "de": "Weitere Kürzel"
+  },
+  "They work between dictations. Use a combination with ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) or F1–F20.": {
+    "ja": "音声入力をしていないときに使えます。⌃ ⌥ ⇧ ⌘ との組み合わせ（⌃⌘V など）か F1–F20 を使ってください。",
+    "ko": "받아쓰기 중이 아닐 때 동작합니다. ⌃ ⌥ ⇧ ⌘ 조합(⌃⌘V 등)이나 F1–F20을 쓰세요.",
+    "es": "Funcionan entre dictados. Usa una combinación con ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) o F1–F20.",
+    "pt": "Funcionam entre ditados. Use uma combinação com ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) ou F1–F20.",
+    "ru": "Работают между диктовками. Используйте сочетание с ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) или F1–F20.",
+    "fr": "Ils fonctionnent entre deux dictées. Utilisez une combinaison avec ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) ou F1–F20.",
+    "de": "Sie wirken zwischen Diktaten. Nimm eine Kombination mit ⌃ ⌥ ⇧ ⌘ (⌃⌘V …) oder F1–F20."
+  },
+  "They work between dictations. Use a combination with Ctrl / Alt / Shift / Win (Alt + Shift + Z…) or F1–F24.": {
+    "ja": "音声入力をしていないときに使えます。Ctrl / Alt / Shift / Win との組み合わせ（Alt + Shift + Z など）か F1–F24 を使ってください。",
+    "ko": "받아쓰기 중이 아닐 때 동작합니다. Ctrl / Alt / Shift / Win 조합(Alt + Shift + Z 등)이나 F1–F24를 쓰세요.",
+    "es": "Funcionan entre dictados. Usa una combinación con Ctrl / Alt / Shift / Win (Alt + Shift + Z…) o F1–F24.",
+    "pt": "Funcionam entre ditados. Use uma combinação com Ctrl / Alt / Shift / Win (Alt + Shift + Z…) ou F1–F24.",
+    "ru": "Работают между диктовками. Используйте сочетание с Ctrl / Alt / Shift / Win (Alt + Shift + Z…) или F1–F24.",
+    "fr": "Ils fonctionnent entre deux dictées. Utilisez une combinaison avec Ctrl / Alt / Shift / Win (Alt + Shift + Z…) ou F1–F24.",
+    "de": "Sie wirken zwischen Diktaten. Nimm eine Kombination mit Ctrl / Alt / Shift / Win (Alt + Shift + Z …) oder F1–F24."
+  },
+  "Change": {
+    "ja": "変更",
+    "ko": "변경",
+    "es": "Cambiar",
+    "pt": "Alterar",
+    "ru": "Изменить",
+    "fr": "Modifier",
+    "de": "Ändern"
+  },
+  "Clear shortcut": {
+    "ja": "ショートカットを解除",
+    "ko": "단축키 지우기",
+    "es": "Quitar atajo",
+    "pt": "Remover atalho",
+    "ru": "Убрать сочетание",
+    "fr": "Effacer le raccourci",
+    "de": "Kürzel entfernen"
+  },
+  "No dictation to paste yet": {
+    "ja": "貼り付けられる音声入力はまだありません",
+    "ko": "아직 붙여넣을 받아쓰기가 없습니다",
+    "es": "Aún no hay ningún dictado para pegar",
+    "pt": "Ainda não há ditado para colar",
+    "ru": "Пока нечего вставить",
+    "fr": "Aucune dictée à coller pour l’instant",
+    "de": "Noch kein Diktat zum Einfügen"
+  },
+  "On keyboard layouts such as German or French, Ctrl + Alt with a letter is AltGr, which types characters like @ and €, so this shortcut would block them. If you type those, pick another shortcut.": {
+    "ja": "ドイツ語やフランス語などのキーボード配列では、Ctrl + Alt と文字キーの組み合わせは AltGr として @ や € などの入力に使われるため、このショートカットはそれらの入力を妨げます。それらを入力する場合は別のショートカットを選んでください。",
+    "ko": "독일어나 프랑스어 같은 키보드 배열에서는 Ctrl + Alt와 글자 키 조합이 AltGr로 @, € 같은 문자를 입력하므로, 이 단축키가 그 입력을 막습니다. 그런 문자를 입력한다면 다른 단축키를 고르세요.",
+    "es": "En distribuciones de teclado como la alemana, la francesa o la española, Ctrl + Alt con una letra es AltGr, que escribe caracteres como @ y €, así que este atajo los bloquearía. Si los escribes, elige otro atajo.",
+    "pt": "Em layouts de teclado como o alemão, o francês ou o ABNT2, Ctrl + Alt com uma letra é o AltGr, que digita caracteres como @ e €, então este atalho os bloquearia. Se você os digita, escolha outro atalho.",
+    "ru": "В раскладках вроде немецкой или французской Ctrl + Alt с буквой — это AltGr, который вводит символы вроде @ и €, так что это сочетание их заблокирует. Если вы их набираете, выберите другое сочетание.",
+    "fr": "Sur les dispositions de clavier comme l’allemand ou le français, Ctrl + Alt avec une lettre équivaut à AltGr, qui sert à taper @ ou €, donc ce raccourci les bloquerait. Si vous les tapez, choisissez un autre raccourci.",
+    "de": "Bei Tastaturlayouts wie Deutsch oder Französisch ist Ctrl + Alt mit einem Buchstaben AltGr, das Zeichen wie @ und € tippt – dieses Kürzel würde sie blockieren. Wenn du sie tippst, wähle ein anderes Kürzel."
+  },
   "Apps": {
     "ja": "アプリ",
     "ko": "앱",

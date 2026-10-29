@@ -74,6 +74,7 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 
 - **Global hotkey.** Hold **Fn** (macOS) or **Right Alt** (Windows) by default, or record any single modifier (right ⌘, right ⌥, Right Ctrl, …) or a combination (⌥ Space, Alt + Space, F5, …).
 - **Push-to-talk or hands-free.** Hold to talk; tap once to keep recording hands-free and tap again to finish. **Esc** cancels. After 10 seconds of talking, a cancelled dictation isn't lost: it's transcribed (not inserted) and kept in History for 24 hours.
+- **Paste last dictation** (optional): give it a shortcut under **Settings → Shortcut**, or click its button in the menu-bar or tray panel, to insert your latest dictation again. If it failed, it's transcribed again first.
 - **Choose your microphone** under **Settings → General**, with a live level meter to check it hears you. Virtual devices (meeting and streaming apps) are marked, and a disconnected choice falls back to the system default.
 - **Keep microphone ready** (optional): recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped. The mic stays on, and Bluetooth headphones switch to call mode.
 - **Live preview (beta)**: see the words above the recording capsule as you speak, recognised on the device (macOS SpeechAnalyzer; Windows speech recognition). The inserted text still comes from your provider.

@@ -124,6 +124,7 @@ struct MenuPopoverView: View {
             HStack(spacing: 8) {
                 Button { close(); openSettings(nil) } label: { Label(L("设置", "Settings"), systemImage: "gearshape") }
                 Button { close(); openSettings(.history) } label: { Label(L("历史", "History"), systemImage: "clock") }
+                pasteLastButton
                 Spacer()
                 Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }
                     .help(L("退出 OpenTypeless", "Quit OpenTypeless"))
@@ -131,6 +132,16 @@ struct MenuPopoverView: View {
         }
         .controlSize(.regular)
         .padding(.top, 2)
+    }
+
+    /// Puts the newest dictation at the cursor of the app that had focus before the panel opened (see
+    /// `SessionController.pasteLastDictation`); its tooltip shows the shortcut, when there is one.
+    private var pasteLastButton: some View {
+        let action = ShortcutAction.pasteLastDictation
+        return Button { close(); controller.pasteLastDictation(releasing: nil) } label: { Image(systemName: action.symbol) }
+            .help(action.title + (settings.shortcut(for: action).map { " (\($0.displayName))" } ?? ""))
+            .accessibilityLabel(action.title)
+            .disabled(controller.state != .idle || history.records.isEmpty)
     }
 
     // MARK: Helpers

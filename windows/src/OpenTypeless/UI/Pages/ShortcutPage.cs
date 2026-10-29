@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Shapes;
 using OpenTypeless.Input;
 using OpenTypeless.Native;
 using OpenTypeless.Services;
+using TypelessCore;
 
 namespace OpenTypeless.UI;
 
@@ -15,11 +16,16 @@ public sealed class ShortcutPage : PageBase
 {
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly HotkeyRecorder _recorder;
+    /// <summary>Records the actions' shortcuts; <see cref="_recordingAction"/> says whose.</summary>
+    private readonly HotkeyRecorder _actionRecorder;
+    private ShortcutAction? _recordingAction;
 
     public ShortcutPage(SettingsWindow window) : base(SettingsPage.Shortcut)
     {
         _recorder = new HotkeyRecorder(() => Win32.GetForegroundWindow() == window.Hwnd);
         _recorder.Changed += Render;
+        _actionRecorder = new HotkeyRecorder(() => Win32.GetForegroundWindow() == window.Hwnd) { AllowsModifierOnly = false };
+        _actionRecorder.Changed += Render;
         _settings.PropertyChanged += OnSettingsChanged;
         Render();
     }
@@ -27,12 +33,13 @@ public sealed class ShortcutPage : PageBase
     protected override void OnClosed()
     {
         _recorder.Stop();
+        _actionRecorder.Stop();
         _settings.PropertyChanged -= OnSettingsChanged;
     }
 
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(AppSettings.Hotkey)) DispatcherQueue.TryEnqueue(Render);
+        if (e.PropertyName is nameof(AppSettings.Hotkey) or nameof(AppSettings.Shortcuts)) DispatcherQueue.TryEnqueue(Render);
     }
 
     private void Render()
@@ -66,7 +73,20 @@ public sealed class ShortcutPage : PageBase
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(record, L("录制快捷键", "Record shortcut"));
             record.Click += (_, _) =>
             {
-                _recorder.OnRecorded = recorded => _settings.Hotkey = recorded;
+                _actionRecorder.Stop();
+                _recorder.OnRecorded = recorded =>
+                {
+                    // An action's keys would start a dictation instead, and the action would never fire.
+                    if (!recorded.IsModifierOnly && _settings.Shortcuts.ActionFor(recorded.Chord.KeyCode, recorded.Chord.Modifiers) is { } taken)
+                    {
+                        _recorder.Message = new ShortcutConflict.Action(taken).Message();
+                        Render();
+                    }
+                    else
+                    {
+                        _settings.Hotkey = recorded;
+                    }
+                };
                 _recorder.Start();
             };
             center.Children.Add(record);
@@ -135,17 +155,92 @@ public sealed class ShortcutPage : PageBase
         });
         Body.Children.Add(how);
 
+        // Actions with a shortcut of their own
+        var actions = new CardSection
+        {
+            Title = L("更多快捷键", "More shortcuts"),
+            Footer = L("在两次听写之间按下时生效。可以是 Ctrl / Alt / Shift / Win 组合键（如 Alt + Shift + Z），也可以是 F1–F24。",
+                       "They work between dictations. Use a combination with Ctrl / Alt / Shift / Win (Alt + Shift + Z…) or F1–F24."),
+        };
+        foreach (var action in ShortcutActions.All)
+        {
+            if (actions.Body.Count > 0) actions.Body.Add(new CardDivider());
+            actions.Body.Add(new CardRow { Glyph = Glyphs.Paste, Tint = Tint.Teal, Title = action.Title(), Subtitle = action.Subtitle(), Trailing = ActionControls(action) });
+        }
+        Body.Children.Add(actions);
+        if (_actionRecorder.Message is { } actionMessage) Body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, actionMessage));
+        var actionShortcuts = ShortcutActions.All.Select(_settings.Shortcut).OfType<Hotkey>().ToList();
+
         if (hotkey.IsModifierOnly && hotkey.KeyCode == Hotkey.VK_RMENU)
         {
             Body.Children.Add(new Banner(Glyphs.Info, Tint.Blue,
                 L("在德语、法语等键盘布局里，右 Alt 是 AltGr，用来输入 @、€ 等字符。如果你要用它打字，请换一个快捷键。",
                   "On keyboard layouts such as German or French, Right Alt is AltGr and types characters like @ and €. If you use it for typing, pick another shortcut.")));
         }
-        if (hotkey.ShadowsCommonShortcut)
+        if (actionShortcuts.Any(shortcut => shortcut.BlocksAltGr))
+        {
+            Body.Children.Add(new Banner(Glyphs.Info, Tint.Blue,
+                L("在德语、法语等键盘布局里，Ctrl + Alt 加字母就是 AltGr，用来输入 @、€ 等字符，这个快捷键会挡住它们。如果你要用它们打字，请换一个快捷键。",
+                  "On keyboard layouts such as German or French, Ctrl + Alt with a letter is AltGr, which types characters like @ and €, so this shortcut would block them. If you type those, pick another shortcut.")));
+        }
+        if (hotkey.ShadowsCommonShortcut || actionShortcuts.Any(shortcut => shortcut.ShadowsCommonShortcut))
         {
             Body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange,
                 L("这个组合会在所有应用里覆盖同名的快捷键。", "This combination overrides the same shortcut in every app.")));
         }
+    }
+
+    /// <summary>An action's shortcut, and buttons to record or clear it.</summary>
+    private FrameworkElement ActionControls(ShortcutAction action)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        if (_actionRecorder.IsRecording && _recordingAction == action)
+        {
+            var prompt = Ui.Text(L("请按下新的快捷键…", "Press the new shortcut…"), 12.5, foreground: Ui.Secondary);
+            prompt.VerticalAlignment = VerticalAlignment.Center;
+            row.Children.Add(prompt);
+            var cancel = new Button { Content = L("取消", "Cancel") };
+            cancel.Click += (_, _) => _actionRecorder.Stop();
+            row.Children.Add(cancel);
+        }
+        else if (_settings.Shortcut(action) is { } shortcut)
+        {
+            row.Children.Add(new KeyCaps { Caps = shortcut.KeyCaps, VerticalAlignment = VerticalAlignment.Center });
+            var change = new Button { Content = L("更改", "Change") };
+            change.Click += (_, _) => Record(action);
+            row.Children.Add(change);
+            var clear = new Button { Content = Ui.Icon(Glyphs.Cancel, 12) };
+            Ui.Label(clear, L("清除快捷键", "Clear shortcut"));
+            clear.Click += (_, _) => _settings.SetShortcut(action, null);
+            row.Children.Add(clear);
+        }
+        else
+        {
+            var record = new Button { Content = L("录制快捷键", "Record shortcut") };
+            record.Click += (_, _) => Record(action);
+            row.Children.Add(record);
+        }
+        return row;
+    }
+
+    /// <summary>Records <paramref name="action"/>'s shortcut; one that clashes (see <see cref="ShortcutConflict"/>) is refused, with the reason shown.</summary>
+    private void Record(ShortcutAction action)
+    {
+        _recorder.Stop();
+        _recordingAction = action;
+        _actionRecorder.OnRecorded = recorded =>
+        {
+            if (_settings.Shortcuts.Conflict(recorded.Chord, action, _settings.Hotkey.Chord, Hotkey.VK_ESCAPE) is { } conflict)
+            {
+                _actionRecorder.Message = conflict.Message();
+                Render();
+            }
+            else
+            {
+                _settings.SetShortcut(action, recorded);
+            }
+        };
+        _actionRecorder.Start();
     }
 
     private static FrameworkElement Centered(TextBlock text)

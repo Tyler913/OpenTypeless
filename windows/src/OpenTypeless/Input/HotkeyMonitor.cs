@@ -25,8 +25,8 @@ public readonly record struct MouseButton(int Message, int X, int Y, uint Time);
 ///
 /// The hook runs on its own thread with its own message loop, so a busy UI thread can never make Windows
 /// drop it for being slow. Everything is passed through untouched except the keystrokes of a key-combination
-/// hotkey, which are swallowed so that e.g. Alt+Space doesn't also reach the focused app, and Esc while a dictation
-/// is under way.
+/// hotkey, which are swallowed so that e.g. Alt+Space doesn't also reach the focused app, Esc while a dictation
+/// is under way, and the keys of an action's shortcut or of a mode chord.
 ///
 /// The press, release and other-key callbacks get the key event's own time, in seconds on the
 /// <see cref="Environment.TickCount64"/> clock (see <see cref="HotkeyPress"/>).
@@ -37,9 +37,35 @@ public sealed class HotkeyMonitor
 
     public Action<double>? OnPress;
     public Action<double>? OnRelease;
-    /// <summary>Another key went down while a modifier-only hotkey was held (e.g. Right Ctrl + C).</summary>
-    public Action<double>? OnOtherKey;
+    /// <summary>
+    /// Another key went down while the hotkey was held, by its virtual-key code: with a modifier-only hotkey any key
+    /// (e.g. Right Ctrl + C), with a key combination only a mode chord (see <see cref="ModeChordKeys"/>).
+    /// </summary>
+    public Action<int, double>? OnOtherKey;
     public Action? OnEscape;
+    /// <summary>An action's shortcut went down (see <see cref="Shortcuts"/>).</summary>
+    public Action<ShortcutAction>? OnAction;
+
+    /// <summary>
+    /// The shortcuts of actions besides dictating. Their keys are always kept from the focused app, whatever the session
+    /// makes of them. Replaced as a whole (it's immutable), so the hook thread always sees a complete one.
+    /// </summary>
+    public volatile ShortcutMap Shortcuts = ShortcutMap.Empty;
+
+    /// <summary>Keys that switch the recording's mode while the hotkey is held (see <see cref="ModeChords{TMode}"/>); kept from the focused app then.</summary>
+    public volatile IReadOnlySet<int> ModeChordKeys = new HashSet<int>();
+
+    /// <summary>
+    /// Keys whose key-down was swallowed as an action's shortcut or a mode chord: their auto-repeats and key-up go too.
+    /// Hook thread only.
+    /// </summary>
+    private readonly HashSet<int> _swallowedKeys = new();
+
+    /// <summary>
+    /// The keys physically down, from every key event the hook sees, the ones it swallows too. Noted on the hook thread,
+    /// asked on the UI thread (see <see cref="WaitForRelease"/>).
+    /// </summary>
+    private readonly HeldKeys _held = new();
 
     /// <summary>
     /// Set (on the UI thread) while a dictation is recording or processing: Esc then cancels it and is kept from the
@@ -217,9 +243,23 @@ public sealed class HotkeyMonitor
         if (!down && !up) return false;
         var vk = (int)info.vkCode;
         var injected = (info.flags & Win32.LLKHF_INJECTED) != 0;
+        // First of all, so the keys held are known while a shortcut is being recorded too. A low-level hook gets no
+        // auto-repeat flag: a key-down for a key already down is one.
+        var repeat = _held.Note(vk, down, info.time);
 
         if (Recorder is { } recorder) return recorder(new KeyEvent(vk, down, injected));
         if (_isSuspended) return false;
+
+        // A key whose press was swallowed (an action's shortcut, a mode chord) stays swallowed until it's let go, its
+        // auto-repeats and key-up alike, whatever is held with it by then: letting go of Shift while Shift + F5 is still
+        // down mustn't turn F5's repeats into the F5 that starts a dictation.
+        if (_swallowedKeys.Contains(vk))
+        {
+            if (up) return _swallowedKeys.Remove(vk);
+            if (repeat) return true;
+            // A new press: the last one's key-up went by while a shortcut was being recorded (or the hook was off).
+            _swallowedKeys.Remove(vk);
+        }
 
         var time = HotkeyPress.TickTime(info.time, Environment.TickCount64);
         var hotkey = _hotkey;
@@ -265,14 +305,16 @@ public sealed class HotkeyMonitor
                 if (!injected)
                 {
                     HotkeyLog.Debug($"combo key (vk {vk}) with {hotkey.DisplayName}");
-                    Fire(OnOtherKey, time);
+                    Fire(OnOtherKey, vk, time);
+                    if (ModeChordKeys.Contains(vk)) return Swallow(vk);
                 }
                 else
                 {
                     HotkeyLog.Debug($"ignored injected key (vk {vk}) while {hotkey.DisplayName} is held");
                 }
             }
-            return false;
+            // After the combo above, which cancels a dictation the shortcut's modifier may have just started.
+            return HandleAction(vk, repeat);
         }
 
         // Key combination.
@@ -296,10 +338,65 @@ public sealed class HotkeyMonitor
                 Fire(OnRelease, time);
                 return true;
             }
-            return false;
+            // Otherwise the same key with other modifiers, which may be an action's shortcut (F5 dictates, Shift + F5 pastes).
         }
         if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down);
-        return false;
+        if (!down) return false;
+        if (_isDown && !injected && ModeChordKeys.Contains(vk))
+        {
+            // Other keys are left alone while a key-combination hotkey is held, as they always were, but a chord counts.
+            if (!repeat)
+            {
+                HotkeyLog.Debug($"chord key (vk {vk}) with {hotkey.DisplayName}");
+                Fire(OnOtherKey, vk, time);
+            }
+            return Swallow(vk);
+        }
+        return HandleAction(vk, repeat);
+    }
+
+    /// <summary>
+    /// A key going down that is an action's shortcut fires the action (once, not on its auto-repeats), and is swallowed,
+    /// like the rest of its presses.
+    /// </summary>
+    private bool HandleAction(int vk, bool repeat)
+    {
+        var shortcuts = Shortcuts;
+        // Every key typed comes through here: with no shortcut set, nothing more is asked of the system.
+        if (shortcuts.IsEmpty || shortcuts.ActionFor(vk, (int)CurrentModifiers()) is not { } action) return false;
+        if (!repeat)
+        {
+            HotkeyLog.Debug($"{action.RawValue()} shortcut");
+            // Alt and Win act on their own release (menu bar / Start menu, or Alt + Shift switching the keyboard layout)
+            // unless another key is seen while they're held, and the shortcut's key is kept from the system.
+            if ((shortcuts.Chords[action].Modifiers & (int)(HotkeyModifiers.Alt | HotkeyModifiers.Win)) != 0) SendMenuMask();
+            Fire(OnAction, action);
+        }
+        return Swallow(vk);
+    }
+
+    private bool Swallow(int vk)
+    {
+        _swallowedKeys.Add(vk);
+        return true;
+    }
+
+    /// <summary>
+    /// Waits until none of <paramref name="shortcut"/>'s keys is physically held any more (its key, and any of Ctrl, Alt,
+    /// Shift and Win): a Ctrl+V sent meanwhile would be read together with them, as another shortcut altogether. Returns
+    /// false when they're still held after <paramref name="timeout"/>. The key itself is followed through the hook: its
+    /// presses were swallowed, so <c>GetAsyncKeyState</c> never heard of them (modifiers always go through).
+    /// </summary>
+    public async Task<bool> WaitForRelease(Hotkey shortcut, TimeSpan timeout)
+    {
+        var clock = Stopwatch.StartNew();
+        while (true)
+        {
+            var keyHeld = !shortcut.IsModifierOnly && _held.IsHeld(shortcut.KeyCode, unchecked((uint)Environment.TickCount));
+            if (CurrentModifiers() == HotkeyModifiers.None && !keyHeld) return true;
+            if (clock.Elapsed >= timeout) return false;
+            await Task.Delay(20);
+        }
     }
 
     /// <summary>The scan code of the Left Ctrl that AltGr layouts send along with Right Alt.</summary>
@@ -351,6 +448,18 @@ public sealed class HotkeyMonitor
     {
         if (callback == null) return;
         _dispatcher?.TryEnqueue(DispatcherQueuePriority.High, () => callback(time));
+    }
+
+    private void Fire(Action<int, double>? callback, int key, double time)
+    {
+        if (callback == null) return;
+        _dispatcher?.TryEnqueue(DispatcherQueuePriority.High, () => callback(key, time));
+    }
+
+    private void Fire(Action<ShortcutAction>? callback, ShortcutAction action)
+    {
+        if (callback == null) return;
+        _dispatcher?.TryEnqueue(DispatcherQueuePriority.High, () => callback(action));
     }
 }
 

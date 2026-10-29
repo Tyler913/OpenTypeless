@@ -97,12 +97,10 @@ import Testing
         #expect(SnippetExpander.vocabulary([], before: ["Claude", "claude", " x "]) == ["Claude", "claude", " x "])
     }
 
-    @Test func longTextStaysFast() {
+    /// How long this takes is a performance budget (PerformanceTests.snippetsInALongDictation).
+    @Test func longTextExpandsEveryTrigger() {
         let snippets = (0..<50).map { Snippet(trigger: "trigger number \($0)", expansion: "expansion \($0)") }
         let text = String(repeating: "我们今天讨论了缓存和数据库的性能，then trigger number 7 again. ", count: 400)
-        let clock = ContinuousClock()
-        let elapsed = clock.measure { _ = SnippetExpander.expand(text, with: snippets) }
-        #expect(elapsed < .seconds(1))
         #expect(SnippetExpander.expand(text, with: snippets).components(separatedBy: "expansion 7").count == 401)
     }
 }

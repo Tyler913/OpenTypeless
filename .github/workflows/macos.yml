@@ -56,7 +56,7 @@ jobs:
 
       # The same scripts used locally.
       - name: Test with coverage
-        timeout-minutes: 10 # 1.5-2.5 minutes on Apple silicon, 2.5-5 on Intel
+        timeout-minutes: 20 # 2.5-4 minutes on Apple silicon, 4.5-8 on Intel and over 10 on a slow Intel runner
         run: |
           mkdir -p "$RUNNER_TEMP/tests-macos"
           set -o pipefail
@@ -113,7 +113,7 @@ jobs:
           echo "OPENTYPELESS_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 
       - name: Build and package
-        timeout-minutes: 10 # 1-1.5 minutes on Apple silicon, 1.5-3 on Intel
+        timeout-minutes: 10 # 1.5-2 minutes on Apple silicon, 2.5-4 on Intel
         run: scripts/build-app.sh --package
 
       # What a user gets: the disk image holds a valid, signed app for this processor and a link to Applications, the

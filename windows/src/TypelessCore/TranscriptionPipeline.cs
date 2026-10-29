@@ -17,6 +17,17 @@ public abstract record ChunkState
     public bool IsFinished => this is Done or SkippedSilence or Failed;
 }
 
+/// <summary>Where the chunks handed to a pipeline stand (see <see cref="TranscriptionPipeline.ChunkCounts"/>).</summary>
+/// <param name="Answered">Transcribed, reused from the preset, or with nothing to send (silence).</param>
+/// <param name="Failed">Failed after their retries (sent once more by Finish, unless the failure is permanent).</param>
+/// <param name="Outstanding">Handed out and still waiting for an answer.</param>
+/// <param name="Refused">
+/// Of the failed ones, those the provider turned down the way it turns down every request (see
+/// <see cref="ApiException.RefusesEveryRequest"/>).
+/// </param>
+/// <param name="FailureStreak">How many chunks failed since the last one that was transcribed, in the order their answers came.</param>
+public readonly record struct ChunkCounts(int Answered, int Failed, int Outstanding, int Refused = 0, int FailureStreak = 0);
+
 public sealed class PipelineFailure : Exception
 {
     public string PartialText { get; }
@@ -51,7 +62,7 @@ public sealed class TranscriptionPipeline
     private readonly TranscriptionLatency _latency;
     private readonly RetryPolicy _policy;
     private readonly Action<int, ChunkState>? _observer;
-    private readonly SemaphoreSlim _semaphore = new(3);
+    private readonly SemaphoreSlim _semaphore;
     private readonly bool _trimSilence;
     private readonly bool _speculate;
     private readonly Action<string?>? _onSpeculation;
@@ -63,6 +74,10 @@ public sealed class TranscriptionPipeline
     private readonly Dictionary<int, ChunkState> _results = new();
     /// <summary>Chunks whose last failure was permanent (bad key, no credit…): not worth another round.</summary>
     private readonly HashSet<int> _permanentFailures = new();
+    /// <summary>Chunks that failed since the last one transcribed (see <see cref="TypelessCore.ChunkCounts.FailureStreak"/>).</summary>
+    private int _failureStreak;
+    /// <summary>Failed chunks the provider turned down as it would any request (see <see cref="TypelessCore.ChunkCounts.Refused"/>).</summary>
+    private readonly HashSet<int> _refusals = new();
     private readonly Dictionary<int, Task> _tasks = new();
     /// <summary>Usage of every successful request, retries of the same chunk included (each one was billed).</summary>
     private readonly List<RequestUsage> _usages = new();
@@ -145,6 +160,10 @@ public sealed class TranscriptionPipeline
     }
 
     /// <param name="preset">Lets a retry reuse transcripts that already succeeded (keyed by chunk index).</param>
+    /// <param name="maxConcurrentRequests">
+    /// How many chunks are transcribed at once (a file being transcribed asks for fewer than a dictation, see
+    /// <see cref="FileTranscription"/>).
+    /// </param>
     /// <param name="trimSilence">Sends each chunk without the silence before and after its speech (see <see cref="AudioChunk.Trimmed"/>).</param>
     /// <param name="speculate">Transcribes the pending audio ahead of time whenever the speaker pauses (see the class summary).</param>
     /// <param name="onSpeculation">
@@ -157,8 +176,9 @@ public sealed class TranscriptionPipeline
                                  RetryPolicy? policy = null, IReadOnlyDictionary<int, string>? preset = null,
                                  Action<int, ChunkState>? observer = null, TranscriptionRoute? backup = null,
                                  TranscriptionLatency? latency = null, bool trimSilence = true, bool speculate = true,
-                                 Action<string?>? onSpeculation = null)
+                                 Action<string?>? onSpeculation = null, int maxConcurrentRequests = 3)
     {
+        _semaphore = new SemaphoreSlim(Math.Max(1, maxConcurrentRequests));
         _trimSilence = trimSilence;
         _speculate = speculate;
         _onSpeculation = onSpeculation;
@@ -278,6 +298,57 @@ public sealed class TranscriptionPipeline
         }
     }
 
+    /// <summary>
+    /// Where the chunks so far stand: answered (or needing none, or reused from the preset), failed, and handed out and
+    /// still waiting. Unlike <see cref="TranscriptionProgress"/> it's there before <see cref="Finish"/>: a long recording
+    /// read from a file is handed over a block at a time, held back while enough chunks are out, and stopped once they
+    /// keep failing (see <see cref="FileTranscription"/>).
+    /// </summary>
+    public ChunkCounts ChunkCounts()
+    {
+        lock (_lock)
+        {
+            int answered = 0, failed = 0, outstanding = 0;
+            foreach (var state in _results.Values)
+            {
+                switch (state)
+                {
+                    case ChunkState.Done or ChunkState.SkippedSilence:
+                        answered++;
+                        break;
+                    case ChunkState.Failed:
+                        failed++;
+                        break;
+                    default:
+                        outstanding++;
+                        break;
+                }
+            }
+            return new ChunkCounts(answered, failed, outstanding, _refusals.Count, _failureStreak);
+        }
+    }
+
+    /// <summary>
+    /// Stops a recording handed over a block at a time (a file) whose chunks keep failing, rather than reading the rest of
+    /// it only to send requests that fail too: what's still out is cancelled, and the failure <see cref="Finish"/> would
+    /// have thrown comes back, with the text so far. A dictation never stops this way.
+    /// </summary>
+    public PipelineFailure GiveUp()
+    {
+        Cancel();
+        var (text, failed, lastError) = Snapshot();
+        return new PipelineFailure(text, failed, lastError ?? "unknown");
+    }
+
+    /// <summary>How many chunks' audio is still held (to be sent, or sent again in Finish's last round).</summary>
+    internal int HeldChunkCount
+    {
+        get
+        {
+            lock (_lock) return _chunks.Count;
+        }
+    }
+
     /// <summary>What the requests so far used, one entry per successful request.</summary>
     public List<RequestUsage> Usages()
     {
@@ -314,8 +385,8 @@ public sealed class TranscriptionPipeline
         ChunkState? preset = null;
         lock (_lock)
         {
-            _chunks[chunk.Index] = chunk;
             if (_results.TryGetValue(chunk.Index, out var existing) && existing is ChunkState.Done) preset = existing;
+            else _chunks[chunk.Index] = chunk;
         }
         if (preset != null)
         {
@@ -336,6 +407,7 @@ public sealed class TranscriptionPipeline
         if (AudioLevel.IsSilent(chunk.Samples) || chunk.Duration < 0.3 || IsOnlyThePauseBeforeRelease(chunk))
         {
             _results[index] = new ChunkState.SkippedSilence();
+            _chunks.Remove(index);
             Monitor.Exit(_lock);
             _observer?.Invoke(index, new ChunkState.SkippedSilence());
             return;
@@ -374,8 +446,20 @@ public sealed class TranscriptionPipeline
         lock (_lock)
         {
             _results[index] = outcome.State;
+            // Only a failed chunk is sent again (in Finish's last round): the audio of the others can go, which keeps an
+            // hour-long file from being held in memory as it's transcribed.
+            if (outcome.State is not ChunkState.Failed) _chunks.Remove(index);
             if (outcome.Permanent) _permanentFailures.Add(index); else _permanentFailures.Remove(index);
             if (outcome.State is ChunkState.Done) _answeredByBackup[index] = outcome.Backup; else _answeredByBackup.Remove(index);
+            if (outcome.State is ChunkState.Done)
+            {
+                _failureStreak = 0;
+                _refusals.Remove(index);
+            }
+            else if (outcome.State is ChunkState.Failed)
+            {
+                _failureStreak++;
+            }
         }
         _observer?.Invoke(index, outcome.State);
         Announce();
@@ -525,6 +609,10 @@ public sealed class TranscriptionPipeline
         catch (Exception error)
         {
             var apiError = ApiException.From(error);
+            if (apiError.RefusesEveryRequest)
+            {
+                lock (_lock) _refusals.Add(chunk.Index);
+            }
             return new Outcome(new ChunkState.Failed(apiError.Message), Permanent: !apiError.IsRetryable);
         }
     }

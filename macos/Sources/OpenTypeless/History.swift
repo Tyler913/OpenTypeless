@@ -58,6 +58,10 @@ struct DictationRecord: Codable, Identifiable, Equatable {
             targetLanguage = newValue?.id
         }
     }
+    /// Where the audio came from: nil for a dictation, `.file` for a transcribed audio or video file (see FileTranscriber).
+    var source: RecordSource?
+    /// The name of the file it was transcribed from.
+    var sourceName: String?
 
     /// Where the wait after the key was released went, in seconds.
     struct Timing: Codable, Equatable {
@@ -108,8 +112,13 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     /// What was (or would be) inserted: the final text with its snippets expanded.
     var outputText: String { insertedText ?? finalText }
 
+    /// Transcribed from a file rather than dictated: never pasted, and not in the Home page's dictation totals.
+    var isFile: Bool { source == .file }
+
     var folder: URL { AppPaths.sessions.appendingPathComponent(id, isDirectory: true) }
     var audioURL: URL { folder.appendingPathComponent("audio.wav") }
+    /// Where a file's sound is written while it's read; renamed to `audioURL` once all of it is there.
+    var partialAudioURL: URL { folder.appendingPathComponent("audio.partial.wav") }
     var hasAudio: Bool { FileManager.default.fileExists(atPath: audioURL.path) }
 
     /// This dictation as History exports it. A record keeps no time zone, so its time is written in this Mac's, with the
@@ -229,7 +238,9 @@ final class HistoryStore: ObservableObject {
         // on disk, so surface it as failed and retryable.
         for index in loaded.indices where loaded[index].status == .recording || loaded[index].status == .processing {
             loaded[index].status = .failed
-            loaded[index].error = L("上次运行中断（音频已保存，可重试）", "Interrupted last time (audio saved — you can retry)")
+            // Quit while a file was still being read: what was read of it is no use.
+            if loaded[index].isFile && !loaded[index].hasAudio { try? FileManager.default.removeItem(at: loaded[index].partialAudioURL) }
+            loaded[index].error = FileTranscription.interruptedMessage(isFile: loaded[index].isFile, hasAudio: loaded[index].hasAudio)
             save(loaded[index])
         }
         records = loaded

@@ -155,6 +155,14 @@ public sealed class SessionController
     /// </summary>
     private ContextSent _contextSent = new();
 
+    private FileTranscriber? _files;
+
+    /// <summary>Audio and video files being transcribed into History, alongside (never instead of) dictating.</summary>
+    public FileTranscriber Files => _files ??= new FileTranscriber(this);
+
+    /// <summary>Quitting: a file being transcribed keeps what it has (see <see cref="FileTranscriber.StopForQuit"/>), if one ever started.</summary>
+    public void StopFilesForQuit() => _files?.StopForQuit();
+
     public SessionController()
     {
         _editWatcher.OnCorrections = (corrections, quiet) =>
@@ -606,18 +614,25 @@ public sealed class SessionController
     /// <summary>How long each speech-to-text route takes, kept while the app runs, so the backup is asked when a chunk is late.</summary>
     private readonly Dictionary<string, TranscriptionLatency> _latencies = new();
 
-    /// <param name="language">The dictation's spoken-language hint, "" to auto-detect.</param>
-    private TranscriptionPipeline MakePipeline(ProviderEndpoint endpoint, IReadOnlyDictionary<int, string> preset, string language,
-                                               Action<string?>? onSpeculation = null)
+    /// <param name="language">The dictation's spoken-language hint, "" to auto-detect; null for the global setting (a file's).</param>
+    /// <param name="forFile">
+    /// For a file being transcribed (see <see cref="FileTranscriber"/>), which sends fewer requests at once on a client of
+    /// its own, has no speculative tail, and keeps its own idea of how long requests take (its chunks are mostly long).
+    /// </param>
+    internal TranscriptionPipeline MakePipeline(ProviderEndpoint endpoint, IReadOnlyDictionary<int, string> preset, string? language = null,
+                                                Action<string?>? onSpeculation = null, bool forFile = false)
     {
-        var hint = language.Length == 0 ? null : language;
+        var spoken = language ?? _settings.SttLanguage;
+        var hint = spoken.Length == 0 ? null : spoken;
         var backup = _settings.SttBackupEndpoint is { } backupEndpoint
-            ? new TranscriptionRoute(new ApiClient(backupEndpoint), new TranscriptionOptions(_settings.SttBackupModel.Trim(), hint, _settings.DictationVocabulary))
+            ? new TranscriptionRoute(Client(backupEndpoint, forFile), new TranscriptionOptions(_settings.SttBackupModel.Trim(), hint, _settings.DictationVocabulary))
             : null;
         var key = ModelPrice.Key(_settings.SttProvider, _settings.SttModel);
-        if (!_latencies.TryGetValue(key, out var latency)) _latencies[key] = latency = new TranscriptionLatency();
-        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, hint, _settings.DictationVocabulary), preset: preset,
-                                         backup: backup, latency: latency, onSpeculation: onSpeculation);
+        var latency = forFile ? new TranscriptionLatency() : _latencies.GetValueOrDefault(key) ?? new TranscriptionLatency();
+        if (!forFile) _latencies[key] = latency;
+        return new TranscriptionPipeline(Client(endpoint, forFile), new TranscriptionOptions(_settings.SttModel, hint, _settings.DictationVocabulary), preset: preset,
+                                         backup: backup, latency: latency, speculate: !forFile, onSpeculation: onSpeculation,
+                                         maxConcurrentRequests: forFile ? FileTranscription.MaxConcurrentRequests : 3);
     }
 
     private void StopCapture()
@@ -1187,31 +1202,50 @@ public sealed class SessionController
     }
 
     /// <summary>
-    /// Cleans up <paramref name="raw"/> with the dictation's preferences (the global ones and its app profile's), or
-    /// translates it into <paramref name="translation"/>, on the main model and the backup alike.
+    /// The clean-up of a file being transcribed (see <see cref="FileTranscriber"/>), with the global preferences, which
+    /// sends a few parts at a time, on the file client, each part waiting to start while <paramref name="holdWhile"/> says
+    /// so (a dictation is under way).
+    /// </summary>
+    internal Task<SegmentedPolishResult> Polish(string raw, Action<string>? onPartial, CancellationToken token, bool forFile = false,
+                                                Func<bool>? holdWhile = null) =>
+        Polish(raw, null, null, null, null, onPartial, token, forFile, holdWhile);
+
+    /// <summary>
+    /// Cleans up <paramref name="raw"/> with the dictation's preferences (the global ones and its app profile's; null: the
+    /// global ones), or translates it into <paramref name="translation"/>, on the main model and the backup alike.
     /// </summary>
     /// <param name="context">The text around the cursor, which goes with every clean-up request (both routes, every part).</param>
     /// <param name="sent">Told when one of them goes out, for the dictation the clean-up is for.</param>
-    private async Task<SegmentedPolishResult> Polish(string raw, DictationSettings dictation, TranslationTarget? translation,
-                                                     string? context, ContextSent sent, Action<string>? onPartial,
-                                                     CancellationToken token)
+    /// <param name="forFile">
+    /// The clean-up of a file being transcribed (see <see cref="FileTranscriber"/>), which sends a few parts at a time, on
+    /// the file client, each part waiting to start while <paramref name="holdWhile"/> says so (a dictation is under way). A
+    /// dictation's own clean-up sends all of its parts at once.
+    /// </param>
+    private async Task<SegmentedPolishResult> Polish(string raw, DictationSettings? dictation, TranslationTarget? translation,
+                                                     string? context, ContextSent? sent, Action<string>? onPartial,
+                                                     CancellationToken token, bool forFile = false, Func<bool>? holdWhile = null)
     {
         if (_settings.PolishEndpoint is not { } endpoint || !_settings.IsConfigured(_settings.PolishProvider))
         {
             throw ApiException.MissingApiKey(_settings.PolishProvider.DisplayName());
         }
-        var primary = Route(endpoint, _settings.PolishModel, dictation.ExtraInstructions, translation, context, sent);
+        var instructions = (dictation ?? _settings.GlobalDictationSettings).ExtraInstructions;
+        var primary = Route(endpoint, _settings.PolishModel, instructions, translation, context, sent, forFile);
         var backup = _settings.PolishBackupEndpoint is { } backupEndpoint
-            ? Route(backupEndpoint, _settings.PolishBackupModel, dictation.ExtraInstructions, translation, context, sent)
+            ? Route(backupEndpoint, _settings.PolishBackupModel, instructions, translation, context, sent, forFile)
             : null;
-        return await SegmentedPolish.Run(raw, primary, backup, onPartial, token);
+        return await SegmentedPolish.Run(raw, primary, backup, onPartial, token,
+                                         forFile ? FileTranscription.CleanUpConcurrency : null, holdWhile);
     }
 
+    /// <summary>A file's requests go on connections of their own, so a dictation's never wait behind them.</summary>
+    private static ApiClient Client(ProviderEndpoint endpoint, bool forFile) => forFile ? ApiClient.ForFiles(endpoint) : new ApiClient(endpoint);
+
     private PolishRoute Route(ProviderEndpoint endpoint, string model, string instructions, TranslationTarget? translation,
-                              string? context, ContextSent sent)
+                              string? context, ContextSent? sent, bool forFile)
     {
         model = model.Trim();
-        return new PolishRoute(new ApiClient(endpoint), new PolishOptions(
+        return new PolishRoute(Client(endpoint, forFile), new PolishOptions(
             model,
             _settings.DictationVocabulary,
             instructions,
@@ -1220,7 +1254,7 @@ public sealed class SessionController
             Host: endpoint.Id == ProviderId.OpenRouter ? _settings.OpenRouterHost(model) : null,
             Translation: translation,
             Context: context,
-            OnContextSent: sent.Mark));
+            OnContextSent: sent is null ? null : sent.Mark));
     }
 
     /// <summary>
@@ -1229,11 +1263,14 @@ public sealed class SessionController
     /// page totals.
     /// </summary>
     /// <param name="discarded">Clean-ups done ahead of time for a transcript the speaker then went on from.</param>
-    /// <param name="sent">Whether this run's requests carried the text around the cursor, which History notes (never the text).</param>
-    private void Account(DictationRecord record, TranscriptionPipeline pipeline, SegmentedPolishResult? polished,
-                         IReadOnlyList<SegmentedPolishResult> discarded, ContextSent sent)
+    /// <param name="sent">
+    /// Whether this run's requests carried the text around the cursor, which History notes (never the text); null for a
+    /// file's, which never send it.
+    /// </param>
+    internal void Account(DictationRecord record, TranscriptionPipeline pipeline, SegmentedPolishResult? polished,
+                          IReadOnlyList<SegmentedPolishResult> discarded, ContextSent? sent = null)
     {
-        NoteContext(record, sent);
+        if (sent != null) NoteContext(record, sent);
         var prices = PriceStore.Shared;
         var (transcription, unpriced) = CostEstimator.Transcriptions(
             pipeline.Usages(), prices.Price(_settings.SttProvider, _settings.SttModel), _settings.SttProvider == ProviderId.OpenRouter);

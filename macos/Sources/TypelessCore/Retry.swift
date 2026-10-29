@@ -26,6 +26,16 @@ public enum APIError: Error, LocalizedError, Equatable {
     }
 
     /// Transient failures worth retrying. Auth, billing and malformed requests are not.
+    /// The provider turns every request down this way (no key or a bad one, no credit, no such model or endpoint), not
+    /// just this one: a file being transcribed stops at the first such failure rather than sending the rest.
+    public var refusesEveryRequest: Bool {
+        switch self {
+        case .missingAPIKey: return true
+        case let .http(status, _): return [401, 402, 403, 404].contains(status)
+        default: return false
+        }
+    }
+
     public var isRetryable: Bool {
         switch self {
         case .missingAPIKey, .cancelled: return false

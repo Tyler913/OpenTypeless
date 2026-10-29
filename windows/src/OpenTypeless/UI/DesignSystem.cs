@@ -107,6 +107,9 @@ public static class Glyphs
     public const string Edit = "\uE70F";
     public const string Export = "\uEDE1";
     public const string Import = "\uE8B5";
+    public const string OpenFile = "\uE8E5";
+    public const string Page = "\uE7C3";
+    public const string Video = "\uE714";
 }
 
 public static class Ui

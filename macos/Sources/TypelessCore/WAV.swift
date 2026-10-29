@@ -128,6 +128,79 @@ public final class WAVFileWriter {
     }
 }
 
+/// Reads a 16 kHz mono PCM16 WAV (as `WAVFileWriter` writes it) a block at a time, so a recording an hour long is never
+/// all in memory: a transcribed file's recording is handed to the pipeline this way (see FileTranscription).
+public final class WAVFileReader {
+    public enum ReadError: Error, Equatable {
+        /// Not a WAV, or not 16 kHz mono 16-bit PCM.
+        case unsupportedFormat
+    }
+
+    /// How many samples the file holds.
+    public let sampleCount: Int
+    private let handle: FileHandle
+    private var remaining: Int
+
+    public init(url: URL) throws {
+        handle = try FileHandle(forReadingFrom: url)
+        do {
+            let fileSize = Int(try handle.seekToEnd())
+            try handle.seek(toOffset: 0)
+            guard let riff = try handle.read(upToCount: 12), riff.count == 12,
+                  riff.prefix(4) == Data("RIFF".utf8), riff.subdata(in: 8..<12) == Data("WAVE".utf8)
+            else { throw ReadError.unsupportedFormat }
+            // Walks the chunks to "data", checking "fmt " on the way (files from other writers carry extra chunks).
+            var offset = 12
+            var formatOK = false
+            var dataBytes: Int?
+            while offset + 8 <= fileSize {
+                try handle.seek(toOffset: UInt64(offset))
+                guard let header = try handle.read(upToCount: 8), header.count == 8 else { break }
+                let declared = header.readLE32(at: 4)
+                let body = offset + 8
+                if header.prefix(4) == Data("fmt ".utf8) {
+                    guard let format = try handle.read(upToCount: 16), format.count == 16 else { break }
+                    let tag = UInt16(format[0]) | UInt16(format[1]) << 8
+                    let channels = UInt16(format[2]) | UInt16(format[3]) << 8
+                    let rate = format.readLE32(at: 4)
+                    let bits = UInt16(format[14]) | UInt16(format[15]) << 8
+                    // 1 = PCM; 0xFFFE = WAVE_FORMAT_EXTENSIBLE, which some writers use for plain PCM too.
+                    formatOK = (tag == 1 || tag == 0xFFFE) && channels == 1 && rate == UInt32(AudioFormat.sampleRate) && bits == 16
+                } else if header.prefix(4) == Data("data".utf8) {
+                    // Never finalized (the app quit mid-way), written by a streaming writer, or cut off: then the audio
+                    // is the rest of the file (as `WAV.decodeSamples` reads it).
+                    let unknown = declared == 0 || declared == UInt32.max || body + Int(declared) > fileSize
+                    dataBytes = unknown ? fileSize - body : Int(declared)
+                    break
+                }
+                offset = body + Int(declared) + Int(declared % 2)
+            }
+            guard formatOK, let dataBytes else { throw ReadError.unsupportedFormat }
+            remaining = dataBytes - dataBytes % 2
+            sampleCount = remaining / 2
+        } catch {
+            try? handle.close()
+            throw error
+        }
+    }
+
+    deinit { try? handle.close() }
+
+    /// The next block of at most `maxSamples` samples; nil once the whole file has been read.
+    public func read(maxSamples: Int) throws -> [Int16]? {
+        guard remaining > 0 else { return nil }
+        let wanted = min(remaining, max(1, maxSamples) * 2)
+        guard let data = try handle.read(upToCount: wanted), data.count >= 2 else {
+            remaining = 0
+            return nil
+        }
+        remaining -= data.count
+        var samples = [Int16](repeating: 0, count: data.count / 2)
+        _ = samples.withUnsafeMutableBytes { data.copyBytes(to: $0, count: $0.count) }
+        return samples
+    }
+}
+
 extension Data {
     mutating func appendLE<T: FixedWidthInteger>(_ value: T) {
         append(Data(le: value))

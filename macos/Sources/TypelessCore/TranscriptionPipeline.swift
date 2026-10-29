@@ -71,6 +71,29 @@ public enum ChunkState: Sendable, Equatable {
     }
 }
 
+/// Where the chunks handed to a pipeline stand (see `TranscriptionPipeline.chunkCounts`).
+public struct ChunkCounts: Equatable, Sendable {
+    /// Transcribed, reused from `preset`, or with nothing to send (silence).
+    public var answered: Int
+    /// Failed after their retries (sent once more by `finish`, unless the failure is permanent).
+    public var failed: Int
+    /// Handed out and still waiting for an answer.
+    public var outstanding: Int
+    /// Of the failed ones, those the provider turned down the way it turns down every request (see
+    /// `APIError.refusesEveryRequest`).
+    public var refused: Int
+    /// How many chunks failed since the last one that was transcribed, in the order their answers came.
+    public var failureStreak: Int
+
+    public init(answered: Int, failed: Int, outstanding: Int, refused: Int = 0, failureStreak: Int = 0) {
+        self.answered = answered
+        self.failed = failed
+        self.outstanding = outstanding
+        self.refused = refused
+        self.failureStreak = failureStreak
+    }
+}
+
 public struct PipelineFailure: Error, LocalizedError, Sendable {
     public let partialText: String
     public let failedChunks: [Int]
@@ -97,7 +120,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     private let latency: TranscriptionLatency
     private let policy: RetryPolicy
     private let observer: ChunkObserver?
-    private let semaphore = AsyncSemaphore(3)
+    private let semaphore: AsyncSemaphore
     private let trimSilence: Bool
     private let speculate: Bool
     private let onSpeculation: (@Sendable (String?) -> Void)?
@@ -108,6 +131,10 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     private var results: [Int: ChunkState] = [:]
     /// Chunks whose last failure was permanent (bad key, no credit…): not worth another round.
     private var permanentFailures: Set<Int> = []
+    /// Chunks that failed since the last one transcribed (see `ChunkCounts.failureStreak`).
+    private var failureStreak = 0
+    /// Failed chunks the provider turned down as it would any request (see `ChunkCounts.refused`).
+    private var refusals: Set<Int> = []
     private var tasks: [Int: Task<Void, Never>] = [:]
     /// Usage of every successful request, retries of the same chunk included (each one was billed).
     private var usages: [RequestUsage] = []
@@ -175,6 +202,8 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     }
 
     /// `preset` lets a retry reuse transcripts that already succeeded (keyed by chunk index).
+    /// `maxConcurrentRequests`: how many chunks are transcribed at once (a file being transcribed asks for fewer than a
+    /// dictation, see `FileTranscription`).
     /// `trimSilence` sends each chunk without the silence before and after its speech (see `AudioChunk.trimmed`).
     /// `speculate` transcribes the pending audio ahead of time whenever the speaker pauses (see above).
     /// `onSpeculation` is called, on a background thread, with the whole transcript the recording would give if it ended
@@ -189,6 +218,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         preset: [Int: String] = [:],
         backup: (client: APIClient, options: APIClient.TranscriptionOptions)? = nil,
         latency: TranscriptionLatency = TranscriptionLatency(),
+        maxConcurrentRequests: Int = 3,
         trimSilence: Bool = true,
         speculate: Bool = true,
         onSpeculation: (@Sendable (String?) -> Void)? = nil,
@@ -203,6 +233,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         self.latency = latency
         self.policy = policy
         self.observer = observer
+        self.semaphore = AsyncSemaphore(max(1, maxConcurrentRequests))
         self.chunker = Chunker(config: chunkConfig)
         for (index, text) in preset { results[index] = .done(text) }
     }
@@ -293,6 +324,36 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         }
     }
 
+    /// Where the chunks so far stand: answered (or needing none, or reused from `preset`), failed, and handed out and
+    /// still waiting. Unlike `transcriptionProgress` it's there before `finish`: a long recording read from a file is
+    /// handed over a block at a time, held back while enough chunks are out, and stopped once they keep failing (see
+    /// FileTranscription).
+    public func chunkCounts() -> ChunkCounts {
+        lock.withLock {
+            var counts = ChunkCounts(answered: 0, failed: 0, outstanding: 0, refused: refusals.count, failureStreak: failureStreak)
+            for state in results.values {
+                switch state {
+                case .done, .skippedSilence: counts.answered += 1
+                case .failed: counts.failed += 1
+                case .queued, .transcribing: counts.outstanding += 1
+                }
+            }
+            return counts
+        }
+    }
+
+    /// Stops a recording handed over a block at a time (a file) whose chunks keep failing, rather than reading the rest
+    /// of it only to send requests that fail too: what's still out is cancelled, and the failure `finish` would have
+    /// thrown comes back, with the text so far. A dictation never stops this way.
+    public func giveUp() -> PipelineFailure {
+        cancel()
+        let (text, failed, lastError) = snapshot()
+        return PipelineFailure(partialText: text, failedChunks: failed, underlying: lastError ?? "unknown")
+    }
+
+    /// How many chunks' audio is still held (to be sent, or sent again in `finish`'s last round).
+    var heldChunkCount: Int { lock.withLock { chunks.count } }
+
     /// What the requests so far used, one entry per successful request.
     public func requestUsages() -> [RequestUsage] {
         lock.withLock { usages }
@@ -317,12 +378,12 @@ public final class TranscriptionPipeline: @unchecked Sendable {
 
     private func schedule(_ chunk: AudioChunk) {
         lock.lock()
-        chunks[chunk.index] = chunk
         if case .done = results[chunk.index] {
             lock.unlock()
             observer?(chunk.index, results[chunk.index]!)
             return
         }
+        chunks[chunk.index] = chunk
         lock.unlock()
         restart(chunk.index)
     }
@@ -332,6 +393,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         guard let chunk = chunks[index] else { lock.unlock(); return }
         if AudioLevel.isSilent(chunk.samples) || chunk.duration < 0.3 || isOnlyThePauseBeforeRelease(chunk) {
             results[index] = .skippedSilence
+            chunks[index] = nil
             lock.unlock()
             observer?(index, .skippedSilence)
             return
@@ -352,8 +414,18 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     private func record(_ index: Int, _ outcome: Outcome) {
         lock.withLock {
             results[index] = outcome.state
+            // Only a failed chunk is sent again (in `finish`'s last round): the audio of the others can go, which keeps an
+            // hour-long file from being held in memory as it's transcribed.
+            if case .failed = outcome.state {} else { chunks[index] = nil }
             if outcome.permanent { permanentFailures.insert(index) } else { permanentFailures.remove(index) }
             if case .done = outcome.state { answeredByBackup[index] = outcome.backup } else { answeredByBackup[index] = nil }
+            switch outcome.state {
+            case .done:
+                failureStreak = 0
+                refusals.remove(index)
+            case .failed: failureStreak += 1
+            default: break
+            }
         }
         observer?(index, outcome.state)
         announce()
@@ -477,6 +549,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
             return (.done(result.text), false, usedBackup)
         } catch {
             let apiError = APIError.from(error)
+            if apiError.refusesEveryRequest { lock.withLock { _ = refusals.insert(chunk.index) } }
             return (.failed(apiError.localizedDescription), !apiError.isRetryable, false)
         }
     }

@@ -52,6 +52,8 @@ final class AppSettings: ObservableObject {
     @AppStorage("showHomeAtLogin") var showHomeAtLogin: Bool = false
     /// The typing speed "time saved" on the Home page is measured against.
     @AppStorage("typingWordsPerMinute") var typingWordsPerMinute: Int = UsageTotals.defaultTypingWordsPerMinute
+    /// Clean up the transcript of a file transcribed from History (the switch in its import sheet), when clean-up is on.
+    @AppStorage("fileCleanUp") var fileCleanUp: Bool = true
 
     /// Translation mode: holding the hotkey and pressing `translationChord` inserts that dictation translated (see
     /// `translationTarget`). Off until the user turns it on and picks a language.

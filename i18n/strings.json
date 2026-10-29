@@ -3392,6 +3392,276 @@
     "fr": "Son enregistrement est aussi supprimé : impossible de la retranscrire ensuite.",
     "de": "Die Aufnahme wird mitgelöscht und kann nicht neu transkribiert werden."
   },
+  "Transcribe File…": {
+    "ja": "ファイルを文字起こし…",
+    "ko": "파일 변환…",
+    "es": "Transcribir archivo…",
+    "pt": "Transcrever arquivo…",
+    "ru": "Распознать файл…",
+    "fr": "Transcrire un fichier…",
+    "de": "Datei transkribieren…"
+  },
+  "Transcribe a voice memo, meeting recording or video (or drop it here)": {
+    "ja": "ボイスメモ、会議の録音、動画を文字起こしします（ここにドロップしても構いません）",
+    "ko": "음성 메모, 회의 녹음, 동영상을 변환합니다(여기로 끌어다 놓아도 됩니다)",
+    "es": "Transcribe una nota de voz, la grabación de una reunión o un vídeo (o suéltalo aquí)",
+    "pt": "Transcreva uma nota de voz, a gravação de uma reunião ou um vídeo (ou solte aqui)",
+    "ru": "Распознать голосовую заметку, запись встречи или видео (или перетащите файл сюда)",
+    "fr": "Transcrire un mémo vocal, l’enregistrement d’une réunion ou une vidéo (ou déposez-le ici)",
+    "de": "Sprachmemo, Besprechungsaufnahme oder Video transkribieren (oder hier ablegen)"
+  },
+  "You can also drop audio or video files here to transcribe them.": {
+    "ja": "音声ファイルや動画ファイルをここにドロップして文字起こしすることもできます。",
+    "ko": "오디오나 동영상 파일을 여기로 끌어다 놓아 변환할 수도 있습니다.",
+    "es": "También puedes soltar aquí archivos de audio o vídeo para transcribirlos.",
+    "pt": "Você também pode soltar arquivos de áudio ou vídeo aqui para transcrevê-los.",
+    "ru": "Сюда можно перетащить аудио- или видеофайлы, чтобы распознать их.",
+    "fr": "Vous pouvez aussi déposer ici des fichiers audio ou vidéo pour les transcrire.",
+    "de": "Du kannst auch Audio- oder Videodateien hier ablegen, um sie zu transkribieren."
+  },
+  "Drop audio or video files to transcribe them": {
+    "ja": "ドロップすると音声・動画ファイルを文字起こしします",
+    "ko": "놓으면 오디오·동영상 파일을 변환합니다",
+    "es": "Suelta archivos de audio o vídeo para transcribirlos",
+    "pt": "Solte arquivos de áudio ou vídeo para transcrevê-los",
+    "ru": "Отпустите аудио- или видеофайлы, чтобы распознать их",
+    "fr": "Déposez des fichiers audio ou vidéo pour les transcrire",
+    "de": "Audio- oder Videodateien ablegen, um sie zu transkribieren"
+  },
+  "Transcribe Files": {
+    "ja": "ファイルを文字起こし",
+    "ko": "파일 변환",
+    "es": "Transcribir archivos",
+    "pt": "Transcrever arquivos",
+    "ru": "Распознать файлы",
+    "fr": "Transcrire des fichiers",
+    "de": "Dateien transkribieren"
+  },
+  "Transcribe": {
+    "ja": "文字起こし",
+    "ko": "변환",
+    "es": "Transcribir",
+    "pt": "Transcrever",
+    "ru": "Распознать",
+    "fr": "Transcrire",
+    "de": "Transkribieren"
+  },
+  "Reading how long the files are…": {
+    "ja": "ファイルの長さを読み取り中…",
+    "ko": "파일 길이를 읽는 중…",
+    "es": "Leyendo la duración de los archivos…",
+    "pt": "Lendo a duração dos arquivos…",
+    "ru": "Определяем длительность файлов…",
+    "fr": "Lecture de la durée des fichiers…",
+    "de": "Länge der Dateien wird gelesen…"
+  },
+  "Clean up text": {
+    "ja": "テキストを整形",
+    "ko": "텍스트 다듬기",
+    "es": "Limpiar el texto",
+    "pt": "Limpar o texto",
+    "ru": "Очистить текст",
+    "fr": "Nettoyer le texte",
+    "de": "Text bereinigen"
+  },
+  "Runs the transcript through the clean-up model, in parts (billed on top)": {
+    "ja": "文字起こし結果を整形モデルで分割して整形します（別途課金）",
+    "ko": "변환 결과를 다듬기 모델로 나누어 다듬습니다(별도 과금)",
+    "es": "Pasa la transcripción por el modelo de limpieza, por partes (se cobra aparte)",
+    "pt": "Passa a transcrição pelo modelo de limpeza, em partes (cobrado à parte)",
+    "ru": "Пропускает расшифровку через модель очистки по частям (оплачивается отдельно)",
+    "fr": "Passe la transcription dans le modèle de nettoyage, par parties (facturé en plus)",
+    "de": "Schickt das Transkript in Teilen durch das Bereinigungsmodell (zusätzlich berechnet)"
+  },
+  "Clean-up is turned off in Settings": {
+    "ja": "整形は設定でオフになっています",
+    "ko": "다듬기가 설정에서 꺼져 있습니다",
+    "es": "La limpieza está desactivada en Ajustes",
+    "pt": "A limpeza está desativada nas Configurações",
+    "ru": "Очистка выключена в настройках",
+    "fr": "Le nettoyage est désactivé dans les Réglages",
+    "de": "Die Bereinigung ist in den Einstellungen ausgeschaltet"
+  },
+  "The text is kept in History; nothing is pasted.": {
+    "ja": "テキストは履歴に保存され、貼り付けはされません。",
+    "ko": "텍스트는 기록에 저장되며 붙여 넣지 않습니다.",
+    "es": "El texto se guarda en el historial; no se pega nada.",
+    "pt": "O texto fica no histórico; nada é colado.",
+    "ru": "Текст сохраняется в истории и никуда не вставляется.",
+    "fr": "Le texte est conservé dans l’historique ; rien n’est collé.",
+    "de": "Der Text bleibt im Verlauf; es wird nichts eingefügt."
+  },
+  "{0} in all; speech-to-text should cost about {1} ({2} at {3}/min). Silence isn't sent.": {
+    "ja": "合計 {0}。文字起こしの費用は約 {1} の見込みです（{2}、1 分あたり {3}）。無音部分は送信されません。",
+    "ko": "총 {0}. 음성 인식 비용은 약 {1}로 예상됩니다({2}, 분당 {3}). 무음 구간은 전송하지 않습니다.",
+    "es": "{0} en total; la transcripción debería costar unos {1} ({2} a {3}/min). El silencio no se envía.",
+    "pt": "{0} no total; a transcrição deve custar cerca de {1} ({2} a {3}/min). O silêncio não é enviado.",
+    "ru": "Всего {0}; распознавание обойдётся примерно в {1} ({2} по {3}/мин). Тишина не отправляется.",
+    "fr": "{0} au total ; la transcription devrait coûter environ {1} ({2} à {3}/min). Les silences ne sont pas envoyés.",
+    "de": "Insgesamt {0}; die Spracherkennung sollte etwa {1} kosten ({2} zu {3}/Min.). Stille wird nicht gesendet."
+  },
+  "{0} in all. {1} has no per-minute price, so the cost can't be estimated.": {
+    "ja": "合計 {0}。{1} には分単位の料金がないため、費用を見積もれません。",
+    "ko": "총 {0}. {1}에는 분당 가격이 없어 비용을 예상할 수 없습니다.",
+    "es": "{0} en total. {1} no tiene precio por minuto, así que no se puede estimar el coste.",
+    "pt": "{0} no total. {1} não tem preço por minuto, então não é possível estimar o custo.",
+    "ru": "Всего {0}. У {1} нет поминутной цены, поэтому стоимость оценить нельзя.",
+    "fr": "{0} au total. {1} n’a pas de prix à la minute, le coût ne peut donc pas être estimé.",
+    "de": "Insgesamt {0}. {1} hat keinen Minutenpreis, daher lassen sich die Kosten nicht schätzen."
+  },
+  "Transcribes the saved audio again": {
+    "ja": "保存された音声をもう一度文字起こしします",
+    "ko": "저장된 오디오를 다시 변환합니다",
+    "es": "Vuelve a transcribir el audio guardado",
+    "pt": "Transcreve de novo o áudio salvo",
+    "ru": "Заново распознаёт сохранённое аудио",
+    "fr": "Retranscrit l’audio enregistré",
+    "de": "Transkribiert das gespeicherte Audio erneut"
+  },
+  "Cancelled (audio saved — you can re-transcribe it)": {
+    "ja": "キャンセルしました（音声は保存済み。もう一度文字起こしできます）",
+    "ko": "취소됨 (오디오 저장됨 — 다시 변환할 수 있음)",
+    "es": "Cancelado (audio guardado; puedes volver a transcribirlo)",
+    "pt": "Cancelado (áudio salvo — você pode transcrever de novo)",
+    "ru": "Отменено (аудио сохранено, можно распознать заново)",
+    "fr": "Annulé (audio conservé, vous pouvez le retranscrire)",
+    "de": "Abgebrochen (Audio gespeichert – du kannst es neu transkribieren)"
+  },
+  "Interrupted last time while reading the file — transcribe the file again": {
+    "ja": "前回、ファイルの読み込み中に中断されました。ファイルをもう一度文字起こししてください",
+    "ko": "지난번 파일을 읽는 중에 중단됨 — 파일을 다시 변환하세요",
+    "es": "Se interrumpió la última vez mientras se leía el archivo; vuelve a transcribirlo",
+    "pt": "Interrompido da última vez durante a leitura do arquivo — transcreva o arquivo de novo",
+    "ru": "В прошлый раз прервано во время чтения файла — распознайте файл заново",
+    "fr": "Interrompu la dernière fois pendant la lecture du fichier — transcrivez à nouveau le fichier",
+    "de": "Letztes Mal beim Lesen der Datei unterbrochen – transkribiere die Datei erneut"
+  },
+  "Waiting…": {
+    "ja": "待機中…",
+    "ko": "대기 중…",
+    "es": "En espera…",
+    "pt": "Na fila…",
+    "ru": "В очереди…",
+    "fr": "En attente…",
+    "de": "Wartet…"
+  },
+  "Reading the file… {0}%": {
+    "ja": "ファイルを読み込み中… {0}%",
+    "ko": "파일 읽는 중… {0}%",
+    "es": "Leyendo el archivo… {0} %",
+    "pt": "Lendo o arquivo… {0}%",
+    "ru": "Чтение файла… {0}%",
+    "fr": "Lecture du fichier… {0} %",
+    "de": "Datei wird gelesen… {0} %"
+  },
+  "Reading the file…": {
+    "ja": "ファイルを読み込み中…",
+    "ko": "파일 읽는 중…",
+    "es": "Leyendo el archivo…",
+    "pt": "Lendo o arquivo…",
+    "ru": "Чтение файла…",
+    "fr": "Lecture du fichier…",
+    "de": "Datei wird gelesen…"
+  },
+  "Transcribing {0}/{1} segments": {
+    "ja": "文字起こし中 {0}/{1} 区間",
+    "ko": "변환 중 {0}/{1} 구간",
+    "es": "Transcribiendo {0}/{1} fragmentos",
+    "pt": "Transcrevendo {0}/{1} trechos",
+    "ru": "Распознавание: {0}/{1} фрагментов",
+    "fr": "Transcription de {0}/{1} segments",
+    "de": "Transkribiere {0}/{1} Abschnitte"
+  },
+  "Cleaning up…": {
+    "ja": "整形中…",
+    "ko": "다듬는 중…",
+    "es": "Limpiando…",
+    "pt": "Limpando…",
+    "ru": "Очистка…",
+    "fr": "Nettoyage…",
+    "de": "Wird bereinigt…"
+  },
+  "The file can't be found (it may have been moved or deleted)": {
+    "ja": "ファイルが見つかりません（移動または削除された可能性があります）",
+    "ko": "파일을 찾을 수 없습니다(이동되었거나 삭제되었을 수 있음)",
+    "es": "No se encuentra el archivo (puede que se haya movido o eliminado)",
+    "pt": "O arquivo não foi encontrado (pode ter sido movido ou excluído)",
+    "ru": "Файл не найден (возможно, он перемещён или удалён)",
+    "fr": "Le fichier est introuvable (il a peut-être été déplacé ou supprimé)",
+    "de": "Die Datei wurde nicht gefunden (sie wurde vielleicht verschoben oder gelöscht)"
+  },
+  "No permission to read this file": {
+    "ja": "このファイルを読み取る権限がありません",
+    "ko": "이 파일을 읽을 권한이 없습니다",
+    "es": "No hay permiso para leer este archivo",
+    "pt": "Sem permissão para ler este arquivo",
+    "ru": "Нет прав на чтение этого файла",
+    "fr": "Pas l’autorisation de lire ce fichier",
+    "de": "Keine Berechtigung, diese Datei zu lesen"
+  },
+  "Can't read this file: it's damaged or in a format that isn't supported ({0})": {
+    "ja": "このファイルを読み込めません：破損しているか、対応していない形式です（{0}）",
+    "ko": "이 파일을 읽을 수 없습니다: 손상되었거나 지원하지 않는 형식입니다({0})",
+    "es": "No se puede leer este archivo: está dañado o en un formato no compatible ({0})",
+    "pt": "Não é possível ler este arquivo: está danificado ou em um formato não suportado ({0})",
+    "ru": "Не удаётся прочитать файл: он повреждён или в неподдерживаемом формате ({0})",
+    "fr": "Impossible de lire ce fichier : il est endommagé ou dans un format non pris en charge ({0})",
+    "de": "Diese Datei kann nicht gelesen werden: Sie ist beschädigt oder in einem nicht unterstützten Format ({0})"
+  },
+  "Can't read this file: it's damaged or in a format that isn't supported": {
+    "ja": "このファイルを読み込めません：破損しているか、対応していない形式です",
+    "ko": "이 파일을 읽을 수 없습니다: 손상되었거나 지원하지 않는 형식입니다",
+    "es": "No se puede leer este archivo: está dañado o en un formato no compatible",
+    "pt": "Não é possível ler este arquivo: está danificado ou em um formato não suportado",
+    "ru": "Не удаётся прочитать файл: он повреждён или в неподдерживаемом формате",
+    "fr": "Impossible de lire ce fichier : il est endommagé ou dans un format non pris en charge",
+    "de": "Diese Datei kann nicht gelesen werden: Sie ist beschädigt oder in einem nicht unterstützten Format"
+  },
+  "This file has no audio track": {
+    "ja": "このファイルには音声トラックがありません",
+    "ko": "이 파일에는 오디오 트랙이 없습니다",
+    "es": "Este archivo no tiene pista de audio",
+    "pt": "Este arquivo não tem faixa de áudio",
+    "ru": "В этом файле нет звуковой дорожки",
+    "fr": "Ce fichier n’a pas de piste audio",
+    "de": "Diese Datei hat keine Tonspur"
+  },
+  "Not enough disk space to save the audio": {
+    "ja": "ディスクの空き容量が足りず、音声を保存できません",
+    "ko": "디스크 공간이 부족해 오디오를 저장할 수 없습니다",
+    "es": "No hay espacio en disco suficiente para guardar el audio",
+    "pt": "Não há espaço em disco suficiente para salvar o áudio",
+    "ru": "Недостаточно места на диске, чтобы сохранить аудио",
+    "fr": "Espace disque insuffisant pour enregistrer l’audio",
+    "de": "Nicht genug Speicherplatz, um das Audio zu speichern"
+  },
+  "Can't save the audio: ": {
+    "ja": "音声を保存できません：",
+    "ko": "오디오를 저장할 수 없습니다: ",
+    "es": "No se puede guardar el audio: ",
+    "pt": "Não é possível salvar o áudio: ",
+    "ru": "Не удаётся сохранить аудио: ",
+    "fr": "Impossible d’enregistrer l’audio : ",
+    "de": "Das Audio kann nicht gespeichert werden: "
+  },
+  "This file's audio track is empty": {
+    "ja": "このファイルの音声トラックは空です",
+    "ko": "이 파일의 오디오 트랙이 비어 있습니다",
+    "es": "La pista de audio de este archivo está vacía",
+    "pt": "A faixa de áudio deste arquivo está vazia",
+    "ru": "Звуковая дорожка этого файла пуста",
+    "fr": "La piste audio de ce fichier est vide",
+    "de": "Die Tonspur dieser Datei ist leer"
+  },
+  "This file is copy-protected (DRM), so it can't be read": {
+    "ja": "このファイルはコピー保護（DRM）されているため読み込めません",
+    "ko": "이 파일은 복제 방지(DRM)되어 있어 읽을 수 없습니다",
+    "es": "Este archivo tiene protección anticopia (DRM), así que no se puede leer",
+    "pt": "Este arquivo tem proteção contra cópia (DRM), então não pode ser lido",
+    "ru": "Этот файл защищён от копирования (DRM), поэтому его нельзя прочитать",
+    "fr": "Ce fichier est protégé contre la copie (DRM), il ne peut donc pas être lu",
+    "de": "Diese Datei ist kopiergeschützt (DRM) und kann daher nicht gelesen werden"
+  },
   "Export": {
     "ja": "書き出す",
     "ko": "내보내기",

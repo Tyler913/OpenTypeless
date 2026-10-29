@@ -359,6 +359,13 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("showHomeAtLogin", value);
     }
 
+    /// <summary>Clean up the transcript of a file transcribed from History (the switch in its import dialog), when clean-up is on.</summary>
+    public bool FileCleanUp
+    {
+        get => GetBool("fileCleanUp", true);
+        set => SetValue("fileCleanUp", value);
+    }
+
     /// <summary>The typing speed "time saved" on the Home page is measured against.</summary>
     public int TypingWordsPerMinute
     {

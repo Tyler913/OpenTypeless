@@ -277,11 +277,12 @@ public sealed class PopoverWindow : Window
         return null;
     }
 
+    /// <summary>The last dictation, when it failed. A transcribed file is retried from History instead: its text is never pasted.</summary>
     private DictationRecord? FailedRecord()
     {
         if (_controller.State != SessionController.SessionState.Idle) return null;
         var last = _history.Records.FirstOrDefault();
-        return last is { Status: DictationStatus.Failed, HasAudio: true } ? last : null;
+        return last is { Status: DictationStatus.Failed, HasAudio: true, IsFile: false } ? last : null;
     }
 
     private FrameworkElement Recent()

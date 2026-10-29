@@ -74,6 +74,14 @@ public sealed class DictationRecord
     [JsonPropertyName("mode")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Mode { get; set; }
     /// <summary>The language a translation dictation is written in (<see cref="TranslationTarget.Id"/>).</summary>
     [JsonPropertyName("targetLanguage")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? TargetLanguage { get; set; }
+    /// <summary>
+    /// Where the audio came from: a dictation (not written), or a transcribed audio or video file (see
+    /// <see cref="Session.FileTranscriber"/>).
+    /// </summary>
+    [JsonPropertyName("source")][JsonConverter(typeof(RecordSourceConverter))][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public RecordSource Source { get; set; }
+    /// <summary>The name of the file it was transcribed from.</summary>
+    [JsonPropertyName("sourceName")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? SourceName { get; set; }
 
     /// <summary>What a translation dictation is translated into; null for plain dictation. A retry translates it again.</summary>
     [JsonIgnore]
@@ -92,8 +100,13 @@ public sealed class DictationRecord
     /// <summary>What was (or would be) inserted: the final text with its snippets expanded.</summary>
     [JsonIgnore] public string OutputText => InsertedText ?? FinalText;
 
+    /// <summary>Transcribed from a file rather than dictated: never pasted, and not in the Home page's dictation totals.</summary>
+    [JsonIgnore] public bool IsFile => Source == RecordSource.File;
+
     [JsonIgnore] public string Folder => Path.Combine(AppPaths.Sessions, Id);
     [JsonIgnore] public string AudioPath => Path.Combine(Folder, "audio.wav");
+    /// <summary>Where a file's sound is written while it's read; renamed to <see cref="AudioPath"/> once all of it is there.</summary>
+    [JsonIgnore] public string PartialAudioPath => Path.Combine(Folder, "audio.partial.wav");
     [JsonIgnore] public bool HasAudio => File.Exists(AudioPath);
 
     /// <summary>
@@ -288,6 +301,13 @@ public sealed class HistoryStore
         var loaded = new List<DictationRecord>();
         foreach (var folder in Directory.EnumerateDirectories(AppPaths.Sessions))
         {
+            if (!File.Exists(Path.Combine(folder, "session.json")) && !File.Exists(Path.Combine(folder, "audio.wav")))
+            {
+                // What a delete that couldn't finish left behind (a cancelled file's transcoder still had its output open):
+                // no record and no recording, so nothing in it is anyone's.
+                try { Directory.Delete(folder, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+                continue;
+            }
             try
             {
                 var record = JsonSerializer.Deserialize<DictationRecord>(File.ReadAllBytes(Path.Combine(folder, "session.json")), Json);
@@ -301,7 +321,12 @@ public sealed class HistoryStore
         foreach (var record in loaded.Where(r => r.Status is DictationStatus.Recording or DictationStatus.Processing))
         {
             record.Status = DictationStatus.Failed;
-            record.Error = L("上次运行中断（音频已保存，可重试）", "Interrupted last time (audio saved — you can retry)");
+            if (record.IsFile && !record.HasAudio)
+            {
+                // Quit while the file was still being read: what was read of it is no use.
+                try { File.Delete(record.PartialAudioPath); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            }
+            record.Error = FileTranscription.InterruptedMessage(record.IsFile, record.HasAudio);
             Save(record);
         }
         _records.AddRange(loaded);

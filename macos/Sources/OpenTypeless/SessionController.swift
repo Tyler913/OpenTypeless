@@ -31,7 +31,7 @@ private extension PolishFallback {
 }
 
 /// Whether a clean-up request carried the text around the cursor (set as the requests go out, read on main), for History.
-private final class ContextSent: @unchecked Sendable {
+final class ContextSent: @unchecked Sendable {
     private let lock = NSLock()
     private var value = false
     func mark() { lock.withLock { value = true } }
@@ -116,6 +116,8 @@ final class SessionController: ObservableObject {
     /// Whether this dictation's clean-up requests carried that text, for History. A new one for each dictation: work still
     /// out for an earlier one holds on to its own.
     private var contextSent = ContextSent()
+    /// Audio and video files being transcribed into History, alongside (never instead of) dictating.
+    private(set) lazy var files = FileTranscriber(controller: self)
 
     init() {
         editWatcher.onCorrections = { [weak self] corrections, quiet in
@@ -555,24 +557,29 @@ final class SessionController: ObservableObject {
     /// How long each speech-to-text route takes, kept while the app runs, so the backup is asked when a chunk is late.
     private var latencies: [String: TranscriptionLatency] = [:]
 
-    /// `language`: the dictation's spoken-language hint, "" to auto-detect.
-    private func makePipeline(endpoint: ProviderEndpoint, preset: [Int: String], language: String,
-                              onSpeculation: (@Sendable (String?) -> Void)? = nil) -> TranscriptionPipeline {
-        let language = language.isEmpty ? nil : language
+    /// `language`: the dictation's spoken-language hint, "" to auto-detect; nil for the global setting (a file's).
+    /// `forFile`: for a file being transcribed (see FileTranscriber), which sends fewer requests at once on a session of
+    /// its own, has no speculative tail, and keeps its own idea of how long requests take (its chunks are mostly long).
+    func makePipeline(endpoint: ProviderEndpoint, preset: [Int: String], language: String? = nil, forFile: Bool = false,
+                      onSpeculation: (@Sendable (String?) -> Void)? = nil) -> TranscriptionPipeline {
+        let spoken = language ?? settings.sttLanguage
+        let language = spoken.isEmpty ? nil : spoken
         let backup = settings.sttBackupEndpoint.map {
-            (client: APIClient(endpoint: $0),
+            (client: forFile ? APIClient.forFiles(endpoint: $0) : APIClient(endpoint: $0),
              options: APIClient.TranscriptionOptions(model: settings.sttBackupModel.trimmingCharacters(in: .whitespaces), language: language,
                                                      vocabulary: settings.dictationVocabulary))
         }
         let key = ModelPrice.key(settings.sttProvider, settings.sttModel)
-        let latency = latencies[key] ?? TranscriptionLatency()
-        latencies[key] = latency
+        let latency = forFile ? TranscriptionLatency() : latencies[key] ?? TranscriptionLatency()
+        if !forFile { latencies[key] = latency }
         return TranscriptionPipeline(
-            client: APIClient(endpoint: endpoint),
+            client: forFile ? APIClient.forFiles(endpoint: endpoint) : APIClient(endpoint: endpoint),
             options: .init(model: settings.sttModel, language: language, vocabulary: settings.dictationVocabulary),
             preset: preset,
             backup: backup,
             latency: latency,
+            maxConcurrentRequests: forFile ? FileTranscription.maxConcurrentRequests : 3,
+            speculate: !forFile,
             onSpeculation: onSpeculation
         )
     }
@@ -1095,29 +1102,37 @@ final class SessionController: ObservableObject {
         return (result.text, surroundings)
     }
 
-    /// Cleans up `raw` with the dictation's preferences (the global ones and its app profile's), or translates it into
-    /// `translation`, on the main model and the backup alike. `context`: the text around the cursor, which goes with
-    /// every clean-up request (both routes, every part); `sent` is told when one of them goes out, for the dictation the
-    /// clean-up is for.
-    private func polish(_ raw: String, with dictation: DictationSettings, translation: TranslationTarget?,
-                        context: String?, sent: ContextSent,
-                        onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
+    /// Cleans up `raw` with the dictation's preferences (the global ones and its app profile's; nil: the global ones), or
+    /// translates it into `translation`, on the main model and the backup alike. `context`: the text around the cursor,
+    /// which goes with every clean-up request (both routes, every part); `sent` is told when one of them goes out, for
+    /// the dictation the clean-up is for.
+    ///
+    /// `forFile`: the clean-up of a file being transcribed (see FileTranscriber), which sends a few parts at a time, on
+    /// the file session, each part waiting to start while `holdWhile` says so (a dictation is under way). A dictation's
+    /// own clean-up sends all of its parts at once.
+    func polish(_ raw: String, with dictation: DictationSettings? = nil, translation: TranslationTarget? = nil,
+                context: String? = nil, sent: ContextSent? = nil, forFile: Bool = false,
+                holdWhile: (@Sendable () -> Bool)? = nil,
+                onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
-        let primary = route(endpoint, model: settings.polishModel, instructions: dictation.extraInstructions,
-                            translation: translation, context: context, sent: sent)
+        let instructions = (dictation ?? settings.globalDictationSettings).extraInstructions
+        let primary = route(endpoint, model: settings.polishModel, instructions: instructions, translation: translation,
+                            context: context, sent: sent, forFile: forFile)
         let backup = settings.polishBackupEndpoint.map {
-            route($0, model: settings.polishBackupModel, instructions: dictation.extraInstructions, translation: translation,
-                  context: context, sent: sent)
+            route($0, model: settings.polishBackupModel, instructions: instructions, translation: translation,
+                  context: context, sent: sent, forFile: forFile)
         }
-        return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup, onPartial: onPartial)
+        return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup,
+                                             concurrency: forFile ? FileTranscription.cleanUpConcurrency : nil,
+                                             holdWhile: holdWhile, onPartial: onPartial)
     }
 
-    private func route(_ endpoint: ProviderEndpoint, model: String, instructions: String,
-                       translation: TranslationTarget?, context: String?, sent: ContextSent) -> PolishRoute {
+    private func route(_ endpoint: ProviderEndpoint, model: String, instructions: String, translation: TranslationTarget?,
+                       context: String?, sent: ContextSent?, forFile: Bool) -> PolishRoute {
         let model = model.trimmingCharacters(in: .whitespaces)
-        return PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
+        return PolishRoute(client: forFile ? .forFiles(endpoint: endpoint) : APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
             vocabulary: settings.dictationVocabulary,
             misheard: settings.misheardHints,
@@ -1126,17 +1141,18 @@ final class SessionController: ObservableObject {
             host: endpoint.id == .openrouter ? settings.openRouterHost(for: model) : nil,
             translation: translation,
             context: context,
-            onContextSent: { sent.mark() }
+            onContextSent: { sent?.mark() }
         ))
     }
 
     /// Prices what this run's requests used (the speech-to-text of every chunk sent, and every clean-up answer, used or
     /// not, with the hedge's cancelled requests) and adds it, with the dictation's words once it's finished, to the Home
     /// page totals. `discarded`: clean-ups done ahead of time for a transcript the speaker then went on from.
-    /// `context`: whether this run's requests carried the text around the cursor, which History notes (never the text).
-    private func account(_ record: inout DictationRecord, pipeline: TranscriptionPipeline, polished: SegmentedPolishResult?,
-                         discarded: [SegmentedPolishResult], context: ContextSent) {
-        noteContext(&record, context)
+    /// `context`: whether this run's requests carried the text around the cursor, which History notes (never the text);
+    /// nil for a file's, which never send it.
+    func account(_ record: inout DictationRecord, pipeline: TranscriptionPipeline, polished: SegmentedPolishResult?,
+                 discarded: [SegmentedPolishResult], context: ContextSent? = nil) {
+        if let context { noteContext(&record, context) }
         let prices = PriceStore.shared
         let transcription = CostEstimator.transcriptions(pipeline.requestUsages(),
                                                          price: prices.price(settings.sttProvider, settings.sttModel),

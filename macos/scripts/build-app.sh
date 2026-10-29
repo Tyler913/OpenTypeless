@@ -74,6 +74,16 @@ cat > "$STAGED/Contents/Info.plist" <<PLIST
     <string>OpenTypeless records your voice to turn it into text.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>With Live preview on, OpenTypeless shows what you say as you talk, recognised on this Mac.</string>
+    <!-- "Open With" for audio and video files, which History offers to transcribe; never the default app for them. -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key><string>Audio or video</string>
+            <key>CFBundleTypeRole</key><string>Viewer</string>
+            <key>LSHandlerRank</key><string>Alternate</string>
+            <key>LSItemContentTypes</key><array><string>public.audio</string><string>public.movie</string></array>
+        </dict>
+    </array>
 </dict>
 </plist>
 PLIST

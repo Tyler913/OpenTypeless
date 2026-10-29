@@ -169,8 +169,9 @@ public partial class App : Application
     private void Quit()
     {
         _popover.Dismiss();
-        // Quitting mid-recording keeps what was said, retryable from History.
+        // Quitting mid-recording keeps what was said, retryable from History; so does a file being transcribed.
         if (_controller.State != SessionController.SessionState.Idle) _controller.StopForQuit();
+        _controller.StopFilesForQuit();
         _tray.Dispose();
         _onboarding?.CloseForExit();
         _settingsWindow?.CloseForExit();

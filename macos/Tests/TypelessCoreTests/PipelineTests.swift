@@ -16,6 +16,10 @@ final class MockOpenRouter: URLProtocol {
     override func stopLoading() { MockOpenRouter.lock.withLock { stopped = true } }
 
     override func startLoading() {
+        // URLSession starts loading a request even when it was cancelled first (a dropped speculative tail, say), and on
+        // a busy runner that can happen after its test has ended: the next test's handler then counted it. A server
+        // never sees such a request.
+        guard task?.state == .running else { return }
         var body = request.httpBody ?? Data()
         if body.isEmpty, let stream = request.httpBodyStream {
             stream.open()

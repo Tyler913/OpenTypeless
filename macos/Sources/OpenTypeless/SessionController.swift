@@ -827,8 +827,9 @@ final class SessionController: ObservableObject {
     /// stopped, or the app in front has other settings than the dictation's (see `suits`). Whether the paste actually
     /// landed is detected from the target app reading the clipboard: if it did, the user's previous clipboard is
     /// restored; if not, the text stays on the clipboard and the HUD says so. Returns how it went, for History (see
-    /// `DictationRecord.Timing.delivery`). Return follows the paste when the dictation's settings (its app profile's, or
-    /// the global one) say so.
+    /// `DictationRecord.Timing.delivery`). A paste is fitted to the text around the cursor first (see `fitToCursor`);
+    /// what's left on the clipboard is the text as cleaned up. Return follows the paste when the dictation's settings
+    /// (its app profile's, or the global one) say so.
     ///
     /// Esc (or the screen locking) can come at any point while the text goes in: the paste and the Return are only sent
     /// while the dictation is still current, and a cancelled one leaves the session and the HUD to what replaced it.
@@ -843,9 +844,19 @@ final class SessionController: ObservableObject {
             finish(showing: notice.map { .error($0) } ?? .copied, hideAfter: 1.6)
             return "copied"
         }
-        let outcome = await TextInserter.insert(text, restoreClipboard: settings.restoreClipboard) {
-            self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved && self.suits(dictation)
-        }
+        // The fitted text goes in only while the cursor is still where it was read; otherwise the text as cleaned up does.
+        let fit = fitToCursor(text)
+        var fits = fit != nil
+        let outcome = await TextInserter.insert(
+            fit?.text ?? text, fallback: text, restoreClipboard: settings.restoreClipboard,
+            shouldPaste: { self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved && self.suits(dictation) },
+            stillFits: {
+                guard let fit else { return true }
+                fits = FocusProbe.isCursorStill(at: fit.surroundings)
+                if !fits { self.note("fitted text not used: the cursor moved, or couldn't be checked") }
+                return fits
+            })
+        let inserted = fits ? fit?.text ?? text : text
         guard isCurrent(generation) else {
             note("deliver → \(outcome), but the dictation was cancelled meanwhile")
             return "cancelled"
@@ -868,7 +879,7 @@ final class SessionController: ObservableObject {
                 reset()
                 hud.finishWorking()
             }
-            if settings.learnFromEdits, !sent { editWatcher.watch(inserted: text) }
+            if settings.learnFromEdits, !sent { editWatcher.watch(inserted: inserted) }
             return "pasted"
         case .notPasted:
             finish(showing: .copied, hideAfter: 1.6)
@@ -886,6 +897,18 @@ final class SessionController: ObservableObject {
     }
 
     private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
+
+    /// The text with its spacing and capitalisation fitted to the text around the cursor (see InsertionJoiner), and where
+    /// that was read; nil when fitting is off, the field can't be read, or nothing needs changing. History keeps the
+    /// cleaned text: this is only how it goes in.
+    private func fitToCursor(_ text: String) -> (text: String, surroundings: FocusProbe.Surroundings)? {
+        guard settings.fitToSurroundingText, let surroundings = FocusProbe.textAroundCursor() else { return nil }
+        let result = InsertionJoiner.fit(text, before: surroundings.before, after: surroundings.after,
+                                         vocabulary: settings.vocabularyList, isCommonWord: EditWatcher.isCommonWord)
+        guard !result.changes.isEmpty else { return nil }
+        note("fitted to the text around the cursor: \(result.changes.joined(separator: ", "))")
+        return (result.text, surroundings)
+    }
 
     /// Cleans up `raw` with the dictation's preferences (the global ones and its app profile's), on the main model and
     /// the backup alike.

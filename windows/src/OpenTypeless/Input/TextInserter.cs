@@ -36,7 +36,8 @@ public static class TextInserter
     /// <summary>The text on offer while a paste is in flight. UI thread only (the owner window lives there).</summary>
     private sealed class Promise(string text)
     {
-        public string Text { get; } = text;
+        /// <summary>What a read gets: the text, or its plain version once it no longer suits the cursor.</summary>
+        public string Text { get; set; } = text;
         /// <summary>Ctrl+V has been sent. A read before that is a clipboard monitor, not the paste.</summary>
         public bool Armed { get; set; }
         public bool Requested { get; set; }
@@ -47,15 +48,23 @@ public static class TextInserter
     private static Promise? _promise;
 
     /// <param name="shouldPaste">
-    /// Asked right before Ctrl+V goes out (the dictation may have been cancelled, or focus moved, while the clipboard was
-    /// being prepared).
+    /// Asked before the clipboard is touched, and again right before Ctrl+V goes out (the dictation may have been
+    /// cancelled, or focus moved, while the clipboard was being prepared).
     /// </param>
-    public static async Task<Outcome> Insert(string text, bool restoreClipboard, Func<bool>? shouldPaste = null)
+    /// <param name="fallback">
+    /// The plain version of <paramref name="text"/>, when that was fitted to the text around the cursor (see
+    /// InsertionJoiner): what's left on the clipboard whenever the text stays there, and what's pasted after all when
+    /// <paramref name="stillFits"/>, asked right before Ctrl+V, says the cursor has moved since.
+    /// </param>
+    public static async Task<Outcome> Insert(string text, bool restoreClipboard, Func<bool>? shouldPaste = null,
+                                             string? fallback = null, Func<Task<bool>>? stillFits = null)
     {
+        var plain = fallback ?? text;
+        if (shouldPaste?.Invoke() == false) return Outcome.Skipped;
         if (ClipboardOwner == 0)
         {
             // No owner window (never in the app itself): paste eagerly and assume it landed.
-            ClipboardSnapshot.SetText(text, transient: false);
+            ClipboardSnapshot.SetText(plain != text && stillFits != null && !await stillFits() ? plain : text, transient: false);
             await Task.Delay(60);
             if (shouldPaste?.Invoke() == false) return Outcome.Skipped;
             PostControlV();
@@ -67,19 +76,20 @@ public static class TextInserter
         _promise = null;
         if (!ClipboardSnapshot.OfferText(ClipboardOwner))
         {
-            CopyToClipboard(text);
+            CopyToClipboard(plain);
             return Outcome.NotPasted;
         }
         var promise = new Promise(text) { Sequence = Win32.GetClipboardSequenceNumber() };
         _promise = promise;
 
         await Task.Delay(60);
+        if (plain != text && stillFits != null && !await stillFits()) promise.Text = plain;
         if (shouldPaste?.Invoke() == false)
         {
             if (_promise == promise && Win32.GetClipboardSequenceNumber() == promise.Sequence)
             {
                 _promise = null;
-                if (saved != null) saved.Restore(); else CopyToClipboard(text);
+                if (saved != null) saved.Restore(); else CopyToClipboard(plain);
             }
             return Outcome.Skipped;
         }
@@ -101,13 +111,13 @@ public static class TextInserter
             await Task.Delay(150);
             if (_promise != promise || Win32.GetClipboardSequenceNumber() != promise.Sequence) return Outcome.Pasted;
             _promise = null;
-            if (saved != null) saved.Restore(); else CopyToClipboard(text);
+            if (saved != null) saved.Restore(); else CopyToClipboard(plain);
             return Outcome.Pasted;
         }
         // Nothing pasted: replace the promise with a plain copy so the text stays available (and
         // clipboard history may record it) after this app stops serving it.
         _promise = null;
-        CopyToClipboard(text);
+        CopyToClipboard(plain);
         return Outcome.NotPasted;
     }
 

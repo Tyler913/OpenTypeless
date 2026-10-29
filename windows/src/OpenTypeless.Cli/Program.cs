@@ -75,7 +75,7 @@ public static class Cli
         var start = Stopwatch.StartNew();
         var pipeline = new TranscriptionPipeline(
             client,
-            new TranscriptionOptions(settings.SttModel, settings.SttLanguage.Length == 0 ? null : settings.SttLanguage, settings.VocabularyList),
+            new TranscriptionOptions(settings.SttModel, settings.SttLanguage.Length == 0 ? null : settings.SttLanguage, settings.DictationVocabulary),
             observer: (index, state) =>
             {
                 var t = $"{start.Elapsed.TotalSeconds,5:0.0}s";
@@ -161,7 +161,7 @@ public static class Cli
                 try { models = await new ApiClient(openRouter).ListModels(); } catch { }
             }
             PolishRoute Route(ProviderEndpoint endpoint, string model) => new(new ApiClient(endpoint), new PolishOptions(
-                model, settings.VocabularyList, settings.ExtraInstructions,
+                model, settings.DictationVocabulary, settings.ExtraInstructions,
                 endpoint.Id == ProviderId.OpenRouter ? models?.FirstOrDefault(m => m.Id == model) : null,
                 Misheard: settings.MisheardHints,
                 Host: endpoint.Id == ProviderId.OpenRouter ? settings.OpenRouterHost(model) : null));

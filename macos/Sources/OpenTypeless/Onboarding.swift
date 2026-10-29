@@ -527,7 +527,7 @@ private struct TryStep: View {
         switch latest.status {
         case .done, .polishFailed:
             error = nil
-            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { text = latest.finalText }
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { text = latest.outputText }
         case .failed:
             error = latest.error
         default:

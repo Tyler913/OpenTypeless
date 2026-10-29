@@ -170,7 +170,8 @@ public sealed class HistoryPage : PageBase
         {
             var needle = _search.Text.Trim();
             if (needle.Length == 0) return _history.Records.ToList();
-            return _history.Records.Where(r => r.FinalText.Contains(needle, StringComparison.CurrentCultureIgnoreCase)
+            return _history.Records.Where(r => r.OutputText.Contains(needle, StringComparison.CurrentCultureIgnoreCase)
+                                                || r.FinalText.Contains(needle, StringComparison.CurrentCultureIgnoreCase)
                                                 || r.RawText.Contains(needle, StringComparison.CurrentCultureIgnoreCase)).ToList();
         }
     }
@@ -374,9 +375,23 @@ public sealed class HistoryPage : PageBase
         args.Handled = true;
     }
 
+    /// <summary>An earlier form of the text, folded away under <paramref name="title"/>.</summary>
+    private static Expander Disclosure(string title, string text)
+    {
+        var content = Ui.Text(text, 12.5, foreground: Ui.Secondary, wrap: true);
+        content.IsTextSelectionEnabled = true;
+        return new Expander
+        {
+            Header = title,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Content = content,
+        };
+    }
+
     private static string Preview(DictationRecord record)
     {
-        if (record.FinalText.Length > 0) return record.FinalText;
+        if (record.OutputText.Length > 0) return record.OutputText;
         return record.Status switch
         {
             DictationStatus.Recording => L("正在录音…", "Recording…"),
@@ -406,7 +421,7 @@ public sealed class HistoryPage : PageBase
         Grid.SetColumn(duration, 1);
         meta.Children.Add(duration);
 
-        var text = Ui.Text(Preview(record), 13, foreground: record.FinalText.Length == 0 ? Ui.Secondary : null, wrap: true);
+        var text = Ui.Text(Preview(record), 13, foreground: record.OutputText.Length == 0 ? Ui.Secondary : null, wrap: true);
         text.MaxLines = 2;
         text.TextTrimming = TextTrimming.CharacterEllipsis;
         return new StackPanel { Spacing = 3, Padding = new Thickness(0, 7, 0, 7), Children = { meta, text } };
@@ -415,12 +430,13 @@ public sealed class HistoryPage : PageBase
     // MARK: Detail
 
     /// <summary>
-    /// The selected dictation: when, how long, how many words and what it cost; the text itself; the raw transcript
-    /// behind an expander when it was cleaned up; and the actions.
+    /// The selected dictation: when, how long, how many words and what it cost; the text that went in; what was said before
+    /// snippets were expanded, and the raw transcript when it was cleaned up, behind expanders; and the actions.
     /// </summary>
     private FrameworkElement Detail(DictationRecord record)
     {
         var details = new List<string> { Formatting.DurationLabel(record.Duration) };
+        // The words said, not what snippets put in.
         var words = WordCount.Count(record.FinalText);
         if (words > 0) details.Add(L($"{UsageFormat.Count(words)} 字", $"{UsageFormat.Count(words)} words"));
         if (record.Cost is { } cost) details.Add(UsageFormat.Money(cost));
@@ -452,7 +468,7 @@ public sealed class HistoryPage : PageBase
                   $"Cancelled, so nothing was inserted. It's kept until {until} to copy or re-transcribe.")));
         }
         if (record.Error is { } error) body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, error));
-        if (record.FinalText.Length == 0 && record.Status is DictationStatus.Recording or DictationStatus.Processing)
+        if (record.OutputText.Length == 0 && record.Status is DictationStatus.Recording or DictationStatus.Processing)
         {
             body.Children.Add(new StackPanel
             {
@@ -468,23 +484,14 @@ public sealed class HistoryPage : PageBase
         }
         else
         {
-            var text = Ui.Text(record.FinalText.Length == 0 ? L("（没有文字）", "(no text)") : record.FinalText, 14,
-                               foreground: record.FinalText.Length == 0 ? Ui.Secondary : null, wrap: true);
+            var text = Ui.Text(record.OutputText.Length == 0 ? L("（没有文字）", "(no text)") : record.OutputText, 14,
+                               foreground: record.OutputText.Length == 0 ? Ui.Secondary : null, wrap: true);
             text.IsTextSelectionEnabled = true;
             text.LineHeight = 22;
             body.Children.Add(text);
-            if (record.PolishedText != null && record.RawText.Length > 0)
-            {
-                var raw = Ui.Text(record.RawText, 12.5, foreground: Ui.Secondary, wrap: true);
-                raw.IsTextSelectionEnabled = true;
-                body.Children.Add(new Expander
-                {
-                    Header = L("原始转写", "Raw transcript"),
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                    Content = raw,
-                });
-            }
+            // What was said, before snippets replaced their triggers.
+            if (record.InsertedText != null) body.Children.Add(Disclosure(L("快捷短语替换前", "Before snippets"), record.FinalText));
+            if (record.PolishedText != null && record.RawText.Length > 0) body.Children.Add(Disclosure(L("原始转写", "Raw transcript"), record.RawText));
         }
         if (record.Timing?.Summary is { } timing)
         {
@@ -508,11 +515,11 @@ public sealed class HistoryPage : PageBase
         var copy = new Button
         {
             Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { copyIcon, copyLabel } },
-            IsEnabled = record.FinalText.Length > 0,
+            IsEnabled = record.OutputText.Length > 0,
         };
         copy.Click += async (_, _) =>
         {
-            TextInserter.CopyToClipboard(record.FinalText);
+            TextInserter.CopyToClipboard(record.OutputText);
             copyLabel.Text = L("已复制", "Copied");
             copyIcon.Glyph = Glyphs.CheckMark;
             await Task.Delay(1500);

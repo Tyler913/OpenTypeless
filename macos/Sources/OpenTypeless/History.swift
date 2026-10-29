@@ -23,6 +23,8 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var status: Status = .recording
     var rawText: String = ""
     var polishedText: String?
+    /// What went in when snippets changed the final text (see SnippetExpander); nil when the final text went in as it was.
+    var insertedText: String?
     var error: String?
     /// Per-chunk transcripts, so a retry only re-sends the chunks that failed.
     var chunkTexts: [Int: String] = [:]
@@ -84,8 +86,10 @@ struct DictationRecord: Codable, Identifiable, Equatable {
         }
     }
 
-    /// What was (or would be) inserted.
+    /// What the speaker said: cleaned up, or as transcribed. Word counts go by it, not by what snippets put in.
     var finalText: String { polishedText ?? rawText }
+    /// What was (or would be) inserted: the final text with its snippets expanded.
+    var outputText: String { insertedText ?? finalText }
 
     var folder: URL { AppPaths.sessions.appendingPathComponent(id, isDirectory: true) }
     var audioURL: URL { folder.appendingPathComponent("audio.wav") }

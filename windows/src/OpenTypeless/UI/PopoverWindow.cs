@@ -286,7 +286,7 @@ public sealed class PopoverWindow : Window
 
     private FrameworkElement Recent()
     {
-        var records = _history.Records.Where(r => r.FinalText.Length > 0).Take(5).ToList();
+        var records = _history.Records.Where(r => r.OutputText.Length > 0).Take(5).ToList();
         var stack = new StackPanel { Spacing = 6 };
         var header = new Grid { Padding = new Thickness(4, 0, 4, 0) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -321,7 +321,7 @@ public sealed class PopoverWindow : Window
     private Button RecentRow(DictationRecord record)
     {
         var copied = _copiedId == record.Id;
-        var text = Ui.Text(record.FinalText, 13, wrap: true);
+        var text = Ui.Text(record.OutputText, 13, wrap: true);
         text.MaxLines = 2;
         text.TextTrimming = TextTrimming.CharacterEllipsis;
         var meta = Ui.Text($"{Formatting.ShortStamp(record.Date)} · {Formatting.DurationLabel(record.Duration)}", 11, foreground: Ui.Tertiary);
@@ -344,10 +344,10 @@ public sealed class PopoverWindow : Window
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
         };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, record.FinalText);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, record.OutputText);
         button.Click += (_, _) =>
         {
-            TextInserter.CopyToClipboard(record.FinalText);
+            TextInserter.CopyToClipboard(record.OutputText);
             _copiedId = record.Id;
             RefreshIfOpen();
             var timer = DispatcherQueue.CreateTimer();

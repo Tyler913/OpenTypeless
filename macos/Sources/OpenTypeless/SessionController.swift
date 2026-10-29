@@ -471,14 +471,14 @@ final class SessionController: ObservableObject {
         let backup = settings.sttBackupEndpoint.map {
             (client: APIClient(endpoint: $0),
              options: APIClient.TranscriptionOptions(model: settings.sttBackupModel.trimmingCharacters(in: .whitespaces), language: language,
-                                                     vocabulary: settings.vocabularyList))
+                                                     vocabulary: settings.dictationVocabulary))
         }
         let key = ModelPrice.key(settings.sttProvider, settings.sttModel)
         let latency = latencies[key] ?? TranscriptionLatency()
         latencies[key] = latency
         return TranscriptionPipeline(
             client: APIClient(endpoint: endpoint),
-            options: .init(model: settings.sttModel, language: language, vocabulary: settings.vocabularyList),
+            options: .init(model: settings.sttModel, language: language, vocabulary: settings.dictationVocabulary),
             preset: preset,
             backup: backup,
             latency: latency,
@@ -599,6 +599,8 @@ final class SessionController: ObservableObject {
             // A new transcript supersedes a clean-up from an earlier run (a retry): History mustn't show that one if this
             // run inserts the raw text (clean-up off or failed). A retry that fails before this keeps the old result.
             record.polishedText = nil
+            // And so does what its snippets put in: expanded again from this run's text, with the snippets as they are now.
+            record.insertedText = nil
             record.error = nil
             guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 record.status = .done
@@ -700,6 +702,12 @@ final class SessionController: ObservableObject {
             record.status = .done
         }
         if record.status == .polishFailed { record.polishedText = nil }
+        // Snippets go in here, in code, never through the clean-up: a model would paraphrase or translate a long expansion,
+        // and its guards would take one for an answer. History keeps what was said (word counts go by it) and what went in.
+        let expanded = SnippetExpander.expand(text, with: settings.snippets)
+        // Scalar by scalar: an expansion that is the trigger in another composition is still a change (as on Windows).
+        record.insertedText = expanded.unicodeScalars.elementsEqual(text.unicodeScalars) ? nil : expanded
+        text = expanded
 
         // Taken now: once the text is in, the next dictation may already be collecting its own.
         let discarded = takeDiscardedPolishes()
@@ -897,7 +905,7 @@ final class SessionController: ObservableObject {
         let model = model.trimmingCharacters(in: .whitespaces)
         return PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
-            vocabulary: settings.vocabularyList,
+            vocabulary: settings.dictationVocabulary,
             misheard: settings.misheardHints,
             extraInstructions: instructions,
             modelInfo: endpoint.id == .openrouter ? modelInfo[model] : nil,

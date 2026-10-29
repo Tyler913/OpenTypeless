@@ -494,11 +494,11 @@ public sealed class SessionController
     {
         var hint = language.Length == 0 ? null : language;
         var backup = _settings.SttBackupEndpoint is { } backupEndpoint
-            ? new TranscriptionRoute(new ApiClient(backupEndpoint), new TranscriptionOptions(_settings.SttBackupModel.Trim(), hint, _settings.VocabularyList))
+            ? new TranscriptionRoute(new ApiClient(backupEndpoint), new TranscriptionOptions(_settings.SttBackupModel.Trim(), hint, _settings.DictationVocabulary))
             : null;
         var key = ModelPrice.Key(_settings.SttProvider, _settings.SttModel);
         if (!_latencies.TryGetValue(key, out var latency)) _latencies[key] = latency = new TranscriptionLatency();
-        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, hint, _settings.VocabularyList), preset: preset,
+        return new TranscriptionPipeline(new ApiClient(endpoint), new TranscriptionOptions(_settings.SttModel, hint, _settings.DictationVocabulary), preset: preset,
                                          backup: backup, latency: latency, onSpeculation: onSpeculation);
     }
 
@@ -633,6 +633,8 @@ public sealed class SessionController
             // A new transcript supersedes a clean-up from an earlier run (a retry): History mustn't show that one if this
             // run inserts the raw text (clean-up off or failed). A retry that fails before this keeps the old result.
             record.PolishedText = null;
+            // And so does what its snippets put in: expanded again from this run's text, with the snippets as they are now.
+            record.InsertedText = null;
             record.Error = null;
             if (raw.Trim().Length == 0)
             {
@@ -766,6 +768,11 @@ public sealed class SessionController
             record.Status = DictationStatus.Done;
         }
         if (record.Status == DictationStatus.PolishFailed) record.PolishedText = null;
+        // Snippets go in here, in code, never through the clean-up: a model would paraphrase or translate a long expansion,
+        // and its guards would take one for an answer. History keeps what was said (word counts go by it) and what went in.
+        var expanded = SnippetExpander.Expand(text, _settings.Snippets);
+        record.InsertedText = expanded == text ? null : expanded;
+        text = expanded;
 
         // Taken now: once the text is in, the next dictation may already be collecting its own.
         var discarded = TakeDiscardedPolishes();
@@ -958,7 +965,7 @@ public sealed class SessionController
         model = model.Trim();
         return new PolishRoute(new ApiClient(endpoint), new PolishOptions(
             model,
-            _settings.VocabularyList,
+            _settings.DictationVocabulary,
             instructions,
             endpoint.Id == ProviderId.OpenRouter ? _modelInfo.GetValueOrDefault(model) : null,
             Misheard: _settings.MisheardHints,

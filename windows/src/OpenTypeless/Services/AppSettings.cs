@@ -57,6 +57,14 @@ public sealed class AppSettings : INotifyPropertyChanged
                 Save();
             }
         }
+        // Snippets are told apart by ID: one saved without its own (none, or another's) is given one now, and kept, so
+        // editing or deleting it works (an ID made up on every read would change under the editor).
+        var (savedSnippets, snippetsRepaired) = Snippet.ReadList(_store["snippets"]);
+        if (snippetsRepaired)
+        {
+            _store["snippets"] = JsonSerializer.SerializeToNode(savedSnippets);
+            Save();
+        }
         // Loaded even when OPENROUTER_API_KEY is set: it only stands in for the OpenRouter key, and the app launched
         // with it still needs the others (and must not save over them when one is edited).
         _apiKeys = Credentials.Load();
@@ -733,6 +741,36 @@ public sealed class AppSettings : INotifyPropertyChanged
                   .Select(t => t.Trim(' ', '\t', '\r'))
                   .Where(t => t.Length > 0)
                   .ToList();
+
+    /// <summary>
+    /// What speech-to-text and the clean-up are given as vocabulary: the snippets' triggers ahead of the vocabulary, so a
+    /// trigger comes through as written for its snippet to be found.
+    /// </summary>
+    public List<string> DictationVocabulary => SnippetExpander.Vocabulary(Snippets, VocabularyList);
+
+    // MARK: Snippets
+
+    /// <summary>Spoken shortcuts: a trigger said in a dictation is replaced by its expansion (see SnippetExpander). None at first.</summary>
+    public List<Snippet> Snippets
+    {
+        get
+        {
+            // Entry by entry: one edited by hand into null, or without its text, is left out rather than hiding the others.
+            lock (_lock) return Snippet.ReadList(_store["snippets"]).Snippets;
+        }
+        private set => SetNode("snippets", JsonSerializer.SerializeToNode(value));
+    }
+
+    /// <summary>Adds the snippet, or replaces the one with its ID.</summary>
+    public void SaveSnippet(Snippet snippet)
+    {
+        var snippets = Snippets;
+        var index = snippets.FindIndex(s => s.Id == snippet.Id);
+        if (index >= 0) snippets[index] = snippet; else snippets.Add(snippet);
+        Snippets = snippets;
+    }
+
+    public void DeleteSnippet(Snippet snippet) => Snippets = Snippets.Where(s => s.Id != snippet.Id).ToList();
 
     // MARK: Storage
 

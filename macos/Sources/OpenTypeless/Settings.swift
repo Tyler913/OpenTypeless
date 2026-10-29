@@ -55,6 +55,8 @@ final class AppSettings: ObservableObject {
     @Published private(set) var learnedTerms: [LearnedTerm]
     /// Learned terms the user removed; never learned again (lowercased).
     private var forgottenTerms: Set<String>
+    /// Spoken shortcuts: a trigger said in a dictation is replaced by its expansion (see SnippetExpander). None at first.
+    @Published private(set) var snippets: [Snippet]
 
     /// The saved keys only: OPENROUTER_API_KEY overrides one in `apiKey(for:)` but never lands in here.
     @Published private(set) var apiKeys: [String: String]
@@ -80,16 +82,20 @@ final class AppSettings: ObservableObject {
         learnedTerms = UserDefaults.standard.data(forKey: "learnedVocabulary")
             .flatMap { try? JSONDecoder().decode([LearnedTerm].self, from: $0) } ?? []
         forgottenTerms = Set(UserDefaults.standard.stringArray(forKey: "forgottenVocabulary") ?? [])
+        let savedSnippets = UserDefaults.standard.data(forKey: "snippets").map(Snippet.list(from:))
+        snippets = savedSnippets?.snippets ?? []
         modelPrices = UserDefaults.standard.data(forKey: "modelPrices")
             .flatMap { try? JSONDecoder().decode([String: ModelPrice].self, from: $0) } ?? [:]
         openRouterHosts = (UserDefaults.standard.dictionary(forKey: "openRouterHosts") as? [String: String]) ?? [:]
+        storedShortcuts = UserDefaults.standard.data(forKey: "shortcuts")
+        actionShortcuts = StoredEntries.decode(storedShortcuts, as: Hotkey.self)
         // An entry that isn't a profile is skipped, not the whole list; an ID that's missing or taken is repaired once and
         // saved, so edits, Remove and retries keep finding their profile.
         let savedProfiles = UserDefaults.standard.data(forKey: "appProfiles").flatMap(AppProfile.list(from:)) ?? []
         appProfiles = AppProfile.withUniqueIDs(savedProfiles)
         if appProfiles != savedProfiles { saveAppProfiles() }
-        storedShortcuts = UserDefaults.standard.data(forKey: "shortcuts")
-        actionShortcuts = StoredEntries.decode(storedShortcuts, as: Hotkey.self)
+        // IDs given to entries that had none (or another's) are kept, so editing or deleting them works next time too.
+        if savedSnippets?.repaired == true { saveSnippets() }
     }
 
     // MARK: Hotkey
@@ -359,6 +365,31 @@ final class AppSettings: ObservableObject {
         vocabulary.split(whereSeparator: { $0 == "," || $0 == "，" || $0 == "\n" })
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+    }
+
+    /// What speech-to-text and the clean-up are given as vocabulary: the snippets' triggers ahead of the vocabulary, so a
+    /// trigger comes through as written for its snippet to be found.
+    var dictationVocabulary: [String] { SnippetExpander.vocabulary(snippets, before: vocabularyList) }
+
+    // MARK: Snippets
+
+    /// Adds the snippet, or replaces the one with its ID.
+    func saveSnippet(_ snippet: Snippet) {
+        if let index = snippets.firstIndex(where: { $0.id == snippet.id }) {
+            snippets[index] = snippet
+        } else {
+            snippets.append(snippet)
+        }
+        saveSnippets()
+    }
+
+    func deleteSnippet(_ snippet: Snippet) {
+        snippets.removeAll { $0.id == snippet.id }
+        saveSnippets()
+    }
+
+    private func saveSnippets() {
+        UserDefaults.standard.set(try? JSONEncoder().encode(snippets), forKey: "snippets")
     }
 }
 

@@ -57,7 +57,7 @@ public static class WordCount
         or UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark
         or UnicodeCategory.DecimalDigitNumber or UnicodeCategory.LetterNumber or UnicodeCategory.OtherNumber;
 
-    private static bool IsJoiner(int scalar) => scalar is '\'' or '’' or '-' or '.' or ',' or '_';
+    internal static bool IsJoiner(int scalar) => scalar is '\'' or '’' or '-' or '.' or ',' or '_';
 }
 
 /// <summary>One day's dictation: what was said, how long it took to say, and what it cost.</summary>

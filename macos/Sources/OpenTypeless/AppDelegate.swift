@@ -30,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         hotkey.hotkey = settings.hotkey
         hotkey.shortcuts = settings.shortcutMap
-        hotkey.modeChordKeys = controller.modeChords.keys
+        hotkey.modeChordKeys = controller.updateModeChords()
         hotkey.onPress = { [weak self] time in self?.controller.hotkeyPressed(at: time) }
         hotkey.onRelease = { [weak self] time in self?.controller.hotkeyReleased(at: time) }
         hotkey.onOtherKey = { [weak self] key, time in self?.controller.otherKeyPressed(key, at: time) }
@@ -48,6 +48,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if self.hotkey.hotkey != self.settings.hotkey { self.hotkey.hotkey = self.settings.hotkey }
                 let shortcuts = self.settings.shortcutMap
                 if self.hotkey.shortcuts != shortcuts { self.hotkey.shortcuts = shortcuts }
+                // Translation turned on or off, its chord changed, or the hotkey became one of the chord's keys.
+                let chordKeys = self.controller.updateModeChords()
+                if self.hotkey.modeChordKeys != chordKeys { self.hotkey.modeChordKeys = chordKeys }
                 if self.menuLanguage != AppLanguage.resolved { self.setUpMainMenu() }
                 self.controller.updateWarmMicrophone()
             }

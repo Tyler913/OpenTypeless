@@ -17,8 +17,24 @@ internal sealed class SampleCounter
     public double Seconds => AudioFormat.Seconds((int)Interlocked.Read(ref _count));
 }
 
-/// <summary>What a recording is for. Only plain dictation so far; a mode chord (see <see cref="ModeChords{TMode}"/>) switches it while recording.</summary>
-public enum RecordingMode { Dictation }
+/// <summary>
+/// What a recording is for: plain dictation, or a translation (see <see cref="TranslationTarget"/>), which the translation
+/// chord (see <see cref="ModeChords{TMode}"/>) switches it to while recording.
+/// </summary>
+public enum RecordingMode { Dictation, Translate }
+
+internal static class TranslationFallbackText
+{
+    /// <summary>Why a translation couldn't be used, for History.</summary>
+    public static string TranslationReason(this PolishFallback fallback) => fallback switch
+    {
+        PolishFallback.Truncated => L("翻译被截断了", "the translation was cut off"),
+        PolishFallback.Answered => L("模型回答了内容，没有翻译", "the model answered instead of translating"),
+        PolishFallback.Summarised => L("翻译漏掉了太多内容", "the translation left too much out"),
+        PolishFallback.Untranslated => L("结果不是目标语言", "it didn't come back in the target language"),
+        _ => L("没有可用的翻译", "no usable translation came back"),
+    };
+}
 
 /// <summary>Orchestrates one dictation: hotkey → record → chunked STT → polish → paste. UI-thread only.</summary>
 public sealed class SessionController
@@ -71,10 +87,11 @@ public sealed class SessionController
     private double? _pressedAt;
     private bool _handsFree;
     /// <summary>
-    /// Second keys that switch the recording's mode while the hotkey is held (see <see cref="ModeChords{TMode}"/>). None is
-    /// registered yet; whatever registers one also gives the hotkey hook its key, to keep it from the focused app.
+    /// Second keys that switch the recording's mode while the hotkey is held (see <see cref="ModeChords{TMode}"/>): the
+    /// translation chord's, while translation mode is on (see <see cref="UpdateModeChords"/>, which also gives the hotkey
+    /// hook the keys to keep from the focused app).
     /// </summary>
-    public ModeChords<RecordingMode> ModeChords { get; } = new();
+    public ModeChords<RecordingMode> ModeChords { get; private set; } = new();
     /// <summary>What the running recording is for; plain dictation at every start.</summary>
     public RecordingMode Mode { get; private set; } = RecordingMode.Dictation;
     /// <summary>
@@ -230,13 +247,52 @@ public sealed class SessionController
         {
             case OtherKeyOutcome<RecordingMode>.SwitchMode chord when chord.Mode != Mode:
                 Note($"mode → {chord.Mode} (chord key {keyCode})");
-                Mode = chord.Mode;
+                SwitchMode(chord.Mode);
                 break;
             case OtherKeyOutcome<RecordingMode>.Cancel:
                 Note("cancelled — another key was pressed with the shortcut (treated as a key combo)");
                 Cancel(silently: true);
                 break;
         }
+    }
+
+    /// <summary>
+    /// The running recording becomes <paramref name="mode"/>'s: the record keeps it (a retry runs the same way), the
+    /// capsule shows it, and a clean-up started ahead of time with the other prompt starts again with this one.
+    /// </summary>
+    private void SwitchMode(RecordingMode mode)
+    {
+        var translation = mode == RecordingMode.Translate ? _settings.TranslationTarget : null;
+        // Translation turned off a moment ago: its chord is on its way out.
+        if (mode == RecordingMode.Translate && translation is null) return;
+        Mode = mode;
+        if (_record != null) _record.Translation = translation;
+        Hud.Model.Badge = translation?.Badge;
+        if (_speculativePolish?.Raw is { } raw)
+        {
+            DropSpeculativePolish();
+            SpeculationChanged(raw);
+        }
+    }
+
+    /// <summary>
+    /// Registers the translation chord's keys while translation mode is on (none otherwise), and returns every chord key,
+    /// for the hotkey hook to keep from the focused app while the hotkey is held. A modifier-only hotkey's own key is
+    /// never its chord. At launch, and whenever the settings it depends on change.
+    /// </summary>
+    public IReadOnlySet<int> UpdateModeChords()
+    {
+        var chords = new ModeChords<RecordingMode>();
+        if (_settings.TranslationTarget != null)
+        {
+            var hotkey = _settings.Hotkey;
+            foreach (var key in _settings.TranslationChord.KeyCodes(hotkey.IsModifierOnly ? hotkey.KeyCode : null))
+            {
+                chords.Register(key, RecordingMode.Translate);
+            }
+        }
+        ModeChords = chords;
+        return chords.Keys;
     }
 
     /// <summary>
@@ -450,6 +506,7 @@ public sealed class SessionController
         LastError = null;
         Hud.Model.ResetLevels();
         Hud.Model.StartedAt = DateTimeOffset.Now;
+        Hud.Model.Badge = null;
         Hud.Show(new HudPhase.Recording());
         PlaySound(Sounds.Kind.Start);
         // After the start sound, which muting would cut off.
@@ -477,7 +534,7 @@ public sealed class SessionController
     private void WarmConnections(bool polishes)
     {
         var endpoints = new List<ProviderEndpoint?> { _settings.SttEndpoint, _settings.SttBackupEndpoint };
-        if (polishes)
+        if (polishes || _settings.TranslationTarget != null)
         {
             endpoints.Add(_settings.PolishEndpoint);
             endpoints.Add(_settings.PolishBackupEndpoint);
@@ -581,7 +638,7 @@ public sealed class SessionController
             Note("released in an app with other settings than the one the recording started in → clipboard");
             _deliverByPaste = false;
         }
-        Hud.ShowWorking(dictation.PolishEnabled);
+        Hud.ShowWorking(dictation.PolishEnabled || record.Translation != null);
 
         // No waiting when the speaker paused before letting go and that pause is already being transcribed as the last
         // chunk: the moment's (quiet) audio changes nothing then, and the text may be ready at once.
@@ -690,16 +747,23 @@ public sealed class SessionController
         var text = record.RawText;
         string? notice = null;
         SegmentedPolishResult? polished = null;
+        // A translation that couldn't be used, set aside for the clean-up: billed all the same.
+        SegmentedPolishResult? setAside = null;
+        // The translation's (and clean-up's) answers as they come in, counted even if Esc then stops the clean-up.
+        var ledger = new PolishLedger();
+        // The text going in is a translation: the user's edits to it say nothing about what speech recognition misheard.
+        var translated = false;
+        var translation = record.Translation;
 
-        if (dictation.PolishEnabled)
+        if (dictation.PolishEnabled || translation != null)
         {
-            // When the speaker paused before letting go and said nothing more, the clean-up of this very transcript
-            // started while they were still holding the key: take it over (often it's already done).
+            // When the speaker paused before letting go and said nothing more, the clean-up (or translation) of this very
+            // transcript started while they were still holding the key: take it over (often it's already done).
             Task<SegmentedPolishResult> polishing;
             var ahead = 0.0;
             CancellationTokenRegistration adopted = default;
             // One that already failed (while recording) gets a fresh attempt instead.
-            if (_speculativePolish is { } speculative && speculative.Raw == record.RawText
+            if (_speculativePolish is { } speculative && speculative.Raw == record.RawText && speculative.Translation == translation
                 && !speculative.Task.IsFaulted && !speculative.Task.IsCanceled)
             {
                 _speculativePolish = null;
@@ -714,46 +778,95 @@ public sealed class SessionController
             else
             {
                 DropSpeculativePolish();
-                polishing = Polish(record.RawText, dictation, OnPolishPartial(record.RawText), token);
+                polishing = Polish(record.RawText, dictation, translation, OnPolishPartial(record.RawText), token);
             }
             // Saved while the clean-up runs, so the transcript survives a crash.
             _history.Update(record);
             try
             {
-                var outcome = await polishing;
-                polished = outcome;
-                // The wait after the key was released: a clean-up started ahead of time had a head start.
-                var firstToken = Math.Max(0, outcome.FirstTokenSeconds - ahead);
-                var total = Math.Max(0, outcome.TotalSeconds - ahead);
-                if (record.Timing is { } timing)
+                if (translation != null)
                 {
-                    timing.PolishFirstToken = firstToken;
-                    timing.Polish = total;
-                    timing.PolishModel = outcome.Model;
-                    timing.UsedBackup = outcome.UsedBackup;
-                }
-                var fallbacks = outcome.Fallbacks;
-                Note($"polish: {outcome.Model}{(outcome.UsedBackup ? " (backup)" : "")}, {outcome.Parts.Count} part(s), first token {firstToken:0.00}s, total {total:0.00}s"
-                     + (fallbacks.Count == 0 ? "" : "; inserted as spoken: " + string.Join(", ", fallbacks.Select(p => p.Fallback.ToString().ToLowerInvariant()))));
-                if (fallbacks.Count == outcome.Parts.Count)
-                {
-                    // Cut off, an answer, a summary or a translation rather than the speaker's text, part after part.
-                    notice = L("未整理，已插入原文", "Inserted without clean-up");
-                    record.Error = fallbacks.Select(p => p.Error).FirstOrDefault(e => e != null)?.Message;
-                    record.Status = DictationStatus.PolishFailed;
+                    // The translation, or when it can't be used as it is, the clean-up (when that's on): one more request.
+                    var raw = record.RawText;
+                    var onPartial = OnPolishPartial(raw);
+                    Func<Task<SegmentedPolishResult>>? cleanUp = dictation.PolishEnabled ? () => Polish(raw, dictation, null, onPartial, token) : null;
+                    var outcome = await TranslatedPolish.Run(() => polishing, cleanUp, token, ledger);
+                    if (outcome.Translated && outcome.Translation is { } translatedResult)
+                    {
+                        polished = translatedResult;
+                        NoteTiming(translatedResult, ahead, record, $"translation → {translation.Id}");
+                        text = translatedResult.Text;
+                        record.PolishedText = translatedResult.Text;
+                        record.Status = DictationStatus.Done;
+                        translated = true;
+                    }
+                    else
+                    {
+                        setAside = outcome.Translation;
+                        var fallback = outcome.TranslationFallback ?? PolishFallback.Failed;
+                        var reason = outcome.TranslationError?.Message ?? fallback.TranslationReason();
+                        record.Error = L($"未能翻译：{reason}", $"Couldn't translate: {reason}");
+                        var answered = outcome.CleanUp ?? outcome.Translation;
+                        if (record.Timing is { } timing)
+                        {
+                            // The wait after the key was released, both requests together.
+                            timing.Polish = begun.Elapsed.TotalSeconds;
+                            timing.PolishModel = answered?.Model;
+                            timing.UsedBackup = answered?.UsedBackup;
+                        }
+                        polished = outcome.CleanUp;
+                        if (outcome.CleanUp is { } cleaned && cleaned.Fallbacks.Count < cleaned.Parts.Count)
+                        {
+                            Note($"translation unusable ({fallback.ToString().ToLowerInvariant()}) → clean-up inserted");
+                            notice = L("未能翻译，已插入整理后的原文", "Couldn't translate — inserted the clean-up");
+                            text = cleaned.Text;
+                            record.PolishedText = cleaned.Text;
+                            record.Status = DictationStatus.Done;
+                        }
+                        else
+                        {
+                            Note($"translation unusable ({fallback.ToString().ToLowerInvariant()}) → inserted as spoken");
+                            notice = L("未能翻译，已插入原文", "Couldn't translate — inserted as spoken");
+                            record.Status = DictationStatus.PolishFailed;
+                        }
+                    }
                 }
                 else
                 {
-                    // A part whose clean-up was unusable goes in as spoken, between the parts that were cleaned up.
-                    if (fallbacks.Count > 0) notice = L("部分未整理，已插入原文", "Partly inserted without clean-up");
-                    text = outcome.Text;
-                    record.PolishedText = outcome.Text;
-                    record.Status = DictationStatus.Done;
+                    var outcome = await polishing;
+                    polished = outcome;
+                    NoteTiming(outcome, ahead, record, "polish");
+                    var fallbacks = outcome.Fallbacks;
+                    if (fallbacks.Count == outcome.Parts.Count)
+                    {
+                        // Cut off, an answer, a summary or a translation rather than the speaker's text, part after part.
+                        notice = L("未整理，已插入原文", "Inserted without clean-up");
+                        record.Error = fallbacks.Select(p => p.Error).FirstOrDefault(e => e != null)?.Message;
+                        record.Status = DictationStatus.PolishFailed;
+                    }
+                    else
+                    {
+                        // A part whose clean-up was unusable goes in as spoken, between the parts that were cleaned up.
+                        if (fallbacks.Count > 0) notice = L("部分未整理，已插入原文", "Partly inserted without clean-up");
+                        text = outcome.Text;
+                        record.PolishedText = outcome.Text;
+                        record.Status = DictationStatus.Done;
+                    }
                 }
             }
             catch (Exception error)
             {
-                if (ApiException.From(error).IsCancelled) return;
+                if (ApiException.From(error).IsCancelled)
+                {
+                    // Esc while the clean-up ran after a translation that couldn't be used: nothing goes in, but that
+                    // translation was billed. (Cancel has kept the record as cancelled; so it stays, now with its cost.)
+                    var billed = ledger.All;
+                    if (billed.Count == 0) return;
+                    record.Status = DictationStatus.Cancelled;
+                    Account(record, pipeline, null, billed);
+                    _history.Update(record);
+                    return;
+                }
                 notice = L("整理失败，已插入原文", "Clean-up failed — inserted raw text");
                 record.Error = error.Message;
                 record.Status = DictationStatus.PolishFailed;
@@ -776,11 +889,12 @@ public sealed class SessionController
 
         // Taken now: once the text is in, the next dictation may already be collecting its own.
         var discarded = TakeDiscardedPolishes();
+        if (setAside != null) discarded.Add(setAside);
         if (IsCurrent(generation, token))
         {
             Hud.Model.Progress.Reach(new ProcessingProgress.Milestone.Delivered());
             if (record.Timing is { } timing) timing.Delivered = (timing.Transcription ?? 0) + begun.Elapsed.TotalSeconds;
-            var delivery = await Deliver(text, notice, generation, dictation, token);
+            var delivery = await Deliver(text, notice, generation, dictation, token, watchEdits: !translated);
             if (record.Timing != null) record.Timing.Delivery = delivery;
         }
         // Esc came before the text was in place (or while it went in): Cancel has kept the record as cancelled, and so
@@ -789,6 +903,26 @@ public sealed class SessionController
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
         Account(record, pipeline, polished, discarded);
         _history.Update(record);
+    }
+
+    /// <summary>
+    /// Saves how long the clean-up (or translation) <paramref name="outcome"/> took after the key was released (one started
+    /// ahead of time had a head start of <paramref name="ahead"/> seconds), and which model answered.
+    /// </summary>
+    private static void NoteTiming(SegmentedPolishResult outcome, double ahead, DictationRecord record, string what)
+    {
+        var firstToken = Math.Max(0, outcome.FirstTokenSeconds - ahead);
+        var total = Math.Max(0, outcome.TotalSeconds - ahead);
+        if (record.Timing is { } timing)
+        {
+            timing.PolishFirstToken = firstToken;
+            timing.Polish = total;
+            timing.PolishModel = outcome.Model;
+            timing.UsedBackup = outcome.UsedBackup;
+        }
+        var fallbacks = outcome.Fallbacks;
+        Note($"{what}: {outcome.Model}{(outcome.UsedBackup ? " (backup)" : "")}, {outcome.Parts.Count} part(s), first token {firstToken:0.00}s, total {total:0.00}s"
+             + (fallbacks.Count == 0 ? "" : "; unusable: " + string.Join(", ", fallbacks.Select(p => p.Fallback.ToString().ToLowerInvariant()))));
     }
 
     /// <summary>Whether the dictation <paramref name="generation"/> is still the one under way, not cancelled or followed by another.</summary>
@@ -805,9 +939,9 @@ public sealed class SessionController
 
     // MARK: - Clean-up ahead of time
 
-    /// <summary>A clean-up of <c>Raw</c>, started while recording.</summary>
-    private sealed record SpeculativePolish(string Raw, Stopwatch Started, Task<SegmentedPolishResult> Task, CancellationTokenSource Cancel,
-                                            PartialRelay Partials);
+    /// <summary>A clean-up of <c>Raw</c> (or its translation into <c>Translation</c>), started while recording.</summary>
+    private sealed record SpeculativePolish(string Raw, TranslationTarget? Translation, Stopwatch Started, Task<SegmentedPolishResult> Task,
+                                            CancellationTokenSource Cancel, PartialRelay Partials);
 
     /// <summary>
     /// Where a clean-up started ahead of time sends its partial text: nowhere until the dictation takes it over, so one
@@ -821,11 +955,13 @@ public sealed class SessionController
 
     /// <summary>
     /// The pipeline has the whole transcript the recording would give if it ended now (the speaker paused), or no longer
-    /// has one (they went on). Starts cleaning that transcript up, so the text can be ready when the key is released.
+    /// has one (they went on). Starts cleaning that transcript up (or translating it, in translation mode), so the text can
+    /// be ready when the key is released.
     /// </summary>
     private void SpeculationChanged(string? raw)
     {
-        if (State != SessionState.Recording || _dictationSettings is not { PolishEnabled: true } dictation) return;
+        if (State != SessionState.Recording || _dictationSettings is not { } dictation
+            || !(dictation.PolishEnabled || Mode == RecordingMode.Translate)) return;
         if (raw != null && raw == _speculativePolish?.Raw) return;
         DropSpeculativePolish();
         if (raw is null || raw.Trim().Length == 0) return;
@@ -834,10 +970,11 @@ public sealed class SessionController
         if (SegmentedPolish.NeedsParts(raw)) return;
         var cancel = new CancellationTokenSource();
         var partials = new PartialRelay();
-        var task = Polish(raw, dictation, partials.Send, cancel.Token);
+        var translation = _record?.Translation;
+        var task = Polish(raw, dictation, translation, partials.Send, cancel.Token);
         // A dropped clean-up's failure (usually its cancellation) is expected; observe it so it isn't reported.
         _ = task.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-        _speculativePolish = new SpeculativePolish(raw, Stopwatch.StartNew(), task, cancel, partials);
+        _speculativePolish = new SpeculativePolish(raw, translation, Stopwatch.StartNew(), task, cancel, partials);
         Note("clean-up started ahead of time (speaker paused)");
     }
 
@@ -884,7 +1021,9 @@ public sealed class SessionController
     /// Esc (or the screen locking) can come at any point while the text goes in: the paste and the Enter are only sent
     /// while the dictation is still current, and a cancelled one leaves the session and the HUD to what replaced it.
     /// </summary>
-    private async Task<string> Deliver(string text, string? notice, int generation, DictationSettings dictation, CancellationToken token)
+    /// <param name="watchEdits">False for a translation, whose edits say nothing about what speech recognition misheard.</param>
+    private async Task<string> Deliver(string text, string? notice, int generation, DictationSettings dictation, CancellationToken token,
+                                       bool watchEdits = true)
     {
         if (_deliverByPaste) await TextInserter.LeaveMenuMode();
         var target = _deliverByPaste ? await FocusProbe.FocusedTarget() : FocusProbe.Target.NotEditable;
@@ -947,7 +1086,7 @@ public sealed class SessionController
                     Reset();
                     Hud.FinishWorking();
                 }
-                if (_settings.LearnFromEdits && !sent) _editWatcher.Watch(inserted);
+                if (_settings.LearnFromEdits && watchEdits && !sent) _editWatcher.Watch(inserted);
                 return "pasted";
             case TextInserter.Outcome.Skipped:
                 // The screen locked or another window came to the front just as Ctrl+V was due.
@@ -975,23 +1114,24 @@ public sealed class SessionController
     }
 
     /// <summary>
-    /// Cleans up <paramref name="raw"/> with the dictation's preferences (the global ones and its app profile's), on the
-    /// main model and the backup alike.
+    /// Cleans up <paramref name="raw"/> with the dictation's preferences (the global ones and its app profile's), or
+    /// translates it into <paramref name="translation"/>, on the main model and the backup alike.
     /// </summary>
-    private async Task<SegmentedPolishResult> Polish(string raw, DictationSettings dictation, Action<string>? onPartial, CancellationToken token)
+    private async Task<SegmentedPolishResult> Polish(string raw, DictationSettings dictation, TranslationTarget? translation,
+                                                     Action<string>? onPartial, CancellationToken token)
     {
         if (_settings.PolishEndpoint is not { } endpoint || !_settings.IsConfigured(_settings.PolishProvider))
         {
             throw ApiException.MissingApiKey(_settings.PolishProvider.DisplayName());
         }
-        var primary = Route(endpoint, _settings.PolishModel, dictation.ExtraInstructions);
+        var primary = Route(endpoint, _settings.PolishModel, dictation.ExtraInstructions, translation);
         var backup = _settings.PolishBackupEndpoint is { } backupEndpoint
-            ? Route(backupEndpoint, _settings.PolishBackupModel, dictation.ExtraInstructions)
+            ? Route(backupEndpoint, _settings.PolishBackupModel, dictation.ExtraInstructions, translation)
             : null;
         return await SegmentedPolish.Run(raw, primary, backup, onPartial, token);
     }
 
-    private PolishRoute Route(ProviderEndpoint endpoint, string model, string instructions)
+    private PolishRoute Route(ProviderEndpoint endpoint, string model, string instructions, TranslationTarget? translation)
     {
         model = model.Trim();
         return new PolishRoute(new ApiClient(endpoint), new PolishOptions(
@@ -1000,7 +1140,8 @@ public sealed class SessionController
             instructions,
             endpoint.Id == ProviderId.OpenRouter ? _modelInfo.GetValueOrDefault(model) : null,
             Misheard: _settings.MisheardHints,
-            Host: endpoint.Id == ProviderId.OpenRouter ? _settings.OpenRouterHost(model) : null));
+            Host: endpoint.Id == ProviderId.OpenRouter ? _settings.OpenRouterHost(model) : null,
+            Translation: translation));
     }
 
     /// <summary>
@@ -1207,7 +1348,10 @@ public sealed class SessionController
         _dictationSettings = dictation;
         _pasteTarget = target;
         State = SessionState.Processing;
-        Hud.ShowWorking(dictation.PolishEnabled);
+        // A translation dictation is translated again, into the language it was translated into then.
+        Mode = record.Translation is null ? RecordingMode.Dictation : RecordingMode.Translate;
+        Hud.Model.Badge = record.Translation?.Badge;
+        Hud.ShowWorking(dictation.PolishEnabled || record.Translation != null);
 
         var pipeline = MakePipeline(endpoint, preset, dictation.Language);
         _pipeline = pipeline;

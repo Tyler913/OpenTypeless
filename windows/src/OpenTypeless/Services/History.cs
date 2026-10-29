@@ -57,6 +57,24 @@ public sealed class DictationRecord
     [JsonPropertyName("profileID")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ProfileId { get; set; }
     /// <summary>That profile's name, for History.</summary>
     [JsonPropertyName("profileName")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ProfileName { get; set; }
+    /// "translate" for a translation dictation (see <see cref="TranslationTarget.RecordMode"/>), null for plain dictation:
+    /// records from before translation, and older versions reading newer ones, see a dictation.
+    /// </summary>
+    [JsonPropertyName("mode")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Mode { get; set; }
+    /// <summary>The language a translation dictation is written in (<see cref="TranslationTarget.Id"/>).</summary>
+    [JsonPropertyName("targetLanguage")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? TargetLanguage { get; set; }
+
+    /// <summary>What a translation dictation is translated into; null for plain dictation. A retry translates it again.</summary>
+    [JsonIgnore]
+    public TranslationTarget? Translation
+    {
+        get => TranslationTarget.FromRecord(Mode, TargetLanguage);
+        set
+        {
+            Mode = value is null ? null : TranslationTarget.RecordMode;
+            TargetLanguage = value?.Id;
+        }
+    }
 
     /// <summary>What the speaker said: cleaned up, or as transcribed. Word counts go by it, not by what snippets put in.</summary>
     [JsonIgnore] public string FinalText => PolishedText ?? RawText;

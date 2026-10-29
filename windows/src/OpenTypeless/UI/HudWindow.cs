@@ -174,6 +174,7 @@ public sealed class HudWindow : Window
         _model.PhaseChanged += Render;
         _model.LevelsChanged += UpdateLevels;
         _model.PreviewChanged += OnPreviewChanged;
+        _model.BadgeChanged += Render;
         _preview.Foreground = Ui.Secondary;
         _frame.ActualThemeChanged += (_, _) => OnThemeChanged();
         Render();
@@ -237,12 +238,15 @@ public sealed class HudWindow : Window
                 _bars.SetLevels(_model.Levels, animated: false);
                 row.Children.Add(_bars.Element);
                 row.Children.Add(_elapsed);
+                if (_model.Badge is { } recordingBadge) row.Children.Add(ModeBadge(recordingBadge));
                 UpdateElapsed();
                 _clock.Start();
                 break;
             case HudPhase.Working:
+                row.Spacing = 10;
                 // About as wide as the recording row, so the capsule keeps its size when the key is released.
                 row.Children.Add(new Grid { Width = 128, Children = { HoppingDots() } });
+                if (_model.Badge is { } workingBadge) row.Children.Add(ModeBadge(workingBadge));
                 break;
             case HudPhase.Copied:
                 row.Spacing = 8;
@@ -370,6 +374,20 @@ public sealed class HudWindow : Window
     }
 
     private static TextBlock Label(string text) => new() { Text = text, FontSize = 13, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center };
+
+    /// <summary>The dictation's mode in the capsule ("→ EN"): a small pill in the accent colour, like the status pills elsewhere.</summary>
+    private static Border ModeBadge(string text) => new()
+    {
+        CornerRadius = new CornerRadius(9),
+        Padding = new Thickness(7, 1, 7, 2),
+        VerticalAlignment = VerticalAlignment.Center,
+        Background = Palette.Brush(Tint.Accent, 0.18),
+        Child = new TextBlock
+        {
+            Text = text, FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Palette.Theme("AccentTextFillColorPrimaryBrush"),
+        },
+    };
 
     /// <summary>A notice's text, wrapping onto up to three lines (the capsule grows to fit, see <see cref="Resize"/>).</summary>
     private static TextBlock Notice(string text)

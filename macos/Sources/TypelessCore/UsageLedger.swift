@@ -50,7 +50,7 @@ public enum WordCount {
         }
     }
 
-    private static func isJoiner(_ scalar: Unicode.Scalar) -> Bool {
+    static func isJoiner(_ scalar: Unicode.Scalar) -> Bool {
         ["'", "\u{2019}", "-", ".", ",", "_"].contains(scalar)
     }
 }

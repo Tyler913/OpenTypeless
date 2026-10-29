@@ -8,12 +8,14 @@ The clean-up prompt lives in `macos/Sources/TypelessCore/Prompts.swift` and `win
 |---|---|
 | `polish-cases.json` | Development set. Some cases resemble the prompt's own examples, so it can be over-fit. |
 | `polish-holdout.json` | Held-out set: different wording and content. **Use this to decide whether a change is an improvement.** |
+| `translate-cases.json` | Translation mode: the translate prompt (`Prompts.baseTranslatePrompt` / `Prompts.BaseTranslatePrompt`, also byte-identical, checked by `testdata/translate-guard-cases.json`). Corrections resolved, names, numbers and terms kept, requests not answered, into each listed language and one typed in. |
 
 Each case has an `input` and optional checks:
 
 - `mustContain`: every string must appear in the output.
 - `mustNotContain`: none may appear (e.g. the value a self-correction replaced).
 - `anyOf`: a list of groups; each group needs at least one match.
+- `translateTo`: translate into this language (a listed language's code such as `en` or `zh-Hans`, or a name such as `Italiano`) with the translate prompt, as translation mode does, instead of cleaning up. The output is then checked against the translation guards (`Prompts.translationFallback`: cut off, far longer or shorter than a translation gets, not mostly in the target's script) instead of the clean-up's, and English kept and similarity aren't reported.
 
 Every output is also checked for truncation and against the apps' own guards (`Prompts.fallback`), which insert the transcript as spoken instead of an output that is much longer than the input (an answer), keeps under 55% of the words of an input of 150 words or more (a summary), or has little in common with the input (an answer, translation or refusal). `testdata/polish-guard-cases.json` holds the heaviest legitimate clean-up of every case here, which the guards must let through. Two metrics are reported per model:
 

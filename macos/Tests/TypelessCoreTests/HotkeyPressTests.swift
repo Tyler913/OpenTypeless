@@ -69,4 +69,74 @@ extension HotkeyPressTests {
             #expect(HotkeyPress.eventTime(stamp, now: 100) == 100)
         }
     }
+    /// While a chord modifier's press is swallowed, a key pressed would reach the app without it, as another shortcut
+    /// (⌘⇧Q, log out, as ⌘Q, quit): it's kept from the app. Modifiers, chord keys and the repeats of a key pressed
+    /// before go through as before, and with nothing swallowed every key does.
+    @Test func keysPressedWhileAChordModifierIsSwallowedAreKeptFromTheApp() {
+        let chords: Set<Int64> = [56, 60] // ⇧
+        #expect(HotkeyPress.keepsFromApp(12, isRepeat: false, isModifier: false, chordKeys: chords,
+                                         chordModifierSwallowed: true)) // Q
+        #expect(HotkeyPress.keepsFromApp(49, isRepeat: false, isModifier: false, chordKeys: chords,
+                                         chordModifierSwallowed: true)) // Space
+        #expect(!HotkeyPress.keepsFromApp(12, isRepeat: false, isModifier: false, chordKeys: chords,
+                                          chordModifierSwallowed: false))
+        #expect(!HotkeyPress.keepsFromApp(12, isRepeat: true, isModifier: false, chordKeys: chords,
+                                          chordModifierSwallowed: true))
+        #expect(!HotkeyPress.keepsFromApp(55, isRepeat: false, isModifier: true, chordKeys: chords,
+                                          chordModifierSwallowed: true)) // ⌘
+        #expect(!HotkeyPress.keepsFromApp(60, isRepeat: false, isModifier: false, chordKeys: chords,
+                                          chordModifierSwallowed: true))
+    }
+}
+
+/// A modifier kept from the focused app is taken out of the flags of every event let through until its release.
+@Suite struct SuppressedModifiersTests {
+    private let leftShift: UInt64 = 0x02, rightShift: UInt64 = 0x04, shift: UInt64 = 0x20000
+    private let fn: UInt64 = 0x800000, leftCommand: UInt64 = 0x08, command: UInt64 = 0x100000
+
+    @Test func nothingKeptChangesNothing() {
+        let none = SuppressedModifiers()
+        #expect(none.isEmpty)
+        #expect(none.strip(fn | shift | leftShift) == fn | shift | leftShift)
+    }
+
+    /// Fn down, Shift down (kept), Fn up: the release carries no Shift, nor does a click or another key meanwhile.
+    @Test func aKeptShiftLeavesTheOtherEventsFlags() {
+        var kept = SuppressedModifiers()
+        kept.insert(56)
+        #expect(kept.strip(shift | leftShift) == 0) // Fn's release
+        #expect(kept.strip(fn | shift | leftShift | leftCommand | command) == fn | leftCommand | command)
+        // The other Shift, let through, keeps the shared flag.
+        #expect(kept.strip(shift | leftShift | rightShift) == shift | rightShift)
+        // Both kept: neither is left.
+        kept.insert(60)
+        #expect(kept.strip(shift | leftShift | rightShift) == 0)
+        // Flags set by software, with no side's bit, are its own.
+        #expect(kept.strip(shift) == shift)
+        kept.remove(56)
+        kept.remove(60)
+        #expect(kept.isEmpty)
+    }
+
+    /// Only modifiers with sides are kept; Fn never is.
+    @Test func onlySidedModifiers() {
+        var kept = SuppressedModifiers()
+        kept.insert(63)
+        #expect(kept.isEmpty)
+        kept.insert(59)
+        #expect(kept.contains(59) && kept.strip(0x40000 | 0x01) == 0)
+    }
+
+    /// After the tap was off, a kept key that is no longer down is let go of: its release went by unseen.
+    @Test func reconcilesWithTheKeysStateAfterAnOutage() {
+        var kept = SuppressedModifiers()
+        kept.insert(56)
+        kept.insert(60)
+        kept.keepHeld(in: shift | rightShift)
+        #expect(kept.keys == [60])
+        kept.keepHeld(in: shift) // no side's bit: the shared flag is all there is to go by
+        #expect(kept.keys == [60])
+        kept.keepHeld(in: fn)
+        #expect(kept.isEmpty)
+    }
 }

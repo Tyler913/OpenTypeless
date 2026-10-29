@@ -24,6 +24,20 @@ public sealed class HudModel
     public event Action? PhaseChanged;
     public event Action? LevelsChanged;
     public event Action? PreviewChanged;
+    public event Action? BadgeChanged;
+
+    private string? _badge;
+    /// <summary>The mode the dictation is in, when it isn't plain dictation ("→ EN" for a translation into English).</summary>
+    public string? Badge
+    {
+        get => _badge;
+        set
+        {
+            if (_badge == value) return;
+            _badge = value;
+            BadgeChanged?.Invoke();
+        }
+    }
 
     private string _preview = "";
     /// <summary>Live preview of what's being said (empty when it's off or hasn't heard anything yet).</summary>

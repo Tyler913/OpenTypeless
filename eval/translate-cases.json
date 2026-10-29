@@ -1,0 +1,111 @@
+[
+  {
+    "id": "zh-en-correction",
+    "translateTo": "en",
+    "input": "我们周三下午三点开会，不对不对，是周四下午三点，然后记得带上电脑",
+    "mustContain": ["Thursday", "3"],
+    "mustNotContain": ["Wednesday", "周"]
+  },
+  {
+    "id": "zh-en-github-issue",
+    "translateTo": "en",
+    "input": "嗯就是那个，我在 macOS 二十七上面用 open typeless，然后按住 Fn 说话之后，呃，文字没有贴到 VS Code 里面，但是剪贴板里面有，版本是一点四点三",
+    "mustContain": ["macOS 27", "OpenTypeless", "Fn", "VS Code", "1.4.3"],
+    "mustNotContain": ["嗯", "呃"]
+  },
+  {
+    "id": "zh-en-keeps-numbers",
+    "translateTo": "en",
+    "input": "这个 app 现在打包出来有两百兆，别的同类才二十兆，能不能想办法压一下",
+    "mustContain": ["200", "20"],
+    "anyOf": [["MB", "megabytes", "兆"]]
+  },
+  {
+    "id": "zh-en-request-not-answered",
+    "translateTo": "en",
+    "input": "你能不能帮我写一个 Python 脚本，把一个文件夹里面所有的 PNG 都转成 JPG",
+    "mustContain": ["Python", "PNG", "JPG"],
+    "mustNotContain": ["import", "def ", "```"]
+  },
+  {
+    "id": "zh-en-withdrawn-item",
+    "translateTo": "en",
+    "input": "我有三个需求啊，第一个是加个暗黑模式，第二个是支持导出 PDF，第三个是，嗯，加一个分享到微信的功能，算了算了第三个先不做了，就前两个吧。",
+    "mustContain": ["PDF"],
+    "anyOf": [["dark mode", "Dark mode", "dark theme"]],
+    "mustNotContain": ["WeChat"]
+  },
+  {
+    "id": "zh-en-vocabulary-names",
+    "translateTo": "en",
+    "input": "我现在用的是 claude opus 五点五，然后呃之前用的是 GPT 六，感觉 opus 写 swift 更好",
+    "mustContain": ["Claude Opus 5.5", "GPT-6", "Swift"]
+  },
+  {
+    "id": "en-zh-correction",
+    "translateTo": "zh-Hans",
+    "input": "so um send the report to Mike by Friday, actually no, send it to Sarah, and uh cc the finance team",
+    "mustContain": ["Sarah", "周五"],
+    "mustNotContain": ["Mike", "um", "uh"]
+  },
+  {
+    "id": "en-zh-keeps-terms",
+    "translateTo": "zh-Hans",
+    "input": "can you check why the useEffect hook runs twice in React 19 strict mode, I think it's expected but I'm not sure",
+    "mustContain": ["useEffect", "React 19"],
+    "anyOf": [["不确定", "不太确定", "不敢肯定"]]
+  },
+  {
+    "id": "zh-ja",
+    "translateTo": "ja",
+    "input": "明天的会改到下午三点，然后呃记得把上周的数据带过来",
+    "mustContain": ["3"],
+    "mustNotContain": ["呃"]
+  },
+  {
+    "id": "zh-ko",
+    "translateTo": "ko",
+    "input": "嗯我们周三下午三点开会，不对不对，是周四，然后记得带电脑",
+    "mustContain": ["목요일"],
+    "mustNotContain": ["수요일"]
+  },
+  {
+    "id": "en-es",
+    "translateTo": "es",
+    "input": "um the build is failing on CI because the Node version is eighteen, we need twenty two",
+    "mustContain": ["CI", "Node", "18", "22"]
+  },
+  {
+    "id": "zh-fr",
+    "translateTo": "fr",
+    "input": "预算大概是五万，呃，六万吧，六万比较保险",
+    "mustContain": ["60"],
+    "mustNotContain": ["50"]
+  },
+  {
+    "id": "zh-de",
+    "translateTo": "de",
+    "input": "帮我看一下这个 bug，就是登录页面在 iOS 上验证码显示不出来",
+    "mustContain": ["iOS"]
+  },
+  {
+    "id": "en-ru",
+    "translateTo": "ru",
+    "input": "please merge the pull request after the tests pass, and uh tag version one point four",
+    "mustContain": ["1.4"]
+  },
+  {
+    "id": "zh-pt",
+    "translateTo": "pt",
+    "input": "嗯就是说，我们下周一，不对，下周二上线新版本",
+    "anyOf": [["terça", "Terça"]],
+    "mustNotContain": ["segunda", "Segunda"]
+  },
+  {
+    "id": "zh-typed-language",
+    "translateTo": "Italiano",
+    "input": "嗯我们周三下午三点开会，不对不对，是周四，然后记得带电脑",
+    "anyOf": [["giovedì", "Giovedì"]],
+    "mustNotContain": ["mercoledì", "Mercoledì"]
+  }
+]

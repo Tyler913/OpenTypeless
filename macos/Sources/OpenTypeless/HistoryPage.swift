@@ -358,12 +358,15 @@ private struct HistoryDetail: View {
     }
 
     /// "0:42 · 123 words · $0.0012 · Slack" (the words said, not what snippets put in; the app profile it was made with,
-    /// if any).
+    /// if any), and "Translation → English" for a translation dictation.
     private var details: String {
         var parts = [record.duration.durationLabel]
         let words = WordCount.count(record.finalText)
         if words > 0 { parts.append(L("\(UsageFormat.count(words)) 字", "\(UsageFormat.count(words)) words")) }
         if let cost = record.cost { parts.append(UsageFormat.money(cost)) }
+        if let translation = record.translation {
+            parts.append(L("翻译 → \(translation.displayName)", "Translation → \(translation.displayName)"))
+        }
         if let profile = record.profileName { parts.append(profile) }
         return parts.joined(separator: " · ")
     }

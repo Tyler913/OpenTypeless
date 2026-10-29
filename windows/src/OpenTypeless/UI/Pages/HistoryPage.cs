@@ -440,6 +440,7 @@ public sealed class HistoryPage : PageBase
         var words = WordCount.Count(record.FinalText);
         if (words > 0) details.Add(L($"{UsageFormat.Count(words)} 字", $"{UsageFormat.Count(words)} words"));
         if (record.Cost is { } cost) details.Add(UsageFormat.Money(cost));
+        if (record.Translation is { } translation) details.Add(L($"翻译 → {translation.DisplayName}", $"Translation → {translation.DisplayName}"));
         // The app profile it was made with, if any.
         if (record.ProfileName is { } profile) details.Add(profile);
 

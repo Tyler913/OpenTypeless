@@ -39,7 +39,11 @@ public sealed class ShortcutPage : PageBase
 
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(AppSettings.Hotkey) or nameof(AppSettings.Shortcuts)) DispatcherQueue.TryEnqueue(Render);
+        if (e.PropertyName is nameof(AppSettings.Hotkey) or nameof(AppSettings.Shortcuts) or nameof(AppSettings.TranslationEnabled)
+            or nameof(AppSettings.TranslationLanguage) or nameof(AppSettings.TranslationOtherLanguage) or nameof(AppSettings.TranslationChord))
+        {
+            DispatcherQueue.TryEnqueue(Render);
+        }
     }
 
     private void Render()
@@ -153,6 +157,17 @@ public sealed class ShortcutPage : PageBase
             Glyph = Glyphs.Cancel, Tint = Tint.Gray, Title = L("Esc 取消", "Esc to cancel"),
             Subtitle = L("录音或处理过程中随时取消", "Cancel any time while recording or processing"),
         });
+        if (_settings.TranslationTarget is { } target)
+        {
+            var key = _settings.TranslationChord.KeyCap();
+            how.Body.Add(new CardDivider());
+            how.Body.Add(new CardRow
+            {
+                Glyph = Glyphs.Speech, Tint = Tint.Indigo, Title = L($"按住 + {key}：翻译", $"Hold + {key}: translate"),
+                Subtitle = L($"插入时翻译成：{target.DisplayName}（在「词汇与风格」里设置）",
+                             $"Inserted translated into {target.DisplayName} (set up under Vocabulary & Style)"),
+            });
+        }
         Body.Children.Add(how);
 
         // Actions with a shortcut of their own

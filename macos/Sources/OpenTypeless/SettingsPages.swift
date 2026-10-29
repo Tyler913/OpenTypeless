@@ -473,6 +473,13 @@ struct ShortcutPage: View {
                 CardDivider(inset: 50)
                 CardRow(icon: "escape", iconColor: .gray, title: L("Esc 取消", "Esc to cancel"),
                         subtitle: L("录音或处理过程中随时取消", "Cancel any time while recording or processing")) { EmptyView() }
+                if let target = settings.translationTarget {
+                    let key = settings.translationChord.keyCap
+                    CardDivider(inset: 50)
+                    CardRow(icon: "character.bubble.fill", iconColor: .indigo, title: L("按住 + \(key)：翻译", "Hold + \(key): translate"),
+                            subtitle: L("插入时翻译成：\(target.displayName)（在「词汇与风格」里设置）",
+                                        "Inserted translated into \(target.displayName) (set up under Vocabulary & Style)")) { EmptyView() }
+                }
             }
 
             CardSection(title: L("更多快捷键", "More shortcuts"),
@@ -1234,6 +1241,56 @@ struct StylePage: View {
                         footer: L("说出触发词，插入时会换成你写好的内容，一字不改，句子中间说也行。触发词会作为词汇提示交给语音识别和整理，让它原样保留。最好选一个平时不会说的说法，免得误替换。",
                                   "Say a trigger and the text you wrote goes in instead, word for word, even mid-sentence. Triggers go to speech-to-text and clean-up as vocabulary, so they come through intact. Pick a phrase you wouldn't otherwise say, so it isn't replaced by accident.")) {
                 SnippetList(settings: settings)
+            }
+            TranslationSection(settings: settings)
+        }
+    }
+}
+
+/// Translation mode: on or off, the language dictations are translated into, and the key that switches a recording to
+/// translation while the dictation shortcut is held.
+private struct TranslationSection: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        let chord = settings.translationChord
+        CardSection(title: L("翻译", "Translation"),
+                    footer: L("说什么语言都可以，插入的是翻译。只需一次模型请求，和整理一样快；翻译不可用时，会改为插入整理后的原文。",
+                              "Speak in any language; what goes in is the translation. It takes one model request, as quick as a clean-up. When the translation can't be used, the cleaned-up original goes in instead.")) {
+            CardRow(icon: "character.bubble.fill", iconColor: .indigo, title: L("翻译模式", "Translation mode"),
+                    subtitle: L("按住听写快捷键时再按一下 \(chord.label)，这次听写会翻译后再插入",
+                                "Hold the dictation shortcut and press \(chord.label) too: that dictation goes in translated"),
+                    isOn: $settings.translationEnabled)
+            if settings.translationEnabled {
+                CardDivider(inset: 50)
+                CardRow(icon: "globe", iconColor: .teal, title: L("翻译成", "Translate into")) {
+                    Picker(L("翻译成", "Translate into"), selection: $settings.translationLanguage) {
+                        ForEach(TranslationLanguage.allCases, id: \.self) { Text($0.nativeName).tag($0.rawValue) }
+                        Text(L("其他…", "Other…")).tag(AppSettings.otherTranslationLanguage)
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                if settings.translationLanguage == AppSettings.otherTranslationLanguage {
+                    CardDivider(inset: 50)
+                    CardRow(icon: "character.cursor.ibeam", iconColor: .gray, title: L("语言", "Language"),
+                            subtitle: L("用它的名字，比如 Italiano、繁體中文、Tiếng Việt",
+                                        "By its name: Italiano, 繁體中文, Tiếng Việt…")) {
+                        TextField(L("语言", "Language"), text: $settings.translationOtherLanguage)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 180)
+                    }
+                }
+                CardDivider(inset: 50)
+                CardRow(icon: "keyboard", iconColor: .blue, title: L("切换键", "Switch key"),
+                        subtitle: L("按住听写快捷键时按下它（左右两边都可以）",
+                                    "Pressed while you hold the dictation shortcut (either side)")) {
+                    Picker(L("切换键", "Switch key"), selection: $settings.translationChord) {
+                        ForEach(TranslationChord.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
             }
         }
     }

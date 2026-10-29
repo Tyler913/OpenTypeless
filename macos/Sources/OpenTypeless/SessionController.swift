@@ -10,9 +10,24 @@ private final class SampleCounter: @unchecked Sendable {
     var seconds: Double { lock.withLock { AudioFormat.seconds(forSampleCount: count) } }
 }
 
-/// What a recording is for. Only plain dictation so far; a mode chord (see `ModeChords`) switches it while recording.
+/// What a recording is for: plain dictation, or a translation (see `TranslationTarget`), which the translation chord
+/// (see `ModeChords`) switches it to while recording.
 enum RecordingMode: Equatable, Sendable {
     case dictation
+    case translate
+}
+
+private extension PolishFallback {
+    /// Why a translation couldn't be used, for History.
+    var translationReason: String {
+        switch self {
+        case .truncated: return L("翻译被截断了", "the translation was cut off")
+        case .answered: return L("模型回答了内容，没有翻译", "the model answered instead of translating")
+        case .summarised: return L("翻译漏掉了太多内容", "the translation left too much out")
+        case .untranslated: return L("结果不是目标语言", "it didn't come back in the target language")
+        case .failed, .unrelated: return L("没有可用的翻译", "no usable translation came back")
+        }
+    }
 }
 
 /// Orchestrates one dictation: hotkey → record → chunked STT → polish → paste.
@@ -47,9 +62,10 @@ final class SessionController: ObservableObject {
     /// When the hotkey went down, by the key event's own time (`ProcessInfo.systemUptime` clock, see `HotkeyPress`).
     private var pressedAt: TimeInterval?
     private var handsFree = false
-    /// Second keys that switch the recording's mode while the hotkey is held (see `ModeChords`). None is registered yet;
-    /// whatever registers one also gives the hotkey monitor its key, to keep it from the focused app.
-    var modeChords = ModeChords<RecordingMode>()
+    /// Second keys that switch the recording's mode while the hotkey is held (see `ModeChords`): the translation chord's,
+    /// while translation mode is on (see `updateModeChords`, which also gives the hotkey monitor the keys to keep from
+    /// the focused app).
+    private(set) var modeChords = ModeChords<RecordingMode>()
     /// What the running recording is for; plain dictation at every start.
     private(set) var mode: RecordingMode = .dictation
     /// The "Paste last dictation" waiting for its keys to be let go, or pasting, by its number. A new dictation, Esc or
@@ -212,13 +228,43 @@ final class SessionController: ObservableObject {
         case let .switchMode(newMode):
             guard newMode != mode else { return }
             note("mode → \(newMode) (chord key \(keyCode))")
-            mode = newMode
+            switchMode(to: newMode)
         case .cancel:
             note("cancelled — another key was pressed with the shortcut (treated as a key combo)")
             cancel(silently: true)
         case .ignore:
             break
         }
+    }
+
+    /// The running recording becomes `newMode`'s: the record keeps it (a retry runs the same way), the capsule shows it,
+    /// and a clean-up started ahead of time with the other prompt starts again with this one.
+    private func switchMode(to newMode: RecordingMode) {
+        let translation = newMode == .translate ? settings.translationTarget : nil
+        // Translation turned off a moment ago: its chord is on its way out.
+        guard newMode == .dictation || translation != nil else { return }
+        mode = newMode
+        record?.translation = translation
+        hud.model.badge = translation?.badge
+        if let raw = speculativePolish?.raw {
+            dropSpeculativePolish()
+            speculationChanged(raw)
+        }
+    }
+
+    /// Registers the translation chord's keys while translation mode is on (none otherwise), and returns every chord key,
+    /// for the hotkey monitor to keep from the focused app while the hotkey is held. A modifier-only hotkey's own key is
+    /// never its chord. At launch, and whenever settings change.
+    func updateModeChords() -> Set<Int64> {
+        var chords = ModeChords<RecordingMode>()
+        if settings.translationTarget != nil {
+            let hotkey = settings.hotkey
+            for key in settings.translationChord.keyCodes(excludingHotkey: hotkey.isModifierOnly ? hotkey.keyCode : nil) {
+                chords.register(key, mode: .translate)
+            }
+        }
+        modeChords = chords
+        return chords.keys
     }
 
     /// The Mac is going to sleep or the screen was locked. A hands-free recording mustn't keep the microphone open on
@@ -436,6 +482,7 @@ final class SessionController: ObservableObject {
         lastError = nil
         hud.model.resetLevels()
         hud.model.startedAt = Date()
+        hud.model.badge = nil
         hud.show(.recording)
         playSound("Tink")
         // After the start sound, which muting would cut off.
@@ -457,7 +504,9 @@ final class SessionController: ObservableObject {
     /// `polishes`: whether this dictation is cleaned up (its app profile can say otherwise than the global setting).
     private func warmConnections(polishes: Bool) {
         var endpoints: [ProviderEndpoint?] = [settings.sttEndpoint, settings.sttBackupEndpoint]
-        if polishes { endpoints += [settings.polishEndpoint, settings.polishBackupEndpoint] }
+        if polishes || settings.translationTarget != nil {
+            endpoints += [settings.polishEndpoint, settings.polishBackupEndpoint]
+        }
         preconnector.warm(endpoints.map { $0.map { APIClient(endpoint: $0) } })
     }
 
@@ -541,7 +590,7 @@ final class SessionController: ObservableObject {
             note("released in \(frontmostID), which has other settings than the app the recording started in → clipboard")
             deliverByPaste = false
         }
-        hud.showWorking(polishes: dictation.polishEnabled)
+        hud.showWorking(polishes: dictation.polishEnabled || record.translation != nil)
 
         // No waiting when the speaker paused before letting go and that pause is already being transcribed as the last
         // chunk: the moment's (quiet) audio changes nothing then, and the text may be ready at once.
@@ -637,14 +686,22 @@ final class SessionController: ObservableObject {
         var text = record.rawText
         var notice: String?
         var polished: SegmentedPolishResult?
+        // A translation that couldn't be used, set aside for the clean-up: billed all the same.
+        var setAside: SegmentedPolishResult?
+        // The translation's (and clean-up's) answers as they come in, counted even if Esc then stops the clean-up.
+        let ledger = PolishLedger()
+        // The text going in is a translation: the user's edits to it say nothing about what speech recognition misheard.
+        var translated = false
+        let translation = record.translation
 
-        if dictation.polishEnabled {
-            // When the speaker paused before letting go and said nothing more, the clean-up of this very transcript
-            // started while they were still holding the key: take it over (often it's already done).
+        if dictation.polishEnabled || translation != nil {
+            // When the speaker paused before letting go and said nothing more, the clean-up (or translation) of this very
+            // transcript started while they were still holding the key: take it over (often it's already done).
             let polishing: Task<SegmentedPolishResult, Error>
             var ahead = 0.0
             // One that already failed (while recording) gets a fresh attempt instead.
-            if let speculative = speculativePolish, speculative.raw == record.rawText, !speculative.outcome.failed {
+            if let speculative = speculativePolish, speculative.raw == record.rawText, speculative.translation == translation,
+               !speculative.outcome.failed {
                 speculativePolish = nil
                 polishing = speculative.task
                 // What it streams from now on moves this dictation's bar.
@@ -657,43 +714,92 @@ final class SessionController: ObservableObject {
                 dropSpeculativePolish()
                 let raw = record.rawText
                 let onPartial = onPolishPartial(expected: raw)
-                polishing = Task { try await self.polish(raw, with: dictation, onPartial: onPartial) }
+                polishing = Task {
+                    try await self.polish(raw, with: dictation, translation: translation, onPartial: onPartial)
+                }
             }
             // Saved while the clean-up runs, so the transcript survives a crash.
             history.update(record)
             do {
-                let outcome = try await withTaskCancellationHandler {
-                    try await polishing.value
-                } onCancel: {
-                    polishing.cancel()
-                }
-                polished = outcome
-                // The wait after the key was released: a clean-up started ahead of time had a head start.
-                let firstToken = max(0, outcome.firstTokenSeconds - ahead)
-                let total = max(0, outcome.totalSeconds - ahead)
-                record.timing?.polishFirstToken = firstToken
-                record.timing?.polish = total
-                record.timing?.polishModel = outcome.model
-                record.timing?.usedBackup = outcome.usedBackup
-                let fallbacks = outcome.fallbacks
-                note(String(format: "polish: %@%@, %d part(s), first token %.2fs, total %.2fs", outcome.model,
-                            outcome.usedBackup ? " (backup)" : "", outcome.parts.count, firstToken, total)
-                     + (fallbacks.isEmpty ? "" : "; inserted as spoken: "
-                        + fallbacks.map { $0.fallback?.rawValue ?? "" }.joined(separator: ", ")))
-                if fallbacks.count == outcome.parts.count {
-                    // Cut off, an answer, a summary or a translation rather than the speaker's text, part after part.
-                    notice = L("未整理，已插入原文", "Inserted without clean-up")
-                    record.error = fallbacks.lazy.compactMap(\.error).first?.localizedDescription
-                    record.status = .polishFailed
+                if let translation {
+                    // The translation, or when it can't be used as it is, the clean-up (when that's on): one more request.
+                    let raw = record.rawText
+                    let onPartial = onPolishPartial(expected: raw)
+                    var cleanUp: (@Sendable () async throws -> SegmentedPolishResult)?
+                    if dictation.polishEnabled {
+                        cleanUp = { [weak self] () async throws -> SegmentedPolishResult in
+                            guard let self else { throw APIError.cancelled }
+                            return try await self.polish(raw, with: dictation, translation: nil, onPartial: onPartial)
+                        }
+                    }
+                    let outcome = try await withTaskCancellationHandler {
+                        try await TranslatedPolish.run(translate: { try await polishing.value }, cleanUp: cleanUp,
+                                                       ledger: ledger)
+                    } onCancel: {
+                        polishing.cancel()
+                    }
+                    if outcome.translated, let translatedResult = outcome.translation {
+                        polished = translatedResult
+                        noteTiming(of: translatedResult, ahead: ahead, in: &record, what: "translation → \(translation.id)")
+                        text = translatedResult.text
+                        record.polishedText = translatedResult.text
+                        record.status = .done
+                        translated = true
+                    } else {
+                        setAside = outcome.translation
+                        let fallback = outcome.translationFallback ?? .failed
+                        let reason = outcome.translationError?.localizedDescription ?? fallback.translationReason
+                        record.error = L("未能翻译：\(reason)", "Couldn't translate: \(reason)")
+                        // The wait after the key was released, both requests together.
+                        record.timing?.polish = ProcessInfo.processInfo.systemUptime - begun
+                        record.timing?.polishModel = (outcome.cleanUp ?? outcome.translation)?.model
+                        record.timing?.usedBackup = (outcome.cleanUp ?? outcome.translation)?.usedBackup
+                        polished = outcome.cleanUp
+                        if let cleaned = outcome.cleanUp, cleaned.fallbacks.count < cleaned.parts.count {
+                            note("translation unusable (\(fallback.rawValue)) → clean-up inserted")
+                            notice = L("未能翻译，已插入整理后的原文", "Couldn't translate — inserted the clean-up")
+                            text = cleaned.text
+                            record.polishedText = cleaned.text
+                            record.status = .done
+                        } else {
+                            note("translation unusable (\(fallback.rawValue)) → inserted as spoken")
+                            notice = L("未能翻译，已插入原文", "Couldn't translate — inserted as spoken")
+                            record.status = .polishFailed
+                        }
+                    }
                 } else {
-                    // A part whose clean-up was unusable goes in as spoken, between the parts that were cleaned up.
-                    if !fallbacks.isEmpty { notice = L("部分未整理，已插入原文", "Partly inserted without clean-up") }
-                    text = outcome.text
-                    record.polishedText = outcome.text
-                    record.status = .done
+                    let outcome = try await withTaskCancellationHandler {
+                        try await polishing.value
+                    } onCancel: {
+                        polishing.cancel()
+                    }
+                    polished = outcome
+                    noteTiming(of: outcome, ahead: ahead, in: &record, what: "polish")
+                    let fallbacks = outcome.fallbacks
+                    if fallbacks.count == outcome.parts.count {
+                        // Cut off, an answer, a summary or a translation rather than the speaker's text, part after part.
+                        notice = L("未整理，已插入原文", "Inserted without clean-up")
+                        record.error = fallbacks.lazy.compactMap(\.error).first?.localizedDescription
+                        record.status = .polishFailed
+                    } else {
+                        // A part whose clean-up was unusable goes in as spoken, between the parts that were cleaned up.
+                        if !fallbacks.isEmpty { notice = L("部分未整理，已插入原文", "Partly inserted without clean-up") }
+                        text = outcome.text
+                        record.polishedText = outcome.text
+                        record.status = .done
+                    }
                 }
             } catch {
-                if APIError.from(error) == .cancelled { return }
+                if APIError.from(error) == .cancelled {
+                    // Esc while the clean-up ran after a translation that couldn't be used: nothing goes in, but that
+                    // translation was billed. (`cancel` has kept the record as cancelled; so it stays, now with its cost.)
+                    let billed = ledger.all
+                    guard !billed.isEmpty else { return }
+                    record.status = .cancelled
+                    account(&record, pipeline: pipeline, polished: nil, discarded: billed)
+                    history.update(record)
+                    return
+                }
                 notice = L("整理失败，已插入原文", "Clean-up failed — inserted raw text")
                 record.error = error.localizedDescription
                 record.status = .polishFailed
@@ -710,12 +816,13 @@ final class SessionController: ObservableObject {
         text = expanded
 
         // Taken now: once the text is in, the next dictation may already be collecting its own.
-        let discarded = takeDiscardedPolishes()
+        let discarded = takeDiscardedPolishes() + (setAside.map { [$0] } ?? [])
         if isCurrent(generation) {
             hud.model.bar.reach(.delivered)
             let transcription = record.timing?.transcription ?? 0
             record.timing?.delivered = transcription + ProcessInfo.processInfo.systemUptime - begun
-            record.timing?.delivery = await deliver(text, notice: notice, generation: generation, dictation: dictation)
+            record.timing?.delivery = await deliver(text, notice: notice, generation: generation, dictation: dictation,
+                                                    watchEdits: !translated)
         }
         // Esc came before the text was in place (or while it went in): `cancel` has kept the record as cancelled, and
         // so it stays, now with its clean-up.
@@ -723,6 +830,21 @@ final class SessionController: ObservableObject {
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
         account(&record, pipeline: pipeline, polished: polished, discarded: discarded)
         history.update(record)
+    }
+
+    /// Saves how long the clean-up (or translation) `outcome` took after the key was released (one started ahead of
+    /// time had a head start of `ahead` seconds), and which model answered.
+    private func noteTiming(of outcome: SegmentedPolishResult, ahead: Double, in record: inout DictationRecord, what: String) {
+        let firstToken = max(0, outcome.firstTokenSeconds - ahead)
+        let total = max(0, outcome.totalSeconds - ahead)
+        record.timing?.polishFirstToken = firstToken
+        record.timing?.polish = total
+        record.timing?.polishModel = outcome.model
+        record.timing?.usedBackup = outcome.usedBackup
+        let fallbacks = outcome.fallbacks
+        note(String(format: "%@: %@%@, %d part(s), first token %.2fs, total %.2fs", what, outcome.model,
+                    outcome.usedBackup ? " (backup)" : "", outcome.parts.count, firstToken, total)
+             + (fallbacks.isEmpty ? "" : "; unusable: " + fallbacks.map { $0.fallback?.rawValue ?? "" }.joined(separator: ", ")))
     }
 
     /// Whether the dictation `generation` is still the one under way, not cancelled or followed by another.
@@ -744,9 +866,10 @@ final class SessionController: ObservableObject {
 
     // MARK: - Clean-up ahead of time
 
-    /// A clean-up of `raw`, started while recording.
+    /// A clean-up of `raw` (or its translation into `translation`), started while recording.
     private struct SpeculativePolish {
         let raw: String
+        let translation: TranslationTarget?
         let startedAt: TimeInterval
         let task: Task<SegmentedPolishResult, Error>
         let outcome: PolishOutcome
@@ -772,9 +895,10 @@ final class SessionController: ObservableObject {
     }
 
     /// The pipeline has the whole transcript the recording would give if it ended now (the speaker paused), or no longer
-    /// has one (they went on). Starts cleaning that transcript up, so the text can be ready when the key is released.
+    /// has one (they went on). Starts cleaning that transcript up (or translating it, in translation mode), so the text
+    /// can be ready when the key is released.
     private func speculationChanged(_ raw: String?) {
-        guard state == .recording, let dictation = dictationSettings, dictation.polishEnabled else { return }
+        guard state == .recording, let dictation = dictationSettings, dictation.polishEnabled || mode == .translate else { return }
         if let raw, raw == speculativePolish?.raw { return }
         dropSpeculativePolish()
         guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -783,10 +907,12 @@ final class SessionController: ObservableObject {
         guard !SegmentedPolish.needsParts(raw) else { return }
         let outcome = PolishOutcome()
         let partials = PartialRelay()
+        let translation = record?.translation
         let task = Task { [weak self] () async throws -> SegmentedPolishResult in
             guard let self else { throw APIError.cancelled }
             do {
-                let result = try await self.polish(raw, with: dictation, onPartial: { partials.send($0) })
+                let result = try await self.polish(raw, with: dictation, translation: translation,
+                                                   onPartial: { partials.send($0) })
                 outcome.result = result
                 return result
             } catch {
@@ -794,7 +920,8 @@ final class SessionController: ObservableObject {
                 throw error
             }
         }
-        speculativePolish = SpeculativePolish(raw: raw, startedAt: ProcessInfo.processInfo.systemUptime, task: task,
+        speculativePolish = SpeculativePolish(raw: raw, translation: translation,
+                                              startedAt: ProcessInfo.processInfo.systemUptime, task: task,
                                               outcome: outcome, partials: partials)
         note("clean-up started ahead of time (speaker paused)")
     }
@@ -833,8 +960,11 @@ final class SessionController: ObservableObject {
     ///
     /// Esc (or the screen locking) can come at any point while the text goes in: the paste and the Return are only sent
     /// while the dictation is still current, and a cancelled one leaves the session and the HUD to what replaced it.
+    ///
+    /// `watchEdits`: false for a translation, whose edits say nothing about what speech recognition misheard.
     @discardableResult
-    private func deliver(_ text: String, notice: String?, generation: Int, dictation: DictationSettings) async -> String {
+    private func deliver(_ text: String, notice: String?, generation: Int, dictation: DictationSettings,
+                         watchEdits: Bool = true) async -> String {
         let target = deliverByPaste ? FocusProbe.focusedTarget() : .notEditable
         let otherSettings = deliverByPaste && !suits(dictation)
         if target == .notEditable || deliverByPaste && focusMoved || otherSettings {
@@ -879,7 +1009,7 @@ final class SessionController: ObservableObject {
                 reset()
                 hud.finishWorking()
             }
-            if settings.learnFromEdits, !sent { editWatcher.watch(inserted: inserted) }
+            if settings.learnFromEdits, watchEdits, !sent { editWatcher.watch(inserted: inserted) }
             return "pasted"
         case .notPasted:
             finish(showing: .copied, hideAfter: 1.6)
@@ -910,21 +1040,23 @@ final class SessionController: ObservableObject {
         return (result.text, surroundings)
     }
 
-    /// Cleans up `raw` with the dictation's preferences (the global ones and its app profile's), on the main model and
-    /// the backup alike.
-    private func polish(_ raw: String, with dictation: DictationSettings,
+    /// Cleans up `raw` with the dictation's preferences (the global ones and its app profile's), or translates it into
+    /// `translation`, on the main model and the backup alike.
+    private func polish(_ raw: String, with dictation: DictationSettings, translation: TranslationTarget?,
                         onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
-        let primary = route(endpoint, model: settings.polishModel, instructions: dictation.extraInstructions)
+        let primary = route(endpoint, model: settings.polishModel, instructions: dictation.extraInstructions,
+                            translation: translation)
         let backup = settings.polishBackupEndpoint.map {
-            route($0, model: settings.polishBackupModel, instructions: dictation.extraInstructions)
+            route($0, model: settings.polishBackupModel, instructions: dictation.extraInstructions, translation: translation)
         }
         return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup, onPartial: onPartial)
     }
 
-    private func route(_ endpoint: ProviderEndpoint, model: String, instructions: String) -> PolishRoute {
+    private func route(_ endpoint: ProviderEndpoint, model: String, instructions: String,
+                       translation: TranslationTarget?) -> PolishRoute {
         let model = model.trimmingCharacters(in: .whitespaces)
         return PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
@@ -932,7 +1064,8 @@ final class SessionController: ObservableObject {
             misheard: settings.misheardHints,
             extraInstructions: instructions,
             modelInfo: endpoint.id == .openrouter ? modelInfo[model] : nil,
-            host: endpoint.id == .openrouter ? settings.openRouterHost(for: model) : nil
+            host: endpoint.id == .openrouter ? settings.openRouterHost(for: model) : nil,
+            translation: translation
         ))
     }
 
@@ -1119,7 +1252,10 @@ final class SessionController: ObservableObject {
         dictationSettings = dictation
         pasteTarget = target
         state = .processing
-        hud.showWorking(polishes: dictation.polishEnabled)
+        // A translation dictation is translated again, into the language it was translated into then.
+        mode = record.translation == nil ? .dictation : .translate
+        hud.model.badge = record.translation?.badge
+        hud.showWorking(polishes: dictation.polishEnabled || record.translation != nil)
 
         let pipeline = makePipeline(endpoint: endpoint, preset: preset, language: dictation.language)
         self.pipeline = pipeline

@@ -118,9 +118,10 @@ public static class SegmentedPolish
     }
 
     /// <summary>
-    /// The app's clean-up of <paramref name="transcript"/>: each part hedged between the routes (see
-    /// <see cref="HedgedPolish"/>) and asked a second time after a transient failure, but not after a timeout. A second wait
-    /// as long as the first would only hold the dictation up; the part goes in as spoken instead.
+    /// The app's clean-up of <paramref name="transcript"/> (or its translation, when the routes' options ask for one):
+    /// each part hedged between the routes (see <see cref="HedgedPolish"/>) and asked a second time after a transient
+    /// failure, but not after a timeout. A second wait as long as the first would only hold the dictation up; the part goes
+    /// in as spoken instead.
     /// </summary>
     public static Task<SegmentedPolishResult> Run(string transcript, PolishRoute primary, PolishRoute? backup,
                                                   Action<string>? onPartial = null, CancellationToken cancellationToken = default)
@@ -128,18 +129,20 @@ public static class SegmentedPolish
         var policy = new RetryPolicy(MaxAttempts: 2, RetriesTimeouts: false);
         return Run(transcript, (part, partial, token) => policy.Run(
                        (_, ct) => HedgedPolish.Run(part, primary, backup, cancellationToken: ct, onPartial: partial), cancellationToken: token),
-                   onPartial, cancellationToken);
+                   onPartial, cancellationToken, primary.Options.Translation, primary.Options.Vocabulary);
     }
 
     /// <summary>
     /// Cleans up the parts of <paramref name="transcript"/> with <paramref name="polish"/>, all at once, and puts each part's
-    /// answer through <see cref="Prompts.Fallback"/>: a part whose answer is unusable, or that got none, goes in as spoken.
-    /// Throws only when no part got an answer (the first part's error), or when cancelled. <paramref name="onPartial"/>
-    /// gets the parts' text so far, joined.
+    /// answer through <see cref="Prompts.Fallback"/> (<see cref="Prompts.TranslationFallback"/> when it's a translation into
+    /// <paramref name="translation"/>): a part whose answer is unusable, or that got none, goes in as spoken. Throws only
+    /// when no part got an answer (the first part's error), or when cancelled. <paramref name="onPartial"/> gets the parts'
+    /// text so far, joined. <paramref name="vocabulary"/>: the speaker's terms, which a translation keeps as they are.
     /// </summary>
     public static async Task<SegmentedPolishResult> Run(string transcript,
                                                         Func<string, Action<string>?, CancellationToken, Task<HedgedPolishResult>> polish,
-                                                        Action<string>? onPartial = null, CancellationToken cancellationToken = default)
+                                                        Action<string>? onPartial = null, CancellationToken cancellationToken = default,
+                                                        TranslationTarget? translation = null, IReadOnlyList<string>? vocabulary = null)
     {
         var texts = Parts(transcript);
         var clock = Stopwatch.StartNew();
@@ -152,7 +155,9 @@ public static class SegmentedPolish
             var (answer, error) = outcomes[i];
             if (answer != null)
             {
-                var fallback = Prompts.Fallback(texts[i], answer.Result.Text, answer.Result.Truncated);
+                var fallback = translation is null
+                    ? Prompts.Fallback(texts[i], answer.Result.Text, answer.Result.Truncated)
+                    : Prompts.TranslationFallback(texts[i], answer.Result.Text, answer.Result.Truncated, translation, vocabulary);
                 results.Add(new SegmentedPolishResult.Part(texts[i], answer, fallback, null));
             }
             else

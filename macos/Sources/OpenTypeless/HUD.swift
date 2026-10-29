@@ -30,6 +30,8 @@ final class HUDModel: ObservableObject {
     @Published var startedAt = Date()
     /// Live preview of what's being said (empty when it's off or hasn't heard anything yet).
     @Published var preview = ""
+    /// The mode the dictation is in, when it isn't plain dictation ("→ EN" for a translation into English).
+    @Published var badge: String?
     let bar = ProcessingBar()
     let levels = InputLevels()
 
@@ -239,10 +241,14 @@ struct HUDView: View {
                 TimelineView(.periodic(from: .now, by: 0.5)) { context in
                     Text(elapsed(context.date)).monospacedDigit()
                 }
+                if let badge = model.badge { ModeBadge(text: badge).transition(.opacity) }
             }
         case .working:
-            // About as wide as the recording row, so the capsule keeps its size when the key is released.
-            HoppingDots().frame(width: 132)
+            HStack(spacing: 10) {
+                // About as wide as the recording row, so the capsule keeps its size when the key is released.
+                HoppingDots().frame(width: 132)
+                if let badge = model.badge { ModeBadge(text: badge) }
+            }
         case .copied:
             HStack(spacing: 7) {
                 Image(systemName: "doc.on.clipboard").foregroundStyle(.secondary)
@@ -306,6 +312,21 @@ struct ProgressFill: View {
         }
         .clipShape(.capsule)
         .allowsHitTesting(false)
+    }
+}
+
+/// The dictation's mode in the capsule ("→ EN"): a small pill in the accent colour, like the status pills elsewhere.
+private struct ModeBadge: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .lineLimit(1)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Color.accentColor.opacity(0.18)))
+            .foregroundStyle(Color.accentColor)
     }
 }
 

@@ -29,6 +29,16 @@ public static class HotkeyPress
     public static double EventTime(double stamp, double now) => stamp > 0 && stamp <= now && now - stamp < MaxEventAge ? stamp : now;
 
     /// <summary>
+    /// Whether a key going down is kept from the focused app because a chord modifier's press was swallowed and it's still
+    /// held. Let through, the key would reach the app without that modifier (a swallowed key never reaches the key
+    /// state), as another shortcut altogether: with Ctrl the translation chord, Win + Ctrl + Q as Win + Q. Its auto-repeats
+    /// and release go with it. Not a modifier (which only changes what's held), a chord key, or the repeat of a key pressed
+    /// before the chord, whose press the app has seen and whose release it must see too.
+    /// </summary>
+    public static bool KeepsFromApp(int keyCode, bool repeat, bool isModifier, IReadOnlySet<int> chordKeys, bool chordModifierSwallowed) =>
+        chordModifierSwallowed && !repeat && !isModifier && !chordKeys.Contains(keyCode);
+
+    /// <summary>
     /// A low-level keyboard hook's event time (the 32-bit millisecond tick count, which wraps every 49.7 days) as
     /// seconds on the 64-bit tick clock <paramref name="nowTicks"/> (<see cref="Environment.TickCount64"/>) is read from.
     /// </summary>

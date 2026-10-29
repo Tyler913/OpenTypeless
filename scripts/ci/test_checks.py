@@ -233,6 +233,22 @@ class PackagingChecks(unittest.TestCase):
             self.release = original
 
 
+class TranslationTableChecks(unittest.TestCase):
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("swift_table", ROOT / "i18n/swift_table.py")
+        self.swift_table = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.swift_table)
+
+    def test_raw_string_delimiter_outnumbers_any_run_of_hashes(self):
+        text = '{\n  "C# and \\"##1\\"": {"ja": "#"}\n}\n'
+        swift = self.swift_table.render(text)
+        self.assertIn('static let json = ###"""\n' + text + '\n"""###\n', swift)
+        self.assertIn('json = #"""', self.swift_table.render("{}\n"))
+
+    def test_committed_swift_file_matches_strings_json(self):
+        self.assertEqual(self.swift_table.current(), self.swift_table.expected())
+
+
 class DictationChecks(unittest.TestCase):
     """The fake provider and the end-to-end check must notice a lost, repeated or cut word, not just a crash."""
 

@@ -30,6 +30,14 @@ import Testing
         #expect(localized("没有翻译", "Not translated \(7)", in: .fr) == "Not translated 7")
     }
 
+    /// TranslationsJSON.swift is generated from i18n/strings.json (python3 i18n/check.py regenerates it).
+    @Test func compiledInTableMatchesStringsJSON() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let file = try String(contentsOf: root.appendingPathComponent("i18n/strings.json"), encoding: .utf8)
+        #expect(Translations.json == file, "TranslationsJSON.swift is out of date: run python3 i18n/check.py")
+    }
+
     @Test func everyTranslationKeepsThePlaceholders() {
         #expect(Translations.table.count > 200)
         let placeholder = #/\{\d+\}/#

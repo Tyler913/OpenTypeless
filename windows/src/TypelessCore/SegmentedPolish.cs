@@ -61,9 +61,12 @@ public static class SegmentedPolish
     /// sentence ends into parts of about the same size; a sentence too long to fit is split at commas, and only a run-on
     /// without either (speech recognition sometimes leaves Chinese unpunctuated) between words or characters.
     /// </summary>
-    public static List<string> Parts(string transcript)
+    public static List<string> Parts(string transcript) => PartsAndBreaks(transcript).Select(p => p.Text).ToList();
+
+    /// <summary><see cref="Parts"/>, each with the number of line breaks that follow it in the transcript (none after the last).</summary>
+    internal static List<(string Text, int BreaksAfter)> PartsAndBreaks(string transcript)
     {
-        if (!NeedsParts(transcript)) return [transcript];
+        if (!NeedsParts(transcript)) return [(transcript, 0)];
         var text = transcript.Trim();
         var total = WordCount.Count(text);
         var count = (total + PartSize - 1) / PartSize;
@@ -96,23 +99,44 @@ public static class SegmentedPolish
             parts.RemoveAt(parts.Count - 1);
             parts[^1] = (parts[^1].Text + last.Text, parts[^1].Words + last.Words);
         }
-        return parts.Select(p => p.Text.Trim()).Where(p => p.Length > 0).ToList();
+        // What ends a piece (the space and line breaks after a sentence) stays with it, so the breaks between two parts are
+        // at the end of the first.
+        return parts.Select(p => (Text: p.Text.Trim(), BreaksAfter: TrailingBreaks(p.Text))).Where(p => p.Text.Length > 0).ToList();
+    }
+
+    /// <summary>The line breaks among the spaces at the end of <paramref name="text"/>, a "\r\n" counting as one (as on macOS).</summary>
+    private static int TrailingBreaks(string text)
+    {
+        var count = 0;
+        for (var i = text.Length - 1; i >= 0 && char.IsWhiteSpace(text[i]); i--)
+        {
+            var c = text[i];
+            if (c is not ('\n' or '\v' or '\f' or '\r' or '\u0085' or '\u2028' or '\u2029')) continue;
+            if (c == '\r' && i + 1 < text.Length && text[i + 1] == '\n') continue;
+            count++;
+        }
+        return count;
     }
 
     /// <summary>
     /// Joins the parts' clean-ups the way transcripts are joined (see <see cref="TranscriptJoiner"/>), except that where
     /// either side is laid out over several lines (paragraphs, a list), they're kept a paragraph apart, so text doesn't run
-    /// on from the last item of a list.
+    /// on from the last item of a list. <paramref name="breaks"/>: the line breaks the speaker dictated before each text
+    /// (see <see cref="SpokenLayout"/>), where a long transcript was split at them: exactly those go back in.
     /// </summary>
-    public static string Join(IEnumerable<string> texts)
+    public static string Join(IEnumerable<string> texts, IReadOnlyList<int>? breaks = null)
     {
         var result = "";
         var previous = "";
+        var index = -1;
         foreach (var text in texts)
         {
+            index++;
             var part = text.Trim();
             if (part.Length == 0) continue;
-            if (result.Length > 0 && (previous.Contains('\n') || part.Contains('\n'))) result += "\n\n" + part;
+            var dictated = breaks != null && index < breaks.Count ? breaks[index] : 0;
+            if (result.Length > 0 && dictated > 0) result += new string('\n', dictated) + part;
+            else if (result.Length > 0 && (previous.Contains('\n') || part.Contains('\n'))) result += "\n\n" + part;
             else result = TranscriptJoiner.Join([result, part]);
             previous = part;
         }
@@ -140,7 +164,7 @@ public static class SegmentedPolish
         return Run(transcript, (part, partial, token) => policy.Run(
                        (_, ct) => HedgedPolish.Run(part, primary, backup, cancellationToken: ct, onPartial: partial), cancellationToken: token),
                    onPartial, cancellationToken, primary.Options.Translation, primary.Options.Vocabulary, primary.Options.Context,
-                   concurrency, holdWhile);
+                   concurrency, holdWhile, primary.Options.DictatedLineBreaks);
     }
 
     /// <summary>
@@ -150,15 +174,19 @@ public static class SegmentedPolish
     /// answer is unusable, or that got none, goes in as spoken. Throws only when no part got an answer (the first part's
     /// error), or when cancelled. <paramref name="onPartial"/> gets the parts' text so far, joined.
     /// <paramref name="vocabulary"/>: the speaker's terms, which a translation keeps as they are. <paramref name="context"/>:
-    /// the text around the cursor the requests carry, if any.
+    /// the text around the cursor the requests carry, if any. <paramref name="keepsLineBreaks"/>: the transcript's line
+    /// breaks were dictated, and those between two parts are put back as they were.
     /// </summary>
     public static async Task<SegmentedPolishResult> Run(string transcript,
                                                         Func<string, Action<string>?, CancellationToken, Task<HedgedPolishResult>> polish,
                                                         Action<string>? onPartial = null, CancellationToken cancellationToken = default,
                                                         TranslationTarget? translation = null, IReadOnlyList<string>? vocabulary = null,
-                                                        string? context = null, int? concurrency = null, Func<bool>? holdWhile = null)
+                                                        string? context = null, int? concurrency = null, Func<bool>? holdWhile = null,
+                                                        bool keepsLineBreaks = false)
     {
-        var texts = Parts(transcript);
+        var split = PartsAndBreaks(transcript);
+        var texts = split.Select(p => p.Text).ToList();
+        int[] breaks = keepsLineBreaks ? split.Take(split.Count - 1).Select(p => p.BreaksAfter).Prepend(0).ToArray() : [];
         var clock = Stopwatch.StartNew();
         var progress = new PartialProgress(texts.Count, onPartial);
         var gate = concurrency is { } limit ? new SemaphoreSlim(Math.Max(1, limit)) : null;
@@ -185,7 +213,7 @@ public static class SegmentedPolish
         // Nothing came back at all: the clean-up failed, just as a single request would have.
         if (results.All(p => p.Answer == null) && results[0].Error is { } first) throw first;
         var firstToken = results.Where(p => p.Answer != null).Select(p => p.Answer!.FirstTokenSeconds).DefaultIfEmpty(0).Min();
-        return new SegmentedPolishResult(Join(results.Select(p => p.Text)), results, firstToken, clock.Elapsed.TotalSeconds);
+        return new SegmentedPolishResult(Join(results.Select(p => p.Text), breaks), results, firstToken, clock.Elapsed.TotalSeconds);
 
         async Task<(HedgedPolishResult? Answer, Exception? Error)> Attempt(string text, int index)
         {

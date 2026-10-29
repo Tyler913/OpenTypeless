@@ -251,6 +251,26 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("fitToSurroundingText", value);
     }
 
+    /// <summary>
+    /// "New line" and "new paragraph" said on their own become line breaks (see <see cref="TypelessCore.SpokenLayout"/>). Off
+    /// until the user turns it on: a command word said on its own in a list ("spaces, new line, tabs") becomes a break too.
+    /// </summary>
+    public bool SpokenLayoutCommands
+    {
+        get => GetBool("spokenLayoutCommands", false);
+        set => SetValue("spokenLayoutCommands", value);
+    }
+
+    /// <summary>
+    /// "Finish and send": the key that, pressed while recording, ends the dictation and sends it once it's pasted (see
+    /// <see cref="TypelessCore.SendKey"/>). Off until the user picks one; a choice this version can't read is off too.
+    /// </summary>
+    public SendKey SendKey
+    {
+        get => SendKeys.Parse(GetString("sendKey", "off"));
+        set => SetValue("sendKey", value.RawValue());
+    }
+
     /// <summary>Mute the speakers while recording (see OutputMute).</summary>
     public bool MuteWhileRecording
     {

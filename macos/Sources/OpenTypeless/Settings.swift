@@ -36,6 +36,12 @@ final class AppSettings: ObservableObject {
     /// Fit the spacing and capitalisation of pasted text to the text around the cursor (see InsertionJoiner). Safe on by
     /// default: a field that can't be read gets the text as it is.
     @AppStorage("fitToSurroundingText") var fitToSurroundingText: Bool = true
+    /// "New line" and "new paragraph" said on their own become line breaks (see `SpokenLayout`). Off until the user turns
+    /// it on: a command word said on its own in a list ("spaces, new line, tabs") becomes a break too.
+    @AppStorage("spokenLayoutCommands") var spokenLayoutCommands: Bool = false
+    /// "Finish and send": the key that, pressed while recording, ends the dictation and sends it once it's pasted (see
+    /// `SendKey`). Off until the user picks one; a choice this version can't read is off too.
+    @AppStorage("sendKey") var sendKey: SendKey = .off
     /// Mute the speakers while recording (see OutputMute).
     @AppStorage("muteWhileRecording") var muteWhileRecording: Bool = false
     @AppStorage("maxRecordingMinutes") var maxRecordingMinutes: Int = 20

@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkey.onRelease = { [weak self] time in self?.controller.hotkeyReleased(at: time) }
         hotkey.onOtherKey = { [weak self] key, time in self?.controller.otherKeyPressed(key, at: time) }
         hotkey.onEscape = { [weak self] in self?.controller.escapePressed() }
+        hotkey.onSendKey = { [weak self] in self?.controller.sendKeyPressed() }
         hotkey.onAction = { [weak self] action in
             guard let self else { return }
             self.controller.perform(action, shortcut: self.settings.shortcut(for: action))
@@ -51,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // Translation or command mode turned on or off, a chord changed, or the hotkey became one of a chord's keys.
                 let chordKeys = self.controller.updateModeChords()
                 if self.hotkey.modeChordKeys != chordKeys { self.hotkey.modeChordKeys = chordKeys }
+                self.updateSendKey(self.controller.state)
                 if self.menuLanguage != AppLanguage.resolved { self.setUpMainMenu() }
                 self.controller.updateWarmMicrophone()
             }
@@ -67,6 +69,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // A warm microphone that failed, or that the chosen input came back for, during the dictation.
                 self?.controller.updateWarmMicrophone()
             }
+            .store(in: &cancellables)
+        // Not a run-loop turn later, like the above: a Return pressed just after the recording ended would still be
+        // taken for the send key then, and kept from the app for nothing.
+        controller.$state
+            .sink { [weak self] state in self?.updateSendKey(state) }
             .store(in: &cancellables)
 
         NotificationCenter.default.addObserver(forName: .openSettings, object: nil, queue: .main) { [weak self] note in
@@ -98,6 +105,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // A manual launch opens Home; starting at login stays in the menu bar unless the user asked for Home then too.
             settingsWindow.show(page: .home)
         }
+    }
+
+    /// The send key only means "finish and send" while a dictation is recording; otherwise it's the focused app's.
+    private func updateSendKey(_ state: SessionController.State) {
+        let key = state == .recording ? settings.sendKey : .off
+        if hotkey.recordingSendKey != key { hotkey.recordingSendKey = key }
     }
 
     /// After the guide: the page for whatever is still missing, or Home.

@@ -109,13 +109,20 @@ public class PolishGuardTests
             if (input != null) pairs.Add((input, string.Join("\n", output).Trim()));
             output.Clear();
         }
+        // A transcript laid out over several lines (dictated line breaks), up to the line that closes it.
+        List<string>? opened = null;
         foreach (var raw in lines)
         {
             var line = raw.TrimEnd('\r');
-            if (line.StartsWith("<transcript>", StringComparison.Ordinal) && line.EndsWith("</transcript>", StringComparison.Ordinal))
+            if (opened == null && line.StartsWith("<transcript>", StringComparison.Ordinal)) opened = [];
+            if (opened != null)
             {
+                opened.Add(line);
+                if (!line.EndsWith("</transcript>", StringComparison.Ordinal)) continue;
                 Flush();
-                input = line["<transcript>".Length..^"</transcript>".Length];
+                var text = string.Join("\n", opened);
+                input = text["<transcript>".Length..^"</transcript>".Length];
+                opened = null;
             }
             else if (input != null)
             {
@@ -165,6 +172,26 @@ public class SegmentedPolishTests
 
     private static HedgedPolishResult Answer(string text) =>
         new(new PolishResult(text, false, new RequestUsage(10, 5)), "m", UsedBackup: false, FirstTokenSeconds: 0.1, TotalSeconds: 0.2);
+
+    /// <summary>
+    /// A long transcript whose line breaks were dictated gets exactly those back where it was split at one; otherwise the
+    /// parts are joined as before.
+    /// </summary>
+    [Fact]
+    public async Task DictatedBreaksBetweenPartsGoBack()
+    {
+        var transcript = string.Join("\n", Enumerable.Range(1, 20).Select(i => $"我们今天讨论了第{i}个问题，主要是关于缓存和数据库的性能。"));
+        var split = SegmentedPolish.PartsAndBreaks(transcript);
+        Assert.True(split.Count > 1);
+        Assert.All(split.Take(split.Count - 1), part => Assert.Equal(1, part.BreaksAfter));
+        Assert.Equal(0, split[^1].BreaksAfter);
+        var kept = await SegmentedPolish.Run(transcript, (part, _, _) => Task.FromResult(Answer(part)), keepsLineBreaks: true);
+        Assert.True(kept.Parts.Count > 1);
+        Assert.Equal(transcript, kept.Text);
+        var joined = await SegmentedPolish.Run(transcript, (part, _, _) => Task.FromResult(Answer(part)));
+        Assert.NotEqual(transcript, joined.Text);
+        Assert.Equal("A.\n\nB. C.", SegmentedPolish.Join(["A.", "B.", "C."], [0, 2, 0]));
+    }
 
     [Fact]
     public void ShortTranscriptGoesInOneRequestUntouched()

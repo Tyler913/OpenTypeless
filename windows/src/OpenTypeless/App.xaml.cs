@@ -79,6 +79,7 @@ public partial class App : Application
         _hotkey.OnRelease = _controller.HotkeyReleased;
         _hotkey.OnOtherKey = _controller.OtherKeyPressed;
         _hotkey.OnEscape = _controller.EscapePressed;
+        _hotkey.OnSendKey = _controller.SendKeyPressed;
         _hotkey.OnAction = action => _controller.Perform(action, _settings.Shortcut(action));
         _hotkey.Start();
 
@@ -87,6 +88,7 @@ public partial class App : Application
         {
             // Esc cancels a dictation under way, and then shouldn't reach the focused app too.
             _hotkey.SwallowsEscape = _controller.State != SessionController.SessionState.Idle;
+            UpdateSendKey();
             _tray.SetState(_controller.State);
             if (_controller.State != SessionController.SessionState.Idle) return;
             Updater.Shared.SessionBecameIdle();
@@ -151,6 +153,13 @@ public partial class App : Application
         {
             _dispatcher?.TryEnqueue(() => _hotkey.ModeChordKeys = _controller.UpdateModeChords());
         }
+        if (e.PropertyName == nameof(AppSettings.SendKey)) UpdateSendKey();
+    }
+
+    /// <summary>The send key only means "finish and send" while a dictation is recording; otherwise it's the focused app's.</summary>
+    private void UpdateSendKey()
+    {
+        _hotkey.RecordingSendKey = _controller.State == SessionController.SessionState.Recording ? _settings.SendKey : TypelessCore.SendKey.Off;
     }
 
     /// <summary>After the guide: the page for whatever is still missing, or Home.</summary>

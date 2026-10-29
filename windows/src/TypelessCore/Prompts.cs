@@ -10,9 +10,13 @@ public static class Prompts
     /// The examples matter more than the rules: models follow a shown example far more reliably.
     /// The text is identical to the macOS app's, so evaluation results carry over between platforms.
     /// <paramref name="misheard"/> are corrections the speaker made to earlier dictations (learned from their edits).
+    /// <paramref name="dictatedLineBreaks"/>: the transcript's line breaks are ones the speaker asked for (see
+    /// <see cref="SpokenLayout"/>), to be kept. Otherwise the prompt says nothing about them, as before the commands existed:
+    /// speech recognition's own breaks are laid out like any other text.
     /// </summary>
-    public static string PolishSystemPrompt(IEnumerable<string> vocabulary, string extraInstructions, IReadOnlyList<Correction>? misheard = null) =>
-        BasePolishPrompt + Appendix(vocabulary, extraInstructions, misheard);
+    public static string PolishSystemPrompt(IEnumerable<string> vocabulary, string extraInstructions, IReadOnlyList<Correction>? misheard = null,
+                                            bool dictatedLineBreaks = false) =>
+        BasePolishPrompt + (dictatedLineBreaks ? "\n\n" + LineBreaksSection : "") + Appendix(vocabulary, extraInstructions, misheard);
 
     /// <summary>The speaker's vocabulary, the mishearings learned from their edits and their own preferences, after either prompt.</summary>
     internal static string Appendix(IEnumerable<string> vocabulary, string extraInstructions, IReadOnlyList<Correction>? misheard)
@@ -36,6 +40,20 @@ public static class Prompts
         }
         return prompt;
     }
+
+    /// <summary>Added for a transcript with line breaks the speaker dictated ("new line", "new paragraph"; see <see cref="SpokenLayout"/>).</summary>
+    internal const string LineBreaksSection = """
+        ## Line breaks
+        The line breaks in this transcript were dictated by the speaker: keep each one where it is, a blank line as a blank line, and never join the lines they separate. For example:
+        <transcript>hi Anna,
+        thanks for the quick review, um, I'll look at the comments tonight.
+
+        so the bug, uh, the bug was in the parser</transcript>
+        Hi Anna,
+        Thanks for the quick review, I'll look at the comments tonight.
+
+        So the bug was in the parser.
+        """;
 
     internal const string BasePolishPrompt = """
         You clean up a raw speech-to-text transcript so it reads the way the speaker would have typed it. You are a light-touch editor, not a writer: the result keeps the speaker's own words, in their order, in their mix of languages — only the mess of speaking is removed. Output only that text.

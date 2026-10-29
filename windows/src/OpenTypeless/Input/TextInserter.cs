@@ -124,16 +124,25 @@ public static class TextInserter
     public static void CopyToClipboard(string text) => ClipboardSnapshot.SetText(text, transient: false);
 
     /// <summary>
-    /// Presses Enter in the foreground app, after a paste, to send what was inserted, unless <paramref name="shouldPress"/>
-    /// says it's no longer wanted by then. Returns whether it was pressed.
+    /// Presses Enter in the foreground app, with <paramref name="modifiers"/> held (Shift + Enter, Ctrl + Enter; only those
+    /// two), after a paste, to send what was inserted, unless <paramref name="shouldPress"/> says it's no longer wanted by
+    /// then. Returns whether it was pressed.
     /// </summary>
-    public static async Task<bool> PressEnter(Func<bool>? shouldPress = null)
+    public static async Task<bool> PressEnter(Func<bool>? shouldPress = null, HotkeyModifiers modifiers = HotkeyModifiers.None)
     {
         // Let the app take in the pasted text first (web apps update their state asynchronously).
         await Task.Delay(120);
         if (shouldPress?.Invoke() == false) return false;
-        var inputs = new[] { Win32.Key(Win32.VK_RETURN, up: false), Win32.Key(Win32.VK_RETURN, up: true) };
-        Win32.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Win32.INPUT>());
+        // The modifiers go down around Enter, as a keyboard sends them: a key event here carries none of its own.
+        var held = new List<ushort>();
+        if (modifiers.HasFlag(HotkeyModifiers.Control)) held.Add(Win32.VK_CONTROL);
+        if (modifiers.HasFlag(HotkeyModifiers.Shift)) held.Add(Win32.VK_SHIFT);
+        var inputs = new List<Win32.INPUT>();
+        foreach (var vk in held) inputs.Add(Win32.Key(vk, up: false));
+        inputs.Add(Win32.Key(Win32.VK_RETURN, up: false));
+        inputs.Add(Win32.Key(Win32.VK_RETURN, up: true));
+        for (var i = held.Count - 1; i >= 0; i--) inputs.Add(Win32.Key(held[i], up: true));
+        Win32.SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<Win32.INPUT>());
         return true;
     }
 

@@ -87,6 +87,17 @@ public sealed class ShortcutPage : PageBase
         return section;
     }
 
+    /// <summary>When it goes, and a warning when the dictation hotkey takes the send key's presses (see <see cref="SendKeys.IsTakenByHotkey"/>).</summary>
+    private string SendKeyFooter()
+    {
+        var footer = L("只在文字粘贴进录音时所在的应用后才按；文字只复制到剪贴板、按了 Esc 或锁屏时不会发送。",
+                       "Only pressed once the text is pasted into the app you were dictating in: not when it only goes to the clipboard, after Esc, or once the screen locks.");
+        var hotkey = _settings.Hotkey;
+        if (!_settings.SendKey.IsTakenByHotkey(hotkey.KeyCode, hotkey.IsModifierOnly, SendKeyText.Codes)) return footer;
+        return footer + "\n" + L("听写快捷键也用到了这个键，录音时会先被当作听写快捷键，发送键就不起作用了。请换一个发送键或快捷键。",
+                                 "Your dictation shortcut uses this key too, and while recording it's read as the shortcut first, so the send key won't work. Pick another send key or shortcut.");
+    }
+
     private void Render()
     {
         var hotkey = _settings.Hotkey;
@@ -221,6 +232,27 @@ public sealed class ShortcutPage : PageBase
         }
         Body.Children.Add(how);
         Body.Children.Add(CommandModeSection());
+
+        // Finish and send
+        var send = new CardSection { Title = L("说完即发送", "Finish and send"), Footer = SendKeyFooter() };
+        var sendKeys = SendKeys.All;
+        var sendPicker = new ComboBox { MinWidth = 140 };
+        foreach (var key in sendKeys) sendPicker.Items.Add(key.Title());
+        sendPicker.SelectedIndex = Math.Max(0, Array.IndexOf(sendKeys, _settings.SendKey));
+        sendPicker.SelectionChanged += (_, _) =>
+        {
+            if (sendPicker.SelectedIndex < 0 || sendKeys[sendPicker.SelectedIndex] == _settings.SendKey) return;
+            _settings.SendKey = sendKeys[sendPicker.SelectedIndex];
+            send.Footer = SendKeyFooter();
+        };
+        send.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Send, Tint = Tint.Green, Title = L("发送键", "Send key"),
+            Subtitle = L("录音时按下它会结束听写，文字插入后再在同一个应用里按一次这个键把它发出去。免手持时可以一步说完并发送。",
+                         "Press it while recording to end the dictation; once the text is in, the same key is pressed in that app to send it. Hands-free, that ends and sends in one go."),
+            Trailing = sendPicker,
+        });
+        Body.Children.Add(send);
 
         // Actions with a shortcut of their own
         var actions = new CardSection

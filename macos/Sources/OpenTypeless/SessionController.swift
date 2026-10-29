@@ -114,6 +114,9 @@ final class SessionController: ObservableObject {
     /// When the hotkey went down, by the key event's own time (`ProcessInfo.systemUptime` clock, see `HotkeyPress`).
     private var pressedAt: TimeInterval?
     private var handsFree = false
+    /// The send key that ended this recording (see `SendKey`): pressed in the app once the text is pasted there, for this
+    /// dictation only. Off unless it was pressed.
+    private var sendKey: SendKey = .off
     /// Second keys that switch the recording's mode while the hotkey is held (see `ModeChords`): the translation chord's,
     /// while translation mode is on (see `updateModeChords`, which also gives the hotkey monitor the keys to keep from
     /// the focused app).
@@ -393,6 +396,17 @@ final class SessionController: ObservableObject {
         return chords.keys
     }
 
+    /// The send key went down while recording (see `SendKey`): the recording ends as if the hotkey were let go (or, hands-free,
+    /// pressed again), and once its text is pasted the same key is pressed in that app to send it.
+    func sendKeyPressed() {
+        guard state == .recording else { return }
+        let key = settings.sendKey
+        guard key != .off else { return }
+        note("send key \(key.rawValue) → stop, and send once the text is in")
+        sendKey = key
+        finishRecording()
+    }
+
     /// The Mac is going to sleep or the screen was locked. A hands-free recording mustn't keep the microphone open on
     /// the lock screen, nor its text land in whatever has focus afterwards: a recording stops as with Esc (a long one is
     /// kept in History), and one being processed goes to the clipboard instead of being pasted.
@@ -486,7 +500,8 @@ final class SessionController: ObservableObject {
                 return
             }
             guard self.history.records.contains(where: { $0.id == record.id }) else { return }
-            record.rawText = raw
+            // Laid out like any dictation's text, for when it's copied from History.
+            record.rawText = self.laidOutTranscript(raw).text
             record.chunkTexts = pipeline.completedTranscripts()
             self.account(&record, pipeline: pipeline, polished: nil, discarded: discarded, context: sent)
             self.history.update(record)
@@ -606,6 +621,7 @@ final class SessionController: ObservableObject {
         deliverByPaste = true
         self.pressedAt = pressedAt
         handsFree = false
+        sendKey = .off
         mode = .dictation
         state = .recording
         lastError = nil
@@ -802,7 +818,9 @@ final class SessionController: ObservableObject {
                             ProcessInfo.processInfo.systemUptime - started))
             }
             record.chunkTexts = pipeline.completedTranscripts()
-            record.rawText = raw
+            // With "new line" and "new paragraph" said on their own as line breaks: what goes in when it isn't cleaned up.
+            let layout = laidOutTranscript(raw)
+            record.rawText = layout.text
             // A new transcript supersedes a clean-up from an earlier run (a retry): History mustn't show that one if this
             // run inserts the raw text (clean-up off or failed). A retry that fails before this keeps the old result.
             record.polishedText = nil
@@ -819,8 +837,8 @@ final class SessionController: ObservableObject {
             if record.isCommand {
                 await editSelection(record: &record, pipeline: pipeline, generation: generation, dictation: dictation)
             } else {
-                await polishAndDeliver(record: &record, pipeline: pipeline, generation: generation, dictation: dictation,
-                                       contextSent: sent)
+                await polishAndDeliver(record: &record, layout: layout, pipeline: pipeline, generation: generation,
+                                       dictation: dictation, contextSent: sent)
             }
         } catch let failure as PipelineFailure {
             guard isCurrent(generation) else { return }
@@ -846,10 +864,12 @@ final class SessionController: ObservableObject {
         }
     }
 
-    private func polishAndDeliver(record: inout DictationRecord, pipeline: TranscriptionPipeline, generation: Int,
-                                  dictation: DictationSettings, contextSent sent: ContextSent) async {
+    /// `layout`: the record's transcript laid out (see `SpokenLayout.layout`). A line break said at the very start or end
+    /// stays out of the clean-up, whose answer is trimmed, and goes back on around its text.
+    private func polishAndDeliver(record: inout DictationRecord, layout: SpokenLayout.LaidOut, pipeline: TranscriptionPipeline,
+                                  generation: Int, dictation: DictationSettings, contextSent sent: ContextSent) async {
         let begun = ProcessInfo.processInfo.systemUptime
-        var text = record.rawText
+        var text = layout.body
         var notice: String?
         var polished: SegmentedPolishResult?
         // A translation that couldn't be used, set aside for the clean-up: billed all the same.
@@ -860,7 +880,8 @@ final class SessionController: ObservableObject {
         var translated = false
         let translation = record.translation
 
-        if dictation.polishEnabled || translation != nil {
+        // Nothing to clean up when all that was said was "new line".
+        if dictation.polishEnabled || translation != nil, !layout.body.allSatisfy(\.isWhitespace) {
             // When the speaker paused before letting go and said nothing more, the clean-up (or translation) of this very
             // transcript started while they were still holding the key: take it over (often it's already done).
             let polishing: Task<SegmentedPolishResult, Error>
@@ -870,24 +891,23 @@ final class SessionController: ObservableObject {
             let context = cursorContext
             // One that already failed (while recording) gets a fresh attempt instead, and so does one started before the
             // text around the cursor was in.
-            if let speculative = speculativePolish, speculative.raw == record.rawText, speculative.translation == translation,
-               speculative.context == context,
-               !speculative.outcome.failed {
+            if let speculative = speculativePolish, speculative.layout == layout, speculative.translation == translation,
+               speculative.context == context, !speculative.outcome.failed {
                 speculativePolish = nil
                 polishing = speculative.task
                 // What it streams from now on moves this dictation's bar.
-                speculative.partials.target = onPolishPartial(expected: record.rawText)
+                speculative.partials.target = onPolishPartial(expected: layout.body)
                 ahead = ProcessInfo.processInfo.systemUptime - speculative.startedAt
                 let transcription = record.timing?.transcription ?? 0
                 record.timing?.polishHeadStart = max(0, ahead - transcription)
                 note(String(format: "clean-up started %.2fs ago, while recording", ahead))
             } else {
                 dropSpeculativePolish()
-                let raw = record.rawText
-                let onPartial = onPolishPartial(expected: raw)
+                let body = layout.body, dictated = layout.dictatedBreaks
+                let onPartial = onPolishPartial(expected: body)
                 polishing = Task {
-                    try await self.polish(raw, with: dictation, translation: translation, context: context, sent: sent,
-                                          onPartial: onPartial)
+                    try await self.polish(body, with: dictation, translation: translation, context: context, sent: sent,
+                                          dictatedLineBreaks: dictated, onPartial: onPartial)
                 }
             }
             // Saved while the clean-up runs, so the transcript survives a crash.
@@ -895,14 +915,14 @@ final class SessionController: ObservableObject {
             do {
                 if let translation {
                     // The translation, or when it can't be used as it is, the clean-up (when that's on): one more request.
-                    let raw = record.rawText
-                    let onPartial = onPolishPartial(expected: raw)
+                    let body = layout.body, dictated = layout.dictatedBreaks
+                    let onPartial = onPolishPartial(expected: body)
                     var cleanUp: (@Sendable () async throws -> SegmentedPolishResult)?
                     if dictation.polishEnabled {
                         cleanUp = { [weak self] () async throws -> SegmentedPolishResult in
                             guard let self else { throw APIError.cancelled }
-                            return try await self.polish(raw, with: dictation, translation: nil, context: context, sent: sent,
-                                                         onPartial: onPartial)
+                            return try await self.polish(body, with: dictation, translation: nil, context: context, sent: sent,
+                                                         dictatedLineBreaks: dictated, onPartial: onPartial)
                         }
                     }
                     let outcome = try await withTaskCancellationHandler {
@@ -915,7 +935,7 @@ final class SessionController: ObservableObject {
                         polished = translatedResult
                         noteTiming(of: translatedResult, ahead: ahead, in: &record, what: "translation → \(translation.id)")
                         text = translatedResult.text
-                        record.polishedText = translatedResult.text
+                        record.polishedText = layout.around(translatedResult.text)
                         record.status = .done
                         translated = true
                     } else {
@@ -932,7 +952,7 @@ final class SessionController: ObservableObject {
                             note("translation unusable (\(fallback.rawValue)) → clean-up inserted")
                             notice = L("未能翻译，已插入整理后的原文", "Couldn't translate — inserted the clean-up")
                             text = cleaned.text
-                            record.polishedText = cleaned.text
+                            record.polishedText = layout.around(cleaned.text)
                             record.status = .done
                         } else {
                             note("translation unusable (\(fallback.rawValue)) → inserted as spoken")
@@ -958,7 +978,7 @@ final class SessionController: ObservableObject {
                         // A part whose clean-up was unusable goes in as spoken, between the parts that were cleaned up.
                         if !fallbacks.isEmpty { notice = L("部分未整理，已插入原文", "Partly inserted without clean-up") }
                         text = outcome.text
-                        record.polishedText = outcome.text
+                        record.polishedText = layout.around(outcome.text)
                         record.status = .done
                     }
                 }
@@ -985,7 +1005,8 @@ final class SessionController: ObservableObject {
         // and its guards would take one for an answer. History keeps what was said (word counts go by it) and what went in.
         let expanded = SnippetExpander.expand(text, with: settings.snippets)
         // Scalar by scalar: an expansion that is the trigger in another composition is still a change (as on Windows).
-        record.insertedText = expanded.unicodeScalars.elementsEqual(text.unicodeScalars) ? nil : expanded
+        // Kept with the line breaks said around it, as it goes in.
+        record.insertedText = expanded.unicodeScalars.elementsEqual(text.unicodeScalars) ? nil : layout.around(expanded)
         text = expanded
 
         // Taken now: once the text is in, the next dictation may already be collecting its own.
@@ -994,8 +1015,8 @@ final class SessionController: ObservableObject {
             hud.model.bar.reach(.delivered)
             let transcription = record.timing?.transcription ?? 0
             record.timing?.delivered = transcription + ProcessInfo.processInfo.systemUptime - begun
-            record.timing?.delivery = await deliver(text, notice: notice, generation: generation, dictation: dictation,
-                                                    watchEdits: !translated)
+            record.timing?.delivery = await deliver(layout.around(text), notice: notice, generation: generation,
+                                                    dictation: dictation, watchEdits: !translated)
         }
         // Esc came before the text was in place (or while it went in): `cancel` has kept the record as cancelled, and
         // so it stays, now with its clean-up.
@@ -1003,6 +1024,11 @@ final class SessionController: ObservableObject {
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
         account(&record, pipeline: pipeline, polished: polished, discarded: discarded, context: sent)
         history.update(record)
+    }
+
+    /// `transcript` with the layout commands said in it as line breaks, unless they're switched off (see `SpokenLayout`).
+    private func laidOutTranscript(_ transcript: String) -> SpokenLayout.LaidOut {
+        SpokenLayout.layout(transcript, enabled: settings.spokenLayoutCommands)
     }
 
     // MARK: - Editing a selection
@@ -1191,10 +1217,11 @@ final class SessionController: ObservableObject {
 
     // MARK: - Clean-up ahead of time
 
-    /// A clean-up of `raw` (or its translation into `translation`), started while recording, with the text around the
-    /// cursor that was in by then.
+    /// A clean-up of `layout`'s body (or its translation into `translation`), started while recording, with the text
+    /// around the cursor that was in by then. `raw`: the transcript it was laid out from.
     private struct SpeculativePolish {
         let raw: String
+        let layout: SpokenLayout.LaidOut
         let translation: TranslationTarget?
         let context: String?
         let startedAt: TimeInterval
@@ -1224,15 +1251,18 @@ final class SessionController: ObservableObject {
     /// The pipeline has the whole transcript the recording would give if it ended now (the speaker paused), or no longer
     /// has one (they went on). Starts cleaning that transcript up (or translating it, in translation mode), so the text
     /// can be ready when the key is released.
-    private func speculationChanged(_ raw: String?) {
+    private func speculationChanged(_ transcript: String?) {
         guard state == .recording, mode != .command, let dictation = dictationSettings,
               dictation.polishEnabled || mode == .translate else { return }
-        if let raw, raw == speculativePolish?.raw { return }
+        // As the clean-up would be given it once the key is released (see `process`).
+        let next = transcript.map { laidOutTranscript($0) }
+        if next != nil, next == speculativePolish?.layout { return }
         dropSpeculativePolish()
-        guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard let transcript, let upcoming = next, !upcoming.body.allSatisfy(\.isWhitespace) else { return }
+        let body = upcoming.body, dictated = upcoming.dictatedBreaks
         // Only a transcript short enough for one request: a long one would go out as several at every pause, and its
         // parts are cleaned up in parallel once the key is released anyway.
-        guard !SegmentedPolish.needsParts(raw) else { return }
+        guard !SegmentedPolish.needsParts(body) else { return }
         let outcome = PolishOutcome()
         let partials = PartialRelay()
         let translation = record?.translation
@@ -1241,8 +1271,8 @@ final class SessionController: ObservableObject {
         let task = Task { [weak self] () async throws -> SegmentedPolishResult in
             guard let self else { throw APIError.cancelled }
             do {
-                let result = try await self.polish(raw, with: dictation, translation: translation, context: context,
-                                                   sent: sent, onPartial: { partials.send($0) })
+                let result = try await self.polish(body, with: dictation, translation: translation, context: context,
+                                                   sent: sent, dictatedLineBreaks: dictated, onPartial: { partials.send($0) })
                 outcome.result = result
                 return result
             } catch {
@@ -1250,7 +1280,7 @@ final class SessionController: ObservableObject {
                 throw error
             }
         }
-        speculativePolish = SpeculativePolish(raw: raw, translation: translation, context: context,
+        speculativePolish = SpeculativePolish(raw: transcript, layout: upcoming, translation: translation, context: context,
                                               startedAt: ProcessInfo.processInfo.systemUptime, task: task,
                                               outcome: outcome, partials: partials)
         note("clean-up started ahead of time (speaker paused)")
@@ -1326,7 +1356,11 @@ final class SessionController: ObservableObject {
         case .pasted:
             // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
             var sent = false
-            if dictation.pressEnter {
+            if sendKey != .off {
+                // The key that ended the recording, in place of "Press Return after inserting".
+                sent = await send(with: sendKey, generation: generation)
+                guard isCurrent(generation) else { return "pasted" }
+            } else if dictation.pressEnter {
                 // Not into another app that came to the front after the paste, nor once the screen locked.
                 sent = await TextInserter.pressReturn {
                     self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved && self.suits(dictation)
@@ -1356,6 +1390,24 @@ final class SessionController: ObservableObject {
         }
     }
 
+    /// Presses the send key that ended the recording in the app the text was just pasted into, under the same conditions as
+    /// the paste. Its keys are let go of first: Return read together with a modifier still held is another key (⇧Return
+    /// makes a new line in most chat boxes, and the hotkey's right ⌘ may still be down), so when they're still held after
+    /// a while the text is left unsent rather than sent the wrong way. Returns whether it was pressed.
+    private func send(with key: SendKey, generation: Int) async -> Bool {
+        guard let keys = key.hotkey else { return false }
+        guard await HotkeyMonitor.waitForRelease(of: keys, timeout: 2) else {
+            note("send key → not sent, its keys are still held")
+            return false
+        }
+        guard isCurrent(generation) else { return false }
+        let sent = await TextInserter.pressReturn(flags: key.flags) {
+            self.isCurrent(generation) && self.deliverByPaste && !self.focusMoved
+        }
+        note("send key → \(sent ? "sent" : "not sent, the dictation was cancelled or focus moved")")
+        return sent
+    }
+
     private var frontmostID: String { NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?" }
 
     /// The text with its spacing and capitalisation fitted to the text around the cursor (see InsertionJoiner), and where
@@ -1377,9 +1429,10 @@ final class SessionController: ObservableObject {
     ///
     /// `forFile`: the clean-up of a file being transcribed (see FileTranscriber), which sends a few parts at a time, on
     /// the file session, each part waiting to start while `holdWhile` says so (a dictation is under way). A dictation's
-    /// own clean-up sends all of its parts at once.
+    /// own clean-up sends all of its parts at once. `dictatedLineBreaks`: `raw`'s line breaks were said as commands, and
+    /// are kept (see `SpokenLayout`).
     func polish(_ raw: String, with dictation: DictationSettings? = nil, translation: TranslationTarget? = nil,
-                context: String? = nil, sent: ContextSent? = nil, forFile: Bool = false,
+                context: String? = nil, sent: ContextSent? = nil, dictatedLineBreaks: Bool = false, forFile: Bool = false,
                 holdWhile: (@Sendable () -> Bool)? = nil,
                 onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
@@ -1387,10 +1440,10 @@ final class SessionController: ObservableObject {
         }
         let instructions = (dictation ?? settings.globalDictationSettings).extraInstructions
         let primary = route(endpoint, model: settings.polishModel, instructions: instructions, translation: translation,
-                            context: context, sent: sent, forFile: forFile)
+                            context: context, sent: sent, dictatedLineBreaks: dictatedLineBreaks, forFile: forFile)
         let backup = settings.polishBackupEndpoint.map {
             route($0, model: settings.polishBackupModel, instructions: instructions, translation: translation,
-                  context: context, sent: sent, forFile: forFile)
+                  context: context, sent: sent, dictatedLineBreaks: dictatedLineBreaks, forFile: forFile)
         }
         return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup,
                                              concurrency: forFile ? FileTranscription.cleanUpConcurrency : nil,
@@ -1399,7 +1452,7 @@ final class SessionController: ObservableObject {
 
     private func route(_ endpoint: ProviderEndpoint, model: String, instructions: String, translation: TranslationTarget?,
                        selection: String? = nil, context: String? = nil, sent: ContextSent? = nil,
-                       forFile: Bool = false) -> PolishRoute {
+                       dictatedLineBreaks: Bool = false, forFile: Bool = false) -> PolishRoute {
         let model = model.trimmingCharacters(in: .whitespaces)
         return PolishRoute(client: forFile ? .forFiles(endpoint: endpoint) : APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
@@ -1411,7 +1464,8 @@ final class SessionController: ObservableObject {
             translation: translation,
             selection: selection,
             context: context,
-            onContextSent: { sent?.mark() }
+            onContextSent: { sent?.mark() },
+            dictatedLineBreaks: dictatedLineBreaks
         ))
     }
 
@@ -1694,6 +1748,7 @@ final class SessionController: ObservableObject {
         pressedAt = nil
         pasteTarget = nil
         handsFree = false
+        sendKey = .off
         mode = .dictation
         dropSelection()
         processingTask = nil

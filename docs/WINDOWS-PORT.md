@@ -114,6 +114,12 @@ failure handling. Only the system-integration layer and the look differ.
   selection can't be read again, only when no click or key went through since it was read: the keyboard hook counts the
   non-modifier key-downs it lets through, and the mouse hook, on from the chord until the edit is done, the button
   presses. The window, its title, the count and the lock are checked again right before Ctrl+V, as on macOS.
+- The send key (Finish and send, see DESIGN.md: Enter, Shift + Enter or Ctrl + Enter) is matched in the same hook while
+  recording, from the keyboard only (an injected Enter goes through), against `CurrentModifiers()` less the held
+  hotkey's (`HeldModifiers`: Right Alt brings Ctrl along on AltGr layouts), and swallowed like an action's shortcut. Its `SendInput` puts the modifiers down around Enter, since an
+  injected key carries none of its own, marked like the paste, and only after `WaitForRelease` saw every modifier and
+  Enter let go (`HeldKeys`, as the swallowed Enter never reaches `GetAsyncKeyState`). The keypad's Enter has the same
+  virtual key.
 
 ## Deliberate platform differences
 
@@ -154,8 +160,8 @@ These follow from how Windows works rather than from missing features:
 ## UI parity checklist
 
 - **Popover**: header (tile, name, status pill), setup warnings with Fix, last failed dictation with Retry, 5 recent items (click to copy, check mark; with none yet, "Hold [keys] and speak" and the tip), footer (Settings, History, Paste last dictation, Quit).
-- **General**: permissions, language (System or one of the nine UI languages), open at login (+ error / approval footer), restore clipboard, fit spacing and capitalisation to the surrounding text, sounds, maximum recording (1–60 min).
-- **Shortcut**: current keys (large key caps), record / cancel, presets, how it works (with "Hold + Shift: translate" while translation mode is on, "Hold + Ctrl: edit the selection" while command mode is), edit selected text by voice (switch; switch key picker, with the clash with translation's named), more shortcuts (record / change / clear per action, refusal reason), warnings.
+- **General**: permissions, language (System or one of the nine UI languages), open at login (+ error / approval footer), restore clipboard, fit spacing and capitalisation to the surrounding text, press Return / Enter after inserting, spoken line breaks, sounds, maximum recording (1–60 min).
+- **Shortcut**: current keys (large key caps), record / cancel, presets, how it works (with "Hold + Shift: translate" while translation mode is on, "Hold + Ctrl: edit the selection" while command mode is), edit selected text by voice (switch; switch key picker, with the clash with translation's named), finish and send (send key picker), more shortcuts (record / change / clear per action, refusal reason), warnings.
 - **Providers**: six expandable cards: usage tags, configured pill, API key (password box + Paste), Base URL (+ Reset), get-a-key link, Test connection.
 - **Models**: STT provider / model (free text + browse, grouped by vendor when > 40) / spoken language; clean-up toggle / provider / model; backup model toggle / provider / model; missing-key banners.
 - **Vocabulary & Style**: vocabulary editor with Import… (CSV or text, previewing what it adds) and Export (CSV or text), "Learn from my corrections" with the learned terms (heard as…, date, remove = never learn again), preferences editor, snippets (an example when there are none; each row edits in place with a trigger box and a multi-line expansion box, or is deleted; a trigger already used can't be saved), translation (switch; target language picker with "Other…" and its name field; switch key picker).

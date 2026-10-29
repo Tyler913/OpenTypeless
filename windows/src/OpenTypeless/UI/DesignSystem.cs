@@ -110,6 +110,8 @@ public static class Glyphs
     public const string OpenFile = "\uE8E5";
     public const string Page = "\uE7C3";
     public const string Video = "\uE714";
+    public const string Send = "\uE724";
+    public const string LineBreak = "\uE8E4";
 }
 
 public static class Ui

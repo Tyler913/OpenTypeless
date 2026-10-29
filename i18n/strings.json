@@ -4310,6 +4310,15 @@
     "fr": "Sur les dispositions de clavier comme l’allemand ou le français, Ctrl + Alt avec une lettre équivaut à AltGr, qui sert à taper @ ou €, donc ce raccourci les bloquerait. Si vous les tapez, choisissez un autre raccourci.",
     "de": "Bei Tastaturlayouts wie Deutsch oder Französisch ist Ctrl + Alt mit einem Buchstaben AltGr, das Zeichen wie @ und € tippt – dieses Kürzel würde sie blockieren. Wenn du sie tippst, wähle ein anderes Kürzel."
   },
+  "Finish and send": {
+    "ja": "話し終えて送信",
+    "ko": "말하고 바로 보내기",
+    "es": "Terminar y enviar",
+    "pt": "Terminar e enviar",
+    "ru": "Закончить и отправить",
+    "fr": "Terminer et envoyer",
+    "de": "Beenden und senden"
+  },
   "Translation": {
     "ja": "翻訳",
     "ko": "번역",
@@ -4885,6 +4894,60 @@
     "ru": "Выкл.",
     "fr": "Désactivé",
     "de": "Aus"
+  },
+  "Send key": {
+    "ja": "送信キー",
+    "ko": "보내기 키",
+    "es": "Tecla de envío",
+    "pt": "Tecla de envio",
+    "ru": "Клавиша отправки",
+    "fr": "Touche d’envoi",
+    "de": "Sendetaste"
+  },
+  "Press it while recording to end the dictation; once the text is in, the same key is pressed in that app to send it. Hands-free, that ends and sends in one go.": {
+    "ja": "録音中に押すと音声入力が終わり、テキストが入力されたあと、同じキーがそのアプリで押されて送信されます。ハンズフリーなら、終了と送信が一度で済みます。",
+    "ko": "녹음 중에 누르면 받아쓰기가 끝나고, 텍스트가 입력된 뒤 같은 키를 그 앱에서 눌러 보냅니다. 핸즈프리라면 끝내기와 보내기가 한 번에 됩니다.",
+    "es": "Púlsala mientras grabas para terminar el dictado; cuando el texto esté dentro, se pulsa la misma tecla en esa app para enviarlo. En manos libres, terminas y envías de una vez.",
+    "pt": "Pressione-a durante a gravação para terminar o ditado; quando o texto estiver inserido, a mesma tecla é pressionada nesse app para enviá-lo. No modo mãos livres, você termina e envia de uma vez.",
+    "ru": "Нажмите её во время записи, чтобы закончить диктовку; когда текст вставлен, та же клавиша нажимается в этом приложении, чтобы отправить его. В режиме без рук это завершает и отправляет за один раз.",
+    "fr": "Appuyez dessus pendant l’enregistrement pour terminer la dictée ; une fois le texte inséré, la même touche est pressée dans cette app pour l’envoyer. En mode mains libres, vous terminez et envoyez d’un coup.",
+    "de": "Drück sie während der Aufnahme, um das Diktat zu beenden; sobald der Text drin ist, wird dieselbe Taste in dieser App gedrückt, um ihn zu senden. Freihändig beendest und sendest du so in einem Schritt."
+  },
+  "Only pressed once the text is pasted into the app you were dictating in: not when it only goes to the clipboard, after Esc, or once the screen locks.": {
+    "ja": "テキストが音声入力していたアプリに貼り付けられたときだけ押されます。クリップボードにコピーされただけのとき、Esc を押したとき、画面がロックされたときは押されません。",
+    "ko": "받아쓰던 앱에 텍스트가 붙여넣어졌을 때만 누릅니다. 클립보드에만 복사됐을 때, Esc를 눌렀을 때, 화면이 잠겼을 때는 누르지 않습니다.",
+    "es": "Solo se pulsa cuando el texto se pega en la app en la que dictabas: no cuando solo va al portapapeles, tras Esc ni si se bloquea la pantalla.",
+    "pt": "Só é pressionada quando o texto é colado no app em que você ditava: não quando ele vai só para a área de transferência, depois de Esc nem quando a tela é bloqueada.",
+    "ru": "Нажимается, только когда текст вставлен в приложение, в котором вы диктовали: не когда он попал только в буфер обмена, не после Esc и не после блокировки экрана.",
+    "fr": "N’est pressée que si le texte est collé dans l’app où vous dictiez : pas s’il va seulement dans le presse-papiers, après Échap, ni une fois l’écran verrouillé.",
+    "de": "Wird nur gedrückt, wenn der Text in die App eingefügt wurde, in der du diktiert hast: nicht, wenn er nur in die Zwischenablage geht, nach Esc oder sobald der Bildschirm gesperrt wird."
+  },
+  "Say “new line” for a line break": {
+    "ja": "「改行」で行を変える",
+    "ko": "“줄 바꿈”으로 줄 바꾸기",
+    "es": "Di “nueva línea” para un salto de línea",
+    "pt": "Diga “nova linha” para quebrar a linha",
+    "ru": "Скажите «новая строка» для переноса строки",
+    "fr": "Dites « à la ligne » pour un retour à la ligne",
+    "de": "Sag „neue Zeile“ für einen Zeilenumbruch"
+  },
+  "Say “new line” or “new paragraph” on its own, with a short pause before and after, for a line break or a blank line; 换行 / 新段落 and the other languages’ words work too. Said within a sentence, the words stay as they are; said on their own in a list (“spaces, new line, tabs”), they become a break too.": {
+    "ja": "「改行」や「新しい段落」を単独で（前後に少し間をおいて）言うと、改行や空行になります。new line、换行 など他の言語の言い方も使えます。文の途中で言ったときはそのまま文字として残りますが、列挙の中で単独で言ったとき（「スペース、改行、タブ」）も改行になります。",
+    "ko": "“줄 바꿈”이나 “새 문단”을 따로(앞뒤로 잠깐 쉬고) 말하면 줄 바꿈이나 빈 줄이 됩니다. new line, 换行 같은 다른 언어의 말도 됩니다. 문장 중간에 말하면 그대로 글자로 남지만, 나열하면서 따로 말하면(“공백, 줄바꿈, 탭”) 그것도 줄 바꿈이 됩니다.",
+    "es": "Di “nueva línea” o “nuevo párrafo” por separado, con una breve pausa antes y después, para un salto de línea o una línea en blanco; “new line”, 换行 y las palabras de los otros idiomas también sirven. Dichas dentro de una frase, las palabras se quedan como están; dichas por separado en una lista (“espacios, nueva línea, tabuladores”), también se convierten en un salto.",
+    "pt": "Diga “nova linha” ou “novo parágrafo” sozinho, com uma pausa curta antes e depois, para quebrar a linha ou deixar uma linha em branco; “new line”, 换行 e as palavras dos outros idiomas também funcionam. Ditas no meio de uma frase, as palavras ficam como estão; ditas sozinhas numa lista (“espaços, nova linha, tabulações”), também viram uma quebra.",
+    "ru": "Скажите «новая строка» или «новый абзац» отдельно, с короткой паузой до и после, чтобы получить перенос строки или пустую строку; «new line», 换行 и слова других языков тоже работают. Сказанные посреди предложения, слова остаются как есть; сказанные отдельно в перечислении («пробелы, новая строка, табуляция»), они тоже станут переносом.",
+    "fr": "Dites « à la ligne » ou « nouveau paragraphe » seul, avec une courte pause avant et après, pour un retour à la ligne ou une ligne vide ; « new line », 换行 et les mots des autres langues fonctionnent aussi. Dits au milieu d’une phrase, les mots restent tels quels ; dits seuls dans une énumération (« espaces, nouvelle ligne, tabulations »), ils deviennent aussi un retour à la ligne.",
+    "de": "Sag „neue Zeile“ oder „neuer Absatz“ für sich, mit einer kurzen Pause davor und danach, für einen Zeilenumbruch oder eine Leerzeile; „new line“, 换行 und die Wörter der anderen Sprachen gehen auch. Mitten in einem Satz bleiben die Wörter, wie sie sind; für sich in einer Aufzählung gesagt („Leerzeichen, neue Zeile, Tabs“), werden sie ebenfalls zum Umbruch."
+  },
+  "Your dictation shortcut uses this key too, and while recording it's read as the shortcut first, so the send key won't work. Pick another send key or shortcut.": {
+    "ja": "音声入力のショートカットもこのキーを使っているため、録音中は先にショートカットとして読み取られ、送信キーは動作しません。別の送信キーかショートカットを選んでください。",
+    "ko": "받아쓰기 단축키도 이 키를 쓰고 있어서 녹음 중에는 단축키로 먼저 인식되므로 보내기 키가 작동하지 않습니다. 다른 보내기 키나 단축키를 고르세요.",
+    "es": "Tu atajo de dictado también usa esta tecla y, mientras grabas, se lee primero como el atajo, así que la tecla de envío no funcionará. Elige otra tecla de envío u otro atajo.",
+    "pt": "Seu atalho de ditado também usa esta tecla e, durante a gravação, ela é lida primeiro como o atalho, então a tecla de envio não vai funcionar. Escolha outra tecla de envio ou outro atalho.",
+    "ru": "Сочетание для диктовки тоже использует эту клавишу, и во время записи она сначала читается как сочетание, поэтому клавиша отправки не сработает. Выберите другую клавишу отправки или другое сочетание.",
+    "fr": "Votre raccourci de dictée utilise aussi cette touche ; pendant l’enregistrement, elle est d’abord lue comme le raccourci, donc la touche d’envoi ne fonctionnera pas. Choisissez une autre touche d’envoi ou un autre raccourci.",
+    "de": "Dein Diktat-Tastenkürzel nutzt diese Taste auch, und während der Aufnahme wird sie zuerst als Tastenkürzel gelesen, sodass die Sendetaste nicht funktioniert. Wähle eine andere Sendetaste oder ein anderes Tastenkürzel."
   },
   "Clean-up preferences for this app": {
     "ja": "このアプリでの整形の好み",

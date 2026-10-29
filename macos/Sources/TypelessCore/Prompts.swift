@@ -5,9 +5,13 @@ public enum Prompts {
     /// dictations with `OpenTypeless --eval-polish` — re-run those after changing anything here.
     /// The examples matter more than the rules: models follow a shown example far more reliably.
     /// `misheard` are corrections the speaker made to earlier dictations (learned from their edits).
+    /// `dictatedLineBreaks`: the transcript's line breaks are ones the speaker asked for (see `SpokenLayout`), to be kept.
+    /// Otherwise the prompt says nothing about them, as before the commands existed: speech recognition's own breaks are
+    /// laid out like any other text.
     public static func polishSystemPrompt(vocabulary: [String], misheard: [Correction] = [],
-                                          extraInstructions: String) -> String {
-        basePolishPrompt + appendix(vocabulary: vocabulary, misheard: misheard, extraInstructions: extraInstructions)
+                                          extraInstructions: String, dictatedLineBreaks: Bool = false) -> String {
+        basePolishPrompt + (dictatedLineBreaks ? "\n\n" + lineBreaksSection : "")
+            + appendix(vocabulary: vocabulary, misheard: misheard, extraInstructions: extraInstructions)
     }
 
     /// The speaker's vocabulary, the mishearings learned from their edits and their own preferences, after either prompt.
@@ -106,6 +110,20 @@ public enum Prompts {
 
     <transcript>so um send the report to Mike by Friday, actually no, send it to Sarah, and uh cc the finance team</transcript>
     Send the report to Sarah by Friday, and cc the finance team.
+    """
+
+    /// Added for a transcript with line breaks the speaker dictated ("new line", "new paragraph"; see `SpokenLayout`).
+    static let lineBreaksSection = """
+    ## Line breaks
+    The line breaks in this transcript were dictated by the speaker: keep each one where it is, a blank line as a blank line, and never join the lines they separate. For example:
+    <transcript>hi Anna,
+    thanks for the quick review, um, I'll look at the comments tonight.
+
+    so the bug, uh, the bug was in the parser</transcript>
+    Hi Anna,
+    Thanks for the quick review, I'll look at the comments tonight.
+
+    So the bug was in the parser.
     """
 
     /// The reminder after the transcript restates the two rules models drift from most (sweeping

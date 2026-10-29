@@ -102,6 +102,15 @@ public sealed record Hotkey(
         && (Modifiers & (HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.Win)) == (HotkeyModifiers.Control | HotkeyModifiers.Alt)
         && KeyCode is >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A or >= 0xBA and <= 0xC0 or >= 0xDB and <= 0xDF or 0xE2;
 
+    /// <summary>
+    /// The modifiers that are down while it's held: a modifier on its own is one of them, a combination brings its own.
+    /// Right Alt brings Ctrl as well on AltGr keyboard layouts (German, French…), which send a Left Ctrl along with it.
+    /// </summary>
+    [JsonIgnore]
+    public HotkeyModifiers HeldModifiers => !IsModifierOnly ? Modifiers
+        : KeyCode == VK_RMENU ? HotkeyModifiers.Alt | HotkeyModifiers.Control
+        : ModifierFlag;
+
     /// <summary>As shortcuts are compared (see <see cref="ShortcutMap"/>).</summary>
     [JsonIgnore]
     public KeyChord Chord => new(KeyCode, (int)Modifiers, IsModifierOnly);
@@ -147,6 +156,19 @@ public static class TranslationChordText
 
     /// <summary>As Settings names it.</summary>
     public static string Label(this TranslationChord chord) => chord.KeyCap();
+}
+
+public static class SendKeyText
+{
+    /// <summary>Enter (the keypad's has the same virtual key), with Shift and Ctrl as <see cref="HotkeyModifiers"/>.</summary>
+    public static readonly SendKeyCodes Codes =
+        new(new HashSet<int> { Win32.VK_RETURN }, (int)HotkeyModifiers.Shift, (int)HotkeyModifiers.Control);
+
+    /// <summary>Its keys, as a shortcut is shown and waited on (see <see cref="HotkeyMonitor.WaitForRelease"/>); null when off.</summary>
+    public static Hotkey? Keys(this SendKey key) =>
+        key.Modifiers(Codes) is { } modifiers ? new Hotkey(Win32.VK_RETURN, (HotkeyModifiers)modifiers, false, "Enter") : null;
+
+    public static string Title(this SendKey key) => key.Keys()?.DisplayName ?? L("关闭", "Off");
 }
 
 public static class ShortcutActionText

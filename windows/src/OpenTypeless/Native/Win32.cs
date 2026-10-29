@@ -130,6 +130,7 @@ public static partial class Win32
     public const int INPUT_KEYBOARD = 1;
     public const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
     public const uint KEYEVENTF_KEYUP = 0x0002;
+    public const ushort VK_SHIFT = 0x10;
     public const ushort VK_CONTROL = 0x11;
     public const ushort VK_RETURN = 0x0D;
     public const ushort VK_ESCAPE = 0x1B;

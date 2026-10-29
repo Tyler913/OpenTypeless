@@ -33,7 +33,12 @@ public sealed record PolishOptions(
     /// </summary>
     string? Context = null,
     /// <summary>Called as a request that carries <c>Context</c> goes out (each attempt), so History can say it was sent.</summary>
-    Action? OnContextSent = null);
+    Action? OnContextSent = null,
+    /// <summary>
+    /// The transcripts' line breaks were dictated (see <see cref="SpokenLayout"/>): the prompt then asks to keep them, for a
+    /// transcript (or part of one) that has any.
+    /// </summary>
+    bool DictatedLineBreaks = false);
 
 public static class ReasoningConfig
 {
@@ -162,7 +167,8 @@ public sealed partial class ApiClient
         }
         return
         [
-            options.SystemPromptOverride ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard),
+            options.SystemPromptOverride ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard,
+                                                                       options.DictatedLineBreaks && transcript.Contains('\n')),
             Prompts.PolishUserMessage(transcript, options.Context),
         ];
     }

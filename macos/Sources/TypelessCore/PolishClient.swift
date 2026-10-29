@@ -23,11 +23,14 @@ public struct PolishOptions: Sendable {
     public var context: String?
     /// Called as a request that carries `context` goes out (each attempt), so History can say it was sent.
     public var onContextSent: (@Sendable () -> Void)?
+    /// The transcripts' line breaks were dictated (see `SpokenLayout`): the prompt then asks to keep them, for a transcript
+    /// (or part of one) that has any.
+    public var dictatedLineBreaks: Bool
 
     public init(model: String, vocabulary: [String] = [], misheard: [Correction] = [], extraInstructions: String = "",
                 modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil,
                 translation: TranslationTarget? = nil, selection: String? = nil, context: String? = nil,
-                onContextSent: (@Sendable () -> Void)? = nil) {
+                onContextSent: (@Sendable () -> Void)? = nil, dictatedLineBreaks: Bool = false) {
         self.model = model
         self.vocabulary = vocabulary
         self.misheard = misheard
@@ -39,6 +42,7 @@ public struct PolishOptions: Sendable {
         self.selection = selection
         self.context = context
         self.onContextSent = onContextSent
+        self.dictatedLineBreaks = dictatedLineBreaks
     }
 }
 
@@ -142,7 +146,8 @@ extension APIClient {
                     Prompts.translateUserMessage(transcript: transcript, target: target)]
         }
         return [options.systemPromptOverride ?? Prompts.polishSystemPrompt(
-                    vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions),
+                    vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions,
+                    dictatedLineBreaks: options.dictatedLineBreaks && transcript.contains(where: \.isNewline)),
                 Prompts.polishUserMessage(transcript: transcript, context: options.context)]
     }
 

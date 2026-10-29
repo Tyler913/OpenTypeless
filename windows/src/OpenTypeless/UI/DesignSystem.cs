@@ -105,6 +105,8 @@ public static class Glyphs
     public const string AppIcon = "\uECAA";
     public const string Add = "\uE710";
     public const string Edit = "\uE70F";
+    public const string Export = "\uEDE1";
+    public const string Import = "\uE8B5";
 }
 
 public static class Ui

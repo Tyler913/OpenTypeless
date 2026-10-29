@@ -12,7 +12,11 @@ namespace OpenTypeless.UI;
 public sealed class StylePage : PageBase
 {
     private readonly AppSettings _settings = AppSettings.Shared;
+    private readonly SettingsWindow _window;
     private readonly TextBox _vocabulary;
+    private readonly DropDownButton _export = new();
+    private readonly TextBlock _exportLabel = Ui.Text(L("导出", "Export"), 13);
+    private readonly FontIcon _exportIcon = Ui.Icon(Glyphs.Export, 13);
     private readonly CardSection _learning = new()
     {
         Title = L("自动学习", "Learning"),
@@ -44,8 +48,9 @@ public sealed class StylePage : PageBase
     private readonly List<UIElement> _translationDetails = [];
     private readonly List<UIElement> _otherLanguage = [];
 
-    public StylePage() : base(SettingsPage.Style)
+    public StylePage(SettingsWindow window) : base(SettingsPage.Style)
     {
+        _window = window;
         var vocabulary = new CardSection
         {
             Title = L("专有名词 / 词汇表", "Vocabulary"),
@@ -54,6 +59,8 @@ public sealed class StylePage : PageBase
         };
         _vocabulary = Editor(_settings.Vocabulary, 110, text => _settings.Vocabulary = text);
         vocabulary.Body.Add(_vocabulary);
+        vocabulary.Body.Add(new CardDivider { Inset = 0 });
+        vocabulary.Body.Add(TransferButtons());
         Body.Children.Add(vocabulary);
 
         RenderLearning();
@@ -167,9 +174,122 @@ public sealed class StylePage : PageBase
                 {
                     var text = _settings.Vocabulary;
                     if (_vocabulary.FocusState == FocusState.Unfocused && Normalize(_vocabulary.Text) != text) _vocabulary.Text = text;
+                    _export.IsEnabled = _settings.VocabularyList.Count > 0;
                 });
                 break;
         }
+    }
+
+    // MARK: Import and export
+
+    private StackPanel TransferButtons()
+    {
+        var import = new Button
+        {
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 6,
+                Children = { Ui.Icon(Glyphs.Import, 13), Ui.Text(L("导入…", "Import…"), 13) },
+            },
+        };
+        ToolTipService.SetToolTip(import, L("从 CSV（第一列）或文本文件添加词汇，已有的词不会重复添加。导出的 CSV 里的误听写法仅供参考，不会导入。",
+                                            "Add terms from a CSV (its first column) or text file; ones you already have aren't added twice. The misheard forms in an exported CSV are for reference and aren't imported."));
+        import.Click += async (_, _) => await ImportVocabulary();
+
+        var asCsv = new MenuFlyoutItem { Text = L("CSV（含学到的误听写法）…", "CSV (with how learned terms were misheard)…") };
+        asCsv.Click += async (_, _) => await ExportVocabulary(csv: true);
+        var asText = new MenuFlyoutItem { Text = L("纯文本（每行一个词）…", "Plain text (one term per line)…") };
+        asText.Click += async (_, _) => await ExportVocabulary(csv: false);
+        _export.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { _exportIcon, _exportLabel } };
+        _export.Flyout = new MenuFlyout { Items = { asCsv, asText } };
+        _export.IsEnabled = _settings.VocabularyList.Count > 0;
+
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8, Padding = new Thickness(12, 8, 12, 8),
+            Children = { import, _export },
+        };
+    }
+
+    /// <summary>Reads the file, then asks before adding what's new to the vocabulary.</summary>
+    private async Task ImportVocabulary()
+    {
+        var path = await Exports.ChooseFile(this, _window.Hwnd, VocabularyTransfer.ImportExtensions);
+        if (path == null) return;
+        var (terms, failure) = await Exports.ReadVocabulary(path);
+        if (terms == null)
+        {
+            await Exports.ShowDialog(XamlRoot, L("无法导入", "Couldn't import"), failure ?? "");
+            return;
+        }
+        if (terms.Count == 0)
+        {
+            await Exports.ShowDialog(XamlRoot, L("文件里没有词", "No terms in this file"),
+                                     L("每行一个词，或用逗号分隔；CSV 文件取第一列。",
+                                       "Put one term per line or separate them with commas; from a CSV file, the first column is used."));
+            return;
+        }
+        var plan = VocabularyTransfer.Plan(terms, _settings.VocabularyList);
+        if (plan.Added.Count == 0)
+        {
+            // Nothing to add, but importing still means the user wants these terms (see AppSettings.ImportVocabulary).
+            _settings.ImportVocabulary(terms);
+            var message = plan.TooLong + plan.OverLimit > 0 ? ImportSummary(plan)
+                : plan.Known == 1 ? L("文件里的词已经在词汇表里了。", "The term in the file is already in your vocabulary.")
+                : L($"文件里的 {plan.Known} 个词都已经在词汇表里了。", $"All {plan.Known} terms in the file are already in your vocabulary.");
+            await Exports.ShowDialog(XamlRoot, L("没有新词可导入", "Nothing new to import"), message);
+            return;
+        }
+        var count = plan.Added.Count;
+        var title = count == 1 ? L("导入 1 个新词？", "Import 1 new term?") : L($"导入 {count} 个新词？", $"Import {count} new terms?");
+        if (await Exports.ShowDialog(XamlRoot, title, ImportSummary(plan), primary: L("导入", "Import"))) _settings.ImportVocabulary(terms);
+    }
+
+    /// <summary>The first few new terms, what's left out and why, and how many of the file's terms are already in the vocabulary.</summary>
+    private static string ImportSummary(VocabularyTransfer.ImportPlan plan)
+    {
+        var parts = new List<string>();
+        if (plan.Added.Count > 0) parts.Add(string.Join(L("、", ", "), plan.Added.Take(10)) + (plan.Added.Count > 10 ? "…" : ""));
+        const int length = VocabularyTransfer.MaxTermLength, limit = VocabularyTransfer.MaxTerms;
+        if (plan.TooLong == 1)
+        {
+            parts.Add(L($"有 1 个条目超过 {length} 个字符，没有导入。", $"1 entry longer than {length} characters is left out."));
+        }
+        else if (plan.TooLong > 1)
+        {
+            parts.Add(L($"有 {plan.TooLong} 个条目超过 {length} 个字符，没有导入。", $"{plan.TooLong} entries longer than {length} characters are left out."));
+        }
+        if (plan.OverLimit == 1)
+        {
+            parts.Add(L($"词汇表最多 {limit} 个词，另有 1 个没有导入。", $"The vocabulary holds up to {limit} terms, so 1 more is left out."));
+        }
+        else if (plan.OverLimit > 1)
+        {
+            parts.Add(L($"词汇表最多 {limit} 个词，另有 {plan.OverLimit} 个没有导入。", $"The vocabulary holds up to {limit} terms, so {plan.OverLimit} more are left out."));
+        }
+        if (plan.Known == 1)
+        {
+            parts.Add(L("另有 1 个已经在词汇表里。", "1 more is already in your vocabulary."));
+        }
+        else if (plan.Known > 1)
+        {
+            parts.Add(L($"另有 {plan.Known} 个已经在词汇表里。", $"{plan.Known} more are already in your vocabulary."));
+        }
+        return string.Join("\n\n", parts);
+    }
+
+    private async Task ExportVocabulary(bool csv)
+    {
+        var terms = _settings.VocabularyForExport;
+        var saved = await Exports.Save(this, _window.Hwnd, L("OpenTypeless 词汇表", "OpenTypeless Vocabulary"),
+                                       csv ? "CSV (UTF-8)" : L("纯文本", "Plain text"), csv ? "csv" : "txt",
+                                       () => VocabularyTransfer.Data(terms, csv), L("导出失败", "Couldn't export"));
+        if (!saved) return;
+        _exportLabel.Text = L("已导出", "Exported");
+        _exportIcon.Glyph = Glyphs.CheckMark;
+        await Task.Delay(1500);
+        _exportLabel.Text = L("导出", "Export");
+        _exportIcon.Glyph = Glyphs.Export;
     }
 
     private void RenderLearning()

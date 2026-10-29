@@ -1,0 +1,763 @@
+{
+  "_comment": "Shared by the macOS (swift-testing) and Windows (xUnit) test suites, so both apps write byte-identical History exports (CSV without its UTF-8 byte-order mark, JSON, Markdown) and vocabulary files, and read imported vocabulary the same way. Dates are Unix seconds plus the local offset in minutes. Fields a spreadsheet would run as a formula are written behind an apostrophe; Markdown lines that would start a heading, a code fence or an HTML block get a backslash.",
+  "history": {
+    "entries": [
+      {
+        "unix": 1791786725,
+        "offsetMinutes": 480,
+        "duration": 42.25,
+        "status": "done",
+        "finalText": "明天下午三点开会，记得带上 Q3 的报告。",
+        "rawText": "嗯明天下午三点开会 记得带上那个 Q3 的报告",
+        "cost": 0.000508
+      },
+      {
+        "unix": 1791767159,
+        "offsetMinutes": 480,
+        "duration": 12.25,
+        "status": "polishFailed",
+        "finalText": "Three things:\n1. Ship the \"export\" feature, then\n2. write the docs",
+        "rawText": "three things ship the export feature then write the docs",
+        "cost": null
+      },
+      {
+        "unix": 1791723600,
+        "offsetMinutes": 480,
+        "duration": 0.04,
+        "status": "failed",
+        "finalText": "",
+        "rawText": "",
+        "cost": null
+      },
+      {
+        "unix": 1791688800,
+        "offsetMinutes": -300,
+        "duration": 7.95,
+        "status": "cancelled",
+        "finalText": "Path: C:\\Users\\tyler\ttab\u0001end  \r\n\r\n  indented line\r\nlast line\t ",
+        "rawText": "path c users tyler",
+        "cost": 4e-07
+      },
+      {
+        "unix": 1791675000,
+        "offsetMinutes": 60,
+        "duration": 65.0,
+        "status": "done",
+        "finalText": "Late night, early morning.",
+        "rawText": "late night early morning",
+        "cost": 0.0021
+      },
+      {
+        "unix": 1791620130.75,
+        "offsetMinutes": 345,
+        "duration": 3.3333333,
+        "status": "done",
+        "finalText": "こんにちは world 👋 don't stop",
+        "rawText": "こんにちは world don't stop",
+        "cost": 1.2
+      },
+      {
+        "unix": 1791540000,
+        "offsetMinutes": 0,
+        "duration": 1e+300,
+        "status": "done",
+        "finalText": "=SUM(A1:A2)\n# Not a heading\n  ## nor this\n```\n~~~ fence\n<!-- not a comment\n#hashtag and ``` inside",
+        "rawText": "@everyone -1",
+        "cost": 1e+300
+      },
+      {
+        "unix": 1791500000,
+        "offsetMinutes": 0,
+        "duration": 2.0,
+        "status": "done",
+        "finalText": "+1 for this, -2 for that",
+        "rawText": "\ttab first",
+        "cost": null
+      }
+    ],
+    "csv": "date,durationSeconds,status,finalText,rawText,costUSD,words\r\n2026-10-12T14:32:05+08:00,42.3,done,明天下午三点开会，记得带上 Q3 的报告。,嗯明天下午三点开会 记得带上那个 Q3 的报告,0.000508,16\r\n2026-10-12T09:05:59+08:00,12.3,polishFailed,\"Three things:\n1. Ship the \"\"export\"\" feature, then\n2. write the docs\",three things ship the export feature then write the docs,,12\r\n2026-10-11T21:00:00+08:00,0.0,failed,,,,0\r\n2026-10-10T22:20:00-05:00,8.0,cancelled,\"Path: C:\\Users\\tyler\ttab\u0001end  \r\n\r\n  indented line\r\nlast line\t \",path c users tyler,0.000000,10\r\n2026-10-11T00:30:00+01:00,65.0,done,\"Late night, early morning.\",late night early morning,0.002100,4\r\n2026-10-10T14:00:30+05:45,3.3,done,こんにちは world 👋 don't stop,こんにちは world don't stop,1.200000,8\r\n2026-10-09T10:00:00+00:00,1000000000000.0,done,\"'=SUM(A1:A2)\n# Not a heading\n  ## nor this\n```\n~~~ fence\n<!-- not a comment\n#hashtag and ``` inside\",'@everyone -1,1000000000000.000000,15\r\n2026-10-08T22:53:20+00:00,2.0,done,\"'+1 for this, -2 for that\",'\ttab first,,6\r\n",
+    "json": "[\n  {\n    \"date\": \"2026-10-12T14:32:05+08:00\",\n    \"durationSeconds\": 42.3,\n    \"status\": \"done\",\n    \"finalText\": \"明天下午三点开会，记得带上 Q3 的报告。\",\n    \"rawText\": \"嗯明天下午三点开会 记得带上那个 Q3 的报告\",\n    \"costUSD\": 0.000508,\n    \"words\": 16\n  },\n  {\n    \"date\": \"2026-10-12T09:05:59+08:00\",\n    \"durationSeconds\": 12.3,\n    \"status\": \"polishFailed\",\n    \"finalText\": \"Three things:\\n1. Ship the \\\"export\\\" feature, then\\n2. write the docs\",\n    \"rawText\": \"three things ship the export feature then write the docs\",\n    \"costUSD\": null,\n    \"words\": 12\n  },\n  {\n    \"date\": \"2026-10-11T21:00:00+08:00\",\n    \"durationSeconds\": 0.0,\n    \"status\": \"failed\",\n    \"finalText\": \"\",\n    \"rawText\": \"\",\n    \"costUSD\": null,\n    \"words\": 0\n  },\n  {\n    \"date\": \"2026-10-10T22:20:00-05:00\",\n    \"durationSeconds\": 8.0,\n    \"status\": \"cancelled\",\n    \"finalText\": \"Path: C:\\\\Users\\\\tyler\\ttab\\u0001end  \\r\\n\\r\\n  indented line\\r\\nlast line\\t \",\n    \"rawText\": \"path c users tyler\",\n    \"costUSD\": 0.000000,\n    \"words\": 10\n  },\n  {\n    \"date\": \"2026-10-11T00:30:00+01:00\",\n    \"durationSeconds\": 65.0,\n    \"status\": \"done\",\n    \"finalText\": \"Late night, early morning.\",\n    \"rawText\": \"late night early morning\",\n    \"costUSD\": 0.002100,\n    \"words\": 4\n  },\n  {\n    \"date\": \"2026-10-10T14:00:30+05:45\",\n    \"durationSeconds\": 3.3,\n    \"status\": \"done\",\n    \"finalText\": \"こんにちは world 👋 don't stop\",\n    \"rawText\": \"こんにちは world don't stop\",\n    \"costUSD\": 1.200000,\n    \"words\": 8\n  },\n  {\n    \"date\": \"2026-10-09T10:00:00+00:00\",\n    \"durationSeconds\": 1000000000000.0,\n    \"status\": \"done\",\n    \"finalText\": \"=SUM(A1:A2)\\n# Not a heading\\n  ## nor this\\n```\\n~~~ fence\\n<!-- not a comment\\n#hashtag and ``` inside\",\n    \"rawText\": \"@everyone -1\",\n    \"costUSD\": 1000000000000.000000,\n    \"words\": 15\n  },\n  {\n    \"date\": \"2026-10-08T22:53:20+00:00\",\n    \"durationSeconds\": 2.0,\n    \"status\": \"done\",\n    \"finalText\": \"+1 for this, -2 for that\",\n    \"rawText\": \"\\ttab first\",\n    \"costUSD\": null,\n    \"words\": 6\n  }\n]\n",
+    "markdown": "# 2026-10-12\n\n## 14:32\n\n明天下午三点开会，记得带上 Q3 的报告。\n\n## 09:05\n\nThree things:\n\n1. Ship the \"export\" feature, then\n\n2. write the docs\n\n# 2026-10-10\n\n## 22:20\n\nPath: C:\\Users\\tyler\ttab\u0001end\n\n  indented line\n\nlast line\n\n# 2026-10-11\n\n## 00:30\n\nLate night, early morning.\n\n# 2026-10-10\n\n## 14:00\n\nこんにちは world 👋 don't stop\n\n# 2026-10-09\n\n## 10:00\n\n=SUM(A1:A2)\n\n\\# Not a heading\n\n  \\## nor this\n\n\\```\n\n\\~~~ fence\n\n\\<!-- not a comment\n\n\\#hashtag and ``` inside\n\n# 2026-10-08\n\n## 22:53\n\n+1 for this, -2 for that\n"
+  },
+  "values": {
+    "timestamps": [
+      {
+        "unix": 0,
+        "offsetMinutes": 0,
+        "expected": "1970-01-01T00:00:00+00:00"
+      },
+      {
+        "unix": -1.5,
+        "offsetMinutes": 0,
+        "expected": "1969-12-31T23:59:58+00:00"
+      },
+      {
+        "unix": 1772953199,
+        "offsetMinutes": -480,
+        "expected": "2026-03-07T22:59:59-08:00"
+      },
+      {
+        "unix": 1791786725.999,
+        "offsetMinutes": 480,
+        "expected": "2026-10-12T14:32:05+08:00"
+      },
+      {
+        "unix": 1791786725,
+        "offsetMinutes": 330,
+        "expected": "2026-10-12T12:02:05+05:30"
+      },
+      {
+        "unix": 1791786725,
+        "offsetMinutes": -570,
+        "expected": "2026-10-11T21:02:05-09:30"
+      },
+      {
+        "unix": 1791786725,
+        "offsetMinutes": 900,
+        "expected": "2026-10-12T20:32:05+14:00"
+      },
+      {
+        "unix": 253402300799,
+        "offsetMinutes": 840,
+        "expected": "9999-12-31T23:59:59+14:00"
+      },
+      {
+        "unix": -62135596800,
+        "offsetMinutes": -720,
+        "expected": "0001-01-01T00:00:00-12:00"
+      }
+    ],
+    "seconds": [
+      {
+        "value": 0,
+        "expected": "0.0"
+      },
+      {
+        "value": 0.04,
+        "expected": "0.0"
+      },
+      {
+        "value": 0.05,
+        "expected": "0.1"
+      },
+      {
+        "value": 0.15,
+        "expected": "0.2"
+      },
+      {
+        "value": 12.25,
+        "expected": "12.3"
+      },
+      {
+        "value": 59.94,
+        "expected": "59.9"
+      },
+      {
+        "value": 59.95,
+        "expected": "60.0"
+      },
+      {
+        "value": 1234.56,
+        "expected": "1234.6"
+      },
+      {
+        "value": -3,
+        "expected": "0.0"
+      },
+      {
+        "value": 1e+300,
+        "expected": "1000000000000.0"
+      }
+    ],
+    "usd": [
+      {
+        "value": 0,
+        "expected": "0.000000"
+      },
+      {
+        "value": 4e-07,
+        "expected": "0.000000"
+      },
+      {
+        "value": 5e-07,
+        "expected": "0.000001"
+      },
+      {
+        "value": 0.000508,
+        "expected": "0.000508"
+      },
+      {
+        "value": 0.0021,
+        "expected": "0.002100"
+      },
+      {
+        "value": 0.0123455,
+        "expected": "0.012346"
+      },
+      {
+        "value": 1.2,
+        "expected": "1.200000"
+      },
+      {
+        "value": 1234.5,
+        "expected": "1234.500000"
+      },
+      {
+        "value": -1,
+        "expected": "0.000000"
+      },
+      {
+        "value": 1e+300,
+        "expected": "1000000000000.000000"
+      }
+    ],
+    "offsets": [
+      {
+        "unix": 1772953199,
+        "zone": "America/New_York",
+        "windowsZone": "Eastern Standard Time",
+        "expected": -300
+      },
+      {
+        "unix": 1772953200,
+        "zone": "America/New_York",
+        "windowsZone": "Eastern Standard Time",
+        "expected": -240
+      },
+      {
+        "unix": 1793512799,
+        "zone": "America/New_York",
+        "windowsZone": "Eastern Standard Time",
+        "expected": -240
+      },
+      {
+        "unix": 1793512800,
+        "zone": "America/New_York",
+        "windowsZone": "Eastern Standard Time",
+        "expected": -300
+      },
+      {
+        "unix": 1774745999,
+        "zone": "Europe/London",
+        "windowsZone": "GMT Standard Time",
+        "expected": 0
+      },
+      {
+        "unix": 1774746000,
+        "zone": "Europe/London",
+        "windowsZone": "GMT Standard Time",
+        "expected": 60
+      },
+      {
+        "unix": 1791786725,
+        "zone": "Asia/Kathmandu",
+        "windowsZone": "Nepal Standard Time",
+        "expected": 345
+      },
+      {
+        "unix": 1775314799,
+        "zone": "Australia/Lord_Howe",
+        "windowsZone": "Lord Howe Standard Time",
+        "expected": 660
+      },
+      {
+        "unix": 1775314800,
+        "zone": "Australia/Lord_Howe",
+        "windowsZone": "Lord Howe Standard Time",
+        "expected": 630
+      }
+    ],
+    "markdownLines": [
+      {
+        "line": "# heading",
+        "expected": "\\# heading"
+      },
+      {
+        "line": "## 14:32",
+        "expected": "\\## 14:32"
+      },
+      {
+        "line": "  # indented",
+        "expected": "  \\# indented"
+      },
+      {
+        "line": "\t#tab",
+        "expected": "\t\\#tab"
+      },
+      {
+        "line": "#hashtag",
+        "expected": "\\#hashtag"
+      },
+      {
+        "line": "```",
+        "expected": "\\```"
+      },
+      {
+        "line": "```swift",
+        "expected": "\\```swift"
+      },
+      {
+        "line": "~~~",
+        "expected": "\\~~~"
+      },
+      {
+        "line": "`` two",
+        "expected": "`` two"
+      },
+      {
+        "line": "~~ two",
+        "expected": "~~ two"
+      },
+      {
+        "line": "<!-- comment",
+        "expected": "\\<!-- comment"
+      },
+      {
+        "line": "<b>bold</b>",
+        "expected": "\\<b>bold</b>"
+      },
+      {
+        "line": "a # b",
+        "expected": "a # b"
+      },
+      {
+        "line": "plain",
+        "expected": "plain"
+      },
+      {
+        "line": "1. list",
+        "expected": "1. list"
+      },
+      {
+        "line": "> quote",
+        "expected": "> quote"
+      },
+      {
+        "line": "  ",
+        "expected": "  "
+      }
+    ],
+    "spreadsheetFields": [
+      {
+        "text": "=SUM(A1:A2)",
+        "expected": "'=SUM(A1:A2)"
+      },
+      {
+        "text": "+86 138",
+        "expected": "'+86 138"
+      },
+      {
+        "text": "-1",
+        "expected": "'-1"
+      },
+      {
+        "text": "@everyone",
+        "expected": "'@everyone"
+      },
+      {
+        "text": "\tindented",
+        "expected": "'\tindented"
+      },
+      {
+        "text": "\rreturn",
+        "expected": "\"'\rreturn\""
+      },
+      {
+        "text": "=1,2",
+        "expected": "\"'=1,2\""
+      },
+      {
+        "text": "plain",
+        "expected": "plain"
+      },
+      {
+        "text": "",
+        "expected": ""
+      },
+      {
+        "text": "'quoted",
+        "expected": "'quoted"
+      },
+      {
+        "text": "'=already",
+        "expected": "''=already"
+      },
+      {
+        "text": "''=twice",
+        "expected": "'''=twice"
+      },
+      {
+        "text": " =space first",
+        "expected": " =space first"
+      },
+      {
+        "text": "中文=1",
+        "expected": "中文=1"
+      }
+    ]
+  },
+  "vocabulary": {
+    "terms": [
+      {
+        "term": "Claude",
+        "heardAs": []
+      },
+      {
+        "term": "Typeless",
+        "heardAs": [
+          "TypeList",
+          "type less"
+        ]
+      },
+      {
+        "term": "李明",
+        "heardAs": [
+          "黎明"
+        ]
+      },
+      {
+        "term": "\"Quoted\" Inc",
+        "heardAs": [
+          "quoted, inc"
+        ]
+      },
+      {
+        "term": "=cmd",
+        "heardAs": [
+          "-cmd",
+          "@cmd"
+        ]
+      }
+    ],
+    "csv": "term,heardAs\r\nClaude,\r\nTypeless,TypeList; type less\r\n李明,黎明\r\n\"\"\"Quoted\"\" Inc\",\"quoted, inc\"\r\n'=cmd,'-cmd; @cmd\r\n",
+    "text": "Claude\nTypeless\n李明\n\"Quoted\" Inc\n=cmd\n",
+    "imports": [
+      {
+        "kind": "csv",
+        "input": "term,heardAs\r\nClaude,\r\nTypeless,TypeList; type less\r\n李明,黎明\r\n\"\"\"Quoted\"\" Inc\",\"quoted, inc\"\r\n'=cmd,'-cmd; @cmd\r\n",
+        "terms": [
+          "Claude",
+          "Typeless",
+          "李明",
+          "\"Quoted\" Inc",
+          "=cmd"
+        ]
+      },
+      {
+        "kind": "csv",
+        "input": "Claude\nOpenRouter\n\n  SwiftUI  \r\nGitHub",
+        "terms": [
+          "Claude",
+          "OpenRouter",
+          "SwiftUI",
+          "GitHub"
+        ]
+      },
+      {
+        "kind": "csv",
+        "input": "Vocabulary;Note\r\nKubernetes;k8s\r\n\"Smith, John\";person\r\n",
+        "terms": [
+          "Kubernetes",
+          "Smith",
+          "John"
+        ]
+      },
+      {
+        "kind": "csv",
+        "input": "word\theard\nTypeless\ttype list\n",
+        "terms": [
+          "Typeless"
+        ]
+      },
+      {
+        "kind": "csv",
+        "input": "\"multi\nline\",x\n\"\"\"quoted\"\"\",y\n,empty first\nunclosed \"quote\n",
+        "terms": [
+          "multi",
+          "line",
+          "\"quoted\"",
+          "unclosed \"quote"
+        ]
+      },
+      {
+        "kind": "txt",
+        "input": "Claude\nOpenRouter, SwiftUI，GitHub\r\n\r\n   \n  Typeless  \n张三",
+        "terms": [
+          "Claude",
+          "OpenRouter",
+          "SwiftUI",
+          "GitHub",
+          "Typeless",
+          "张三"
+        ]
+      },
+      {
+        "kind": "txt",
+        "input": "",
+        "terms": []
+      },
+      {
+        "kind": "csv",
+        "input": "术语,备注\r\n'=SUM(A1),x\r\n'+86 phone,y\r\n'@home,z\r\n'-ish,w\r\n'plain,v\r\n''=twice,u\r\n",
+        "terms": [
+          "=SUM(A1)",
+          "+86 phone",
+          "@home",
+          "-ish",
+          "'plain",
+          "'=twice"
+        ]
+      },
+      {
+        "kind": "csv",
+        "input": "Phrase,Notes\nhello world,x\n",
+        "terms": [
+          "hello world"
+        ]
+      },
+      {
+        "kind": "CSV",
+        "input": "Words\nKubernetes\n",
+        "terms": [
+          "Kubernetes"
+        ]
+      },
+      {
+        "kind": "tsv",
+        "input": "词\t备注\n张三\t人名\n",
+        "terms": [
+          "张三"
+        ]
+      },
+      {
+        "kind": "txt",
+        "base64": "//50AGUAcgBtAAkAaABlAGEAcgBkAEEAcwANAAoAVAB5AHAAZQBsAGUAcwBzAAkAVAB5AHAAZQBMAGkAcwB0AA0ACgBOZw5mCQDOng5mDQAKAA==",
+        "terms": [
+          "Typeless",
+          "李明"
+        ]
+      },
+      {
+        "kind": "txt",
+        "input": "Claude\tnote\nOpenRouter, SwiftUI\tx\n\"Smith, John\"\ty\n",
+        "terms": [
+          "Claude",
+          "OpenRouter",
+          "SwiftUI",
+          "Smith",
+          "John"
+        ]
+      },
+      {
+        "kind": "txt",
+        "input": "Claude\nterm\twith a tab on line two\n",
+        "terms": [
+          "Claude",
+          "term\twith a tab on line two"
+        ]
+      },
+      {
+        "kind": "md",
+        "input": "# Claude, Typeless",
+        "terms": [
+          "# Claude",
+          "Typeless"
+        ]
+      }
+    ],
+    "decode": [
+      {
+        "base64": "77u/Q2xhdWRlCuadjuaYjg==",
+        "text": "Claude\n李明"
+      },
+      {
+        "base64": "Q2xhdWRlCuadjuaYjg==",
+        "text": "Claude\n李明"
+      },
+      {
+        "base64": "//5DAGwAYQB1AGQAZQAKAE5nDmY=",
+        "text": "Claude\n李明"
+      },
+      {
+        "base64": "/v8AQwBsAGEAdQBkAGUACmdOZg4=",
+        "text": "Claude\n李明"
+      },
+      {
+        "base64": "Q2xhdWRlCsDuw/c=",
+        "text": null
+      },
+      {
+        "base64": "",
+        "text": ""
+      },
+      {
+        "base64": "//5BAEI=",
+        "text": null
+      },
+      {
+        "base64": "/v8AQUI=",
+        "text": null
+      },
+      {
+        "base64": "//5BAADYQgA=",
+        "text": null
+      },
+      {
+        "base64": "//4=",
+        "text": ""
+      }
+    ],
+    "maxTermLength": 64,
+    "maxTerms": 1000,
+    "plans": [
+      {
+        "existing": [
+          "Claude",
+          "OpenRouter"
+        ],
+        "imported": [
+          "claude",
+          "GitHub",
+          "github",
+          "李明",
+          "OPENROUTER",
+          "Swift"
+        ],
+        "added": [
+          "GitHub",
+          "李明",
+          "Swift"
+        ],
+        "known": 2,
+        "tooLong": 0,
+        "overLimit": 0
+      },
+      {
+        "existing": [],
+        "imported": [
+          "A",
+          "a",
+          "B"
+        ],
+        "added": [
+          "A",
+          "B"
+        ],
+        "known": 0,
+        "tooLong": 0,
+        "overLimit": 0
+      },
+      {
+        "existing": [
+          "X"
+        ],
+        "imported": [],
+        "added": [],
+        "known": 0,
+        "tooLong": 0,
+        "overLimit": 0
+      },
+      {
+        "existing": [],
+        "imported": [
+          "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+          "长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长",
+          "长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长",
+          "👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋",
+          "👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋",
+          "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        ],
+        "added": [
+          "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长",
+          "👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋👋"
+        ],
+        "known": 0,
+        "tooLong": 3,
+        "overLimit": 0
+      },
+      {
+        "existing": [
+          "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        ],
+        "imported": [
+          "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+        ],
+        "added": [],
+        "known": 1,
+        "tooLong": 0,
+        "overLimit": 0
+      },
+      {
+        "existing": [
+          "A",
+          "B"
+        ],
+        "limit": 4,
+        "imported": [
+          "a",
+          "C",
+          "D",
+          "E",
+          "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+          "c",
+          "F"
+        ],
+        "added": [
+          "C",
+          "D"
+        ],
+        "known": 1,
+        "tooLong": 1,
+        "overLimit": 2
+      },
+      {
+        "existing": [
+          "A",
+          "B",
+          "C"
+        ],
+        "limit": 2,
+        "imported": [
+          "D",
+          "a"
+        ],
+        "added": [],
+        "known": 1,
+        "tooLong": 0,
+        "overLimit": 1
+      }
+    ],
+    "merged": [
+      {
+        "vocabulary": "Claude, OpenRouter  \n",
+        "adding": [
+          "GitHub",
+          "李明"
+        ],
+        "expected": "Claude, OpenRouter, GitHub, 李明"
+      },
+      {
+        "vocabulary": "  ",
+        "adding": [
+          "A"
+        ],
+        "expected": "A"
+      },
+      {
+        "vocabulary": "",
+        "adding": [
+          "A",
+          "B"
+        ],
+        "expected": "A, B"
+      },
+      {
+        "vocabulary": "Claude\n",
+        "adding": [],
+        "expected": "Claude\n"
+      }
+    ]
+  }
+}

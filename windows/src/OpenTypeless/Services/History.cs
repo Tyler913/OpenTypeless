@@ -19,6 +19,17 @@ public static class DictationStatusExtensions
         DictationStatus.Failed => HistoryPruning.Kind.Failed,
         _ => HistoryPruning.Kind.Cancelled,
     };
+
+    /// <summary>As stored in session.json, the same as macOS: "done", "polishFailed", …</summary>
+    public static string RawValue(this DictationStatus status) => status switch
+    {
+        DictationStatus.Recording => "recording",
+        DictationStatus.Processing => "processing",
+        DictationStatus.Done => "done",
+        DictationStatus.PolishFailed => "polishFailed",
+        DictationStatus.Cancelled => "cancelled",
+        _ => "failed",
+    };
 }
 
 /// <summary>One dictation. Stored as <c>Sessions\&lt;id&gt;\session.json</c> next to its <c>audio.wav</c>, same schema as macOS.</summary>
@@ -85,6 +96,13 @@ public sealed class DictationRecord
     [JsonIgnore] public string AudioPath => Path.Combine(Folder, "audio.wav");
     [JsonIgnore] public bool HasAudio => File.Exists(AudioPath);
 
+    /// <summary>
+    /// This dictation as History exports it. A record keeps no time zone, so its time is written in this PC's, with the
+    /// offset that zone had on that date.
+    /// </summary>
+    public HistoryExport.Entry ExportEntry() =>
+        new(Date, HistoryExport.UtcOffsetMinutes(Date, TimeZoneInfo.Local), Duration, Status.RawValue(), FinalText, RawText, Cost);
+
     /// <summary>Records have value semantics (a struct on macOS): the store and the session each keep their own copy.</summary>
     public DictationRecord Copy()
     {
@@ -117,15 +135,7 @@ public sealed class DictationRecord
             };
 
         public override void Write(Utf8JsonWriter writer, DictationStatus value, JsonSerializerOptions options) =>
-            writer.WriteStringValue(value switch
-            {
-                DictationStatus.Recording => "recording",
-                DictationStatus.Processing => "processing",
-                DictationStatus.Done => "done",
-                DictationStatus.PolishFailed => "polishFailed",
-                DictationStatus.Cancelled => "cancelled",
-                _ => "failed",
-            });
+            writer.WriteStringValue(value.RawValue());
     }
 }
 

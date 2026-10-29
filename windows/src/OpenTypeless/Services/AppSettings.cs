@@ -786,6 +786,35 @@ public sealed class AppSettings : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Adds an imported file's new terms to the vocabulary, leaving out ones already in it (ignoring case) and ones
+    /// <see cref="VocabularyTransfer.Plan"/> keeps out of every clean-up request. Importing is the user asking for these
+    /// terms, so one they once removed from the learned terms may be learned again too. Returns what it did.
+    /// </summary>
+    public VocabularyTransfer.ImportPlan ImportVocabulary(IReadOnlyCollection<string> terms)
+    {
+        var plan = VocabularyTransfer.Plan(terms, VocabularyList);
+        if (plan.Added.Count > 0) Vocabulary = VocabularyTransfer.Merged(Vocabulary, plan.Added);
+        var kept = VocabularyList.Select(t => t.ToLowerInvariant()).ToHashSet();
+        kept.IntersectWith(terms.Select(t => t.ToLowerInvariant()));
+        var forgotten = ForgottenTerms;
+        if (forgotten.Any(kept.Contains)) ForgottenTerms = forgotten.Where(t => !kept.Contains(t)).ToList();
+        return plan;
+    }
+
+    /// <summary>The vocabulary as it's exported: each term with how recognition misheard it, when it was learned from a fix.</summary>
+    public List<VocabularyTransfer.Term> VocabularyForExport
+    {
+        get
+        {
+            var learned = new Dictionary<string, List<string>>();
+            foreach (var term in LearnedTerms) learned.TryAdd(term.Term.ToLowerInvariant(), term.HeardAs);
+            return VocabularyList
+                .Select(t => new VocabularyTransfer.Term(t, learned.TryGetValue(t.ToLowerInvariant(), out var heard) ? heard : new List<string>()))
+                .ToList();
+        }
+    }
+
     /// <summary>Misheard forms of vocabulary terms, newest first, for the clean-up prompt.</summary>
     public List<Correction> MisheardHints
     {

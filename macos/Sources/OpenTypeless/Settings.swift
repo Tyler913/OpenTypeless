@@ -376,6 +376,27 @@ final class AppSettings: ObservableObject {
         saveLearnedTerms()
     }
 
+    /// Adds an imported file's new terms to the vocabulary, leaving out ones already in it (ignoring case) and ones
+    /// `VocabularyTransfer.plan` keeps out of every clean-up request. Importing is the user asking for these terms, so
+    /// one they once removed from the learned terms may be learned again too. Returns what it did.
+    @discardableResult
+    func importVocabulary(_ terms: [String]) -> VocabularyTransfer.ImportPlan {
+        let plan = VocabularyTransfer.plan(terms, existing: vocabularyList)
+        if !plan.added.isEmpty { vocabulary = VocabularyTransfer.merged(vocabulary, adding: plan.added) }
+        let kept = Set(vocabularyList.map { $0.lowercased() }).intersection(terms.map { $0.lowercased() })
+        if !forgottenTerms.isDisjoint(with: kept) {
+            forgottenTerms.subtract(kept)
+            UserDefaults.standard.set(Array(forgottenTerms), forKey: "forgottenVocabulary")
+        }
+        return plan
+    }
+
+    /// The vocabulary as it's exported: each term with how recognition misheard it, when it was learned from a fix.
+    var vocabularyForExport: [VocabularyTransfer.Term] {
+        let learned = Dictionary(learnedTerms.map { ($0.term.lowercased(), $0.heardAs) }, uniquingKeysWith: { first, _ in first })
+        return vocabularyList.map { VocabularyTransfer.Term(term: $0, heardAs: learned[$0.lowercased()] ?? []) }
+    }
+
     /// Misheard forms of vocabulary terms, newest first, for the clean-up prompt.
     var misheardHints: [Correction] {
         let terms = Set(vocabularyList.map { $0.lowercased() })

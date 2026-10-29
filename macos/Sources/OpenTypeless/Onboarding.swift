@@ -339,7 +339,7 @@ private struct ProviderStep: View {
         .padding(.horizontal, 44)
         .frame(maxHeight: .infinity, alignment: .top)
         // A key saved earlier (coming back from the next step) is filled in again.
-        .onChange(of: provider, initial: true) { key = settings.apiKey(for: provider) }
+        .onChange(of: provider, initial: true) { key = settings.savedAPIKey(for: provider) }
     }
 }
 
@@ -527,7 +527,7 @@ private struct TryStep: View {
         switch latest.status {
         case .done, .polishFailed:
             error = nil
-            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { text = latest.finalText }
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { text = latest.outputText }
         case .failed:
             error = latest.error
         default:

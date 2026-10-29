@@ -4,3 +4,7 @@
 build/
 *.xcodeproj/xcuserdata/
 dist/
+
+# Coverage data from `swift test --enable-code-coverage` or LLVM_PROFILE_FILE
+*.profraw
+*.profdata

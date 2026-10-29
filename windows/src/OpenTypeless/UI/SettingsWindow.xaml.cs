@@ -12,7 +12,7 @@ using Windows.Graphics;
 
 namespace OpenTypeless.UI;
 
-/// <summary>The settings window: a Mica window with a sidebar of six pages, kept alive while hidden.</summary>
+/// <summary>The settings window: a Mica window with a sidebar of eight pages, kept alive while hidden.</summary>
 public sealed partial class SettingsWindow : Window
 {
     private readonly SessionController _controller;
@@ -85,6 +85,8 @@ public sealed partial class SettingsWindow : Window
 
     public void CloseForExit()
     {
+        // A tick after Close would set the pill's text on a torn-down window (E_UNEXPECTED, and the process ends).
+        _refresh.Stop();
         _allowClose = true;
         _settings.PropertyChanged -= OnSettingsChanged;
         Close();
@@ -122,8 +124,9 @@ public sealed partial class SettingsWindow : Window
             SettingsPage.Shortcut => new ShortcutPage(this),
             SettingsPage.Providers => new ProvidersPage(),
             SettingsPage.Models => new ModelsPage(this, _controller),
-            SettingsPage.Style => new StylePage(),
-            _ => new HistoryPage(_controller),
+            SettingsPage.Style => new StylePage(this),
+            SettingsPage.Apps => new AppsPage(this),
+            _ => new HistoryPage(this, _controller),
         };
     }
 

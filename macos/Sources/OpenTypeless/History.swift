@@ -6,6 +6,15 @@ struct DictationRecord: Codable, Identifiable, Equatable {
         case recording, processing, done, polishFailed, failed
         /// Stopped with Esc after `CancelPolicy.keepAfterSeconds`: transcribed but not inserted, kept for a day.
         case cancelled
+
+        var pruningKind: HistoryPruning.Kind {
+            switch self {
+            case .recording, .processing: return .inProgress
+            case .done, .polishFailed: return .finished
+            case .failed: return .failed
+            case .cancelled: return .cancelled
+            }
+        }
     }
 
     let id: String
@@ -14,14 +23,54 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var status: Status = .recording
     var rawText: String = ""
     var polishedText: String?
+    /// What went in when snippets changed the final text (see SnippetExpander); nil when the final text went in as it was.
+    var insertedText: String?
     var error: String?
     /// Per-chunk transcripts, so a retry only re-sends the chunks that failed.
     var chunkTexts: [Int: String] = [:]
+    /// How the recording was cut into those chunks (`Chunker.layout`; nil before it was saved): a retry that cuts it
+    /// differently can't reuse them by index.
+    var chunkLayout: Int?
+    /// The language hint those chunks were transcribed with ("" auto-detect; nil before it was saved): a retry with
+    /// another one sends them again (see `DictationSettings.reusesTranscripts`).
+    var chunkLanguage: String?
     var timing: Timing?
     /// What processing it cost so far in USD, retries included (nil when nothing could be priced).
     var cost: Double?
     /// Its words are in the usage totals (so re-transcribing it doesn't count them twice).
     var counted: Bool?
+    /// The app profile it was made with (see AppProfile), so a retry uses that profile again while it exists; nil when
+    /// none applied.
+    var profileID: String?
+    /// That profile's name, for History.
+    var profileName: String?
+    /// "translate" for a translation dictation (see `TranslationTarget.recordMode`), "command" for an edit of a selection
+    /// by voice (see `SelectionCommand.recordMode`), nil for plain dictation: records from before translation, and older
+    /// versions reading newer ones, see a dictation.
+    var mode: String?
+    /// The language a translation dictation is written in (`TranslationTarget.id`).
+    var targetLanguage: String?
+    /// How many characters the selection an edit worked on had. Neither the selection nor the rewrite (or the answer to
+    /// a question about it) is kept: they can be anything the user had open (a contract, a private message), and History
+    /// keeps entries for days. Only its instruction is, as the transcript.
+    var selectionLength: Int?
+
+    /// An edit of a selection by voice rather than a dictation. Without its selection it can't be run again.
+    var isCommand: Bool { SelectionCommand.isCommand(mode: mode) }
+
+    /// What a translation dictation is translated into; nil for plain dictation. A retry translates it again.
+    var translation: TranslationTarget? {
+        get { TranslationTarget(mode: mode, targetLanguage: targetLanguage) }
+        set {
+            mode = newValue == nil ? nil : TranslationTarget.recordMode
+            targetLanguage = newValue?.id
+        }
+    }
+
+    /// Where the audio came from: nil for a dictation, `.file` for a transcribed audio or video file (see FileTranscriber).
+    var source: RecordSource?
+    /// The name of the file it was transcribed from.
+    var sourceName: String?
 
     /// Where the wait after the key was released went, in seconds.
     struct Timing: Codable, Equatable {
@@ -33,6 +82,19 @@ struct DictationRecord: Codable, Identifiable, Equatable {
         var polish: Double?
         var polishModel: String?
         var usedBackup: Bool?
+        /// The last segment's transcript came from a speculative tail, sent while the speaker paused before letting go.
+        var speculativeTail: Bool?
+        /// The speech-to-text route that answered the last segment transcribed: "primary" or "backup".
+        var lastChunkRoute: String?
+        /// How long the clean-up taken over at release had been running by then (started while the speaker paused).
+        var polishHeadStart: Double?
+        /// The clean-up was sent the text around the cursor to spell names by (see CursorContext); the text isn't kept.
+        var usedContext: Bool?
+        /// Release → the text ready and handed over for delivery (focus is checked, then it's pasted or copied at once).
+        var delivered: Double?
+        /// "pasted"; "copied" (focus wasn't a text field); "failed" (the paste didn't land, or wasn't allowed; the text
+        /// is on the clipboard).
+        var delivery: String?
 
         /// "转写 0.8 秒 · 整理 1.2 秒（首字 0.4 秒，备用 deepseek/…）"
         var summary: String? {
@@ -46,6 +108,7 @@ struct DictationRecord: Codable, Identifiable, Equatable {
                 var detail: [String] = []
                 if let polishFirstToken { detail.append(L("首字 ", "first token ") + secs(polishFirstToken)) }
                 if let polishModel { detail.append((usedBackup == true ? L("备用 ", "backup ") : "") + polishModel) }
+                if usedContext == true { detail.append(L("参考了光标附近的文字", "with text around the cursor")) }
                 parts.append(L("整理 ", "Clean-up ") + secs(polish)
                              + (detail.isEmpty ? "" : L("（", " (") + detail.joined(separator: L("，", ", ")) + L("）", ")")))
             }
@@ -53,12 +116,26 @@ struct DictationRecord: Codable, Identifiable, Equatable {
         }
     }
 
-    /// What was (or would be) inserted.
+    /// What the speaker said: cleaned up, or as transcribed. Word counts go by it, not by what snippets put in.
     var finalText: String { polishedText ?? rawText }
+    /// What was (or would be) inserted: the final text with its snippets expanded.
+    var outputText: String { insertedText ?? finalText }
+
+    /// Transcribed from a file rather than dictated: never pasted, and not in the Home page's dictation totals.
+    var isFile: Bool { source == .file }
 
     var folder: URL { AppPaths.sessions.appendingPathComponent(id, isDirectory: true) }
     var audioURL: URL { folder.appendingPathComponent("audio.wav") }
+    /// Where a file's sound is written while it's read; renamed to `audioURL` once all of it is there.
+    var partialAudioURL: URL { folder.appendingPathComponent("audio.partial.wav") }
     var hasAudio: Bool { FileManager.default.fileExists(atPath: audioURL.path) }
+
+    /// This dictation as History exports it. A record keeps no time zone, so its time is written in this Mac's, with the
+    /// offset that zone had on that date.
+    var exportEntry: HistoryExport.Entry {
+        HistoryExport.Entry(date: date, utcOffsetMinutes: HistoryExport.utcOffsetMinutes(at: date, in: .current), duration: duration,
+                            status: status.rawValue, finalText: finalText, rawText: rawText, cost: cost)
+    }
 }
 
 /// How long finished dictations are kept. The recording is the big part (about 1.9 MB per minute
@@ -93,10 +170,10 @@ enum HistoryRetention: String, CaseIterable, Identifiable {
     }
 }
 
-/// Every dictation is saved (audio + transcripts) so nothing is ever lost to a failure. Finished
-/// dictations older than the retention setting lose their recording; their text stays in History
-/// among the newest `minimumTextRecords`, and older ones are removed entirely. Failed dictations
-/// keep everything until retried or deleted, so they can always be re-sent.
+/// Every dictation is saved (audio + transcripts) so nothing is ever lost to a failure. What expires, by the
+/// retention setting and a cap on the recordings' total size, is decided by `HistoryPruning`: finished dictations
+/// lose their recording first and their text later; failed ones keep theirs for at least a month, so they can be
+/// re-sent.
 @MainActor
 final class HistoryStore: ObservableObject {
     static let shared = HistoryStore()
@@ -105,8 +182,10 @@ final class HistoryStore: ObservableObject {
     /// Bumped whenever files are written or removed, so views can refresh the storage figure.
     @Published private(set) var changeCount = 0
 
-    private let minimumTextRecords = 200
     private var retentionTimer: Timer?
+    /// Recording sizes by record ID (0 = none), measured once a dictation is over, since its recording doesn't change
+    /// after that: the size cap then doesn't look at every file on disk after each dictation.
+    private var audioSizes: [String: Int64] = [:]
 
     private init() {
         load()
@@ -120,7 +199,8 @@ final class HistoryStore: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         let id = formatter.string(from: Date()) + "-" + UUID().uuidString.prefix(4)
-        let record = DictationRecord(id: String(id), date: Date())
+        var record = DictationRecord(id: String(id), date: Date())
+        record.chunkLayout = Chunker.layout
         try? FileManager.default.createDirectory(at: record.folder, withIntermediateDirectories: true)
         records.insert(record, at: 0)
         save(record)
@@ -141,6 +221,7 @@ final class HistoryStore: ObservableObject {
     func delete(_ record: DictationRecord) {
         records.removeAll { $0.id == record.id }
         try? FileManager.default.removeItem(at: record.folder)
+        audioSizes[record.id] = nil
         changeCount += 1
     }
 
@@ -166,42 +247,35 @@ final class HistoryStore: ObservableObject {
         // on disk, so surface it as failed and retryable.
         for index in loaded.indices where loaded[index].status == .recording || loaded[index].status == .processing {
             loaded[index].status = .failed
-            loaded[index].error = L("上次运行中断（音频已保存，可重试）", "Interrupted last time (audio saved — you can retry)")
+            // Quit while a file was still being read: what was read of it is no use.
+            if loaded[index].isFile && !loaded[index].hasAudio { try? FileManager.default.removeItem(at: loaded[index].partialAudioURL) }
+            loaded[index].error = FileTranscription.interruptedMessage(isFile: loaded[index].isFile, hasAudio: loaded[index].hasAudio)
             save(loaded[index])
         }
         records = loaded
         applyRetention()
     }
 
-    /// Deletes what the retention setting says has expired.
+    /// Deletes what has expired by the retention setting, and the oldest recordings while they take more than
+    /// `HistoryPruning.audioBudget` (see HistoryPruning).
     func applyRetention() {
-        let retention = AppSettings.shared.historyRetention
-        let now = Date()
+        let entries = records.map { HistoryPruning.Entry(kind: $0.status.pruningKind, date: $0.date, audioBytes: audioBytes(of: $0)) }
+        let actions = HistoryPruning.plan(entries, maxAge: AppSettings.shared.historyRetention.maxAge)
         var kept: [DictationRecord] = []
         var changed = false
-        for (index, record) in records.enumerated() {
-            if record.status == .cancelled {
-                // A cancelled dictation is only a safety net: it goes a day after it was made, whatever the setting.
-                if CancelPolicy.isExpired(recordedAt: record.date, now: now) {
-                    try? FileManager.default.removeItem(at: record.folder)
-                    changed = true
-                } else {
-                    kept.append(record)
-                }
-                continue
-            }
-            let finished = record.status == .done || record.status == .polishFailed
-            let expired = retention.maxAge.map { now.timeIntervalSince(record.date) >= $0 } ?? false
-            guard finished, expired else { kept.append(record); continue }
-            if index >= minimumTextRecords {
-                try? FileManager.default.removeItem(at: record.folder)
-                changed = true
-            } else {
-                if record.hasAudio {
-                    try? FileManager.default.removeItem(at: record.audioURL)
-                    changed = true
-                }
+        for (record, action) in zip(records, actions) {
+            switch action {
+            case .keep:
                 kept.append(record)
+            case .removeAudio:
+                try? FileManager.default.removeItem(at: record.audioURL)
+                audioSizes[record.id] = 0
+                kept.append(record)
+                changed = true
+            case .remove:
+                try? FileManager.default.removeItem(at: record.folder)
+                audioSizes[record.id] = nil
+                changed = true
             }
         }
         // Runs after every dictation and hourly: publishing when nothing expired would redraw History and walk every
@@ -209,6 +283,14 @@ final class HistoryStore: ObservableObject {
         guard changed else { return }
         records = kept
         changeCount += 1
+    }
+
+    private func audioBytes(of record: DictationRecord) -> Int64 {
+        if let known = audioSizes[record.id] { return known }
+        let size = (try? FileManager.default.attributesOfItem(atPath: record.audioURL.path)[.size] as? NSNumber)?.int64Value ?? 0
+        // One still being recorded is measured again next time.
+        if record.status.pruningKind != .inProgress { audioSizes[record.id] = size }
+        return size
     }
 
     /// Bytes used by every saved dictation (recordings and transcripts).

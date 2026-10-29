@@ -1,6 +1,10 @@
 # Builds the Windows app in the cloud, since WinUI 3 only compiles on Windows, natively for x64 and for ARM64 (each
-# on its own runner): runs the tests (and, once, the performance budgets), then packages the portable zip and the
-# installer, and installs, starts and uninstalls the installer's app (download both from the run's Artifacts).
+# on its own runner): runs the tests (and, once, the performance budgets, except for a release tag), then packages the
+# portable zip and the installer, and installs, starts and uninstalls the installer's app (download both from the
+# run's Artifacts).
+#
+# The long steps have their own time limits, at least twice their longest recent runs, so a hung step fails in minutes
+# instead of holding the runner until the job's limit.
 #
 #   ci.yml calls it          when a push or pull request changes windows/
 #   release.yml calls it     for a version tag like `1.0.2` (together with the macOS build)
@@ -45,6 +49,7 @@ jobs:
       # The same script used locally: runs the tests, publishes the app and CLI self-contained, zips them.
       - name: Test, build and package
         id: build
+        timeout-minutes: 12 # 2-4 minutes
         shell: pwsh
         run: scripts/build.ps1 -Package -Arch ${{ matrix.arch }} *>&1 | Tee-Object -FilePath build.log
 
@@ -110,9 +115,11 @@ jobs:
 
       # Time budgets for the work that runs while you dictate and on the UI thread, in a Release build like the app's
       # (tests/TypelessCore.Tests/PerformanceTests.cs). The timings are on the run's summary page. Once is enough,
-      # on the x64 runner.
+      # on the x64 runner. Not for a release tag: the pull request that changed the code already met them, and a
+      # timing flake mustn't block a release.
       - name: Performance
-        if: matrix.arch == 'x64'
+        if: matrix.arch == 'x64' && !startsWith(github.ref, 'refs/tags/')
+        timeout-minutes: 5 # seconds
         shell: pwsh
         run: scripts/perf.ps1
 

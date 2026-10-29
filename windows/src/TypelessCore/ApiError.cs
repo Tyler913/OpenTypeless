@@ -57,6 +57,14 @@ public sealed class ApiException : Exception, IEquatable<ApiException>
 
     public bool IsCancelled => Kind == ApiErrorKind.Cancelled;
 
+    /// <summary>
+    /// The provider turns every request down this way (no key or a bad one, no credit, no such model or endpoint), not
+    /// just this one: a file being transcribed stops at the first such failure rather than sending the rest.
+    /// </summary>
+    public bool RefusesEveryRequest => Kind == ApiErrorKind.MissingApiKey || (Kind == ApiErrorKind.Http && Status is 401 or 402 or 403 or 404);
+
+    public bool IsTimeout => Kind == ApiErrorKind.Timeout;
+
     public static ApiException From(Exception error)
     {
         switch (error)
@@ -98,7 +106,11 @@ public sealed class ApiException : Exception, IEquatable<ApiException>
     public override string ToString() => $"{Kind}({Status}) {Detail}";
 }
 
-public sealed record RetryPolicy(int MaxAttempts = 4, double BaseDelay = 1.0)
+/// <param name="RetriesTimeouts">
+/// False where a second wait as long as the first would cost more than it could win back: the clean-up, whose
+/// transcript can go in as spoken instead.
+/// </param>
+public sealed record RetryPolicy(int MaxAttempts = 4, double BaseDelay = 1.0, bool RetriesTimeouts = true)
 {
     /// <summary>1s, 2s, 4s … with ±20% jitter so parallel chunks don't retry in lockstep.</summary>
     public double Delay(int afterAttempt)
@@ -121,7 +133,8 @@ public sealed record RetryPolicy(int MaxAttempts = 4, double BaseDelay = 1.0)
             catch (Exception error)
             {
                 var apiError = ApiException.From(error);
-                if (!apiError.IsRetryable || attempt >= MaxAttempts || cancellationToken.IsCancellationRequested)
+                if (!apiError.IsRetryable || (!RetriesTimeouts && apiError.IsTimeout) || attempt >= MaxAttempts
+                    || cancellationToken.IsCancellationRequested)
                 {
                     throw apiError;
                 }

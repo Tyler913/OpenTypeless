@@ -394,7 +394,7 @@ final class EditWatcher {
     }
 
     /// An everyday English word, per the system spelling dictionary.
-    private static func isCommonWord(_ word: String) -> Bool {
+    static func isCommonWord(_ word: String) -> Bool {
         let checker = NSSpellChecker.shared
         return checker.checkSpelling(of: word.lowercased(), startingAt: 0, language: "en",
                                      wrap: false, inSpellDocumentWithTag: 0, wordCount: nil).location == NSNotFound

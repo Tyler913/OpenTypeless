@@ -25,7 +25,7 @@ cd "$(dirname "$0")/.."
 
 APP_NAME="OpenTypeless"
 BUNDLE_ID="local.opentypeless.app"
-VERSION="1.4.4"
+VERSION="2.0.0"
 IDENTITY_NAME="OpenTypeless Dev"
 INSTALLED="/Applications/$APP_NAME.app"
 STAGING_DIR=".build/app-staging"
@@ -74,6 +74,16 @@ cat > "$STAGED/Contents/Info.plist" <<PLIST
     <string>OpenTypeless records your voice to turn it into text.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>With Live preview on, OpenTypeless shows what you say as you talk, recognised on this Mac.</string>
+    <!-- "Open With" for audio and video files, which History offers to transcribe; never the default app for them. -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key><string>Audio or video</string>
+            <key>CFBundleTypeRole</key><string>Viewer</string>
+            <key>LSHandlerRank</key><string>Alternate</string>
+            <key>LSItemContentTypes</key><array><string>public.audio</string><string>public.movie</string></array>
+        </dict>
+    </array>
 </dict>
 </plist>
 PLIST

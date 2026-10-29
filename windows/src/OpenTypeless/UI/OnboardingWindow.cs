@@ -377,7 +377,7 @@ public sealed class OnboardingWindow : Window
 
     private FrameworkElement ProviderStep()
     {
-        _key = _settings.ApiKey(_provider);
+        _key = _settings.SavedApiKey(_provider);
         var panel = StepPanel(22);
         panel.Children.Add(Header(L("连接服务商", "Connect a provider"),
             L("录音会用你自己的 API Key 发给你选的服务商转写和整理。推荐 OpenRouter：一个 Key 就能同时用于两步。",
@@ -598,7 +598,7 @@ public sealed class OnboardingWindow : Window
         {
             case DictationStatus.Done or DictationStatus.PolishFailed:
                 _tryError = null;
-                if (string.IsNullOrWhiteSpace(_tryText) && _tryBox != null) _tryBox.Text = latest.FinalText;
+                if (string.IsNullOrWhiteSpace(_tryText) && _tryBox != null) _tryBox.Text = latest.OutputText;
                 break;
             case DictationStatus.Failed:
                 _tryError = latest.Error;

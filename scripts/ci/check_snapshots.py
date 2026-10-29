@@ -9,7 +9,7 @@ from pathlib import Path
 
 from PIL import Image
 
-PAGES = ("home", "general", "shortcut", "providers", "models", "style", "history")
+PAGES = ("home", "general", "shortcut", "providers", "models", "style", "apps", "history")
 HUD_STATES = ("recording", "working", "copied", "learned", "error")
 
 

@@ -20,6 +20,11 @@ public static class TextInserter
         Pasted,
         /// <summary>Ctrl+V was sent but nothing read the text; it's on the clipboard.</summary>
         NotPasted,
+        /// <summary>
+        /// The paste was no longer wanted when Ctrl+V was due, so it wasn't sent; the clipboard is as it was (or holds
+        /// the text, when it wasn't to be restored).
+        /// </summary>
+        Skipped,
     }
 
     /// <summary>The window that owns our clipboard writes (the tray's message window), and receives WM_RENDERFORMAT.</summary>
@@ -31,7 +36,8 @@ public static class TextInserter
     /// <summary>The text on offer while a paste is in flight. UI thread only (the owner window lives there).</summary>
     private sealed class Promise(string text)
     {
-        public string Text { get; } = text;
+        /// <summary>What a read gets: the text, or its plain version once it no longer suits the cursor.</summary>
+        public string Text { get; set; } = text;
         /// <summary>Ctrl+V has been sent. A read before that is a clipboard monitor, not the paste.</summary>
         public bool Armed { get; set; }
         public bool Requested { get; set; }
@@ -41,13 +47,26 @@ public static class TextInserter
 
     private static Promise? _promise;
 
-    public static async Task<Outcome> Insert(string text, bool restoreClipboard)
+    /// <param name="shouldPaste">
+    /// Asked before the clipboard is touched, and again right before Ctrl+V goes out (the dictation may have been
+    /// cancelled, or focus moved, while the clipboard was being prepared).
+    /// </param>
+    /// <param name="fallback">
+    /// The plain version of <paramref name="text"/>, when that was fitted to the text around the cursor (see
+    /// InsertionJoiner): what's left on the clipboard whenever the text stays there, and what's pasted after all when
+    /// <paramref name="stillFits"/>, asked right before Ctrl+V, says the cursor has moved since.
+    /// </param>
+    public static async Task<Outcome> Insert(string text, bool restoreClipboard, Func<bool>? shouldPaste = null,
+                                             string? fallback = null, Func<Task<bool>>? stillFits = null)
     {
+        var plain = fallback ?? text;
+        if (shouldPaste?.Invoke() == false) return Outcome.Skipped;
         if (ClipboardOwner == 0)
         {
             // No owner window (never in the app itself): paste eagerly and assume it landed.
-            ClipboardSnapshot.SetText(text, transient: false);
+            ClipboardSnapshot.SetText(plain != text && stillFits != null && !await stillFits() ? plain : text, transient: false);
             await Task.Delay(60);
+            if (shouldPaste?.Invoke() == false) return Outcome.Skipped;
             PostControlV();
             return Outcome.Pasted;
         }
@@ -57,13 +76,23 @@ public static class TextInserter
         _promise = null;
         if (!ClipboardSnapshot.OfferText(ClipboardOwner))
         {
-            CopyToClipboard(text);
+            CopyToClipboard(plain);
             return Outcome.NotPasted;
         }
         var promise = new Promise(text) { Sequence = Win32.GetClipboardSequenceNumber() };
         _promise = promise;
 
         await Task.Delay(60);
+        if (plain != text && stillFits != null && !await stillFits()) promise.Text = plain;
+        if (shouldPaste?.Invoke() == false)
+        {
+            if (_promise == promise && Win32.GetClipboardSequenceNumber() == promise.Sequence)
+            {
+                _promise = null;
+                if (saved != null) saved.Restore(); else CopyToClipboard(plain);
+            }
+            return Outcome.Skipped;
+        }
         promise.Armed = true;
         PostControlV();
 
@@ -82,25 +111,39 @@ public static class TextInserter
             await Task.Delay(150);
             if (_promise != promise || Win32.GetClipboardSequenceNumber() != promise.Sequence) return Outcome.Pasted;
             _promise = null;
-            if (saved != null) saved.Restore(); else CopyToClipboard(text);
+            if (saved != null) saved.Restore(); else CopyToClipboard(plain);
             return Outcome.Pasted;
         }
         // Nothing pasted: replace the promise with a plain copy so the text stays available (and
         // clipboard history may record it) after this app stops serving it.
         _promise = null;
-        CopyToClipboard(text);
+        CopyToClipboard(plain);
         return Outcome.NotPasted;
     }
 
     public static void CopyToClipboard(string text) => ClipboardSnapshot.SetText(text, transient: false);
 
-    /// <summary>Presses Enter in the foreground app, after a paste, to send what was inserted.</summary>
-    public static async Task PressEnter()
+    /// <summary>
+    /// Presses Enter in the foreground app, with <paramref name="modifiers"/> held (Shift + Enter, Ctrl + Enter; only those
+    /// two), after a paste, to send what was inserted, unless <paramref name="shouldPress"/> says it's no longer wanted by
+    /// then. Returns whether it was pressed.
+    /// </summary>
+    public static async Task<bool> PressEnter(Func<bool>? shouldPress = null, HotkeyModifiers modifiers = HotkeyModifiers.None)
     {
         // Let the app take in the pasted text first (web apps update their state asynchronously).
         await Task.Delay(120);
-        var inputs = new[] { Win32.Key(Win32.VK_RETURN, up: false), Win32.Key(Win32.VK_RETURN, up: true) };
-        Win32.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Win32.INPUT>());
+        if (shouldPress?.Invoke() == false) return false;
+        // The modifiers go down around Enter, as a keyboard sends them: a key event here carries none of its own.
+        var held = new List<ushort>();
+        if (modifiers.HasFlag(HotkeyModifiers.Control)) held.Add(Win32.VK_CONTROL);
+        if (modifiers.HasFlag(HotkeyModifiers.Shift)) held.Add(Win32.VK_SHIFT);
+        var inputs = new List<Win32.INPUT>();
+        foreach (var vk in held) inputs.Add(Win32.Key(vk, up: false));
+        inputs.Add(Win32.Key(Win32.VK_RETURN, up: false));
+        inputs.Add(Win32.Key(Win32.VK_RETURN, up: true));
+        for (var i = held.Count - 1; i >= 0; i--) inputs.Add(Win32.Key(held[i], up: true));
+        Win32.SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<Win32.INPUT>());
+        return true;
     }
 
     /// <summary>
@@ -168,7 +211,7 @@ public static class TextInserter
 
     /// <summary>
     /// The text selected in the foreground app, read by pressing Ctrl+C; the clipboard is put back as it was. Null when
-    /// nothing was copied (no selection, or the app didn't answer).
+    /// nothing was copied within 400 ms (no selection, or the app didn't answer).
     /// </summary>
     public static async Task<string?> CopySelection()
     {
@@ -184,7 +227,14 @@ public static class TextInserter
         Win32.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Win32.INPUT>());
         var clock = Stopwatch.StartNew();
         while (Win32.GetClipboardSequenceNumber() == before && clock.ElapsedMilliseconds < 400) await Task.Delay(20);
-        if (Win32.GetClipboardSequenceNumber() == before) return null;
+        if (Win32.GetClipboardSequenceNumber() == before)
+        {
+            // An app that copies only just after that still has the clipboard put back (a moment later), so its copy is
+            // never left there to be taken for the user's own clipboard.
+            await Task.Delay(250);
+            if (Win32.GetClipboardSequenceNumber() != before) saved.Restore();
+            return null;
+        }
         await Task.Delay(30); // let the app finish writing its formats
         var text = ClipboardSnapshot.ReadText();
         saved.Restore();

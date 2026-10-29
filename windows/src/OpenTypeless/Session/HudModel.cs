@@ -15,6 +15,8 @@ public abstract record HudPhase
     public sealed record Copied : HudPhase;
     /// <summary>New words were learned from the user's fixes to the last dictation.</summary>
     public sealed record Learned(string Terms) : HudPhase;
+    /// <summary>The answer to a question about the selection (see <see cref="SelectionCommand.Reply"/>), also on the clipboard.</summary>
+    public sealed record Answer(string Text) : HudPhase;
     public sealed record Error(string Message) : HudPhase;
 }
 
@@ -24,6 +26,20 @@ public sealed class HudModel
     public event Action? PhaseChanged;
     public event Action? LevelsChanged;
     public event Action? PreviewChanged;
+    public event Action? BadgeChanged;
+
+    private string? _badge;
+    /// <summary>The mode the dictation is in, when it isn't plain dictation ("→ EN" for a translation into English).</summary>
+    public string? Badge
+    {
+        get => _badge;
+        set
+        {
+            if (_badge == value) return;
+            _badge = value;
+            BadgeChanged?.Invoke();
+        }
+    }
 
     private string _preview = "";
     /// <summary>Live preview of what's being said (empty when it's off or hasn't heard anything yet).</summary>

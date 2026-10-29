@@ -15,29 +15,46 @@ enum TextInserter {
         case notPasted
         /// No Accessibility permission to send ⌘V; the text is on the clipboard.
         case noPermission
+        /// The paste was no longer wanted when ⌘V was due, so it wasn't sent; the clipboard is as it was.
+        case skipped
     }
 
     private static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
     /// How long to wait for the target app to read the pasteboard after ⌘V.
     private static let pasteTimeout: Duration = .milliseconds(1200)
+    /// A bigger clipboard (a huge copied image) isn't kept for putting back: copying it would stall the paste.
+    private static let maxSnapshotBytes = 64 * 1024 * 1024
 
     private final class PasteTracker: NSObject, NSPasteboardItemDataProvider {
-        let text: String
+        /// What a read gets: the text, or its plain version once it no longer suits the cursor.
+        var text: String
+        /// ⌘V has been sent. A read before that is a clipboard manager, not the paste.
+        var armed = false
         var requested = false
 
         init(text: String) { self.text = text }
 
         func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem,
                         provideDataForType type: NSPasteboard.PasteboardType) {
-            requested = true
+            // Provided once, the data stays on the pasteboard: a later read by the target app is invisible, so an
+            // early read by a clipboard manager ends up as "not pasted", which keeps the text on the clipboard.
+            if armed { requested = true }
             item.setString(text, forType: type)
         }
     }
 
+    /// `shouldPaste` is asked before the clipboard is touched, and again right before ⌘V goes out (the dictation may have
+    /// been cancelled, or focus moved, while the clipboard was being prepared). `fallback` is the plain version of `text`,
+    /// when that was fitted to the text around the cursor (see InsertionJoiner): what's left on the clipboard whenever
+    /// the text stays there, and what's pasted after all when `stillFits`, asked right before ⌘V, says the cursor has
+    /// moved since.
     @MainActor
-    static func insert(_ text: String, restoreClipboard: Bool) async -> Outcome {
+    static func insert(_ text: String, fallback: String? = nil, restoreClipboard: Bool,
+                       shouldPaste: () -> Bool = { true }, stillFits: () -> Bool = { true }) async -> Outcome {
+        let plain = fallback ?? text
+        guard shouldPaste() else { return .skipped }
         guard AXIsProcessTrusted() else {
-            copyToClipboard(text)
+            copyToClipboard(plain)
             return .noPermission
         }
         let pasteboard = NSPasteboard.general
@@ -52,32 +69,41 @@ enum TextInserter {
         pasteboard.writeObjects([item])
         let ourChange = pasteboard.changeCount
 
-        try? await Task.sleep(for: .milliseconds(60))
+        await pause(.milliseconds(60))
+        if plain != text, !stillFits() { tracker.text = plain }
+        guard shouldPaste() else {
+            if pasteboard.changeCount == ourChange {
+                pasteboard.clearContents()
+                if !saved.isEmpty { pasteboard.writeObjects(saved) }
+            }
+            return .skipped
+        }
+        tracker.armed = true
         postCommandV()
 
         let clock = ContinuousClock()
         let deadline = clock.now + pasteTimeout
         while !tracker.requested, clock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(20))
+            await pause(.milliseconds(20))
         }
         // Someone else changed the clipboard meanwhile: leave their content alone.
         guard pasteboard.changeCount == ourChange else { return tracker.requested ? .pasted : .notPasted }
 
         if tracker.requested {
             // Let the app finish reading any other representations before swapping the clipboard.
-            try? await Task.sleep(for: .milliseconds(150))
+            await pause(.milliseconds(150))
             guard pasteboard.changeCount == ourChange else { return .pasted }
             if restoreClipboard {
                 pasteboard.clearContents()
                 if !saved.isEmpty { pasteboard.writeObjects(saved) }
             } else {
-                copyToClipboard(text)
+                copyToClipboard(plain)
             }
             return .pasted
         }
         // Nothing pasted: replace the promise with a plain copy so the text stays available (and
         // clipboard managers may record it) after this app stops serving it.
-        copyToClipboard(text)
+        copyToClipboard(plain)
         return .notPasted
     }
 
@@ -86,41 +112,75 @@ enum TextInserter {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
-    /// Presses Return in the frontmost app, after a paste, to send what was inserted.
+    /// Presses Return in the frontmost app, with `flags` held (⇧Return, ⌘Return), after a paste, to send what was
+    /// inserted, unless `shouldPress` says it's no longer wanted by then. Returns whether it was pressed.
     @MainActor
-    static func pressReturn() async {
+    static func pressReturn(flags: CGEventFlags = [], if shouldPress: () -> Bool = { true }) async -> Bool {
         // Let the app take in the pasted text first (web apps update their state asynchronously).
-        try? await Task.sleep(for: .milliseconds(120))
-        postKey(CGKeyCode(kVK_Return), flags: [])
+        await pause(.milliseconds(120))
+        guard shouldPress() else { return false }
+        postKey(CGKeyCode(kVK_Return), flags: flags)
+        return true
+    }
+
+    /// Waits even when the dictation was cancelled meanwhile: a cancelled `Task.sleep` returns at once, which would turn
+    /// the wait for the paste into a busy loop on the main thread, and once ⌘V is out the clipboard still has to be put back.
+    private static func pause(_ duration: Duration) async {
+        await Task { try? await Task.sleep(for: duration) }.value
     }
 
     /// The text selected in the frontmost app, read by pressing ⌘C; the clipboard is put back as it was. nil when nothing
     /// was copied (no selection, or the app didn't answer).
     @MainActor
     static func copySelection() async -> String? {
+        await copySelection(by: {
+            postKey(CGKeyCode(kVK_ANSI_C), flags: .maskCommand)
+            return true
+        })
+    }
+
+    /// The text `copy` puts on the clipboard (false: it couldn't be done), the clipboard put back as it was. The
+    /// clipboard's change count tells a copy from no copy, also one of the very text that was there before. nil when
+    /// nothing was copied within 400 ms; an app that copies only just after that still has the clipboard put back (a
+    /// moment later), so its copy is never left there to be taken for the user's own clipboard.
+    @MainActor
+    static func copySelection(by copy: () async -> Bool) async -> String? {
         let pasteboard = NSPasteboard.general
         let saved = snapshot(pasteboard)
         let before = pasteboard.changeCount
-        postKey(CGKeyCode(kVK_ANSI_C), flags: .maskCommand)
+        guard await copy() else { return nil }
         let clock = ContinuousClock()
         let deadline = clock.now + .milliseconds(400)
         while pasteboard.changeCount == before, clock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(20))
+            // Not `Task.sleep`, which returns at once in a cancelled task (Esc while the selection is read).
+            await pause(.milliseconds(20))
         }
-        guard pasteboard.changeCount != before else { return nil }
+        if pasteboard.changeCount == before {
+            await pause(.milliseconds(250))
+            guard pasteboard.changeCount != before else { return nil }
+            pasteboard.clearContents()
+            if !saved.isEmpty { pasteboard.writeObjects(saved) }
+            return nil
+        }
         let text = pasteboard.string(forType: .string)
         pasteboard.clearContents()
         if !saved.isEmpty { pasteboard.writeObjects(saved) }
         return text
     }
 
+    /// A copy of every type on the clipboard, up to `maxSnapshotBytes` in all; types beyond that are left out (and items
+    /// left with none). The pasteboard has no way to tell a type's size before reading it, so a huge one is still read
+    /// once, but it isn't kept or written back.
     private static func snapshot(_ pasteboard: NSPasteboard) -> [NSPasteboardItem] {
-        (pasteboard.pasteboardItems ?? []).map { item in
+        var total = 0
+        return (pasteboard.pasteboardItems ?? []).compactMap { item in
             let copy = NSPasteboardItem()
             for type in item.types {
-                if let data = item.data(forType: type) { copy.setData(data, forType: type) }
+                guard let data = item.data(forType: type), total + data.count <= maxSnapshotBytes else { continue }
+                copy.setData(data, forType: type)
+                total += data.count
             }
-            return copy
+            return copy.types.isEmpty ? nil : copy
         }
     }
 
@@ -128,13 +188,19 @@ enum TextInserter {
         postKey(CGKeyCode(kVK_ANSI_V), flags: .maskCommand)
     }
 
+    /// Marks the key events this app posts (`eventSourceUserData`), so its own event tap lets them through untouched:
+    /// a ⌘V set as an action's shortcut must not swallow the paste of a dictation. The Windows app tags its keys the same.
+    static let eventSignature: Int64 = 0x4F544C53 // "OTLS"
+
     /// Explicit flags, so a modifier still held (or stuck) doesn't turn the key into a shortcut.
     private static func postKey(_ key: CGKeyCode, flags: CGEventFlags) {
         let source = CGEventSource(stateID: .privateState)
         guard let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true),
               let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) else { return }
-        down.flags = flags
-        up.flags = flags
+        for event in [down, up] {
+            event.flags = flags
+            event.setIntegerValueField(.eventSourceUserData, value: eventSignature)
+        }
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
     }

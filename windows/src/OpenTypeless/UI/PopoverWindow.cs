@@ -31,6 +31,11 @@ public sealed class PopoverWindow : Window
     private DateTimeOffset _hiddenAt = DateTimeOffset.MinValue;
     private string? _copiedId;
     private (Updater.UpdatePhase, bool) _updateState;
+    /// <summary>
+    /// The window in front before the panel opened, where "Paste last dictation" goes; 0 when that was this app, the
+    /// desktop or the taskbar (a click on the tray icon may already have made the taskbar the window in front).
+    /// </summary>
+    private nint _windowBefore;
 
     public nint Hwnd { get; }
     public bool IsOpen { get; private set; }
@@ -86,6 +91,11 @@ public sealed class PopoverWindow : Window
     public void Open(Win32.RECT anchor)
     {
         _anchor = anchor;
+        var front = Win32.GetForegroundWindow();
+        Win32.GetWindowThreadProcessId(front, out var owner);
+        _windowBefore = owner == (uint)Environment.ProcessId
+                        || Win32.ClassName(front) is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" or "Progman" or "WorkerW"
+            ? 0 : front;
         _root.Children.Clear();
         _root.Children.Add(BuildContent());
         IsOpen = true;
@@ -267,16 +277,18 @@ public sealed class PopoverWindow : Window
         return null;
     }
 
+    /// <summary>The last dictation, when it failed. A transcribed file is retried from History instead: its text is never pasted.</summary>
     private DictationRecord? FailedRecord()
     {
         if (_controller.State != SessionController.SessionState.Idle) return null;
         var last = _history.Records.FirstOrDefault();
-        return last is { Status: DictationStatus.Failed, HasAudio: true } ? last : null;
+        // An edit of a selection can't be run again without its selection.
+        return last is { Status: DictationStatus.Failed, HasAudio: true, IsFile: false, IsCommand: false } ? last : null;
     }
 
     private FrameworkElement Recent()
     {
-        var records = _history.Records.Where(r => r.FinalText.Length > 0).Take(5).ToList();
+        var records = _history.Records.Where(r => r.OutputText.Length > 0).Take(5).ToList();
         var stack = new StackPanel { Spacing = 6 };
         var header = new Grid { Padding = new Thickness(4, 0, 4, 0) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -311,7 +323,7 @@ public sealed class PopoverWindow : Window
     private Button RecentRow(DictationRecord record)
     {
         var copied = _copiedId == record.Id;
-        var text = Ui.Text(record.FinalText, 13, wrap: true);
+        var text = Ui.Text(record.OutputText, 13, wrap: true);
         text.MaxLines = 2;
         text.TextTrimming = TextTrimming.CharacterEllipsis;
         var meta = Ui.Text($"{Formatting.ShortStamp(record.Date)} · {Formatting.DurationLabel(record.Duration)}", 11, foreground: Ui.Tertiary);
@@ -334,10 +346,10 @@ public sealed class PopoverWindow : Window
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
         };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, record.FinalText);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, record.OutputText);
         button.Click += (_, _) =>
         {
-            TextInserter.CopyToClipboard(record.FinalText);
+            TextInserter.CopyToClipboard(record.OutputText);
             _copiedId = record.Id;
             RefreshIfOpen();
             var timer = DispatcherQueue.CreateTimer();
@@ -361,6 +373,7 @@ public sealed class PopoverWindow : Window
         var grid = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 2, 0, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -381,10 +394,28 @@ public sealed class PopoverWindow : Window
         Grid.SetColumn(history, 1);
         grid.Children.Add(history);
 
+        // Puts the newest dictation at the cursor of the window that had focus before the panel opened; its tooltip shows
+        // the shortcut, when there is one.
+        var action = ShortcutAction.PasteLastDictation;
+        var pasteLast = new Button
+        {
+            Content = Ui.Icon(Glyphs.Paste, 14),
+            IsEnabled = _controller.State == SessionController.SessionState.Idle && _history.Records.Count > 0,
+        };
+        Ui.Label(pasteLast, action.Title());
+        ToolTipService.SetToolTip(pasteLast, action.Title() + (_settings.Shortcut(action) is { } shortcut ? $" ({shortcut.DisplayName})" : ""));
+        pasteLast.Click += (_, _) =>
+        {
+            Dismiss();
+            _controller.PasteLastDictation(null, _windowBefore);
+        };
+        Grid.SetColumn(pasteLast, 2);
+        grid.Children.Add(pasteLast);
+
         var quit = new Button { Content = Ui.Icon(Glyphs.Power, 14) };
         Ui.Label(quit, L("退出 OpenTypeless", "Quit OpenTypeless"));
         quit.Click += (_, _) => _quit();
-        Grid.SetColumn(quit, 3);
+        Grid.SetColumn(quit, 4);
         grid.Children.Add(quit);
         return grid;
     }

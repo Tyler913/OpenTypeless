@@ -13,9 +13,24 @@ public struct PolishOptions: Sendable {
     /// The OpenRouter host (an endpoint tag such as "groq" or "deepinfra/fp8") the user wants this model served by;
     /// nil lets OpenRouter pick the fastest.
     public var host: String?
+    /// Translate into this language instead of cleaning up (see `Prompts.translateSystemPrompt`).
+    public var translation: TranslationTarget?
+    /// Edit this selected text by the transcript, a spoken instruction, instead of cleaning the transcript up (see
+    /// `Prompts.commandSystemPrompt`).
+    public var selection: String?
+    /// The text around the speaker's cursor, sent after the transcript to spell names by (see CursorContext); nil for none.
+    /// A clean-up's only: a translation or an edit goes without it.
+    public var context: String?
+    /// Called as a request that carries `context` goes out (each attempt), so History can say it was sent.
+    public var onContextSent: (@Sendable () -> Void)?
+    /// The transcripts' line breaks were dictated (see `SpokenLayout`): the prompt then asks to keep them, for a transcript
+    /// (or part of one) that has any.
+    public var dictatedLineBreaks: Bool
 
     public init(model: String, vocabulary: [String] = [], misheard: [Correction] = [], extraInstructions: String = "",
-                modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil) {
+                modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil,
+                translation: TranslationTarget? = nil, selection: String? = nil, context: String? = nil,
+                onContextSent: (@Sendable () -> Void)? = nil, dictatedLineBreaks: Bool = false) {
         self.model = model
         self.vocabulary = vocabulary
         self.misheard = misheard
@@ -23,6 +38,11 @@ public struct PolishOptions: Sendable {
         self.modelInfo = modelInfo
         self.systemPromptOverride = systemPromptOverride
         self.host = host
+        self.translation = translation
+        self.selection = selection
+        self.context = context
+        self.onContextSent = onContextSent
+        self.dictatedLineBreaks = dictatedLineBreaks
     }
 }
 
@@ -51,7 +71,8 @@ public struct SSEParser {
         case content(String)
         case finished(reason: String?)
         case done
-        case error(String)
+        /// An error object in the stream, with the HTTP status its `code` gives, if any.
+        case error(String, status: Int? = nil)
         /// The token counts (and on OpenRouter the cost), sent in the last chunk.
         case usage(RequestUsage)
     }
@@ -67,7 +88,7 @@ public struct SSEParser {
         guard let data = payload.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
         if object["error"] != nil {
-            return [.error(APIClient.errorMessage(from: data))]
+            return [.error(APIClient.errorMessage(from: data), status: APIClient.errorStatus(from: data))]
         }
         var events: [Event] = []
         if let usage = RequestUsage.parse(object["usage"]) { events.append(.usage(usage)) }
@@ -109,22 +130,43 @@ extension APIClient {
         return routing
     }
 
+    /// The system prompt and the user message a clean-up (or translation) of `transcript` sends, or an edit of the
+    /// options' selection by it.
+    static func polishMessages(transcript: String, options: PolishOptions) -> [String] {
+        if let selection = options.selection {
+            return [options.systemPromptOverride ?? Prompts.commandSystemPrompt(
+                        vocabulary: options.vocabulary, misheard: options.misheard,
+                        extraInstructions: options.extraInstructions),
+                    Prompts.commandUserMessage(selection: selection, instruction: transcript)]
+        }
+        if let target = options.translation {
+            return [options.systemPromptOverride ?? Prompts.translateSystemPrompt(
+                        target: target, vocabulary: options.vocabulary, misheard: options.misheard,
+                        extraInstructions: options.extraInstructions),
+                    Prompts.translateUserMessage(transcript: transcript, target: target)]
+        }
+        return [options.systemPromptOverride ?? Prompts.polishSystemPrompt(
+                    vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions,
+                    dictatedLineBreaks: options.dictatedLineBreaks && transcript.contains(where: \.isNewline)),
+                Prompts.polishUserMessage(transcript: transcript, context: options.context)]
+    }
+
     /// Builds the chat request body. Optional tuning parameters are only sent where they're known to
     /// be accepted: OpenRouter normalises them for every model, while e.g. OpenAI's reasoning models
     /// reject `temperature`.
     func polishBody(transcript: String, options: PolishOptions, includeOptional: Bool) -> [String: Any] {
+        let messages = Self.polishMessages(transcript: transcript, options: options)
         var body: [String: Any] = [
             "model": options.model,
             "stream": true,
             "messages": [
-                ["role": "system", "content": options.systemPromptOverride ?? Prompts.polishSystemPrompt(
-                    vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions)],
-                ["role": "user", "content": Prompts.polishUserMessage(transcript: transcript)],
+                ["role": "system", "content": messages[0]],
+                ["role": "user", "content": messages[1]],
             ],
         ]
         guard includeOptional else { return body }
         if isOpenRouter {
-            body["max_tokens"] = max(1024, transcript.count * 3)
+            body["max_tokens"] = Self.maxTokens(transcript: transcript, options: options)
             body["provider"] = Self.polishRouting(host: options.host)
             if let reasoning = ReasoningConfig.body(for: options.modelInfo) { body["reasoning"] = reasoning }
             if options.modelInfo?.supportedParameters.contains("temperature") ?? true { body["temperature"] = 0.2 }
@@ -138,19 +180,42 @@ extension APIClient {
         return body
     }
 
+    /// Room for the answer: three tokens a character of what is to be rewritten (the transcript, or an edit's selection,
+    /// which can be long and come back longer still: "translate this into Japanese"), within what models can write.
+    static func maxTokens(transcript: String, options: PolishOptions) -> Int {
+        guard let selection = options.selection else { return max(1024, transcript.count * 3) }
+        return min(16_384, max(1024, (selection.count + transcript.count) * 3))
+    }
+
+    /// How long a clean-up may take in all: long enough for a slow provider to stream the whole answer out, and short
+    /// enough that a stuck one gives the dictation back (as spoken) within a minute or two rather than four.
+    public static func polishTimeout(for transcript: String) -> Double {
+        min(120, 20 + Double(transcript.count) * 0.05)
+    }
+
+    /// Clean-up models start answering within a second or two. OpenRouter sends keep-alive comments while a model is
+    /// queued or slow to start, which keep the idle timeout from ever firing, so the first word has a deadline of its own.
+    public static let polishFirstTokenTimeout: Double = 10
+
     /// Streams a clean-up completion. Liveness is judged by an *idle* timeout (no bytes for
     /// `idleTimeout` seconds) rather than a short total timeout, so long dictations that take a while
-    /// to stream out are never killed mid-way. `totalTimeout` is only a runaway guard.
+    /// to stream out are never killed mid-way. `totalTimeout` (by default `polishTimeout(for:)`) is only a runaway
+    /// guard; the first content must arrive within `firstTokenTimeout`. All three end in `APIError.timeout`.
     public func polish(
         transcript: String,
         options: PolishOptions,
         idleTimeout: Double = 25,
-        totalTimeout: Double = 240,
+        totalTimeout: Double? = nil,
+        firstTokenTimeout: Double = APIClient.polishFirstTokenTimeout,
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> PolishResult {
+        // An edit streams out its selection rewritten, so that is what takes time.
+        let limits = StreamLimits(idle: idleTimeout,
+                                  total: totalTimeout ?? Self.polishTimeout(for: (options.selection ?? "") + transcript),
+                                  firstToken: firstTokenTimeout)
         do {
             return try await streamPolish(transcript: transcript, options: options, includeOptional: true,
-                                          idleTimeout: idleTimeout, totalTimeout: totalTimeout, onPartial: onPartial)
+                                          limits: limits, onPartial: onPartial)
         } catch let APIError.http(status, message) where status == 400 || status == 422 {
             // A server rejecting an optional parameter: retry with the bare minimum request.
             let lower = message.lowercased()
@@ -158,56 +223,120 @@ extension APIClient {
                    "unsupported", "unrecognized", "unknown"]
                 .contains(where: lower.contains) else { throw APIError.http(status: status, message: message) }
             return try await streamPolish(transcript: transcript, options: options, includeOptional: false,
-                                          idleTimeout: idleTimeout, totalTimeout: totalTimeout, onPartial: onPartial)
+                                          limits: limits, onPartial: onPartial)
         }
+    }
+
+    private struct StreamLimits: Sendable {
+        let idle: Double
+        let total: Double
+        let firstToken: Double
     }
 
     private func streamPolish(
         transcript: String, options: PolishOptions, includeOptional: Bool,
-        idleTimeout: Double, totalTimeout: Double, onPartial: (@Sendable (String) -> Void)?
+        limits: StreamLimits, onPartial: (@Sendable (String) -> Void)?
     ) async throws -> PolishResult {
-        var request = try request(path: "chat/completions", idleTimeout: idleTimeout)
+        var request = try request(path: "chat/completions", idleTimeout: limits.idle)
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         let body = polishBody(transcript: transcript, options: options, includeOptional: includeOptional)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let messages = (body["messages"] as? [[String: String]] ?? []).compactMap { $0["content"] }
+        let reminder = Prompts.reminder(translation: options.translation)
+        let selection = options.selection
+        let instruction = transcript
         let session = self.session
+        let answering = OnceFlag()
+        // Told as the request goes out (not when it's built, nor for one cancelled first), so History says so only when
+        // the text around the cursor really went to the provider.
+        let sentContext = options.translation == nil && options.selection == nil && Prompts.contextBlock(options.context) != nil
+        if sentContext, !Task.isCancelled { options.onContextSent?() }
 
-        return try await withTimeout(totalTimeout) { [request] in
-            let (bytes, response) = try await session.bytes(for: request)
-            guard let http = response as? HTTPURLResponse else { throw APIError.badResponse("no HTTP response") }
-            guard (200..<300).contains(http.statusCode) else {
-                var data = Data()
-                for try await byte in bytes { data.append(byte); if data.count > 4096 { break } }
-                throw APIError.http(status: http.statusCode, message: APIClient.errorMessage(from: data))
-            }
-            let parser = SSEParser()
-            var text = ""
-            var finishReason: String?
-            var usage: RequestUsage?
-            loop: for try await line in bytes.lines {
-                for event in parser.parse(line: line) {
-                    switch event {
-                    case let .content(piece):
-                        text += piece
-                        onPartial?(text)
-                    case let .finished(reason):
-                        finishReason = reason
-                    case .done:
-                        break loop
-                    case let .usage(reported):
-                        usage = reported
-                    case let .error(message):
-                        throw APIError.http(status: 502, message: message)
+        return try await withTimeout(limits.total) { [request] in
+            try await withThrowingTaskGroup(of: PolishResult?.self) { group in
+                group.addTask {
+                    do {
+                        return try await Self.readPolishStream(session: session, request: request, messages: messages,
+                                                               reminder: reminder, selection: selection,
+                                                               instruction: instruction, sentContext: sentContext,
+                                                               answering: answering,
+                                                               onPartial: onPartial)
+                    } catch let error as URLError where error.code == .timedOut {
+                        // No byte for the idle timeout.
+                        throw APIError.timeout(seconds: limits.idle)
                     }
                 }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(limits.firstToken * 1_000_000_000))
+                    if answering.isSet { return nil }
+                    throw APIError.timeout(seconds: limits.firstToken)
+                }
+                defer { group.cancelAll() }
+                while let finished = try await group.next() {
+                    if let result = finished { return result }
+                }
+                throw APIError.cancelled
             }
-            let cleaned = Prompts.sanitizePolishOutput(text)
-            guard !cleaned.isEmpty else { throw APIError.badResponse(L("模型返回了空内容", "the model returned nothing")) }
-            if usage == nil || (usage?.inputTokens == nil && usage?.outputTokens == nil && usage?.cost == nil) {
-                usage = APIClient.estimatedUsage(messages: messages, output: text)
+        }
+    }
+
+    /// `selection`: the text an edit works on (its answer is cleaned up as an edit's, by `instruction`), nil for a
+    /// clean-up or translation.
+    private static func readPolishStream(
+        session: URLSession, request: URLRequest, messages: [String], reminder: String, selection: String?,
+        instruction: String, sentContext: Bool, answering: OnceFlag, onPartial: (@Sendable (String) -> Void)?
+    ) async throws -> PolishResult {
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.badResponse("no HTTP response") }
+        guard (200..<300).contains(http.statusCode) else {
+            var data = Data()
+            for try await byte in bytes { data.append(byte); if data.count > 4096 { break } }
+            throw APIError.http(status: http.statusCode, message: APIClient.errorMessage(from: data))
+        }
+        let parser = SSEParser()
+        var text = ""
+        var finishReason: String?
+        var receivedDone = false
+        var usage: RequestUsage?
+        loop: for try await line in bytes.lines {
+            for event in parser.parse(line: line) {
+                switch event {
+                case let .content(piece):
+                    text += piece
+                    answering.set()
+                    onPartial?(text)
+                case let .finished(reason):
+                    finishReason = reason
+                case .done:
+                    receivedDone = true
+                    break loop
+                case let .usage(reported):
+                    usage = reported
+                case let .error(message, status):
+                    // The error's own code (401, 402, 429…) decides whether asking again can help; without one it's
+                    // the upstream provider failing.
+                    throw APIError.http(status: status ?? 502, message: message)
+                }
             }
-            return PolishResult(text: cleaned, truncated: finishReason == "length", usage: usage)
+        }
+        let cleaned = selection.map { Prompts.sanitizeCommandOutput(text, selection: $0, instruction: instruction) }
+            ?? Prompts.sanitizePolishOutput(text, reminder: reminder, sentContext: sentContext)
+        guard !cleaned.isEmpty else { throw APIError.badResponse(L("模型返回了空内容", "the model returned nothing")) }
+        if usage == nil || (usage?.inputTokens == nil && usage?.outputTokens == nil && usage?.cost == nil) {
+            usage = APIClient.estimatedUsage(messages: messages, output: text)
+        }
+        return PolishResult(text: cleaned, truncated: isTruncated(finishReason: finishReason, receivedDone: receivedDone),
+                            usage: usage)
+    }
+
+    /// An answer stopped by the output limit or a content filter is incomplete, and so is a stream that ended without
+    /// saying it had finished (neither a finish reason nor `[DONE]`): the connection broke off. Inserting it as the
+    /// clean-up would silently lose the rest of the dictation.
+    static func isTruncated(finishReason: String?, receivedDone: Bool) -> Bool {
+        switch finishReason {
+        case "length", "content_filter": return true
+        case nil: return !receivedDone
+        default: return false
         }
     }
 }
@@ -218,4 +347,13 @@ extension APIClient {
         let input = messages.reduce(0) { $0 + TokenEstimate.count($1) + 4 }
         return RequestUsage(inputTokens: input, outputTokens: TokenEstimate.count(output), estimated: true)
     }
+}
+
+/// Set once, by the stream when the answer starts; read by the first-token deadline.
+private final class OnceFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    func set() { lock.withLock { value = true } }
+    var isSet: Bool { lock.withLock { value } }
 }

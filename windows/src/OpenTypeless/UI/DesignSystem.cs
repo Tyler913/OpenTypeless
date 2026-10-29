@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Microsoft.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -97,8 +99,19 @@ public static class Glyphs
     public const string Money = "\uE8C7";
     public const string Calendar = "\uE787";
     public const string Speech = "\uE720";
+    public const string Edit = "\uE70F";
     public const string ReturnKey = "\uE751";
     public const string Mute = "\uE74F";
+    public const string AllApps = "\uE71D";
+    public const string AppIcon = "\uECAA";
+    public const string Add = "\uE710";
+    public const string Export = "\uEDE1";
+    public const string Import = "\uE8B5";
+    public const string OpenFile = "\uE8E5";
+    public const string Page = "\uE7C3";
+    public const string Video = "\uE714";
+    public const string Send = "\uE724";
+    public const string LineBreak = "\uE8E4";
 }
 
 public static class Ui
@@ -270,6 +283,8 @@ public sealed class CardRow : UserControl
     private readonly TextBlock _title = Ui.Text("", 13.5);
     private readonly TextBlock _subtitle = Ui.Text("", 12, foreground: Ui.Secondary, wrap: true);
     private readonly ContentPresenter _trailing = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+    /// <summary>The accessible name this row gave its control, so a later title replaces it but a control's own name stays.</summary>
+    private string? _givenName;
 
     public CardRow()
     {
@@ -303,7 +318,16 @@ public sealed class CardRow : UserControl
     }
 
     public Tint Tint { get => _badge.Tint; set => _badge.Tint = value; }
-    public string Title { get => _title.Text; set => _title.Text = value; }
+
+    public string Title
+    {
+        get => _title.Text;
+        set
+        {
+            _title.Text = value;
+            NameControl();
+        }
+    }
 
     public string? Subtitle
     {
@@ -315,7 +339,32 @@ public sealed class CardRow : UserControl
         }
     }
 
-    public object? Trailing { get => _trailing.Content; set => _trailing.Content = value; }
+    public object? Trailing
+    {
+        get => _trailing.Content;
+        set
+        {
+            _trailing.Content = value;
+            NameControl();
+        }
+    }
+
+    /// <summary>
+    /// Gives the switch, list or number box at the end of the row the row's title as its accessible name, so Narrator
+    /// says what it changes (the title is a separate text block). Buttons keep their own text as their name.
+    /// </summary>
+    private void NameControl()
+    {
+        static bool Nameable(object? element) => element is ToggleSwitch or ComboBox or NumberBox;
+        var control = Nameable(_trailing.Content)
+            ? (Control)_trailing.Content!
+            : (_trailing.Content as Panel)?.Children.OfType<Control>().FirstOrDefault(c => Nameable(c));
+        if (control == null || string.IsNullOrEmpty(_title.Text)) return;
+        var name = Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(control);
+        if (!string.IsNullOrEmpty(name) && name != _givenName) return;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(control, _title.Text);
+        _givenName = _title.Text;
+    }
 }
 
 public sealed class CardDivider : UserControl
@@ -469,15 +518,38 @@ public sealed class Banner : UserControl
 
 public static class Formatting
 {
-    /// <summary>"14:32" today, "Yesterday 09:10", otherwise "9/26 18:02".</summary>
+    /// <summary>
+    /// The culture dates and times are written in: the user's own regional format when it's in the app's language (so
+    /// an English UI in the UK still writes 26/09 and 24-hour time), otherwise the usual one for the app's language.
+    /// </summary>
+    public static CultureInfo DateCulture
+    {
+        get
+        {
+            var language = TypelessCore.Localization.Resolved;
+            return TypelessCore.Localization.Matching(CultureInfo.CurrentCulture.Name) == language
+                ? CultureInfo.CurrentCulture
+                : language.Culture();
+        }
+    }
+
+    /// <summary>"14:32" today, "Yesterday 09:10", otherwise "9/26 18:02" (in the app's language: "26.09 18:02" in German).</summary>
     public static string ShortStamp(DateTimeOffset date)
     {
+        var culture = DateCulture;
         var local = date.ToLocalTime();
-        var time = local.ToString("t");
+        var time = local.ToString("t", culture);
         var today = DateTime.Today;
         if (local.Date == today) return time;
         if (local.Date == today.AddDays(-1)) return L("昨天", "Yesterday") + " " + time;
-        return $"{local.Month}/{local.Day} {time}";
+        return local.ToString(MonthDayPattern(culture.DateTimeFormat), culture) + " " + time;
+    }
+
+    /// <summary>The culture's numeric short date without the year: "M/d" (en-US), "dd.MM" (de-DE), "M/d" (zh-CN).</summary>
+    private static string MonthDayPattern(DateTimeFormatInfo dates)
+    {
+        var pattern = Regex.Replace(dates.ShortDatePattern, @"^y+[^dM]*|[^dM]*y+[^dM]*$", "").Trim();
+        return pattern.Contains('d') && pattern.Contains('M') ? pattern : "M/d";
     }
 
     public static string DurationLabel(double seconds)

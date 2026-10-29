@@ -58,6 +58,14 @@ public enum VoiceActivity {
         let pad = AudioFormat.sampleCount(forSeconds: padding)
         return (max(0, first * frameSamples - pad), min(samples.count, (last + 1) * frameSamples + pad))
     }
+
+    /// Whether any frame of `samples` that ends before the last `ignored` samples is speech. At the end of a recording,
+    /// the moment before the key was let go (its click, a breath) isn't something said.
+    public static func containsSpeech(_ samples: [Int16], ignoringLast ignored: Int = 0) -> Bool {
+        let levels = frameLevels(samples)
+        let threshold = threshold(levels)
+        return levels.prefix(max(0, samples.count - ignored) / frameSamples).contains { $0 > threshold }
+    }
 }
 
 /// Follows the live audio 30 ms at a time, to tell when the speaker last spoke and whether they spoke again after a
@@ -102,12 +110,12 @@ public final class PauseTracker {
         return (firstFrame + last + 1) * VoiceActivity.frameSamples
     }
 
-    /// Whether any audio after `sample` is speech, the frame straddling it included. With `includePartial` the last,
-    /// not yet complete frame counts too (at the end of the recording).
-    public func speechAfter(_ sample: Int, includePartial: Bool = false) -> Bool {
+    /// Whether any audio after `sample` is speech, the frame straddling it included. With `end`, only the frames that end
+    /// by then count: the last moment of a recording (the key's click as it's let go, a breath) can be left out.
+    public func speechAfter(_ sample: Int, before end: Int? = nil) -> Bool {
         let threshold = VoiceActivity.threshold(levels)
         let from = max(0, sample / VoiceActivity.frameSamples - firstFrame)
-        if from < levels.count, levels[from...].contains(where: { $0 > threshold }) { return true }
-        return includePartial && !partial.isEmpty && sampleCount > sample && AudioLevel.rms(partial) > threshold
+        let to = min(levels.count, end.map { $0 / VoiceActivity.frameSamples - firstFrame } ?? levels.count)
+        return from < to && levels[from..<to].contains { $0 > threshold }
     }
 }

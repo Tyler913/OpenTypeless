@@ -1,0 +1,381 @@
+{
+  "_comment": "Spoken layout commands (SpokenLayout), shared by the macOS and Windows tests. cases: apply(input); output null = the transcript comes back exactly as it was. Cases with a \"limitation\" are known false positives, pinned so a change to them is deliberate: a command word said as its own clause in a list or as an answer becomes a break (one visible, undoable line break; why the feature is off until turned on). edges: the line breaks at the very start and end kept out of the clean-up. layouts: layout(input, enabled), what a dictation uses.",
+  "cases": [
+    {
+      "id": "en-commas",
+      "input": "Hi Anna, new line, thanks for the quick review. New paragraph. I pushed the fixes.",
+      "output": "Hi Anna,\nthanks for the quick review.\n\nI pushed the fixes."
+    },
+    {
+      "id": "en-sentences",
+      "input": "Hi Anna. New line. Thanks for the quick review.",
+      "output": "Hi Anna.\nThanks for the quick review."
+    },
+    {
+      "id": "en-one-word",
+      "input": "First point. Newline. Second point.",
+      "output": "First point.\nSecond point."
+    },
+    {
+      "id": "en-capitalised",
+      "input": "First point. NEW LINE. Second point.",
+      "output": "First point.\nSecond point."
+    },
+    {
+      "id": "en-words-in-a-sentence",
+      "input": "I also added a new line at the end of every file.",
+      "output": null
+    },
+    {
+      "id": "en-words-and-a-command",
+      "input": "We're launching a new line of products, new line, it ships in May.",
+      "output": "We're launching a new line of products,\nit ships in May."
+    },
+    {
+      "id": "en-said-without-a-pause",
+      "input": "hi Anna new line thanks for the quick review",
+      "output": null
+    },
+    {
+      "id": "en-command-with-more-words",
+      "input": "New line please, thanks.",
+      "output": null
+    },
+    {
+      "id": "en-quoted",
+      "input": "Type \"new line\" and press enter.",
+      "output": null
+    },
+    {
+      "id": "en-quoted-sentence",
+      "input": "He said \"New line.\" and left.",
+      "output": null
+    },
+    {
+      "id": "en-numbers-stay-whole",
+      "input": "Version 3.5, new line, done at 10:30.",
+      "output": "Version 3.5,\ndone at 10:30."
+    },
+    {
+      "id": "en-filler-before",
+      "input": "So um, new line, can you check the 登录 page",
+      "output": "So um,\ncan you check the 登录 page"
+    },
+    {
+      "id": "en-at-start-and-end",
+      "input": "New paragraph. Second point is the budget. New line.",
+      "output": "\n\nSecond point is the budget.\n"
+    },
+    {
+      "id": "en-only-a-command",
+      "input": "New line.",
+      "output": "\n"
+    },
+    {
+      "id": "en-twice",
+      "input": "Item one. New line. New line. Item two.",
+      "output": "Item one.\n\nItem two."
+    },
+    {
+      "id": "zh-commas",
+      "input": "周报，登录模块重构完了，换行，支付那个 bug 也修好了，另起一段，下周主要做性能优化",
+      "output": "周报，登录模块重构完了，\n支付那个 bug 也修好了，\n\n下周主要做性能优化"
+    },
+    {
+      "id": "zh-sentences",
+      "input": "第一点：性能。新段落。第二点：安全。",
+      "output": "第一点：性能。\n\n第二点：安全。"
+    },
+    {
+      "id": "zh-filler-clause",
+      "input": "嗯，换行，好的",
+      "output": "嗯，\n好的"
+    },
+    {
+      "id": "zh-words-in-a-question",
+      "input": "这里要不要换行，我还没想好",
+      "output": null
+    },
+    {
+      "id": "zh-words-in-a-clause",
+      "input": "那个日志要不要每条都换行写，我还没想好。",
+      "output": null
+    },
+    {
+      "id": "zh-word-in-a-compound",
+      "input": "换行符在 Windows 上是 CRLF。",
+      "output": null
+    },
+    {
+      "id": "zh-no-punctuation",
+      "input": "周报登录模块重构完了换行支付那个bug也修好了",
+      "output": null
+    },
+    {
+      "id": "zh-spaces-only",
+      "input": "周报 登录模块重构完了 换行 支付那个bug也修好了",
+      "output": null
+    },
+    {
+      "id": "zh-traditional",
+      "input": "會議紀錄。換行。明天再討論。",
+      "output": "會議紀錄。\n明天再討論。"
+    },
+    {
+      "id": "zh-new-paragraph-variants",
+      "input": "上周完成了。换一段。本周计划。另起一段。下周再说。",
+      "output": "上周完成了。\n\n本周计划。\n\n下周再说。"
+    },
+    {
+      "id": "ja",
+      "input": "お疲れ様です。改行。明日の会議は十時からです。",
+      "output": "お疲れ様です。\n明日の会議は十時からです。"
+    },
+    {
+      "id": "ja-words",
+      "input": "ここで改行してください。",
+      "output": null
+    },
+    {
+      "id": "ko",
+      "input": "안녕하세요. 줄 바꿈. 회의는 내일입니다. 새 문단. 감사합니다.",
+      "output": "안녕하세요.\n회의는 내일입니다.\n\n감사합니다."
+    },
+    {
+      "id": "de",
+      "input": "Hallo Anna, neue Zeile, danke für die schnelle Antwort. Neuer Absatz. Bis morgen.",
+      "output": "Hallo Anna,\ndanke für die schnelle Antwort.\n\nBis morgen."
+    },
+    {
+      "id": "de-words",
+      "input": "Füge eine neue Zeile ein.",
+      "output": null
+    },
+    {
+      "id": "fr",
+      "input": "Bonjour, à la ligne, merci beaucoup. Nouveau paragraphe. À demain.",
+      "output": "Bonjour,\nmerci beaucoup.\n\nÀ demain."
+    },
+    {
+      "id": "es-keeps-opening-marks",
+      "input": "Hola. Nuevo párrafo. ¿Qué tal? Nueva línea. ¡Genial!",
+      "output": "Hola.\n\n¿Qué tal?\n¡Genial!"
+    },
+    {
+      "id": "pt",
+      "input": "Oi, nova linha, tudo bem? Novo parágrafo. Até logo.",
+      "output": "Oi,\ntudo bem?\n\nAté logo."
+    },
+    {
+      "id": "ru",
+      "input": "Привет. Новая строка. Как дела? Новый абзац. Пока.",
+      "output": "Привет.\nКак дела?\n\nПока."
+    },
+    {
+      "id": "nothing-to-do",
+      "input": "我现在用的是 Claude Opus 5.5，之前用的是 GPT-6。",
+      "output": null
+    },
+    {
+      "id": "nothing-to-do-spaces-kept",
+      "input": "  odd  spacing , kept ",
+      "output": null
+    },
+    {
+      "id": "limitation-reported-speech",
+      "input": "I said, new line, and then I stopped.",
+      "output": "I said,\nand then I stopped.",
+      "limitation": "the words quoted without quotation marks"
+    },
+    {
+      "id": "limitation-list-en",
+      "input": "Trim spaces, newline, tabs.",
+      "output": "Trim spaces,\ntabs.",
+      "limitation": "a list of the characters"
+    },
+    {
+      "id": "limitation-list-zh",
+      "input": "空格，换行，制表符",
+      "output": "空格，\n制表符",
+      "limitation": "a list of the characters"
+    },
+    {
+      "id": "limitation-list-ja",
+      "input": "スペース、改行、タブ",
+      "output": "スペース、\nタブ",
+      "limitation": "a list of the characters"
+    },
+    {
+      "id": "limitation-list-ko",
+      "input": "공백, 줄바꿈, 탭",
+      "output": "공백,\n탭",
+      "limitation": "a list of the characters"
+    },
+    {
+      "id": "limitation-topic-zh",
+      "input": "换行，是怎么实现的",
+      "output": "\n是怎么实现的",
+      "limitation": "the word as the topic of a question"
+    },
+    {
+      "id": "limitation-answer",
+      "input": "What should I type? New line.",
+      "output": "What should I type?\n",
+      "limitation": "the words as an answer"
+    },
+    {
+      "id": "crlf-without-a-command",
+      "input": "Hi.\r\nThere.",
+      "output": null
+    },
+    {
+      "id": "crlf-with-a-command",
+      "input": "Hi.\r\nNew line.\r\nThere.",
+      "output": "Hi.\nThere."
+    },
+    {
+      "id": "recognition-breaks-without-a-command-stay",
+      "input": "this is a long\nsentence.",
+      "output": null
+    },
+    {
+      "id": "recognition-breaks-go-with-a-command",
+      "input": "Hi Anna,\nthis is a long\nsentence. New paragraph. Bye.",
+      "output": "Hi Anna, this is a long sentence.\n\nBye."
+    },
+    {
+      "id": "recognition-breaks-go-between-chinese",
+      "input": "登录模块\n重构完了，换行，支付修好了",
+      "output": "登录模块重构完了，\n支付修好了"
+    },
+    {
+      "id": "decomposed-spanish",
+      "input": "Hola. Nuevo párrafo. Adiós.",
+      "output": "Hola.\n\nAdiós."
+    },
+    {
+      "id": "decomposed-korean",
+      "input": "안녕. 새 문단. 끝.",
+      "output": "안녕.\n\n끝."
+    },
+    {
+      "id": "ideographic-space-around",
+      "input": "周报，　换行　，内容",
+      "output": "周报，\n内容"
+    },
+    {
+      "id": "no-break-space-around",
+      "input": "Hi Anna, new line, thanks.",
+      "output": "Hi Anna,\nthanks."
+    },
+    {
+      "id": "ellipsis-after",
+      "input": "Hi Anna… new line… thanks.",
+      "output": "Hi Anna…\nthanks."
+    },
+    {
+      "id": "dash-is-not-a-pause",
+      "input": "Hi Anna — new line — thanks.",
+      "output": null
+    },
+    {
+      "id": "full-width-marks",
+      "input": "收到！换行！谢谢？新段落？好的",
+      "output": "收到！\n谢谢？\n\n好的"
+    },
+    {
+      "id": "closing-quote-after",
+      "input": "He typed \"New line.\" twice.",
+      "output": null
+    }
+  ],
+  "edges": [
+    {
+      "id": "breaks-at-both-ends",
+      "input": "\n\nSecond point.\n",
+      "leading": "\n\n",
+      "body": "Second point.",
+      "trailing": "\n"
+    },
+    {
+      "id": "none",
+      "input": "Hello.",
+      "leading": "",
+      "body": "Hello.",
+      "trailing": ""
+    },
+    {
+      "id": "spaces-without-breaks-stay",
+      "input": " Hello ",
+      "leading": "",
+      "body": " Hello ",
+      "trailing": ""
+    },
+    {
+      "id": "only-a-break",
+      "input": "\n",
+      "leading": "\n",
+      "body": "",
+      "trailing": ""
+    },
+    {
+      "id": "breaks-inside-stay",
+      "input": "A.\nB.",
+      "leading": "",
+      "body": "A.\nB.",
+      "trailing": ""
+    },
+    {
+      "id": "other-line-separators",
+      "input": " Hi",
+      "leading": "\n",
+      "body": "Hi",
+      "trailing": "\n"
+    },
+    {
+      "id": "mixed-line-endings",
+      "input": "\r\n\nHi\n\r",
+      "leading": "\n\n",
+      "body": "Hi",
+      "trailing": "\n\n"
+    }
+  ],
+  "layouts": [
+    {
+      "id": "edges-split-off",
+      "input": "New line. Hello. New paragraph.",
+      "enabled": true,
+      "leading": "\n",
+      "body": "Hello.",
+      "trailing": "\n\n",
+      "dictatedBreaks": true
+    },
+    {
+      "id": "switched-off",
+      "input": "New line. Hello. New paragraph.",
+      "enabled": false,
+      "leading": "",
+      "body": "New line. Hello. New paragraph.",
+      "trailing": "",
+      "dictatedBreaks": false
+    },
+    {
+      "id": "recognition-breaks-only",
+      "input": "Line one\nline two.",
+      "enabled": true,
+      "leading": "",
+      "body": "Line one\nline two.",
+      "trailing": "",
+      "dictatedBreaks": false
+    },
+    {
+      "id": "inside",
+      "input": "Hi Anna, new line, thanks.",
+      "enabled": true,
+      "leading": "",
+      "body": "Hi Anna,\nthanks.",
+      "trailing": "",
+      "dictatedBreaks": true
+    }
+  ]
+}

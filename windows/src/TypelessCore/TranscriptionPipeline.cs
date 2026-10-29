@@ -17,6 +17,17 @@ public abstract record ChunkState
     public bool IsFinished => this is Done or SkippedSilence or Failed;
 }
 
+/// <summary>Where the chunks handed to a pipeline stand (see <see cref="TranscriptionPipeline.ChunkCounts"/>).</summary>
+/// <param name="Answered">Transcribed, reused from the preset, or with nothing to send (silence).</param>
+/// <param name="Failed">Failed after their retries (sent once more by Finish, unless the failure is permanent).</param>
+/// <param name="Outstanding">Handed out and still waiting for an answer.</param>
+/// <param name="Refused">
+/// Of the failed ones, those the provider turned down the way it turns down every request (see
+/// <see cref="ApiException.RefusesEveryRequest"/>).
+/// </param>
+/// <param name="FailureStreak">How many chunks failed since the last one that was transcribed, in the order their answers came.</param>
+public readonly record struct ChunkCounts(int Answered, int Failed, int Outstanding, int Refused = 0, int FailureStreak = 0);
+
 public sealed class PipelineFailure : Exception
 {
     public string PartialText { get; }
@@ -51,7 +62,7 @@ public sealed class TranscriptionPipeline
     private readonly TranscriptionLatency _latency;
     private readonly RetryPolicy _policy;
     private readonly Action<int, ChunkState>? _observer;
-    private readonly SemaphoreSlim _semaphore = new(3);
+    private readonly SemaphoreSlim _semaphore;
     private readonly bool _trimSilence;
     private readonly bool _speculate;
     private readonly Action<string?>? _onSpeculation;
@@ -63,6 +74,10 @@ public sealed class TranscriptionPipeline
     private readonly Dictionary<int, ChunkState> _results = new();
     /// <summary>Chunks whose last failure was permanent (bad key, no credit…): not worth another round.</summary>
     private readonly HashSet<int> _permanentFailures = new();
+    /// <summary>Chunks that failed since the last one transcribed (see <see cref="TypelessCore.ChunkCounts.FailureStreak"/>).</summary>
+    private int _failureStreak;
+    /// <summary>Failed chunks the provider turned down as it would any request (see <see cref="TypelessCore.ChunkCounts.Refused"/>).</summary>
+    private readonly HashSet<int> _refusals = new();
     private readonly Dictionary<int, Task> _tasks = new();
     /// <summary>Usage of every successful request, retries of the same chunk included (each one was billed).</summary>
     private readonly List<RequestUsage> _usages = new();
@@ -73,14 +88,36 @@ public sealed class TranscriptionPipeline
     private bool _cancelled;
     /// <summary>Completed by <see cref="Finish"/>: the recording has ended, so every chunk still out is holding up the text.</summary>
     private readonly TaskCompletionSource _recordingEnded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    /// <summary>The last chunk, once <see cref="Finish"/> has cut it.</summary>
+    private int? _tailIndex;
+    /// <summary>Which route answered each chunk that was transcribed (true: the backup).</summary>
+    private readonly Dictionary<int, bool> _answeredByBackup = new();
 
     /// <summary>How long the speaker has to be quiet before the audio so far is transcribed ahead of time.</summary>
     public const double PauseSeconds = 0.3;
+    /// <summary>
+    /// The end of a recording this close to the release isn't taken for speech: letting go of the key clicks, and people
+    /// breathe out. Otherwise a click after the pause voided the speculative tail (it applied in 4 of 571 timed
+    /// dictations), and after a chunk cut at a pause a tail of silence and a click was sent on its own.
+    /// </summary>
+    public const double ReleaseSeconds = 0.15;
+    /// <summary>
+    /// A chunk sent once the recording has ended is what the user waits for: when it holds at most this much audio, the
+    /// backup route is asked at once alongside the main one, rather than once the main one is late (the backup won in 13%
+    /// of 789 timed dictations, and then the text still took 1.79 s at the median, mostly the wait before asking it). A
+    /// longer chunk keeps the delay, so two uploads of it don't share a slow uplink; so does a chunk sent while the user is
+    /// still talking, which nothing waits on yet.
+    /// </summary>
+    public const double RaceSeconds = 10;
     private readonly PauseTracker _pauses = new();
     /// <summary>The audio not yet cut into a chunk, being transcribed ahead of time since the speaker paused.</summary>
     private Speculation? _speculation;
-    /// <summary>The last transcript passed to <c>onSpeculation</c>.</summary>
+    /// <summary>The last transcript passed to <c>onSpeculation</c>, and how many changes were worked out so far.</summary>
     private string? _announced;
+    private int _announcements;
+    /// <summary>Calls <c>onSpeculation</c> one at a time, and how many changes it was told of (the newest one's number).</summary>
+    private readonly object _announceLock = new();
+    private int _announcedUpTo;
 
     private sealed class Speculation(AudioChunk chunk, CancellationTokenSource cancel)
     {
@@ -88,26 +125,60 @@ public sealed class TranscriptionPipeline
         public AudioChunk Chunk { get; } = chunk;
         public int End => Chunk.StartSample + Chunk.Samples.Length;
         public CancellationTokenSource Cancel { get; } = cancel;
-        public Task<(ChunkState State, bool Permanent)> Task { get; set; } = null!;
+        public Task<Outcome> Task { get; set; } = null!;
     }
+
+    /// <summary>A chunk's request: its state, whether a failure is permanent, and whether the backup route answered.</summary>
+    private readonly record struct Outcome(ChunkState State, bool Permanent, bool Backup = false);
 
     /// <summary>Whether the last chunk's transcript came from a speculative tail, so nothing was left to send when the recording ended.</summary>
     public bool TailWasSpeculative { get; private set; }
 
+    /// <summary>
+    /// The audio so far ends in a pause a speculative tail is already transcribing: if the recording ended now, that
+    /// answer would be the last chunk's (as Finish decides it, the key's click aside). A moment more of (quiet) audio
+    /// after the key is released changes nothing then.
+    /// </summary>
+    public bool EndsInCoveredPause
+    {
+        get
+        {
+            lock (_lock) return _speculation is { } speculation && !_pauses.SpeechAfter(speculation.End, before: ReleaseStart);
+        }
+    }
+
+    /// <summary>
+    /// Whether the backup route answered the last chunk that was transcribed (null when none was): the request the text
+    /// waited on at the end.
+    /// </summary>
+    public bool? LastChunkUsedBackup
+    {
+        get
+        {
+            lock (_lock) return _answeredByBackup.Count == 0 ? null : _answeredByBackup[_answeredByBackup.Keys.Max()];
+        }
+    }
+
     /// <param name="preset">Lets a retry reuse transcripts that already succeeded (keyed by chunk index).</param>
+    /// <param name="maxConcurrentRequests">
+    /// How many chunks are transcribed at once (a file being transcribed asks for fewer than a dictation, see
+    /// <see cref="FileTranscription"/>).
+    /// </param>
     /// <param name="trimSilence">Sends each chunk without the silence before and after its speech (see <see cref="AudioChunk.Trimmed"/>).</param>
     /// <param name="speculate">Transcribes the pending audio ahead of time whenever the speaker pauses (see the class summary).</param>
     /// <param name="onSpeculation">
     /// Called, on a background thread, with the whole transcript the recording would give if it ended now, once a
     /// speculative tail and every chunk before it are transcribed; with null when that stops being true because the
-    /// speaker went on. Lets the caller start cleaning the text up before the key is released.
+    /// speaker went on. Lets the caller start cleaning the text up before the key is released. It is called one call at a
+    /// time and never with a stale transcript after a newer one, so it mustn't call back into the pipeline.
     /// </param>
     public TranscriptionPipeline(ApiClient client, TranscriptionOptions options, Chunker.Config? chunkConfig = null,
                                  RetryPolicy? policy = null, IReadOnlyDictionary<int, string>? preset = null,
                                  Action<int, ChunkState>? observer = null, TranscriptionRoute? backup = null,
                                  TranscriptionLatency? latency = null, bool trimSilence = true, bool speculate = true,
-                                 Action<string?>? onSpeculation = null)
+                                 Action<string?>? onSpeculation = null, int maxConcurrentRequests = 3)
     {
+        _semaphore = new SemaphoreSlim(Math.Max(1, maxConcurrentRequests));
         _trimSilence = trimSilence;
         _speculate = speculate;
         _onSpeculation = onSpeculation;
@@ -162,11 +233,12 @@ public sealed class TranscriptionPipeline
         {
             _finished = true;
             tail = _chunker.Finish();
+            _tailIndex = tail?.Index;
             if (_speculation is { } speculation)
             {
-                // Only silence since the pause: the speculative answer is the tail's.
+                // Only silence since the pause (the key's click aside): the speculative answer is the tail's.
                 if (tail != null && tail.Index == speculation.Chunk.Index && tail.StartSample == speculation.Chunk.StartSample
-                    && !_pauses.SpeechAfter(speculation.End, includePartial: true))
+                    && !_pauses.SpeechAfter(speculation.End, before: ReleaseStart))
                 {
                     adopted = speculation;
                     _speculation = null;
@@ -226,6 +298,57 @@ public sealed class TranscriptionPipeline
         }
     }
 
+    /// <summary>
+    /// Where the chunks so far stand: answered (or needing none, or reused from the preset), failed, and handed out and
+    /// still waiting. Unlike <see cref="TranscriptionProgress"/> it's there before <see cref="Finish"/>: a long recording
+    /// read from a file is handed over a block at a time, held back while enough chunks are out, and stopped once they
+    /// keep failing (see <see cref="FileTranscription"/>).
+    /// </summary>
+    public ChunkCounts ChunkCounts()
+    {
+        lock (_lock)
+        {
+            int answered = 0, failed = 0, outstanding = 0;
+            foreach (var state in _results.Values)
+            {
+                switch (state)
+                {
+                    case ChunkState.Done or ChunkState.SkippedSilence:
+                        answered++;
+                        break;
+                    case ChunkState.Failed:
+                        failed++;
+                        break;
+                    default:
+                        outstanding++;
+                        break;
+                }
+            }
+            return new ChunkCounts(answered, failed, outstanding, _refusals.Count, _failureStreak);
+        }
+    }
+
+    /// <summary>
+    /// Stops a recording handed over a block at a time (a file) whose chunks keep failing, rather than reading the rest of
+    /// it only to send requests that fail too: what's still out is cancelled, and the failure <see cref="Finish"/> would
+    /// have thrown comes back, with the text so far. A dictation never stops this way.
+    /// </summary>
+    public PipelineFailure GiveUp()
+    {
+        Cancel();
+        var (text, failed, lastError) = Snapshot();
+        return new PipelineFailure(text, failed, lastError ?? "unknown");
+    }
+
+    /// <summary>How many chunks' audio is still held (to be sent, or sent again in Finish's last round).</summary>
+    internal int HeldChunkCount
+    {
+        get
+        {
+            lock (_lock) return _chunks.Count;
+        }
+    }
+
     /// <summary>What the requests so far used, one entry per successful request.</summary>
     public List<RequestUsage> Usages()
     {
@@ -251,13 +374,19 @@ public sealed class TranscriptionPipeline
         get { lock (_lock) return _cancelled; }
     }
 
+    /// <summary>The recording has ended (<see cref="Finish"/> was called), so every chunk still out is holding up the text.</summary>
+    private bool IsFinished
+    {
+        get { lock (_lock) return _finished; }
+    }
+
     private void Schedule(AudioChunk chunk)
     {
         ChunkState? preset = null;
         lock (_lock)
         {
-            _chunks[chunk.Index] = chunk;
             if (_results.TryGetValue(chunk.Index, out var existing) && existing is ChunkState.Done) preset = existing;
+            else _chunks[chunk.Index] = chunk;
         }
         if (preset != null)
         {
@@ -275,9 +404,10 @@ public sealed class TranscriptionPipeline
             Monitor.Exit(_lock);
             return;
         }
-        if (AudioLevel.IsSilent(chunk.Samples) || chunk.Duration < 0.3)
+        if (AudioLevel.IsSilent(chunk.Samples) || chunk.Duration < 0.3 || IsOnlyThePauseBeforeRelease(chunk))
         {
             _results[index] = new ChunkState.SkippedSilence();
+            _chunks.Remove(index);
             Monitor.Exit(_lock);
             _observer?.Invoke(index, new ChunkState.SkippedSilence());
             return;
@@ -286,54 +416,78 @@ public sealed class TranscriptionPipeline
         var token = _cancellation.Token;
         var task = Task.Run(async () =>
         {
-            ChunkState state;
-            bool permanent;
+            Outcome outcome;
             try
             {
                 await _semaphore.WaitAsync(token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
-                Record(index, new ChunkState.Failed(ApiException.Cancelled().Message), permanent: true);
+                Record(index, new Outcome(new ChunkState.Failed(ApiException.Cancelled().Message), Permanent: true));
                 return;
             }
             try
             {
-                (state, permanent) = await Run(chunk, token).ConfigureAwait(false);
+                outcome = await Run(chunk, token).ConfigureAwait(false);
             }
             finally
             {
                 _semaphore.Release();
             }
-            Record(index, state, permanent);
+            Record(index, outcome);
         });
         _tasks[index] = task;
         Monitor.Exit(_lock);
         _observer?.Invoke(index, new ChunkState.Queued());
     }
 
-    private void Record(int index, ChunkState state, bool permanent)
+    private void Record(int index, Outcome outcome)
     {
         lock (_lock)
         {
-            _results[index] = state;
-            if (permanent) _permanentFailures.Add(index); else _permanentFailures.Remove(index);
+            _results[index] = outcome.State;
+            // Only a failed chunk is sent again (in Finish's last round): the audio of the others can go, which keeps an
+            // hour-long file from being held in memory as it's transcribed.
+            if (outcome.State is not ChunkState.Failed) _chunks.Remove(index);
+            if (outcome.Permanent) _permanentFailures.Add(index); else _permanentFailures.Remove(index);
+            if (outcome.State is ChunkState.Done) _answeredByBackup[index] = outcome.Backup; else _answeredByBackup.Remove(index);
+            if (outcome.State is ChunkState.Done)
+            {
+                _failureStreak = 0;
+                _refusals.Remove(index);
+            }
+            else if (outcome.State is ChunkState.Failed)
+            {
+                _failureStreak++;
+            }
         }
-        _observer?.Invoke(index, state);
+        _observer?.Invoke(index, outcome.State);
         Announce();
     }
+
+    /// <summary>Where the audio stops counting as speech: <see cref="ReleaseSeconds"/> before the end of what has been appended. Under the lock.</summary>
+    private int ReleaseStart => _pauses.SampleCount - AudioFormat.SampleCount(ReleaseSeconds);
+
+    /// <summary>
+    /// The last chunk of a recording that was cut at a pause, holding nothing but the rest of that pause and the key's
+    /// click: nothing to send (models make text up from noise). Called under the lock.
+    /// </summary>
+    private bool IsOnlyThePauseBeforeRelease(AudioChunk chunk) =>
+        chunk.Index > 0 && chunk.Index == _tailIndex
+        && !VoiceActivity.ContainsSpeech(chunk.Samples, AudioFormat.SampleCount(ReleaseSeconds));
 
     // MARK: - Speculative tail
 
     /// <summary>
     /// After new audio: drops the speculation if the speaker has spoken since it started, and starts one when they have
-    /// been quiet for <see cref="PauseSeconds"/> after speaking. Called under the lock.
+    /// been quiet for <see cref="PauseSeconds"/> after speaking. Called under the lock. Sound in the last
+    /// <see cref="ReleaseSeconds"/> doesn't drop it yet: it may be the key's click, which <see cref="Finish"/> leaves out too.
     /// </summary>
     private void UpdateSpeculation()
     {
         if (_speculation is { } current)
         {
-            if (!_pauses.SpeechAfter(current.End)) return;
+            if (!_pauses.SpeechAfter(current.End, before: ReleaseStart)) return;
             DropSpeculation();
         }
         if (_pauses.LastSpeechEnd() is not { } lastSpeech
@@ -351,7 +505,7 @@ public sealed class TranscriptionPipeline
             }
             catch (OperationCanceledException)
             {
-                return ((ChunkState)new ChunkState.Failed(ApiException.Cancelled().Message), true);
+                return new Outcome(new ChunkState.Failed(ApiException.Cancelled().Message), Permanent: true);
             }
             try
             {
@@ -383,8 +537,8 @@ public sealed class TranscriptionPipeline
         _results[tail.Index] = new ChunkState.Queued();
         _tasks[tail.Index] = Task.Run(async () =>
         {
-            var (state, permanent) = await speculation.Task.ConfigureAwait(false);
-            Record(tail.Index, state, permanent);
+            var outcome = await speculation.Task.ConfigureAwait(false);
+            Record(tail.Index, outcome);
         });
     }
 
@@ -393,14 +547,23 @@ public sealed class TranscriptionPipeline
     {
         if (_onSpeculation == null) return;
         string? text;
+        int number;
         lock (_lock)
         {
             if (_finished || _cancelled) return;
             text = SpeculativeTranscript();
             if (text == _announced) return;
             _announced = text;
+            number = ++_announcements;
         }
-        _onSpeculation(text);
+        // Changes are numbered in order under the lock, but two threads can get from there to here the other way round: a
+        // change a newer one overtook is stale, and passing it on would leave the caller cleaning up the wrong text.
+        lock (_announceLock)
+        {
+            if (number <= _announcedUpTo) return;
+            _announcedUpTo = number;
+            _onSpeculation(text);
+        }
     }
 
     /// <summary>The whole transcript with the speculation as the tail, once it and every chunk before it are done. Under the lock.</summary>
@@ -429,9 +592,9 @@ public sealed class TranscriptionPipeline
     // MARK: - Requests
 
     /// <param name="report">False for a speculative tail: nothing is waiting on it yet, so the observer isn't told.</param>
-    private async Task<(ChunkState, bool Permanent)> Run(AudioChunk chunk, CancellationToken token, bool report = true)
+    private async Task<Outcome> Run(AudioChunk chunk, CancellationToken token, bool report = true)
     {
-        if (token.IsCancellationRequested) return (new ChunkState.Failed(ApiException.Cancelled().Message), true);
+        if (token.IsCancellationRequested) return new Outcome(new ChunkState.Failed(ApiException.Cancelled().Message), Permanent: true);
         if (report) _observer?.Invoke(chunk.Index, new ChunkState.Transcribing(1));
         if (_trimSilence) chunk = chunk.Trimmed();
         try
@@ -441,12 +604,16 @@ public sealed class TranscriptionPipeline
             {
                 lock (_lock) (usedBackup ? _backupUsages : _usages).Add(usage);
             }
-            return (new ChunkState.Done(result.Text), false);
+            return new Outcome(new ChunkState.Done(result.Text), Permanent: false, Backup: usedBackup);
         }
         catch (Exception error)
         {
             var apiError = ApiException.From(error);
-            return (new ChunkState.Failed(apiError.Message), !apiError.IsRetryable);
+            if (apiError.RefusesEveryRequest)
+            {
+                lock (_lock) _refusals.Add(chunk.Index);
+            }
+            return new Outcome(new ChunkState.Failed(apiError.Message), Permanent: !apiError.IsRetryable);
         }
     }
 
@@ -466,8 +633,8 @@ public sealed class TranscriptionPipeline
 
     /// <summary>
     /// One chunk, on the primary route; with a backup route, the backup is asked too once the primary has failed, or is
-    /// late (see <see cref="TranscriptionLatency"/>) and the recording has ended, and whichever answers first is used;
-    /// the other is cancelled.
+    /// late (see <see cref="TranscriptionLatency"/>, and <see cref="RaceSeconds"/> for a chunk sent after the recording
+    /// ended) and the recording has ended, and whichever answers first is used; the other is cancelled.
     /// </summary>
     private async Task<(TranscriptionResult Result, bool UsedBackup)> Transcribe(AudioChunk chunk, CancellationToken token, bool report)
     {
@@ -481,7 +648,7 @@ public sealed class TranscriptionPipeline
         using var race = CancellationTokenSource.CreateLinkedTokenSource(token);
         // Each on the thread pool, so neither can hold up the other (or the timer) before its first await.
         var primary = Task.Run(() => Attempt(_client, _options, chunk, race.Token, report), CancellationToken.None);
-        var late = Late(_latency.HedgeDelay(chunk.Duration), race.Token);
+        var late = Late(HedgeDelay(chunk), race.Token);
         Task<TranscriptionResult>? second = null;
         Exception? primaryError = null;
         var backupFailed = false;
@@ -537,9 +704,16 @@ public sealed class TranscriptionPipeline
     /// </summary>
     private async Task Late(double seconds, CancellationToken token)
     {
-        await Task.Delay(TimeSpan.FromSeconds(seconds), token).ConfigureAwait(false);
+        if (seconds > 0) await Task.Delay(TimeSpan.FromSeconds(seconds), token).ConfigureAwait(false);
         await _recordingEnded.Task.WaitAsync(token).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// How long the primary route has for a chunk before the backup is asked too: nothing for a short chunk sent once the
+    /// recording has ended (see <see cref="RaceSeconds"/>), else until it's late.
+    /// </summary>
+    private double HedgeDelay(AudioChunk chunk) =>
+        IsFinished && chunk.Duration <= RaceSeconds ? 0 : _latency.HedgeDelay(chunk.Duration);
 
     private async Task WaitForAll()
     {

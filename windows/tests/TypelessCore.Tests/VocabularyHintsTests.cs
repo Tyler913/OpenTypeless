@@ -6,6 +6,19 @@ namespace TypelessCore.Tests;
 [Collection("MockServer")]
 public class VocabularyHintsTests
 {
+
+    [Fact]
+    public void TokenCapIncludesSeparatorsAndStopsAtTheFirstOverflow()
+    {
+        var exact = new string('a', 400);
+        Assert.Equal(exact, VocabularyHints.Prompt([exact]));
+        Assert.Equal("", VocabularyHints.Prompt([exact + "a", "small"]));
+        var mixed = new string('中', 98) + "abcd";
+        Assert.Equal(mixed + ", xy", VocabularyHints.Prompt([mixed, "xy", "z"])); // 98 + ceil(8/4) = 100
+        Assert.Equal(mixed, VocabularyHints.Prompt([mixed, "xyz", "x"])); // separator makes it 101, don't skip ahead
+        Assert.Equal("", VocabularyHints.Prompt([new string('中', 101), "x"]));
+    }
+
     private static readonly string[] Vocabulary = ["OpenTypeless", " Kwazara ", "", "opentypeless", "卓维克"];
 
     private static async Task<JsonObject> Body(string model, IReadOnlyList<string>? vocabulary)
@@ -26,9 +39,26 @@ public class VocabularyHintsTests
     public void PromptStopsAtAWholeTerm()
     {
         var prompt = VocabularyHints.Prompt(Enumerable.Range(0, 200).Select(i => $"term{i}").ToList());
-        Assert.True(prompt.Length <= VocabularyHints.MaxPromptCharacters);
-        Assert.False(prompt.EndsWith(','));
-        Assert.Matches(@"term\d+$", prompt);
+        Assert.True(TokenEstimate.Count(prompt) <= VocabularyHints.MaxPromptTokens);
+        Assert.True(prompt.Length > 350); // most of what the old 600-character cap let through, well inside Whisper's window
+        Assert.StartsWith("term0, term1, ", prompt);
+        Assert.Matches(@"^(term\d+, )*term\d+$", prompt);
+    }
+
+    [Fact]
+    public void AChinesePromptFitsWhispersWindow()
+    {
+        // 100 four-character terms: 600 characters were let through by a character cap, far over Whisper's 224 tokens,
+        // which would then have dropped the first terms, the ones the user put first.
+        var characters = "卓维克斯特尔数据云端智能语音模型";
+        var terms = Enumerable.Range(0, 100).Select(i => $"{characters[i % 16]}{characters[i / 16 % 16]}科技").ToList();
+        var prompt = VocabularyHints.Prompt(terms);
+        Assert.StartsWith("卓卓科技, 维卓科技, ", prompt);
+        Assert.True(TokenEstimate.Count(prompt) <= VocabularyHints.MaxPromptTokens);
+        // Even at two tokens per Chinese character and per separator, as Whisper's tokenizer often needs, it fits.
+        var parts = prompt.Split(", ");
+        Assert.True(parts.All(p => p.Length == 4) && parts.Length > 10);
+        Assert.True(parts.Length * 4 * 2 + (parts.Length - 1) * 2 <= 224);
     }
 
     [Fact]

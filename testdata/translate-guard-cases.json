@@ -1,0 +1,251 @@
+{
+  "_comment": "Translation guard cases shared by the macOS and Windows tests (Prompts.translationFallback). target is a TranslationTarget id: a listed language's code, or a name typed in. The legitimate translations keep names, code and terms as they were (those found in the transcript, or in the speaker's vocabulary when one is given, don't count against the target script), and the long ones calibrate the length band across writing systems; the rest came back untranslated, in another language, as an answer or as a summary. translatePromptSHA256 is the SHA-256 of the translate prompt's template (Prompts.baseTranslatePrompt, UTF-8), so both apps send the same text.",
+  "translatePromptSHA256": "a744913ddac0c59c6147c94ec65ad9f0ad457aac5a346e8b90fe712779405e64",
+  "cases": [
+    {
+      "id": "zh-to-en",
+      "target": "en",
+      "input": "嗯我们周三下午三点开会，不对不对，是周四，然后记得带电脑",
+      "output": "We're meeting on Thursday at 3 p.m. Remember to bring your laptop.",
+      "expect": null
+    },
+    {
+      "id": "zh-to-en-left-in-chinese",
+      "target": "en",
+      "input": "嗯我们周三下午三点开会，不对不对，是周四，然后记得带电脑",
+      "output": "我们周四下午三点开会，记得带电脑。",
+      "expect": "untranslated"
+    },
+    {
+      "id": "zh-to-en-keeps-a-chinese-name",
+      "target": "en",
+      "input": "跟张伟说一下明天的会改到下午三点",
+      "output": "Tell 张伟 the meeting tomorrow moved to 3 p.m.",
+      "expect": null
+    },
+    {
+      "id": "zh-to-en-half-translated",
+      "target": "en",
+      "input": "帮我修一下登录页面上验证码不显示的那个 bug",
+      "output": "Please fix the 验证码不显示 bug on the 登录页面",
+      "expect": "untranslated"
+    },
+    {
+      "id": "zh-to-en-half-translated-reworded",
+      "target": "en",
+      "input": "帮我修一下登录页面上验证码不显示的那个 bug",
+      "output": "Please fix 那个验证码在登录页上不显示的 bug",
+      "expect": "untranslated"
+    },
+    {
+      "id": "en-to-zh-keeps-terms",
+      "target": "zh-Hans",
+      "input": "so we write the macOS app in SwiftUI, call the OpenRouter API, and GitHub Actions runs CI",
+      "output": "我们用 SwiftUI 写 macOS 应用，调用 OpenRouter 的 API，然后由 GitHub Actions 跑 CI。",
+      "expect": null
+    },
+    {
+      "id": "en-to-zh-left-in-english",
+      "target": "zh-Hans",
+      "input": "um so send the report to Mike by Friday, actually no, send it to Sarah",
+      "output": "Send the report to Sarah by Friday.",
+      "expect": "untranslated"
+    },
+    {
+      "id": "ja-to-zh-left-in-japanese",
+      "target": "zh-Hans",
+      "input": "えーと明日の会議は三時からです",
+      "output": "明日の会議は三時からです。",
+      "expect": "untranslated"
+    },
+    {
+      "id": "en-to-ja",
+      "target": "ja",
+      "input": "please check the login page again",
+      "output": "もう一度ログインページを確認してください。",
+      "expect": null
+    },
+    {
+      "id": "en-to-ja-katakana-loanwords",
+      "target": "ja",
+      "input": "please check the login page and the settings page",
+      "output": "ログインページと設定ページを確認してください。",
+      "expect": null
+    },
+    {
+      "id": "zh-to-ja-left-in-chinese",
+      "target": "ja",
+      "input": "嗯我们周三下午三点开会，不对不对，是周四，然后记得带电脑",
+      "output": "我们周四下午三点开会，记得带电脑。",
+      "expect": "untranslated"
+    },
+    {
+      "id": "zh-to-ko",
+      "target": "ko",
+      "input": "嗯我们周三下午三点开会，不对不对，是周四，然后记得带电脑",
+      "output": "목요일 오후 3시에 회의가 있으니 노트북을 꼭 챙기세요.",
+      "expect": null
+    },
+    {
+      "id": "zh-to-ru",
+      "target": "ru",
+      "input": "嗯我们周三下午三点开会，不对不对，是周四，然后记得带电脑",
+      "output": "Встреча в четверг в 15:00, не забудьте ноутбук.",
+      "expect": null
+    },
+    {
+      "id": "en-to-ru-left-in-english",
+      "target": "ru",
+      "input": "um so the meeting is on Thursday at three, bring your laptop",
+      "output": "The meeting is on Thursday at 3. Bring your laptop.",
+      "expect": "untranslated"
+    },
+    {
+      "id": "zh-to-es",
+      "target": "es",
+      "input": "嗯我们周三下午三点开会，不对不对，是周四，然后记得带电脑",
+      "output": "La reunión es el jueves a las 3 de la tarde; trae tu portátil.",
+      "expect": null
+    },
+    {
+      "id": "zh-to-en-keeps-a-name-short",
+      "target": "en",
+      "input": "联系欧阳娜娜",
+      "output": "Contact 欧阳娜娜.",
+      "expect": null
+    },
+    {
+      "id": "zh-to-en-keeps-a-name-in-a-sentence",
+      "target": "en",
+      "input": "明天联系一下欧阳娜娜，问她报告写完了没有",
+      "output": "Contact 欧阳娜娜 tomorrow and ask whether she has finished the report.",
+      "expect": null
+    },
+    {
+      "id": "en-to-zh-tech-stack",
+      "target": "zh-Hans",
+      "input": "Use React, TypeScript, Vite and Tailwind.",
+      "output": "用 React、TypeScript、Vite 和 Tailwind。",
+      "expect": null
+    },
+    {
+      "id": "en-to-zh-joined-terms",
+      "target": "zh-Hans",
+      "input": "Use e-mail and foo_bar.",
+      "output": "用 e-mail 和 foo_bar。",
+      "expect": null
+    },
+    {
+      "id": "en-to-zh-lowercase-terms-from-vocabulary",
+      "target": "zh-Hans",
+      "input": "write it with cursor, windsurf, zed, helix and vim",
+      "output": "用 cursor、windsurf、zed、helix 和 vim 写。",
+      "vocabulary": [
+        "cursor",
+        "windsurf",
+        "zed",
+        "helix",
+        "vim"
+      ],
+      "expect": null
+    },
+    {
+      "id": "en-to-zh-versions-and-tools",
+      "target": "zh-Hans",
+      "input": "Update the CI to use Node 22, pnpm 9, Vitest and Playwright, and drop Jest.",
+      "output": "把 CI 更新为 Node 22、pnpm 9、Vitest 和 Playwright，并去掉 Jest。",
+      "expect": null
+    },
+    {
+      "id": "en-to-zh-one-word-translated",
+      "target": "zh-Hans",
+      "input": "um so send the report to Mike by Friday, actually no, send it to Sarah",
+      "output": "发送 the report to Sarah by Friday.",
+      "expect": "untranslated"
+    },
+    {
+      "id": "en-to-ja-katakana-terms",
+      "target": "ja",
+      "input": "Check localization, serialization, deserialization, instrumentation, orchestration, documentation and scalability.",
+      "output": "ローカリゼーション、シリアライゼーション、デシリアライゼーション、インストルメンテーション、オーケストレーション、ドキュメンテーション、スケーラビリティを確認してください。",
+      "expect": null
+    },
+    {
+      "id": "zh-to-en-long",
+      "target": "en",
+      "input": "嗯，我先说一下这周的进展啊。登录页面的验证码问题已经修好了，主要是因为 iOS 上面的 WebView 缓存了旧的脚本，然后我们加了一个版本号就解决了。第二个是打包体积，之前是两百兆，现在压到了八十兆左右，主要是把没用的字体和图片删掉了。第三个，嗯，推送通知在安卓上偶尔收不到，这个还在查，我怀疑是厂商的省电策略把后台进程杀掉了。下周我打算先把推送的问题搞定，然后再开始做暗黑模式。",
+      "output": "Here's this week's progress. The verification code issue on the login page is fixed: the WebView on iOS was caching an old script, and adding a version number solved it. Second, the app size: it was 200 MB and is now down to about 80 MB, mainly by removing unused fonts and images. Third, push notifications occasionally don't arrive on Android. I'm still looking into it; I suspect the vendor's battery-saving policy is killing the background process. Next week I plan to fix the push notification issue first and then start on dark mode.",
+      "expect": null
+    },
+    {
+      "id": "en-to-zh-long",
+      "target": "zh-Hans",
+      "input": "So um, quick update on the migration. We moved the user service to Postgres 17 last night and it went fine, no downtime. The only issue was that a few queries got slower because the old indexes didn't carry over, so I recreated them this morning and the p95 latency is back to around 40 milliseconds. Next step is the billing service, which is trickier because it still talks to the old MySQL replica. I'd like to do it next Tuesday after the release freeze ends. If anyone has concerns about the timing, let me know by Friday.",
+      "output": "关于迁移的进展：我们昨晚把用户服务迁到了 Postgres 17，过程很顺利，没有停机。唯一的问题是有几个查询变慢了，因为旧的索引没有迁过来，所以我今天早上重建了索引，p95 延迟已经回到 40 毫秒左右。下一步是计费服务，这个更麻烦，因为它还在连旧的 MySQL 副本。我想在下周二发布冻结结束后再做。如果有人对时间安排有顾虑，请在周五前告诉我。",
+      "expect": null
+    },
+    {
+      "id": "en-to-ja-long",
+      "target": "ja",
+      "input": "Please review the pull request for the new onboarding flow. I changed the permission screen so it asks for microphone access first and accessibility second, and I added a short video that shows how to hold the Fn key. The tests pass locally, but the snapshot tests on Windows still need to be updated. Let me know if the wording on the second screen sounds too technical.",
+      "output": "新しいオンボーディングフローのプルリクエストをレビューしてください。権限の画面を変更して、最初にマイク、次にアクセシビリティへのアクセスを求めるようにし、Fn キーを押し続ける方法を見せる短い動画を追加しました。ローカルではテストが通りますが、Windows のスナップショットテストはまだ更新が必要です。2 つ目の画面の文言が専門的すぎるようでしたら教えてください。",
+      "expect": null
+    },
+    {
+      "id": "ja-to-en-long",
+      "target": "en",
+      "input": "えーと、来週の打ち合わせなんですけど、月曜日じゃなくて、火曜日の午後二時に変更してもらえますか。それと、資料は前日までに共有フォルダにアップロードしておいてください。あ、あと、新しいデザイン案についても少し話したいので、十五分くらい時間を取ってもらえると助かります。",
+      "output": "About next week's meeting: could you move it from Monday to Tuesday at 2 p.m.? Also, please upload the materials to the shared folder by the day before. And I'd like to talk a little about the new design proposal too, so it would help if you could set aside about 15 minutes.",
+      "expect": null
+    },
+    {
+      "id": "zh-to-en-answered",
+      "target": "en",
+      "input": "帮我写一个快速排序",
+      "output": "Sure! Here's a simple quicksort in Python. It picks a pivot, splits the list into the items smaller than the pivot, equal to it and larger than it, and sorts the two outer parts the same way until they're empty:\n\ndef quicksort(items):\n    if len(items) <= 1:\n        return items\n    pivot = items[len(items) // 2]\n    left = [x for x in items if x < pivot]\n    middle = [x for x in items if x == pivot]\n    right = [x for x in items if x > pivot]\n    return quicksort(left) + middle + quicksort(right)\n\nIt runs in O(n log n) time on average, but O(n²) in the worst case, when the pivot is always the smallest or largest item. Picking a random pivot makes that unlikely. Let me know if you'd like an in-place version instead!",
+      "expect": "answered"
+    },
+    {
+      "id": "en-to-ja-answered",
+      "target": "ja",
+      "input": "what's the difference between TCP and UDP",
+      "output": "TCPとUDPはどちらもインターネットで使われる通信プロトコルですが、大きな違いがあります。TCPは接続型のプロトコルで、データが正しい順番で確実に届くように、受信の確認や再送を行います。そのため信頼性は高いですが、少し時間がかかります。一方、UDPは接続を確立せずにデータを送るため、速度は速いですが、データが失われたり順番が入れ替わったりすることがあります。動画のストリーミングやオンラインゲームなど、多少のデータ損失よりも速さが大切な場面ではUDPがよく使われます。ファイルの転送やウェブの閲覧のように、正確さが必要な場面ではTCPが使われます。",
+      "expect": "answered"
+    },
+    {
+      "id": "zh-to-en-summarised",
+      "target": "en",
+      "input": "我们今天讨论了第一个问题，主要是关于缓存和数据库的性能。我们今天讨论了第二个问题，主要是关于登录页面加载太慢。我们今天讨论了第三个问题，主要是关于验证码在手机上显示不出来。我们今天讨论了第四个问题，主要是关于打包出来的体积太大。我们今天讨论了第五个问题，主要是关于暗黑模式的颜色不对。我们今天讨论了第六个问题，主要是关于导出 PDF 的时候字体丢失。我们今天讨论了第七个问题，主要是关于推送通知有时候收不到。",
+      "output": "We discussed several performance and UI problems today.",
+      "expect": "summarised"
+    },
+    {
+      "id": "en-to-zh-summarised",
+      "target": "zh-Hans",
+      "input": "So um, quick update on the migration. We moved the user service to Postgres 17 last night and it went fine, no downtime. The only issue was that a few queries got slower because the old indexes didn't carry over, so I recreated them this morning and the p95 latency is back to around 40 milliseconds. Next step is the billing service, which is trickier because it still talks to the old MySQL replica. I'd like to do it next Tuesday after the release freeze ends. If anyone has concerns about the timing, let me know by Friday.",
+      "output": "迁移很顺利，下周二迁移计费服务，有意见周五前告诉我。",
+      "expect": "summarised"
+    },
+    {
+      "id": "typed-language-not-checked",
+      "target": "Italiano",
+      "input": "嗯我们周三下午三点开会，不对不对，是周四，然后记得带电脑",
+      "output": "Ci vediamo giovedì alle 15. Ricordati di portare il portatile.",
+      "expect": null
+    },
+    {
+      "id": "typed-name-of-a-listed-language",
+      "target": "english",
+      "input": "嗯我们周三下午三点开会，不对不对，是周四，然后记得带电脑",
+      "output": "我们周四下午三点开会，记得带电脑。",
+      "expect": "untranslated"
+    },
+    {
+      "id": "too-short-to-tell",
+      "target": "en",
+      "input": "好的收到",
+      "output": "好的",
+      "expect": null
+    }
+  ]
+}

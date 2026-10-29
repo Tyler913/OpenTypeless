@@ -69,19 +69,31 @@ public partial class App : Application
         TextInserter.ClipboardOwner = _tray.Hwnd;
         _popover = new PopoverWindow(_controller, page => ShowSettings(page), Quit);
         _tray.Clicked += rect => _popover.Toggle(rect);
+        _tray.Locked += _controller.SystemLocked;
+        _tray.Unlocked += _controller.SystemUnlocked;
 
         _hotkey.Hotkey = _settings.Hotkey;
+        _hotkey.Shortcuts = _settings.Shortcuts;
+        _hotkey.ModeChordKeys = _controller.UpdateModeChords();
         _hotkey.OnPress = _controller.HotkeyPressed;
         _hotkey.OnRelease = _controller.HotkeyReleased;
         _hotkey.OnOtherKey = _controller.OtherKeyPressed;
         _hotkey.OnEscape = _controller.EscapePressed;
+        _hotkey.OnSendKey = _controller.SendKeyPressed;
+        _hotkey.OnAction = action => _controller.Perform(action, _settings.Shortcut(action));
         _hotkey.Start();
 
         _settings.PropertyChanged += OnSettingsChanged;
         _controller.StateChanged += () =>
         {
+            // Esc cancels a dictation under way, and then shouldn't reach the focused app too.
+            _hotkey.SwallowsEscape = _controller.State != SessionController.SessionState.Idle;
+            UpdateSendKey();
             _tray.SetState(_controller.State);
-            if (_controller.State == SessionController.SessionState.Idle) Updater.Shared.SessionBecameIdle();
+            if (_controller.State != SessionController.SessionState.Idle) return;
+            Updater.Shared.SessionBecameIdle();
+            // A warm microphone that failed during the dictation is opened again.
+            _dispatcher?.TryEnqueue(_controller.UpdateWarmMicrophone);
         };
         _controller.OpenSettingsRequested += page => ShowSettings(SettingsPageInfo.Parse(page));
         var dispatcher = DispatcherQueue.GetForCurrentThread();
@@ -133,6 +145,21 @@ public partial class App : Application
             var hotkey = _settings.Hotkey;
             if (_hotkey.Hotkey != hotkey) _hotkey.Hotkey = hotkey;
         }
+        if (e.PropertyName == nameof(AppSettings.Shortcuts)) _hotkey.Shortcuts = _settings.Shortcuts;
+        // Translation or command mode turned on or off, a chord changed, or the hotkey became one of a chord's keys.
+        if (e.PropertyName is nameof(AppSettings.Hotkey) or nameof(AppSettings.TranslationEnabled) or nameof(AppSettings.TranslationLanguage)
+            or nameof(AppSettings.TranslationOtherLanguage) or nameof(AppSettings.TranslationChord)
+            or nameof(AppSettings.CommandModeEnabled) or nameof(AppSettings.CommandChord))
+        {
+            _dispatcher?.TryEnqueue(() => _hotkey.ModeChordKeys = _controller.UpdateModeChords());
+        }
+        if (e.PropertyName == nameof(AppSettings.SendKey)) UpdateSendKey();
+    }
+
+    /// <summary>The send key only means "finish and send" while a dictation is recording; otherwise it's the focused app's.</summary>
+    private void UpdateSendKey()
+    {
+        _hotkey.RecordingSendKey = _controller.State == SessionController.SessionState.Recording ? _settings.SendKey : TypelessCore.SendKey.Off;
     }
 
     /// <summary>After the guide: the page for whatever is still missing, or Home.</summary>
@@ -152,7 +179,9 @@ public partial class App : Application
     private void Quit()
     {
         _popover.Dismiss();
-        if (_controller.State != SessionController.SessionState.Idle) _controller.Cancel(silently: true);
+        // Quitting mid-recording keeps what was said, retryable from History; so does a file being transcribed.
+        if (_controller.State != SessionController.SessionState.Idle) _controller.StopForQuit();
+        _controller.StopFilesForQuit();
         _tray.Dispose();
         _onboarding?.CloseForExit();
         _settingsWindow?.CloseForExit();

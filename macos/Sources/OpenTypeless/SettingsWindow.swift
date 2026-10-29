@@ -3,7 +3,7 @@ import SwiftUI
 import TypelessCore
 
 enum SettingsPage: String, CaseIterable, Identifiable {
-    case home, general, shortcut, providers, models, style, history
+    case home, general, shortcut, providers, models, style, apps, history
 
     var id: String { rawValue }
 
@@ -15,6 +15,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .providers: return L("服务商", "Providers")
         case .models: return L("模型", "Models")
         case .style: return L("词汇与风格", "Vocabulary & Style")
+        case .apps: return L("应用", "Apps")
         case .history: return L("历史记录", "History")
         }
     }
@@ -28,6 +29,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
                                   "Add API keys. Speech-to-text and clean-up can use different providers.")
         case .models: return L("为语音转文字和文字整理分别选择模型", "Pick a model for each step")
         case .style: return L("让整理结果更符合你的用词和习惯", "Teach the clean-up your terms and preferences")
+        case .apps: return L("在特定应用里听写时使用的设置", "Settings used when you dictate into a particular app")
         case .history: return L("每次听写都会保存，失败的可以重试", "Every dictation is saved; failed ones can be retried")
         }
     }
@@ -40,6 +42,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .providers: return "key.fill"
         case .models: return "cpu.fill"
         case .style: return "textformat"
+        case .apps: return "square.grid.2x2.fill"
         case .history: return "clock.fill"
         }
     }
@@ -52,6 +55,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .providers: return .orange
         case .models: return .purple
         case .style: return .green
+        case .apps: return .teal
         case .history: return .indigo
         }
     }
@@ -60,6 +64,10 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 @MainActor
 final class SettingsNavigation: ObservableObject {
     @Published var page: SettingsPage = .home
+    /// False while the settings window is closed. The window is kept when closed, and SwiftUI never tells the views in
+    /// it that they've gone, so the page is taken out instead: its onDisappear then stops the shortcut recorder, the
+    /// microphone test and its timers, as hiding the Windows settings window does.
+    @Published var isWindowOpen = true
 }
 
 /// The page area to the right of the sidebar.
@@ -77,6 +85,14 @@ struct SettingsDetailView: View {
     }
 
     @ViewBuilder private var content: some View {
+        if !navigation.isWindowOpen {
+            Color.clear
+        } else {
+            page
+        }
+    }
+
+    @ViewBuilder private var page: some View {
         switch navigation.page {
         case .home: HomePage(settings: settings, navigation: navigation)
         case .general: GeneralPage(settings: settings)
@@ -84,7 +100,8 @@ struct SettingsDetailView: View {
         case .providers: ProvidersPage(settings: settings)
         case .models: ModelsPage(settings: settings, navigation: navigation, controller: controller)
         case .style: StylePage(settings: settings)
-        case .history: HistoryPage(history: HistoryStore.shared, settings: settings, controller: controller)
+        case .apps: AppsPage(settings: settings)
+        case .history: HistoryPage(history: HistoryStore.shared, settings: settings, controller: controller, files: controller.files)
         }
     }
 }
@@ -93,13 +110,14 @@ struct SettingsDetailView: View {
 struct SettingsSidebar: View {
     @ObservedObject var navigation: SettingsNavigation
     @ObservedObject var settings: AppSettings
+    @ObservedObject var permissions = PermissionsMonitor.shared
 
     private var version: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String).map { "v\($0)" } ?? "dev"
     }
 
     private var ready: Bool {
-        settings.isConfigured(settings.sttProvider) && Permissions.microphoneGranted && Permissions.accessibilityGranted
+        settings.isConfigured(settings.sttProvider) && permissions.microphoneGranted && permissions.accessibilityGranted
     }
 
     var body: some View {
@@ -172,7 +190,7 @@ struct PageScaffold<Content: View>: View {
 
 /// Opens / focuses the settings window.
 @MainActor
-final class SettingsWindowController {
+final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     let navigation = SettingsNavigation()
     private let controller: SessionController
@@ -183,12 +201,22 @@ final class SettingsWindowController {
 
     func show(page: SettingsPage? = nil) {
         if let page { navigation.page = page }
+        navigation.isWindowOpen = true
+        PermissionsMonitor.shared.setWatching(true, by: .settingsWindow)
         if window == nil {
-            window = Self.makeWindow(navigation: navigation, controller: controller)
-            window?.center()
+            let window = Self.makeWindow(navigation: navigation, controller: controller)
+            window.delegate = self
+            window.center()
+            self.window = window
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// The window stays around for next time, but its page goes (see `SettingsNavigation.isWindowOpen`).
+    func windowWillClose(_ notification: Notification) {
+        navigation.isWindowOpen = false
+        PermissionsMonitor.shared.setWatching(false, by: .settingsWindow)
     }
 
     /// An AppKit split view with a sidebar item: on macOS 26+ AppKit draws that sidebar as a floating

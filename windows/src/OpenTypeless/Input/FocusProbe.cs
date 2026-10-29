@@ -151,11 +151,79 @@ public static class FocusProbe
     private static readonly HashSet<string> TerminalClasses = ["ConsoleWindowClass", "CASCADIA_HOSTING_WINDOW_CLASS", "PuTTY", "mintty"];
     private static readonly string[] TerminalExecutables = ["windowsterminal", "openconsole", "wezterm-gui", "alacritty", "mintty", "putty", "kitty"];
 
-    private static bool IsTerminal(nint window, uint pid)
+    internal static bool IsTerminal(nint window, uint pid)
     {
         if (TerminalClasses.Contains(Win32.ClassName(window))) return true;
         var exe = Win32.ProcessImagePath(pid);
         return exe != null && TerminalExecutables.Contains(Path.GetFileNameWithoutExtension(exe), StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The executable of the app in front ("slack.exe"), to pick its app profile; null when it can't be read.</summary>
+    public static string? ForegroundExecutable()
+    {
+        var foreground = Win32.GetForegroundWindow();
+        if (foreground == 0 || ExecutablePath(foreground) is not { } path) return null;
+        return Path.GetFileName(path);
+    }
+
+    /// <summary>
+    /// The full path of the app a top-level window belongs to; null when it can't be read. A Store app's window belongs
+    /// to ApplicationFrameHost, which only frames it: the app is the process behind its content.
+    /// </summary>
+    public static string? ExecutablePath(nint window)
+    {
+        Win32.GetWindowThreadProcessId(window, out var pid);
+        var path = Win32.ProcessImagePath(pid);
+        if (!string.Equals(Path.GetFileName(path), "ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase)) return path;
+        uint hosted = 0;
+        Win32.EnumChildWindows(window, (child, _) =>
+        {
+            Win32.GetWindowThreadProcessId(child, out var owner);
+            if (owner == pid || owner == 0) return true;
+            hosted = owner;
+            return false;
+        }, 0);
+        return hosted != 0 && Win32.ProcessImagePath(hosted) is { } hostedPath ? hostedPath : path;
+    }
+
+    /// <summary>Whether the foreground window is a terminal, where Ctrl+C interrupts the running program instead of copying.</summary>
+    public static bool ForegroundIsTerminal()
+    {
+        var foreground = Win32.GetForegroundWindow();
+        if (foreground == 0) return false;
+        Win32.GetWindowThreadProcessId(foreground, out var pid);
+        return IsTerminal(foreground, pid);
+    }
+
+    /// <summary>
+    /// What's just before and after the cursor in the focused field, for fitting the dictation to it (see
+    /// InsertionJoiner). Null whenever it can't be told for sure: a terminal (its buffer's selection isn't the shell's
+    /// cursor), a field that doesn't say it isn't a password field, an element without a Text pattern, a read that
+    /// doesn't add up, or an app that doesn't answer in time. UI thread only.
+    /// </summary>
+    internal static Task<UIAutomation.CursorContext?> TextAroundCursor() => ForegroundIsTerminal()
+        ? Task.FromResult<UIAutomation.CursorContext?>(null)
+        : Probe<UIAutomation.CursorContext?>(() => UIAutomation.TextAroundCursor(before: 12, after: 8), null);
+
+    /// <summary>
+    /// Whether the cursor is still where <paramref name="context"/> was read (the same field, the same selection): false
+    /// when it moved, or when that can't be told in time. UI thread only.
+    /// </summary>
+    internal static Task<bool> CursorStillAt(UIAutomation.CursorContext context) => Probe(() => UIAutomation.CursorStillAt(context), false);
+
+    private static Task? _probe;
+
+    /// <summary>
+    /// Runs a UI Automation read on the thread pool, one at a time: the call goes into the other app, and a hung app must
+    /// neither stall the paste nor pile up blocked reads. While an earlier read is still out, or when this one takes
+    /// longer than 0.3 s, the answer is <paramref name="unknown"/>; a late result is dropped.
+    /// </summary>
+    private static async Task<T> Probe<T>(Func<T> read, T unknown)
+    {
+        if (_probe is { IsCompleted: false }) return unknown;
+        var task = Task.Run(read);
+        _probe = task;
+        return await Task.WhenAny(task, Task.Delay(300)) == task && task.IsCompletedSuccessfully ? task.Result : unknown;
     }
 
     private static int Int(IUIAutomationElement element, int property) =>

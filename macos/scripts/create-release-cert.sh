@@ -8,7 +8,9 @@
 #
 # Writes OpenTypeless-Release.p12 to the folder you pass (default: the current folder) and prints the two values to
 # add as repository secrets. Keep the .p12 somewhere safe and private: it is the release signing key. Losing it
-# means users re-grant permissions once after the release signed with a new one.
+# means installed copies refuse the in-app update to a release signed with a new one: users have to download that
+# release by hand (and re-grant permissions once). The new certificate's hash also goes into RELEASE_CERTIFICATE_LEAF
+# in .github/workflows/macos.yml.
 set -euo pipefail
 
 NAME="OpenTypeless Release"
@@ -41,6 +43,8 @@ openssl pkcs12 -export -legacy -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
   || openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" \
     -out "$P12" -passout "pass:$PASSWORD" -name "$NAME"
 chmod 600 "$P12"
+# What codesign shows as `certificate leaf = H"…"`: the certificate's SHA-1.
+LEAF="$(openssl x509 -noout -fingerprint -sha1 -in "$TMP/cert.pem" | cut -d= -f2 | tr -d : | tr 'A-F' 'a-f')"
 
 cat <<INFO
 ✓ Created $P12 ("$NAME", valid for 20 years)
@@ -55,5 +59,6 @@ or with the GitHub CLI:
   base64 -i "$P12" | gh secret set MACOS_SIGNING_CERTIFICATE
   gh secret set MACOS_SIGNING_CERTIFICATE_PASSWORD --body '$PASSWORD'
 
-Every release tag from then on is signed with it.
+and set RELEASE_CERTIFICATE_LEAF in .github/workflows/macos.yml to $LEAF, which release builds are checked
+against. Every release tag from then on is signed with it.
 INFO

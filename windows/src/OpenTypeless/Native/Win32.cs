@@ -130,6 +130,7 @@ public static partial class Win32
     public const int INPUT_KEYBOARD = 1;
     public const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
     public const uint KEYEVENTF_KEYUP = 0x0002;
+    public const ushort VK_SHIFT = 0x10;
     public const ushort VK_CONTROL = 0x11;
     public const ushort VK_RETURN = 0x0D;
     public const ushort VK_ESCAPE = 0x1B;
@@ -303,8 +304,35 @@ public static partial class Win32
         return n > 0 ? new string(buffer, 0, n) : "";
     }
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowText(nint hWnd, [Out] char[] lpString, int nMaxCount);
+
+    /// <summary>The window's title (a browser's: its tab's), up to 512 characters.</summary>
+    public static string WindowTitle(nint hwnd)
+    {
+        var buffer = new char[512];
+        var n = GetWindowText(hwnd, buffer, buffer.Length);
+        return n > 0 ? new string(buffer, 0, n) : "";
+    }
+
     [DllImport("user32.dll")]
     public static extern uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
+
+    /// <summary>Return false to stop the enumeration.</summary>
+    public delegate bool EnumWindowsProc(nint hWnd, nint lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumChildWindows(nint hWndParent, EnumWindowsProc lpEnumFunc, nint lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, nint lParam);
+
+    public const uint GW_OWNER = 4;
+
+    [DllImport("user32.dll")]
+    public static extern nint GetWindow(nint hWnd, uint uCmd);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT
@@ -420,6 +448,22 @@ public static partial class Win32
     public static extern uint RegisterWindowMessage(string lpString);
 
     public static readonly nint HWND_MESSAGE = -3;
+
+    // MARK: Session and power
+
+    public const uint WM_WTSSESSION_CHANGE = 0x02B1;
+    public const int WTS_SESSION_LOCK = 0x7;
+    public const int WTS_SESSION_UNLOCK = 0x8;
+    public const uint NOTIFY_FOR_THIS_SESSION = 0;
+    public const uint WM_POWERBROADCAST = 0x0218;
+    public const int PBT_APMSUSPEND = 0x4;
+    public const int PBT_APMRESUMEAUTOMATIC = 0x12;
+
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    public static extern bool WTSRegisterSessionNotification(nint hWnd, uint dwFlags);
+
+    [DllImport("wtsapi32.dll")]
+    public static extern bool WTSUnRegisterSessionNotification(nint hWnd);
 
     // MARK: Icons
 

@@ -52,7 +52,7 @@ public struct EvaluationAttempt: Codable, Sendable {
             switch event {
             case let .content(piece): rawOutput += piece
             case let .finished(reason): finishReason = reason
-            case let .error(message): error = message
+            case let .error(message, _): error = message
             case .done: receivedDone = true
             case .usage: break // read from the raw chunk above, with the evaluation's own fields
             }
@@ -66,6 +66,9 @@ public struct EvaluationPlan: Codable, Sendable {
     public let upperBoundUSD: Double
     public let inputTokenBound: Int
     public let outputTokenBound: Int
+    /// The request carries text around the cursor, so its output is cleaned of that as the app's is. Optional, so a plan
+    /// saved before it existed still reads.
+    public var sentContext: Bool?
 }
 
 extension APIClient {
@@ -96,7 +99,8 @@ extension APIClient {
         let upper = (Double(inputBound) * promptPrice + Double(outputBound) * completionPrice) * 1.2
         let data = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
         return EvaluationPlan(model: options.model, bodyJSON: String(decoding: data, as: UTF8.self),
-                              upperBoundUSD: upper, inputTokenBound: inputBound, outputTokenBound: outputBound)
+                              upperBoundUSD: upper, inputTokenBound: inputBound, outputTokenBound: outputBound,
+                              sentContext: Prompts.contextBlock(options.context) != nil)
     }
 
     /// One attempt only: failures and missing billing remain visible, with no hidden retries.
@@ -125,7 +129,7 @@ extension APIClient {
             }
             if !result.receivedDone && result.error == nil { result.error = "stream ended without DONE" }
             if result.finishReason == nil && result.error == nil { result.error = "missing finish_reason" }
-            result.output = Prompts.sanitizePolishOutput(result.rawOutput)
+            result.output = Prompts.sanitizePolishOutput(result.rawOutput, sentContext: plan.sentContext == true)
             if result.output.isEmpty && result.error == nil { result.error = "empty output" }
         } catch { result.error = error.localizedDescription }
         result.seconds = ProcessInfo.processInfo.systemUptime - start
@@ -248,6 +252,11 @@ public enum PolishMetrics {
     public static func similarity(_ a: String, _ b: String) -> Double {
         let x = Array(normalized(a)), y = Array(normalized(b))
         if x.isEmpty || y.isEmpty { return x.count == y.count ? 1 : 0 }
+        return 1 - Double(distance(x, y)) / Double(max(x.count, y.count))
+    }
+
+    /// Edit distance between two normalised texts.
+    static func distance(_ x: [Character], _ y: [Character]) -> Int {
         // A shared start and end never change the distance, and after a small fix to a long text they are nearly all
         // of it: only the part in between needs the quadratic table (the learner runs this on the main thread).
         var start = 0
@@ -266,7 +275,88 @@ public enum PolishMetrics {
             }
             swap(&previous, &current)
         }
-        return 1 - Double(previous[m]) / Double(max(x.count, y.count))
+        return previous[m]
+    }
+
+    /// Four letters in a row of a normalised text.
+    struct Gram: Hashable {
+        static let length = 4
+        let a, b, c, d: UInt32
+    }
+
+    /// Every run of four letters, by where it starts.
+    static func grams(_ text: [UInt32]) -> [Gram] {
+        guard text.count >= Gram.length else { return [] }
+        return (0...(text.count - Gram.length)).map { Gram(a: text[$0], b: text[$0 + 1], c: text[$0 + 2], d: text[$0 + 3]) }
+    }
+
+    /// One place where `y` differs from `x`: the letters of `y` there (positions), and how many of `x`'s it replaces.
+    struct Edit: Equatable {
+        let output: Range<Int>
+        let replaced: Int
+    }
+
+    /// Where `y` differs from `x`, by an edit-distance alignment of the two: each run of changes between letters they
+    /// share. Nil for texts too long to align here (over `maxCells` pairs of letters, a table that size in bytes).
+    static func edits(_ x: [UInt32], _ y: [UInt32], maxCells: Int = 8_000_000) -> [Edit]? {
+        var start = 0
+        while start < x.count, start < y.count, x[start] == y[start] { start += 1 }
+        var end = 0
+        while end < x.count - start, end < y.count - start, x[x.count - 1 - end] == y[y.count - 1 - end] { end += 1 }
+        let n = x.count - start - end, m = y.count - start - end
+        guard n * m <= maxCells else { return nil }
+        // How each cell was reached: 0 the same letter, 1 another letter in its place, 2 a letter of x left out,
+        // 3 a letter of y added. Ties go in that order, as on Windows.
+        var moves = [UInt8](repeating: 0, count: (n + 1) * (m + 1))
+        var previous = Array(0...m)
+        var current = [Int](repeating: 0, count: m + 1)
+        for i in stride(from: 1, through: n, by: 1) {
+            current[0] = i
+            for j in stride(from: 1, through: m, by: 1) {
+                let same = x[start + i - 1] == y[start + j - 1]
+                let diagonal = previous[j - 1] + (same ? 0 : 1), leftOut = previous[j] + 1, added = current[j - 1] + 1
+                if diagonal <= leftOut, diagonal <= added {
+                    current[j] = diagonal
+                    moves[i * (m + 1) + j] = same ? 0 : 1
+                } else if leftOut <= added {
+                    current[j] = leftOut
+                    moves[i * (m + 1) + j] = 2
+                } else {
+                    current[j] = added
+                    moves[i * (m + 1) + j] = 3
+                }
+            }
+            swap(&previous, &current)
+        }
+        // Back from the end; a run of changes ends at the next shared letter.
+        var runs: [Edit] = []
+        var i = n, j = m
+        var runEnd: Int?
+        var replaced = 0
+        while i > 0 || j > 0 {
+            let move = i == 0 ? 3 : j == 0 ? 2 : moves[i * (m + 1) + j]
+            if move == 0 {
+                if let runEnd { runs.append(Edit(output: (start + j)..<(start + runEnd), replaced: replaced)) }
+                runEnd = nil
+                replaced = 0
+                i -= 1
+                j -= 1
+                continue
+            }
+            if runEnd == nil { runEnd = j }
+            switch move {
+            case 1: i -= 1; j -= 1; replaced += 1
+            case 2: i -= 1; replaced += 1
+            default: j -= 1
+            }
+        }
+        if let runEnd { runs.append(Edit(output: start..<(start + runEnd), replaced: replaced)) }
+        return runs.reversed()
+    }
+
+    /// `normalized`, as Unicode scalar values, which compare far faster than characters.
+    static func scalars(_ text: String) -> [UInt32] {
+        normalized(text).unicodeScalars.map(\.value)
     }
 
     static func latinWords(_ text: String) -> [String] {

@@ -1,8 +1,9 @@
 import Foundation
 
 public enum TranscriptJoiner {
-    /// Joins per-chunk transcripts. CJK text is concatenated directly; a space is inserted only
-    /// where both sides are Latin letters/digits (so "hello" + "world" doesn't become "helloworld").
+    /// Joins per-chunk transcripts. Chinese and Japanese text is concatenated directly; elsewhere (Latin letters,
+    /// digits, Korean, which puts spaces between words) a space goes in, so "hello" + "world" doesn't become
+    /// "helloworld".
     public static func join(_ parts: [String]) -> String {
         var result = ""
         for raw in parts {
@@ -18,11 +19,17 @@ public enum TranscriptJoiner {
     }
 
     private static func needsSpace(between a: Unicode.Scalar, and b: Unicode.Scalar) -> Bool {
-        if isCJK(a) || isCJK(b) { return false }
+        if joinsWithoutSpace(a) || joinsWithoutSpace(b) { return false }
         if CharacterSet.whitespacesAndNewlines.contains(a) { return false }
         // After sentence punctuation like "." or "," a space reads naturally in Latin text.
         if CharacterSet.punctuationCharacters.contains(b) { return false }
         return true
+    }
+
+    /// Script written without spaces between words: Han, kana, CJK punctuation and full-width forms. Not Hangul, unlike
+    /// `isCJK`: Korean separates its words with spaces, so two Korean chunks need one between them.
+    static func joinsWithoutSpace(_ s: Unicode.Scalar) -> Bool {
+        isCJK(s) && !(0xAC00...0xD7AF).contains(s.value)
     }
 
     static func isCJK(_ s: Unicode.Scalar) -> Bool {

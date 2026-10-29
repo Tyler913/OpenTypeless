@@ -20,6 +20,20 @@ public struct APIClient: Sendable {
         return URLSession(configuration: config)
     }()
 
+    /// A client for a file being transcribed, on a session of its own with fewer connections per host (see
+    /// `FileTranscription.maxConnectionsPerHost`): a dictation's requests never wait behind a file's.
+    public static func forFiles(endpoint: ProviderEndpoint) -> APIClient {
+        APIClient(endpoint: endpoint, session: fileSession)
+    }
+
+    static let fileSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForResource = 600
+        config.waitsForConnectivity = false
+        config.httpMaximumConnectionsPerHost = FileTranscription.maxConnectionsPerHost
+        return URLSession(configuration: config)
+    }()
+
     var isOpenRouter: Bool { endpoint.id == .openrouter }
 
     func url(_ path: String) -> URL {
@@ -57,6 +71,16 @@ public struct APIClient: Sendable {
             if let detail = object["detail"] as? String { return detail }
         }
         return String(data: data.prefix(300), encoding: .utf8) ?? "unknown error"
+    }
+
+    /// The HTTP status an error body carries in `error.code` (OpenRouter puts 401, 402, 429… there, also inside a 200
+    /// response or a stream), so the error is classified like that status and e.g. a 402 isn't retried. Nil for string
+    /// codes and anything else.
+    static func errorStatus(from data: Data) -> Int? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let error = object["error"] as? [String: Any],
+              let code = error["code"] as? Int, (400...599).contains(code) else { return nil }
+        return code
     }
 }
 
@@ -149,7 +173,7 @@ extension APIClient {
         }
         if object["error"] != nil {
             // Some upstream failures arrive as 200 + error body.
-            throw APIError.http(status: 502, message: Self.errorMessage(from: data))
+            throw APIError.http(status: Self.errorStatus(from: data) ?? 502, message: Self.errorMessage(from: data))
         }
         guard let text = object["text"] as? String else {
             throw APIError.badResponse("missing \"text\" field")

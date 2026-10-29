@@ -1,4 +1,3 @@
-import AVFoundation
 import Foundation
 import TypelessCore
 
@@ -8,7 +7,8 @@ enum CLI {
         let url = URL(fileURLWithPath: path)
         let samples: [Int16]
         do {
-            samples = try loadAudio(url)
+            // The app's own reader: the audio track of audio and video files alike.
+            samples = try await AudioFileDecoder.load(url)
         } catch {
             log("❌ Can't read audio: \(error.localizedDescription)")
             return 1
@@ -31,7 +31,7 @@ enum CLI {
         let pipeline = TranscriptionPipeline(
             client: client,
             options: .init(model: settings.sttModel, language: settings.sttLanguage.isEmpty ? nil : settings.sttLanguage,
-                           vocabulary: settings.vocabularyList),
+                           vocabulary: settings.dictationVocabulary),
             observer: { index, state in
                 let t = String(format: "%5.1fs", Date().timeIntervalSince(start))
                 switch state {
@@ -71,6 +71,24 @@ enum CLI {
         print("\n===== Raw transcript (\(raw.count) chars) =====\n\(raw)\n")
 
         guard polish else { return 0 }
+        return await cleanUp(raw)
+    }
+
+    /// `--polish-text <file>`: the clean-up alone, on a transcript in a text file.
+    static func polishText(path: String) async -> Int32 {
+        guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else {
+            log("❌ Can't read \(path)")
+            return 1
+        }
+        let settings = AppSettings.shared
+        log("📝 \(URL(fileURLWithPath: path).lastPathComponent): \(raw.count) chars, \(WordCount.count(raw)) words; clean-up: "
+            + "\(settings.polishProvider.displayName) / \(settings.polishModel)")
+        return await cleanUp(raw)
+    }
+
+    /// Cleans `raw` up the way the app does (in parts when it's long, each part checked) and prints the result.
+    static func cleanUp(_ raw: String) async -> Int32 {
+        let settings = AppSettings.shared
         guard let polishEndpoint = settings.polishEndpoint else {
             log("❌ The clean-up provider's base URL is invalid")
             return 3
@@ -84,23 +102,25 @@ enum CLI {
             }
             func route(_ endpoint: ProviderEndpoint, _ model: String) -> PolishRoute {
                 PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
-                    model: model, vocabulary: settings.vocabularyList, misheard: settings.misheardHints,
+                    model: model, vocabulary: settings.dictationVocabulary, misheard: settings.misheardHints,
                     extraInstructions: settings.extraInstructions,
                     modelInfo: endpoint.id == .openrouter ? models?.first { $0.id == model } : nil,
                     host: endpoint.id == .openrouter ? settings.openRouterHost(for: model) : nil))
             }
-            let outcome = try await HedgedPolish.run(
+            let outcome = try await SegmentedPolish.run(
                 transcript: raw,
                 primary: route(polishEndpoint, settings.polishModel),
                 backup: settings.polishBackupEndpoint.map { route($0, settings.polishBackupModel) })
-            let result = outcome.result
-            log(String(format: "⏱  Clean-up took %.1f s (first token %.2f s, %@%@)%@", Date().timeIntervalSince(polishStart),
-                       outcome.firstTokenSeconds, outcome.usedBackup ? "backup " : "", outcome.model,
-                       result.truncated ? " (truncated)" : ""))
-            if Prompts.looksLikeAnAnswer(input: raw, output: result.text) {
-                log("⚠️ Output is much longer than the input; the app would fall back to the raw transcript")
+            log(String(format: "⏱  Clean-up took %.1f s (first token %.2f s, %@%@), %d part(s)", Date().timeIntervalSince(polishStart),
+                       outcome.firstTokenSeconds, outcome.usedBackup ? "backup " : "", outcome.model, outcome.parts.count))
+            for (index, part) in outcome.parts.enumerated() {
+                let kept = part.answer.map { WordCount.count($0.result.text) } ?? 0
+                log(String(format: "   part %d: %d → %d words, similarity %.2f%@", index + 1, WordCount.count(part.transcript), kept,
+                           part.answer.map { PolishMetrics.similarity(part.transcript, $0.result.text) } ?? 0,
+                           part.fallback.map { " — inserted as spoken (\($0.rawValue))" } ?? ""))
+                if let error = part.error { log("     \(error.localizedDescription)") }
             }
-            print("===== Cleaned up (\(result.text.count) chars) =====\n\(result.text)\n")
+            print("===== Cleaned up (\(outcome.text.count) chars, \(WordCount.count(outcome.text)) words) =====\n\(outcome.text)\n")
             return 0
         } catch {
             log("❌ Clean-up failed: \(error.localizedDescription)")
@@ -125,46 +145,6 @@ enum CLI {
                          chunk.startTime, chunk.startTime + chunk.duration, chunk.duration,
                          20 * log10(max(cutRMS, 1e-6)), AudioLevel.isSilent(chunk.samples) ? " (silent)" : ""))
         }
-    }
-
-    /// Reads any audio file AVFoundation understands and converts it to 16 kHz mono Int16.
-    static func loadAudio(_ url: URL) throws -> [Int16] {
-        let file = try AVAudioFile(forReading: url)
-        let target = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(AudioFormat.sampleRate),
-                                   channels: 1, interleaved: true)!
-        guard let converter = AVAudioConverter(from: file.processingFormat, to: target) else {
-            throw NSError(domain: "CLI", code: 1, userInfo: [NSLocalizedDescriptionKey: "unsupported format"])
-        }
-        var result: [Int16] = []
-        let inputBuffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 8192)!
-        var reachedEnd = false
-        while true {
-            let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: 8192)!
-            var error: NSError?
-            let status = converter.convert(to: output, error: &error) { _, outStatus in
-                if reachedEnd { outStatus.pointee = .endOfStream; return nil }
-                do {
-                    try file.read(into: inputBuffer)
-                } catch {
-                    reachedEnd = true
-                    outStatus.pointee = .endOfStream
-                    return nil
-                }
-                if inputBuffer.frameLength == 0 {
-                    reachedEnd = true
-                    outStatus.pointee = .endOfStream
-                    return nil
-                }
-                outStatus.pointee = .haveData
-                return inputBuffer
-            }
-            if let error { throw error }
-            if output.frameLength > 0, let channel = output.int16ChannelData {
-                result.append(contentsOf: UnsafeBufferPointer(start: channel[0], count: Int(output.frameLength)))
-            }
-            if status == .endOfStream || status == .error { break }
-        }
-        return result
     }
 
     static func log(_ message: String) {

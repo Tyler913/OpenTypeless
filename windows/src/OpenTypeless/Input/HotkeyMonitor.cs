@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using OpenTypeless.Native;
+using TypelessCore;
 
 namespace OpenTypeless.Input;
 
@@ -24,17 +25,68 @@ public readonly record struct MouseButton(int Message, int X, int Y, uint Time);
 ///
 /// The hook runs on its own thread with its own message loop, so a busy UI thread can never make Windows
 /// drop it for being slow. Everything is passed through untouched except the keystrokes of a key-combination
-/// hotkey, which are swallowed so that e.g. Alt+Space doesn't also reach the focused app.
+/// hotkey, which are swallowed so that e.g. Alt+Space doesn't also reach the focused app, Esc while a dictation
+/// is under way, the keys of an action's shortcut or of a mode chord, and the send key while recording.
+///
+/// The press, release and other-key callbacks get the key event's own time, in seconds on the
+/// <see cref="Environment.TickCount64"/> clock (see <see cref="HotkeyPress"/>).
 /// </summary>
 public sealed class HotkeyMonitor
 {
     public static HotkeyMonitor Shared { get; } = new();
 
-    public Action? OnPress;
-    public Action? OnRelease;
-    /// <summary>Another key went down while a modifier-only hotkey was held (e.g. Right Ctrl + C).</summary>
-    public Action? OnOtherKey;
+    public Action<double>? OnPress;
+    public Action<double>? OnRelease;
+    /// <summary>
+    /// Another key went down while the hotkey was held, by its virtual-key code: with a modifier-only hotkey any key
+    /// (e.g. Right Ctrl + C), with a key combination only a mode chord (see <see cref="ModeChordKeys"/>). A modifier only
+    /// counts as a mode chord.
+    /// </summary>
+    public Action<int, double>? OnOtherKey;
     public Action? OnEscape;
+    /// <summary>An action's shortcut went down (see <see cref="Shortcuts"/>).</summary>
+    public Action<ShortcutAction>? OnAction;
+    /// <summary>The send key went down while recording (see <see cref="RecordingSendKey"/>).</summary>
+    public Action? OnSendKey;
+
+    /// <summary>
+    /// The "Finish and send" key while a dictation is recording, off otherwise (see <see cref="SendKey"/>): it then ends
+    /// the recording, and is kept from the focused app, which would send what's there before the text is in. Set on the
+    /// UI thread.
+    /// </summary>
+    public volatile SendKey RecordingSendKey;
+
+    /// <summary>
+    /// The shortcuts of actions besides dictating. Their keys are always kept from the focused app, whatever the session
+    /// makes of them. Replaced as a whole (it's immutable), so the hook thread always sees a complete one.
+    /// </summary>
+    public volatile ShortcutMap Shortcuts = ShortcutMap.Empty;
+
+    /// <summary>Keys that switch the recording's mode while the hotkey is held (see <see cref="ModeChords{TMode}"/>); kept from the focused app then.</summary>
+    public volatile IReadOnlySet<int> ModeChordKeys = new HashSet<int>();
+
+    /// <summary>
+    /// Keys whose key-down was swallowed as an action's shortcut or a mode chord: their auto-repeats and key-up go too.
+    /// Hook thread only.
+    /// </summary>
+    private readonly HashSet<int> _swallowedKeys = new();
+
+    /// <summary>
+    /// The keys physically down, from every key event the hook sees, the ones it swallows too. Noted on the hook thread,
+    /// asked on the UI thread (see <see cref="WaitForRelease"/>).
+    /// </summary>
+    private readonly HeldKeys _held = new();
+
+    /// <summary>
+    /// Set (on the UI thread) while a dictation is recording or processing: Esc then cancels it and is kept from the
+    /// focused app, where it would also interrupt a command-line AI tool or close a dialog.
+    /// </summary>
+    public volatile bool SwallowsEscape;
+    /// <summary>
+    /// An Esc key-down was swallowed: its auto-repeats and its key-up are swallowed too, even once the dictation has
+    /// ended, so the focused app never sees half a key press. Hook thread only.
+    /// </summary>
+    private bool _escapeSwallowed;
 
     private volatile Hotkey _hotkey = Hotkey.Default;
     public Hotkey Hotkey
@@ -60,6 +112,8 @@ public sealed class HotkeyMonitor
     public bool IsRunning { get; private set; }
 
     private volatile bool _isDown;
+    /// <summary>When the hotkey last went down, by the key event's own time. Hook thread only.</summary>
+    private double _pressedAt;
     private DispatcherQueue? _dispatcher;
     private Thread? _thread;
     private uint _threadId;
@@ -74,6 +128,8 @@ public sealed class HotkeyMonitor
     private nint _mouseHook;
     private Win32.LowLevelMouseProc? _mouseProc;
     private volatile Action<MouseButton>? _onClick;
+    private volatile bool _countsInput;
+    private long _inputCount;
 
     /// <summary>
     /// Calls <paramref name="onClick"/> (on the UI thread) when a mouse button goes down anywhere, or the left one up;
@@ -82,7 +138,26 @@ public sealed class HotkeyMonitor
     public void WatchClicks(Action<MouseButton>? onClick)
     {
         _onClick = onClick;
-        if (_threadId != 0) Win32.PostThreadMessage(_threadId, WM_WATCH_CLICKS, onClick != null ? 1 : 0, 0);
+        UpdateMouseHook();
+    }
+
+    /// <summary>
+    /// How many key-downs (auto-repeats too, modifiers on their own not) went through to the focused app, not counting the
+    /// keys this app sends itself, and, while <see cref="CountInput"/> is on, how many mouse buttons went down: a click or key while a
+    /// selection is being edited may have moved it (see <see cref="SelectionCommand.DeliveryOf"/>). Any thread.
+    /// </summary>
+    public long InputCount => Interlocked.Read(ref _inputCount);
+
+    /// <summary>Counts mouse buttons going down in <see cref="InputCount"/> too (the mouse hook is on meanwhile), or stops.</summary>
+    public void CountInput(bool on)
+    {
+        _countsInput = on;
+        UpdateMouseHook();
+    }
+
+    private void UpdateMouseHook()
+    {
+        if (_threadId != 0) Win32.PostThreadMessage(_threadId, WM_WATCH_CLICKS, _onClick != null || _countsInput ? 1 : 0, 0);
     }
 
     /// <summary>Starts the hook thread. Callbacks are delivered on the calling (UI) thread.</summary>
@@ -154,6 +229,8 @@ public sealed class HotkeyMonitor
             if (info.dwExtraInfo != Win32.InjectedSignature)
             {
                 if (Handle((int)wParam, info)) return 1;
+                // A modifier on its own (the hotkey's, say) moves no selection.
+                if ((int)wParam is Win32.WM_KEYDOWN or Win32.WM_SYSKEYDOWN && !IsModifier((int)info.vkCode)) Interlocked.Increment(ref _inputCount);
                 if (KeyObserver is { } observer && (int)wParam is Win32.WM_KEYDOWN or Win32.WM_SYSKEYDOWN) observer(Typed(info));
             }
         }
@@ -162,6 +239,10 @@ public sealed class HotkeyMonitor
 
     private nint MouseProc(int nCode, nint wParam, nint lParam)
     {
+        if (nCode >= 0 && _countsInput && (int)wParam is Win32.WM_LBUTTONDOWN or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN)
+        {
+            Interlocked.Increment(ref _inputCount);
+        }
         if (nCode >= 0 && (int)wParam is Win32.WM_LBUTTONDOWN or (int)Win32.WM_LBUTTONUP or Win32.WM_RBUTTONDOWN or Win32.WM_MBUTTONDOWN
             && _onClick is { } onClick)
         {
@@ -201,11 +282,30 @@ public sealed class HotkeyMonitor
         if (!down && !up) return false;
         var vk = (int)info.vkCode;
         var injected = (info.flags & Win32.LLKHF_INJECTED) != 0;
+        // First of all, so the keys held are known while a shortcut is being recorded too. A low-level hook gets no
+        // auto-repeat flag: a key-down for a key already down is one.
+        var repeat = _held.Note(vk, down, info.time);
 
         if (Recorder is { } recorder) return recorder(new KeyEvent(vk, down, injected));
-        if (_isSuspended) return false;
 
+        // A key whose press was swallowed (an action's shortcut, a mode chord) stays swallowed until it's let go, its
+        // auto-repeats and key-up alike, whatever is held with it by then: letting go of Shift while Shift + F5 is still
+        // down mustn't turn F5's repeats into the F5 that starts a dictation. Suspended or not: the focused app mustn't
+        // get half a key press because Settings changed meanwhile. (The key-combination hotkey's own release, while it's
+        // down, is read below.)
         var hotkey = _hotkey;
+        var hotkeyHeld = _isDown && !hotkey.IsModifierOnly && vk == hotkey.KeyCode;
+        if (_swallowedKeys.Contains(vk) && !hotkeyHeld)
+        {
+            if (up) return _swallowedKeys.Remove(vk);
+            if (repeat) return true;
+            // A new press: the last one's key-up went by while a shortcut was being recorded (or the hook was off).
+            _swallowedKeys.Remove(vk);
+        }
+        // While a new hotkey is recorded too: a key that would reach the app without a swallowed chord modifier.
+        if (_isSuspended) return down && KeepsFromApp(vk, repeat);
+
+        var time = HotkeyPress.TickTime(info.time, Environment.TickCount64);
         if (hotkey.IsModifierOnly)
         {
             if (vk == hotkey.KeyCode)
@@ -221,7 +321,8 @@ public sealed class HotkeyMonitor
                     // still open the menu bar of a native app, which then swallows the Ctrl+V of the paste.
                     // Send it from the hook thread's message loop instead, once this key-down has gone through.
                     if (hotkey.NeedsMenuMask) Win32.PostThreadMessage(_threadId, WM_SEND_MENU_MASK, 0, 0);
-                    Fire(OnPress);
+                    _pressedAt = time;
+                    Fire(OnPress, time);
                 }
                 else if (up && _isDown)
                 {
@@ -230,31 +331,44 @@ public sealed class HotkeyMonitor
                     // And once more from inside the hook, which lands ahead of the release while the key is still
                     // held, in case the tap was too quick for the posted mask. A spare mask is harmless.
                     if (hotkey.NeedsMenuMask) SendMenuMask();
-                    Fire(OnRelease);
+                    Fire(OnRelease, time);
                 }
                 // Auto-repeat while held arrives as more key-downs: ignored.
                 return false;
             }
+            // Before a combination with the hotkey below, which could cancel the dictation instead.
+            if (down && !injected && IsSendKey(vk, repeat, time, hotkey)) return SendKeyPressed(vk);
+            if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down) || (down && KeepsFromApp(vk, repeat));
             if (!down) return false;
-            if (vk == Hotkey.VK_ESCAPE)
+            // A mode chord pressed with the hotkey counts, a modifier too (Right Alt + Shift translates), and is kept
+            // from the focused app, where Shift on its own would switch a Chinese or Japanese input method between its
+            // own letters and English, and Alt + Shift the keyboard layout. Not AltGr's made-up Left Ctrl (below).
+            if (_isDown && !injected && !repeat && ModeChordKeys.Contains(vk) && info.scanCode != AltGrControlScanCode)
             {
-                Fire(OnEscape);
+                HotkeyLog.Debug($"chord key (vk {vk}) with {hotkey.DisplayName}");
+                Fire(OnOtherKey, vk, time);
+                return Swallow(vk);
             }
-            else if (_isDown)
+            // Shift, Ctrl… pressed with the hotkey make no combo on their own (macOS doesn't count them either). AltGr
+            // layouts also send a made-up Left Ctrl with every Right Alt event, auto-repeat included, which would
+            // otherwise cancel a dictation held on Right Alt.
+            if (IsModifier(vk) || info.scanCode == AltGrControlScanCode) return false;
+            if (_isDown)
             {
                 // A real combo (Right Ctrl + C…) comes from the keyboard. Keys injected by other software at
                 // the same moment (e.g. a mouse utility sending its own shortcut) don't count and must not cancel.
                 if (!injected)
                 {
                     HotkeyLog.Debug($"combo key (vk {vk}) with {hotkey.DisplayName}");
-                    Fire(OnOtherKey);
+                    Fire(OnOtherKey, vk, time);
                 }
                 else
                 {
                     HotkeyLog.Debug($"ignored injected key (vk {vk}) while {hotkey.DisplayName} is held");
                 }
             }
-            return false;
+            // After the combo above, which cancels a dictation the shortcut's modifier may have just started.
+            return HandleAction(vk, repeat) || KeepsFromApp(vk, repeat);
         }
 
         // Key combination.
@@ -265,23 +379,145 @@ public sealed class HotkeyMonitor
                 if (!_isDown)
                 {
                     _isDown = true;
+                    // Also swallowed: its key-up, should the hotkey change or recording a new one start first.
+                    _swallowedKeys.Add(vk);
                     HotkeyLog.Debug($"{hotkey.DisplayName} down");
                     if ((hotkey.Modifiers & (HotkeyModifiers.Alt | HotkeyModifiers.Win)) != 0) SendMenuMask();
-                    Fire(OnPress);
+                    _pressedAt = time;
+                    Fire(OnPress, time);
                 }
                 return true;
             }
             if (up && _isDown)
             {
                 _isDown = false;
+                _swallowedKeys.Remove(vk);
                 HotkeyLog.Debug($"{hotkey.DisplayName} up");
-                Fire(OnRelease);
+                Fire(OnRelease, time);
                 return true;
             }
-            return false;
+            // Otherwise the same key with other modifiers, which may be an action's shortcut (F5 dictates, Shift + F5 pastes).
         }
-        if (down && vk == Hotkey.VK_ESCAPE) Fire(OnEscape);
+        if (down && !injected && IsSendKey(vk, repeat, time, hotkey)) return SendKeyPressed(vk);
+        if (vk == Hotkey.VK_ESCAPE) return HandleEscape(down) || (down && KeepsFromApp(vk, repeat));
+        if (!down) return false;
+        // A new press only: the repeats of one that went through before the hotkey (Shift held, then ⌥Space) go through
+        // too, or the focused app would see it go down and never come up. A swallowed one's repeats went above.
+        if (_isDown && !injected && !repeat && ModeChordKeys.Contains(vk) && info.scanCode != AltGrControlScanCode)
+        {
+            // Other keys are left alone while a key-combination hotkey is held, as they always were, but a chord counts.
+            HotkeyLog.Debug($"chord key (vk {vk}) with {hotkey.DisplayName}");
+            Fire(OnOtherKey, vk, time);
+            return Swallow(vk);
+        }
+        return HandleAction(vk, repeat) || KeepsFromApp(vk, repeat);
+    }
+
+    /// <summary>
+    /// A key going down while a chord modifier whose press was swallowed is still held: swallowed too, its repeats and
+    /// key-up with it, since it would reach the app without that modifier, as another shortcut (see
+    /// <see cref="HotkeyPress.KeepsFromApp"/>). Only chords swallow a modifier: an action's shortcut is never one alone.
+    /// </summary>
+    private bool KeepsFromApp(int vk, bool repeat)
+    {
+        if (!HotkeyPress.KeepsFromApp(vk, repeat, IsModifier(vk), ModeChordKeys, _swallowedKeys.Any(IsModifier))) return false;
+        HotkeyLog.Debug($"key (vk {vk}) kept from the app while a chord modifier is held");
+        return Swallow(vk);
+    }
+
+    /// <summary>
+    /// A key going down that is an action's shortcut fires the action (once, not on its auto-repeats), and is swallowed,
+    /// like the rest of its presses.
+    /// </summary>
+    private bool HandleAction(int vk, bool repeat)
+    {
+        var shortcuts = Shortcuts;
+        // Every key typed comes through here: with no shortcut set, nothing more is asked of the system.
+        if (shortcuts.IsEmpty || shortcuts.ActionFor(vk, (int)CurrentModifiers()) is not { } action) return false;
+        if (!repeat)
+        {
+            HotkeyLog.Debug($"{action.RawValue()} shortcut");
+            // Alt and Win act on their own release (menu bar / Start menu, or Alt + Shift switching the keyboard layout)
+            // unless another key is seen while they're held, and the shortcut's key is kept from the system.
+            if ((shortcuts.Chords[action].Modifiers & (int)(HotkeyModifiers.Alt | HotkeyModifiers.Win)) != 0) SendMenuMask();
+            Fire(OnAction, action);
+        }
+        return Swallow(vk);
+    }
+
+    /// <summary>
+    /// Whether a key going down is the send key while recording (see <see cref="RecordingSendKey"/>): not an auto-repeat,
+    /// and not right with the hotkey still held (Right Ctrl + Enter…), which is left as it was. Only from the keyboard (the
+    /// caller checks): an Enter other software sends meanwhile is its own, and goes through.
+    /// </summary>
+    private bool IsSendKey(int vk, bool repeat, double time, Hotkey hotkey)
+    {
+        var key = RecordingSendKey;
+        if (key == SendKey.Off || repeat) return false;
+        // Every key typed while recording comes through here: the modifiers are only asked for Enter.
+        if (!SendKeyText.Codes.ReturnKeys.Contains(vk)) return false;
+        var held = _isDown ? (int)hotkey.HeldModifiers : 0;
+        if (!key.Matches(vk, (int)CurrentModifiers(), held, SendKeyText.Codes)) return false;
+        return !(_isDown && SendKeys.IsCombination(_pressedAt, time));
+    }
+
+    /// <summary>The send key ends the recording, and its key-down, auto-repeats and key-up are kept from the focused app.</summary>
+    private bool SendKeyPressed(int vk)
+    {
+        HotkeyLog.Debug("send key");
+        Fire(OnSendKey);
+        return Swallow(vk);
+    }
+
+    private bool Swallow(int vk)
+    {
+        _swallowedKeys.Add(vk);
+        return true;
+    }
+
+    /// <summary>
+    /// Waits until none of <paramref name="shortcut"/>'s keys is physically held any more (its key, and any of Ctrl, Alt,
+    /// Shift and Win): a Ctrl+V sent meanwhile would be read together with them, as another shortcut altogether. Returns
+    /// false when they're still held after <paramref name="timeout"/>, or once <paramref name="cancellationToken"/> is
+    /// cancelled. The key itself is followed through the hook: its presses were swallowed, so <c>GetAsyncKeyState</c>
+    /// never heard of them (modifiers always go through, except a mode chord's: <paramref name="alsoKeys"/>, followed the
+    /// same way).
+    /// </summary>
+    public async Task<bool> WaitForRelease(Hotkey shortcut, TimeSpan timeout, IReadOnlyCollection<int>? alsoKeys = null,
+                                           CancellationToken cancellationToken = default)
+    {
+        var clock = Stopwatch.StartNew();
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var now = unchecked((uint)Environment.TickCount);
+            var keyHeld = (!shortcut.IsModifierOnly && _held.IsHeld(shortcut.KeyCode, now))
+                          || (alsoKeys?.Any(key => _held.IsHeld(key, now)) ?? false);
+            if (CurrentModifiers() == HotkeyModifiers.None && !keyHeld) return true;
+            if (clock.Elapsed >= timeout) return false;
+            try { await Task.Delay(20, cancellationToken); } catch (OperationCanceledException) { return false; }
+        }
         return false;
+    }
+
+    /// <summary>The scan code of the Left Ctrl that AltGr layouts send along with Right Alt.</summary>
+    private const uint AltGrControlScanCode = 0x21D;
+
+    /// <summary>Shift, Ctrl, Alt or Win, either side or the side-less code.</summary>
+    private static bool IsModifier(int vk) => vk is >= 0x10 and <= 0x12 || Hotkey.ModifierKeys.ContainsKey(vk);
+
+    /// <summary>Esc cancels a dictation under way; returns whether the key is swallowed (see <see cref="SwallowsEscape"/>).</summary>
+    private bool HandleEscape(bool down)
+    {
+        if (!down)
+        {
+            var swallowed = _escapeSwallowed;
+            _escapeSwallowed = false;
+            return swallowed;
+        }
+        if (_escapeSwallowed) return true; // auto-repeat of a swallowed Esc
+        Fire(OnEscape);
+        _escapeSwallowed = SwallowsEscape;
+        return _escapeSwallowed;
     }
 
     public static HotkeyModifiers CurrentModifiers()
@@ -306,6 +542,24 @@ public sealed class HotkeyMonitor
     {
         if (callback == null) return;
         _dispatcher?.TryEnqueue(DispatcherQueuePriority.High, () => callback());
+    }
+
+    private void Fire(Action<double>? callback, double time)
+    {
+        if (callback == null) return;
+        _dispatcher?.TryEnqueue(DispatcherQueuePriority.High, () => callback(time));
+    }
+
+    private void Fire(Action<int, double>? callback, int key, double time)
+    {
+        if (callback == null) return;
+        _dispatcher?.TryEnqueue(DispatcherQueuePriority.High, () => callback(key, time));
+    }
+
+    private void Fire(Action<ShortcutAction>? callback, ShortcutAction action)
+    {
+        if (callback == null) return;
+        _dispatcher?.TryEnqueue(DispatcherQueuePriority.High, () => callback(action));
     }
 }
 

@@ -773,6 +773,15 @@
     "fr": "Inséré sans nettoyage",
     "de": "Ohne Bereinigung eingefügt"
   },
+  "Partly inserted without clean-up": {
+    "ja": "一部を整形せずに挿入しました",
+    "ko": "일부를 다듬기 없이 삽입함",
+    "es": "Insertado en parte sin limpieza",
+    "pt": "Inserido em parte sem limpeza",
+    "ru": "Частично вставлено без очистки",
+    "fr": "Inséré en partie sans nettoyage",
+    "de": "Teilweise ohne Bereinigung eingefügt"
+  },
   "Clean-up failed — inserted raw text": {
     "ja": "整形に失敗したため、元のテキストを挿入しました",
     "ko": "다듬기 실패 — 원본 텍스트를 삽입함",
@@ -952,6 +961,24 @@
     "ru": "Возвращать прежнее содержимое буфера после вставки",
     "fr": "Remet le contenu précédent du presse-papiers après l’insertion",
     "de": "Stellt nach dem Einfügen den vorherigen Inhalt der Zwischenablage wieder her"
+  },
+  "Fit spacing and capitalisation to the surrounding text": {
+    "ja": "前後の文章に合わせてスペースと大文字小文字を整える",
+    "ko": "앞뒤 문장에 맞춰 띄어쓰기와 대소문자 맞추기",
+    "es": "Ajustar espacios y mayúsculas al texto de alrededor",
+    "pt": "Ajustar espaços e maiúsculas ao texto ao redor",
+    "ru": "Подгонять пробелы и регистр под окружающий текст",
+    "fr": "Adapter les espaces et les majuscules au texte autour",
+    "de": "Leerzeichen und Großschreibung an den umgebenden Text anpassen"
+  },
+  "When you dictate into existing text, adds a missing space, lowercases a capital in mid-sentence and drops a full stop that would end the sentence early, going by the text around the cursor. Where that can't be read (a password field, some apps), the text goes in as it is.": {
+    "ja": "既存の文章の途中に音声入力すると、カーソル前後の文章を見て、足りないスペースを補い、文の途中の大文字を小文字にし、文を途中で終わらせてしまう句点を取り除きます。カーソル付近の文章を読み取れないとき（パスワード欄や一部のアプリ）は、そのまま挿入します。",
+    "ko": "기존 텍스트 중간에 받아쓰면 커서 앞뒤 텍스트를 보고 빠진 띄어쓰기를 넣고, 문장 중간의 대문자를 소문자로 바꾸고, 문장을 일찍 끝내 버리는 마침표를 뺍니다. 커서 주변 텍스트를 읽을 수 없으면(비밀번호 입력란, 일부 앱) 그대로 삽입합니다.",
+    "es": "Al dictar dentro de un texto existente, añade el espacio que falta, pone en minúscula una mayúscula a mitad de frase y quita el punto que cerraría la frase antes de tiempo, según el texto que rodea al cursor. Si no se puede leer (un campo de contraseña, algunas apps), el texto se inserta tal cual.",
+    "pt": "Ao ditar no meio de um texto existente, adiciona o espaço que falta, deixa em minúscula uma maiúscula no meio da frase e tira o ponto final que encerraria a frase antes da hora, com base no texto em volta do cursor. Quando ele não pode ser lido (um campo de senha, alguns apps), o texto entra como está.",
+    "ru": "Когда вы диктуете внутрь уже написанного текста, добавляет недостающий пробел, делает строчной заглавную букву посреди предложения и убирает точку, которая завершила бы предложение раньше времени, — по тексту вокруг курсора. Если его не прочитать (поле пароля, некоторые приложения), текст вставляется как есть.",
+    "fr": "Quand vous dictez au milieu d’un texte existant, ajoute l’espace manquante, met en minuscule une majuscule en milieu de phrase et retire le point qui terminerait la phrase trop tôt, d’après le texte autour du curseur. S’il ne peut pas être lu (champ de mot de passe, certaines apps), le texte est inséré tel quel.",
+    "de": "Wenn du in bestehenden Text diktierst, ergänzt es ein fehlendes Leerzeichen, schreibt einen Großbuchstaben mitten im Satz klein und lässt einen Punkt weg, der den Satz zu früh beenden würde – anhand des Textes um den Cursor. Wo der nicht lesbar ist (ein Passwortfeld, manche Apps), wird der Text unverändert eingefügt."
   },
   "Press Return after inserting": {
     "ja": "挿入後に Return キーを押す",
@@ -1483,6 +1510,24 @@
     "ru": "Получить API-ключ",
     "fr": "Obtenir une clé API",
     "de": "API-Schlüssel holen"
+  },
+  "Using the key in the OPENROUTER_API_KEY environment variable; the key saved here is used when it isn't set": {
+    "ja": "環境変数 OPENROUTER_API_KEY のキーを使用中です。この変数が設定されていないときは、ここに保存したキーを使います",
+    "ko": "환경 변수 OPENROUTER_API_KEY의 키를 사용 중입니다. 이 변수가 없을 때는 여기에 저장한 키를 사용합니다",
+    "es": "Se usa la clave de la variable de entorno OPENROUTER_API_KEY; la clave guardada aquí se usa cuando no está definida",
+    "pt": "Usando a chave da variável de ambiente OPENROUTER_API_KEY; a chave salva aqui é usada quando ela não está definida",
+    "ru": "Используется ключ из переменной окружения OPENROUTER_API_KEY; ключ, сохранённый здесь, используется, когда она не задана",
+    "fr": "La clé de la variable d’environnement OPENROUTER_API_KEY est utilisée ; la clé enregistrée ici sert quand elle n’est pas définie",
+    "de": "Der Schlüssel aus der Umgebungsvariable OPENROUTER_API_KEY wird verwendet; der hier gespeicherte gilt, wenn sie nicht gesetzt ist"
+  },
+  "Couldn't save to Windows Credential Manager; you'll need to enter this key again after the app quits": {
+    "ja": "Windows 資格情報マネージャーに保存できませんでした。アプリを終了すると、このキーをもう一度入力する必要があります",
+    "ko": "Windows 자격 증명 관리자에 저장하지 못했습니다. 앱을 종료하면 이 키를 다시 입력해야 합니다",
+    "es": "No se pudo guardar en el Administrador de credenciales de Windows; tendrás que volver a introducir esta clave cuando cierres la app",
+    "pt": "Não foi possível salvar no Gerenciador de Credenciais do Windows; você precisará digitar esta chave de novo depois de fechar o app",
+    "ru": "Не удалось сохранить в диспетчере учётных данных Windows; после выхода из приложения этот ключ придётся ввести снова",
+    "fr": "Impossible d’enregistrer dans le Gestionnaire d’identification Windows ; il faudra saisir de nouveau cette clé après avoir quitté l’app",
+    "de": "Speichern in der Windows-Anmeldeinformationsverwaltung nicht möglich; nach dem Beenden der App musst du diesen Schlüssel erneut eingeben"
   },
   "Any OpenAI-compatible server: /audio/transcriptions and /chat/completions": {
     "ja": "OpenAI 互換の任意のサーバー：/audio/transcriptions と /chat/completions",
@@ -3301,5 +3346,1715 @@
     "ru": "доступность {0}%",
     "fr": "{0} % de disponibilité",
     "de": "{0} % verfügbar"
+  },
+  "API Key": {
+    "ja": "API キー",
+    "ko": "API 키",
+    "es": "Clave de API",
+    "pt": "Chave de API",
+    "ru": "API-ключ",
+    "fr": "Clé API",
+    "de": "API-Schlüssel"
+  },
+  "Base URL": {
+    "ja": "ベース URL",
+    "ko": "기본 URL",
+    "es": "URL base",
+    "pt": "URL base",
+    "ru": "Базовый URL",
+    "fr": "URL de base",
+    "de": "Basis-URL"
+  },
+  "Delete this dictation?": {
+    "ja": "この音声入力を削除しますか？",
+    "ko": "이 받아쓰기를 삭제할까요?",
+    "es": "¿Eliminar este dictado?",
+    "pt": "Excluir este ditado?",
+    "ru": "Удалить эту диктовку?",
+    "fr": "Supprimer cette dictée ?",
+    "de": "Dieses Diktat löschen?"
+  },
+  "It was never transcribed. Its recording is deleted too, so it can't be retried.": {
+    "ja": "まだ文字起こしされていません。録音も削除されるため、再試行できなくなります。",
+    "ko": "아직 변환되지 않았습니다. 녹음도 함께 삭제되어 다시 시도할 수 없습니다.",
+    "es": "Nunca se transcribió. Su grabación también se elimina, así que no se podrá reintentar.",
+    "pt": "Ele nunca foi transcrito. A gravação também é excluída, então não será possível tentar de novo.",
+    "ru": "Она так и не была распознана. Запись тоже удалится, и повторить попытку будет нельзя.",
+    "fr": "Elle n’a jamais été transcrite. Son enregistrement est aussi supprimé : impossible de réessayer ensuite.",
+    "de": "Es wurde nie transkribiert. Die Aufnahme wird mitgelöscht, ein neuer Versuch ist dann nicht mehr möglich."
+  },
+  "Its recording is deleted too, so it can't be re-transcribed.": {
+    "ja": "録音も削除されるため、もう一度文字起こしすることはできなくなります。",
+    "ko": "녹음도 함께 삭제되어 다시 변환할 수 없습니다.",
+    "es": "Su grabación también se elimina, así que no se podrá volver a transcribir.",
+    "pt": "A gravação também é excluída, então não será possível transcrever de novo.",
+    "ru": "Запись тоже удалится, и распознать её заново будет нельзя.",
+    "fr": "Son enregistrement est aussi supprimé : impossible de la retranscrire ensuite.",
+    "de": "Die Aufnahme wird mitgelöscht und kann nicht neu transkribiert werden."
+  },
+  "Transcribe File…": {
+    "ja": "ファイルを文字起こし…",
+    "ko": "파일 변환…",
+    "es": "Transcribir archivo…",
+    "pt": "Transcrever arquivo…",
+    "ru": "Распознать файл…",
+    "fr": "Transcrire un fichier…",
+    "de": "Datei transkribieren…"
+  },
+  "Transcribe a voice memo, meeting recording or video (or drop it here)": {
+    "ja": "ボイスメモ、会議の録音、動画を文字起こしします（ここにドロップしても構いません）",
+    "ko": "음성 메모, 회의 녹음, 동영상을 변환합니다(여기로 끌어다 놓아도 됩니다)",
+    "es": "Transcribe una nota de voz, la grabación de una reunión o un vídeo (o suéltalo aquí)",
+    "pt": "Transcreva uma nota de voz, a gravação de uma reunião ou um vídeo (ou solte aqui)",
+    "ru": "Распознать голосовую заметку, запись встречи или видео (или перетащите файл сюда)",
+    "fr": "Transcrire un mémo vocal, l’enregistrement d’une réunion ou une vidéo (ou déposez-le ici)",
+    "de": "Sprachmemo, Besprechungsaufnahme oder Video transkribieren (oder hier ablegen)"
+  },
+  "You can also drop audio or video files here to transcribe them.": {
+    "ja": "音声ファイルや動画ファイルをここにドロップして文字起こしすることもできます。",
+    "ko": "오디오나 동영상 파일을 여기로 끌어다 놓아 변환할 수도 있습니다.",
+    "es": "También puedes soltar aquí archivos de audio o vídeo para transcribirlos.",
+    "pt": "Você também pode soltar arquivos de áudio ou vídeo aqui para transcrevê-los.",
+    "ru": "Сюда можно перетащить аудио- или видеофайлы, чтобы распознать их.",
+    "fr": "Vous pouvez aussi déposer ici des fichiers audio ou vidéo pour les transcrire.",
+    "de": "Du kannst auch Audio- oder Videodateien hier ablegen, um sie zu transkribieren."
+  },
+  "Drop audio or video files to transcribe them": {
+    "ja": "ドロップすると音声・動画ファイルを文字起こしします",
+    "ko": "놓으면 오디오·동영상 파일을 변환합니다",
+    "es": "Suelta archivos de audio o vídeo para transcribirlos",
+    "pt": "Solte arquivos de áudio ou vídeo para transcrevê-los",
+    "ru": "Отпустите аудио- или видеофайлы, чтобы распознать их",
+    "fr": "Déposez des fichiers audio ou vidéo pour les transcrire",
+    "de": "Audio- oder Videodateien ablegen, um sie zu transkribieren"
+  },
+  "Transcribe Files": {
+    "ja": "ファイルを文字起こし",
+    "ko": "파일 변환",
+    "es": "Transcribir archivos",
+    "pt": "Transcrever arquivos",
+    "ru": "Распознать файлы",
+    "fr": "Transcrire des fichiers",
+    "de": "Dateien transkribieren"
+  },
+  "Transcribe": {
+    "ja": "文字起こし",
+    "ko": "변환",
+    "es": "Transcribir",
+    "pt": "Transcrever",
+    "ru": "Распознать",
+    "fr": "Transcrire",
+    "de": "Transkribieren"
+  },
+  "Reading how long the files are…": {
+    "ja": "ファイルの長さを読み取り中…",
+    "ko": "파일 길이를 읽는 중…",
+    "es": "Leyendo la duración de los archivos…",
+    "pt": "Lendo a duração dos arquivos…",
+    "ru": "Определяем длительность файлов…",
+    "fr": "Lecture de la durée des fichiers…",
+    "de": "Länge der Dateien wird gelesen…"
+  },
+  "Clean up text": {
+    "ja": "テキストを整形",
+    "ko": "텍스트 다듬기",
+    "es": "Limpiar el texto",
+    "pt": "Limpar o texto",
+    "ru": "Очистить текст",
+    "fr": "Nettoyer le texte",
+    "de": "Text bereinigen"
+  },
+  "Runs the transcript through the clean-up model, in parts (billed on top)": {
+    "ja": "文字起こし結果を整形モデルで分割して整形します（別途課金）",
+    "ko": "변환 결과를 다듬기 모델로 나누어 다듬습니다(별도 과금)",
+    "es": "Pasa la transcripción por el modelo de limpieza, por partes (se cobra aparte)",
+    "pt": "Passa a transcrição pelo modelo de limpeza, em partes (cobrado à parte)",
+    "ru": "Пропускает расшифровку через модель очистки по частям (оплачивается отдельно)",
+    "fr": "Passe la transcription dans le modèle de nettoyage, par parties (facturé en plus)",
+    "de": "Schickt das Transkript in Teilen durch das Bereinigungsmodell (zusätzlich berechnet)"
+  },
+  "Clean-up is turned off in Settings": {
+    "ja": "整形は設定でオフになっています",
+    "ko": "다듬기가 설정에서 꺼져 있습니다",
+    "es": "La limpieza está desactivada en Ajustes",
+    "pt": "A limpeza está desativada nas Configurações",
+    "ru": "Очистка выключена в настройках",
+    "fr": "Le nettoyage est désactivé dans les Réglages",
+    "de": "Die Bereinigung ist in den Einstellungen ausgeschaltet"
+  },
+  "The text is kept in History; nothing is pasted.": {
+    "ja": "テキストは履歴に保存され、貼り付けはされません。",
+    "ko": "텍스트는 기록에 저장되며 붙여 넣지 않습니다.",
+    "es": "El texto se guarda en el historial; no se pega nada.",
+    "pt": "O texto fica no histórico; nada é colado.",
+    "ru": "Текст сохраняется в истории и никуда не вставляется.",
+    "fr": "Le texte est conservé dans l’historique ; rien n’est collé.",
+    "de": "Der Text bleibt im Verlauf; es wird nichts eingefügt."
+  },
+  "{0} in all; speech-to-text should cost about {1} ({2} at {3}/min). Silence isn't sent.": {
+    "ja": "合計 {0}。文字起こしの費用は約 {1} の見込みです（{2}、1 分あたり {3}）。無音部分は送信されません。",
+    "ko": "총 {0}. 음성 인식 비용은 약 {1}로 예상됩니다({2}, 분당 {3}). 무음 구간은 전송하지 않습니다.",
+    "es": "{0} en total; la transcripción debería costar unos {1} ({2} a {3}/min). El silencio no se envía.",
+    "pt": "{0} no total; a transcrição deve custar cerca de {1} ({2} a {3}/min). O silêncio não é enviado.",
+    "ru": "Всего {0}; распознавание обойдётся примерно в {1} ({2} по {3}/мин). Тишина не отправляется.",
+    "fr": "{0} au total ; la transcription devrait coûter environ {1} ({2} à {3}/min). Les silences ne sont pas envoyés.",
+    "de": "Insgesamt {0}; die Spracherkennung sollte etwa {1} kosten ({2} zu {3}/Min.). Stille wird nicht gesendet."
+  },
+  "{0} in all. {1} has no per-minute price, so the cost can't be estimated.": {
+    "ja": "合計 {0}。{1} には分単位の料金がないため、費用を見積もれません。",
+    "ko": "총 {0}. {1}에는 분당 가격이 없어 비용을 예상할 수 없습니다.",
+    "es": "{0} en total. {1} no tiene precio por minuto, así que no se puede estimar el coste.",
+    "pt": "{0} no total. {1} não tem preço por minuto, então não é possível estimar o custo.",
+    "ru": "Всего {0}. У {1} нет поминутной цены, поэтому стоимость оценить нельзя.",
+    "fr": "{0} au total. {1} n’a pas de prix à la minute, le coût ne peut donc pas être estimé.",
+    "de": "Insgesamt {0}. {1} hat keinen Minutenpreis, daher lassen sich die Kosten nicht schätzen."
+  },
+  "Transcribes the saved audio again": {
+    "ja": "保存された音声をもう一度文字起こしします",
+    "ko": "저장된 오디오를 다시 변환합니다",
+    "es": "Vuelve a transcribir el audio guardado",
+    "pt": "Transcreve de novo o áudio salvo",
+    "ru": "Заново распознаёт сохранённое аудио",
+    "fr": "Retranscrit l’audio enregistré",
+    "de": "Transkribiert das gespeicherte Audio erneut"
+  },
+  "Cancelled (audio saved — you can re-transcribe it)": {
+    "ja": "キャンセルしました（音声は保存済み。もう一度文字起こしできます）",
+    "ko": "취소됨 (오디오 저장됨 — 다시 변환할 수 있음)",
+    "es": "Cancelado (audio guardado; puedes volver a transcribirlo)",
+    "pt": "Cancelado (áudio salvo — você pode transcrever de novo)",
+    "ru": "Отменено (аудио сохранено, можно распознать заново)",
+    "fr": "Annulé (audio conservé, vous pouvez le retranscrire)",
+    "de": "Abgebrochen (Audio gespeichert – du kannst es neu transkribieren)"
+  },
+  "Interrupted last time while reading the file — transcribe the file again": {
+    "ja": "前回、ファイルの読み込み中に中断されました。ファイルをもう一度文字起こししてください",
+    "ko": "지난번 파일을 읽는 중에 중단됨 — 파일을 다시 변환하세요",
+    "es": "Se interrumpió la última vez mientras se leía el archivo; vuelve a transcribirlo",
+    "pt": "Interrompido da última vez durante a leitura do arquivo — transcreva o arquivo de novo",
+    "ru": "В прошлый раз прервано во время чтения файла — распознайте файл заново",
+    "fr": "Interrompu la dernière fois pendant la lecture du fichier — transcrivez à nouveau le fichier",
+    "de": "Letztes Mal beim Lesen der Datei unterbrochen – transkribiere die Datei erneut"
+  },
+  "Waiting…": {
+    "ja": "待機中…",
+    "ko": "대기 중…",
+    "es": "En espera…",
+    "pt": "Na fila…",
+    "ru": "В очереди…",
+    "fr": "En attente…",
+    "de": "Wartet…"
+  },
+  "Reading the file… {0}%": {
+    "ja": "ファイルを読み込み中… {0}%",
+    "ko": "파일 읽는 중… {0}%",
+    "es": "Leyendo el archivo… {0} %",
+    "pt": "Lendo o arquivo… {0}%",
+    "ru": "Чтение файла… {0}%",
+    "fr": "Lecture du fichier… {0} %",
+    "de": "Datei wird gelesen… {0} %"
+  },
+  "Reading the file…": {
+    "ja": "ファイルを読み込み中…",
+    "ko": "파일 읽는 중…",
+    "es": "Leyendo el archivo…",
+    "pt": "Lendo o arquivo…",
+    "ru": "Чтение файла…",
+    "fr": "Lecture du fichier…",
+    "de": "Datei wird gelesen…"
+  },
+  "Transcribing {0}/{1} segments": {
+    "ja": "文字起こし中 {0}/{1} 区間",
+    "ko": "변환 중 {0}/{1} 구간",
+    "es": "Transcribiendo {0}/{1} fragmentos",
+    "pt": "Transcrevendo {0}/{1} trechos",
+    "ru": "Распознавание: {0}/{1} фрагментов",
+    "fr": "Transcription de {0}/{1} segments",
+    "de": "Transkribiere {0}/{1} Abschnitte"
+  },
+  "Cleaning up…": {
+    "ja": "整形中…",
+    "ko": "다듬는 중…",
+    "es": "Limpiando…",
+    "pt": "Limpando…",
+    "ru": "Очистка…",
+    "fr": "Nettoyage…",
+    "de": "Wird bereinigt…"
+  },
+  "The file can't be found (it may have been moved or deleted)": {
+    "ja": "ファイルが見つかりません（移動または削除された可能性があります）",
+    "ko": "파일을 찾을 수 없습니다(이동되었거나 삭제되었을 수 있음)",
+    "es": "No se encuentra el archivo (puede que se haya movido o eliminado)",
+    "pt": "O arquivo não foi encontrado (pode ter sido movido ou excluído)",
+    "ru": "Файл не найден (возможно, он перемещён или удалён)",
+    "fr": "Le fichier est introuvable (il a peut-être été déplacé ou supprimé)",
+    "de": "Die Datei wurde nicht gefunden (sie wurde vielleicht verschoben oder gelöscht)"
+  },
+  "No permission to read this file": {
+    "ja": "このファイルを読み取る権限がありません",
+    "ko": "이 파일을 읽을 권한이 없습니다",
+    "es": "No hay permiso para leer este archivo",
+    "pt": "Sem permissão para ler este arquivo",
+    "ru": "Нет прав на чтение этого файла",
+    "fr": "Pas l’autorisation de lire ce fichier",
+    "de": "Keine Berechtigung, diese Datei zu lesen"
+  },
+  "Can't read this file: it's damaged or in a format that isn't supported ({0})": {
+    "ja": "このファイルを読み込めません：破損しているか、対応していない形式です（{0}）",
+    "ko": "이 파일을 읽을 수 없습니다: 손상되었거나 지원하지 않는 형식입니다({0})",
+    "es": "No se puede leer este archivo: está dañado o en un formato no compatible ({0})",
+    "pt": "Não é possível ler este arquivo: está danificado ou em um formato não suportado ({0})",
+    "ru": "Не удаётся прочитать файл: он повреждён или в неподдерживаемом формате ({0})",
+    "fr": "Impossible de lire ce fichier : il est endommagé ou dans un format non pris en charge ({0})",
+    "de": "Diese Datei kann nicht gelesen werden: Sie ist beschädigt oder in einem nicht unterstützten Format ({0})"
+  },
+  "Can't read this file: it's damaged or in a format that isn't supported": {
+    "ja": "このファイルを読み込めません：破損しているか、対応していない形式です",
+    "ko": "이 파일을 읽을 수 없습니다: 손상되었거나 지원하지 않는 형식입니다",
+    "es": "No se puede leer este archivo: está dañado o en un formato no compatible",
+    "pt": "Não é possível ler este arquivo: está danificado ou em um formato não suportado",
+    "ru": "Не удаётся прочитать файл: он повреждён или в неподдерживаемом формате",
+    "fr": "Impossible de lire ce fichier : il est endommagé ou dans un format non pris en charge",
+    "de": "Diese Datei kann nicht gelesen werden: Sie ist beschädigt oder in einem nicht unterstützten Format"
+  },
+  "This file has no audio track": {
+    "ja": "このファイルには音声トラックがありません",
+    "ko": "이 파일에는 오디오 트랙이 없습니다",
+    "es": "Este archivo no tiene pista de audio",
+    "pt": "Este arquivo não tem faixa de áudio",
+    "ru": "В этом файле нет звуковой дорожки",
+    "fr": "Ce fichier n’a pas de piste audio",
+    "de": "Diese Datei hat keine Tonspur"
+  },
+  "Not enough disk space to save the audio": {
+    "ja": "ディスクの空き容量が足りず、音声を保存できません",
+    "ko": "디스크 공간이 부족해 오디오를 저장할 수 없습니다",
+    "es": "No hay espacio en disco suficiente para guardar el audio",
+    "pt": "Não há espaço em disco suficiente para salvar o áudio",
+    "ru": "Недостаточно места на диске, чтобы сохранить аудио",
+    "fr": "Espace disque insuffisant pour enregistrer l’audio",
+    "de": "Nicht genug Speicherplatz, um das Audio zu speichern"
+  },
+  "Can't save the audio: ": {
+    "ja": "音声を保存できません：",
+    "ko": "오디오를 저장할 수 없습니다: ",
+    "es": "No se puede guardar el audio: ",
+    "pt": "Não é possível salvar o áudio: ",
+    "ru": "Не удаётся сохранить аудио: ",
+    "fr": "Impossible d’enregistrer l’audio : ",
+    "de": "Das Audio kann nicht gespeichert werden: "
+  },
+  "This file's audio track is empty": {
+    "ja": "このファイルの音声トラックは空です",
+    "ko": "이 파일의 오디오 트랙이 비어 있습니다",
+    "es": "La pista de audio de este archivo está vacía",
+    "pt": "A faixa de áudio deste arquivo está vazia",
+    "ru": "Звуковая дорожка этого файла пуста",
+    "fr": "La piste audio de ce fichier est vide",
+    "de": "Die Tonspur dieser Datei ist leer"
+  },
+  "This file is copy-protected (DRM), so it can't be read": {
+    "ja": "このファイルはコピー保護（DRM）されているため読み込めません",
+    "ko": "이 파일은 복제 방지(DRM)되어 있어 읽을 수 없습니다",
+    "es": "Este archivo tiene protección anticopia (DRM), así que no se puede leer",
+    "pt": "Este arquivo tem proteção contra cópia (DRM), então não pode ser lido",
+    "ru": "Этот файл защищён от копирования (DRM), поэтому его нельзя прочитать",
+    "fr": "Ce fichier est protégé contre la copie (DRM), il ne peut donc pas être lu",
+    "de": "Diese Datei ist kopiergeschützt (DRM) und kann daher nicht gelesen werden"
+  },
+  "Export": {
+    "ja": "書き出す",
+    "ko": "내보내기",
+    "es": "Exportar",
+    "pt": "Exportar",
+    "ru": "Экспорт",
+    "fr": "Exporter",
+    "de": "Exportieren"
+  },
+  "Exported": {
+    "ja": "書き出しました",
+    "ko": "내보냄",
+    "es": "Exportado",
+    "pt": "Exportado",
+    "ru": "Экспортировано",
+    "fr": "Exporté",
+    "de": "Exportiert"
+  },
+  "Couldn't export": {
+    "ja": "書き出せませんでした",
+    "ko": "내보낼 수 없습니다",
+    "es": "No se pudo exportar",
+    "pt": "Não foi possível exportar",
+    "ru": "Не удалось экспортировать",
+    "fr": "Impossible d’exporter",
+    "de": "Export fehlgeschlagen"
+  },
+  "OK": {
+    "ja": "OK",
+    "ko": "확인",
+    "es": "Aceptar",
+    "pt": "OK",
+    "ru": "ОК",
+    "fr": "OK",
+    "de": "OK"
+  },
+  "CSV (opens in Excel)…": {
+    "ja": "CSV（Excel で開けます）…",
+    "ko": "CSV(Excel에서 열림)…",
+    "es": "CSV (se abre en Excel)…",
+    "pt": "CSV (abre no Excel)…",
+    "ru": "CSV (открывается в Excel)…",
+    "fr": "CSV (s’ouvre dans Excel)…",
+    "de": "CSV (für Excel) …"
+  },
+  "Export 1 dictation": {
+    "ja": "1 件の音声入力を書き出す",
+    "ko": "받아쓰기 1개 내보내기",
+    "es": "Exportar 1 dictado",
+    "pt": "Exportar 1 ditado",
+    "ru": "Экспортировать 1 диктовку",
+    "fr": "Exporter 1 dictée",
+    "de": "1 Diktat exportieren"
+  },
+  "Export all {0} dictations": {
+    "ja": "{0} 件の音声入力をすべて書き出す",
+    "ko": "받아쓰기 {0}개 모두 내보내기",
+    "es": "Exportar los {0} dictados",
+    "pt": "Exportar todos os {0} ditados",
+    "ru": "Экспортировать все диктовки ({0})",
+    "fr": "Exporter les {0} dictées",
+    "de": "Alle {0} Diktate exportieren"
+  },
+  "Export the 1 matching dictation": {
+    "ja": "一致した 1 件の音声入力を書き出す",
+    "ko": "일치하는 받아쓰기 1개 내보내기",
+    "es": "Exportar el dictado que coincide",
+    "pt": "Exportar o ditado encontrado",
+    "ru": "Экспортировать найденную диктовку",
+    "fr": "Exporter la dictée trouvée",
+    "de": "Das gefundene Diktat exportieren"
+  },
+  "Export the {0} matching dictations": {
+    "ja": "一致した {0} 件の音声入力を書き出す",
+    "ko": "일치하는 받아쓰기 {0}개 내보내기",
+    "es": "Exportar los {0} dictados que coinciden",
+    "pt": "Exportar os {0} ditados encontrados",
+    "ru": "Экспортировать найденные диктовки ({0})",
+    "fr": "Exporter les {0} dictées trouvées",
+    "de": "Die {0} gefundenen Diktate exportieren"
+  },
+  "OpenTypeless History": {
+    "ja": "OpenTypeless 履歴",
+    "ko": "OpenTypeless 기록",
+    "es": "Historial de OpenTypeless",
+    "pt": "Histórico do OpenTypeless",
+    "ru": "История OpenTypeless",
+    "fr": "Historique OpenTypeless",
+    "de": "OpenTypeless-Verlauf"
+  },
+  "OpenTypeless Vocabulary": {
+    "ja": "OpenTypeless 語彙",
+    "ko": "OpenTypeless 어휘",
+    "es": "Vocabulario de OpenTypeless",
+    "pt": "Vocabulário do OpenTypeless",
+    "ru": "Словарь OpenTypeless",
+    "fr": "Vocabulaire OpenTypeless",
+    "de": "OpenTypeless-Vokabular"
+  },
+  "Save recording…": {
+    "ja": "録音を別名で保存…",
+    "ko": "녹음을 다른 이름으로 저장…",
+    "es": "Guardar grabación…",
+    "pt": "Salvar gravação…",
+    "ru": "Сохранить запись…",
+    "fr": "Enregistrer l’audio…",
+    "de": "Aufnahme sichern …"
+  },
+  "Couldn't save the recording": {
+    "ja": "録音を保存できませんでした",
+    "ko": "녹음을 저장할 수 없습니다",
+    "es": "No se pudo guardar la grabación",
+    "pt": "Não foi possível salvar a gravação",
+    "ru": "Не удалось сохранить запись",
+    "fr": "Impossible d’enregistrer l’audio",
+    "de": "Aufnahme konnte nicht gesichert werden"
+  },
+  "Import": {
+    "ja": "読み込む",
+    "ko": "가져오기",
+    "es": "Importar",
+    "pt": "Importar",
+    "ru": "Импортировать",
+    "fr": "Importer",
+    "de": "Importieren"
+  },
+  "Import…": {
+    "ja": "読み込む…",
+    "ko": "가져오기…",
+    "es": "Importar…",
+    "pt": "Importar…",
+    "ru": "Импорт…",
+    "fr": "Importer…",
+    "de": "Importieren …"
+  },
+  "Add terms from a CSV (its first column) or text file; ones you already have aren't added twice. The misheard forms in an exported CSV are for reference and aren't imported.": {
+    "ja": "CSV（1 列目）またはテキストファイルから語彙を追加します。すでにある語は重複して追加されません。書き出した CSV の聞き間違いの形は参考用で、読み込まれません。",
+    "ko": "CSV(첫 번째 열) 또는 텍스트 파일에서 어휘를 추가합니다. 이미 있는 단어는 중복으로 추가되지 않습니다. 내보낸 CSV의 잘못 인식된 형태는 참고용이며 가져오지 않습니다.",
+    "es": "Añade términos desde un archivo CSV (su primera columna) o de texto; los que ya tienes no se repiten. Las formas mal oídas de un CSV exportado son solo de referencia y no se importan.",
+    "pt": "Adiciona termos de um arquivo CSV (a primeira coluna) ou de texto; os que você já tem não são repetidos. As formas mal ouvidas de um CSV exportado são só para referência e não são importadas.",
+    "ru": "Добавить слова из файла CSV (первый столбец) или текстового файла; уже имеющиеся не повторяются. Варианты неверного распознавания в экспортированном CSV даны для справки и не импортируются.",
+    "fr": "Ajoute des termes depuis un fichier CSV (sa première colonne) ou texte ; ceux que vous avez déjà ne sont pas ajoutés deux fois. Les formes mal entendues d’un CSV exporté sont données à titre indicatif et ne sont pas importées.",
+    "de": "Begriffe aus einer CSV-Datei (ihrer ersten Spalte) oder Textdatei hinzufügen; vorhandene werden nicht doppelt hinzugefügt. Die falsch erkannten Formen in einer exportierten CSV dienen nur zur Information und werden nicht importiert."
+  },
+  "1 entry longer than {0} characters is left out.": {
+    "ja": "{0} 文字を超える 1 件は読み込まれません。",
+    "ko": "{0}자를 넘는 항목 1개는 가져오지 않습니다.",
+    "es": "Se omite 1 entrada de más de {0} caracteres.",
+    "pt": "1 entrada com mais de {0} caracteres fica de fora.",
+    "ru": "1 запись длиннее {0} символов не импортируется.",
+    "fr": "1 entrée de plus de {0} caractères est laissée de côté.",
+    "de": "1 Eintrag mit mehr als {0} Zeichen wird ausgelassen."
+  },
+  "{0} entries longer than {1} characters are left out.": {
+    "ja": "{1} 文字を超える {0} 件は読み込まれません。",
+    "ko": "{1}자를 넘는 항목 {0}개는 가져오지 않습니다.",
+    "es": "Se omiten {0} entradas de más de {1} caracteres.",
+    "pt": "{0} entradas com mais de {1} caracteres ficam de fora.",
+    "ru": "Записи длиннее {1} символов ({0}) не импортируются.",
+    "fr": "{0} entrées de plus de {1} caractères sont laissées de côté.",
+    "de": "{0} Einträge mit mehr als {1} Zeichen werden ausgelassen."
+  },
+  "The vocabulary holds up to {0} terms, so 1 more is left out.": {
+    "ja": "語彙は最大 {0} 語までのため、ほか 1 語は読み込まれません。",
+    "ko": "어휘는 최대 {0}개까지라서 1개는 더 가져오지 않습니다.",
+    "es": "El vocabulario admite hasta {0} términos, así que se omite 1 más.",
+    "pt": "O vocabulário comporta até {0} termos, então mais 1 fica de fora.",
+    "ru": "Словарь вмещает до {0} слов, поэтому ещё 1 не импортируется.",
+    "fr": "Le vocabulaire contient au plus {0} termes, 1 de plus est donc laissé de côté.",
+    "de": "Das Vokabular fasst bis zu {0} Begriffe, daher wird 1 weiterer ausgelassen."
+  },
+  "The vocabulary holds up to {0} terms, so {1} more are left out.": {
+    "ja": "語彙は最大 {0} 語までのため、ほか {1} 語は読み込まれません。",
+    "ko": "어휘는 최대 {0}개까지라서 {1}개는 더 가져오지 않습니다.",
+    "es": "El vocabulario admite hasta {0} términos, así que se omiten {1} más.",
+    "pt": "O vocabulário comporta até {0} termos, então mais {1} ficam de fora.",
+    "ru": "Словарь вмещает до {0} слов, поэтому ещё {1} не импортируются.",
+    "fr": "Le vocabulaire contient au plus {0} termes, {1} de plus sont donc laissés de côté.",
+    "de": "Das Vokabular fasst bis zu {0} Begriffe, daher werden {1} weitere ausgelassen."
+  },
+  "CSV (with how learned terms were misheard)…": {
+    "ja": "CSV（学習した語の聞き間違いも含む）…",
+    "ko": "CSV(학습한 단어의 잘못 인식된 형태 포함)…",
+    "es": "CSV (con cómo se oyeron mal los términos aprendidos)…",
+    "pt": "CSV (com como os termos aprendidos foram ouvidos errado)…",
+    "ru": "CSV (с тем, как были ошибочно распознаны выученные слова)…",
+    "fr": "CSV (avec la façon dont les termes appris ont été mal entendus)…",
+    "de": "CSV (mit falsch gehörten Formen gelernter Begriffe) …"
+  },
+  "Plain text (one term per line)…": {
+    "ja": "プレーンテキスト（1 行に 1 語）…",
+    "ko": "일반 텍스트(한 줄에 한 단어)…",
+    "es": "Texto sin formato (un término por línea)…",
+    "pt": "Texto simples (um termo por linha)…",
+    "ru": "Обычный текст (по слову на строку)…",
+    "fr": "Texte brut (un terme par ligne)…",
+    "de": "Reiner Text (ein Begriff pro Zeile) …"
+  },
+  "Plain text": {
+    "ja": "プレーンテキスト",
+    "ko": "일반 텍스트",
+    "es": "Texto sin formato",
+    "pt": "Texto simples",
+    "ru": "Обычный текст",
+    "fr": "Texte brut",
+    "de": "Reiner Text"
+  },
+  "Couldn't import": {
+    "ja": "読み込めませんでした",
+    "ko": "가져올 수 없습니다",
+    "es": "No se pudo importar",
+    "pt": "Não foi possível importar",
+    "ru": "Не удалось импортировать",
+    "fr": "Impossible d’importer",
+    "de": "Import fehlgeschlagen"
+  },
+  "No terms in this file": {
+    "ja": "このファイルには語がありません",
+    "ko": "이 파일에 단어가 없습니다",
+    "es": "Este archivo no tiene términos",
+    "pt": "Este arquivo não tem termos",
+    "ru": "В этом файле нет слов",
+    "fr": "Aucun terme dans ce fichier",
+    "de": "Keine Begriffe in dieser Datei"
+  },
+  "Put one term per line or separate them with commas; from a CSV file, the first column is used.": {
+    "ja": "1 行に 1 語、またはカンマで区切ってください。CSV ファイルでは最初の列を使います。",
+    "ko": "한 줄에 한 단어씩 쓰거나 쉼표로 구분하세요. CSV 파일은 첫 번째 열을 사용합니다.",
+    "es": "Pon un término por línea o sepáralos con comas; de un archivo CSV se usa la primera columna.",
+    "pt": "Coloque um termo por linha ou separe-os com vírgulas; de um arquivo CSV, a primeira coluna é usada.",
+    "ru": "Пишите по слову на строку или через запятую; из файла CSV берётся первый столбец.",
+    "fr": "Mettez un terme par ligne ou séparez-les par des virgules ; dans un fichier CSV, la première colonne est utilisée.",
+    "de": "Ein Begriff pro Zeile oder durch Kommas getrennt; aus einer CSV-Datei wird die erste Spalte verwendet."
+  },
+  "Nothing new to import": {
+    "ja": "新しい語はありません",
+    "ko": "가져올 새 단어가 없습니다",
+    "es": "No hay nada nuevo que importar",
+    "pt": "Nada novo para importar",
+    "ru": "Нечего импортировать",
+    "fr": "Rien de nouveau à importer",
+    "de": "Nichts Neues zum Importieren"
+  },
+  "The term in the file is already in your vocabulary.": {
+    "ja": "ファイルの語はすでに語彙にあります。",
+    "ko": "파일의 단어가 이미 어휘에 있습니다.",
+    "es": "El término del archivo ya está en tu vocabulario.",
+    "pt": "O termo do arquivo já está no seu vocabulário.",
+    "ru": "Слово из файла уже есть в словаре.",
+    "fr": "Le terme du fichier est déjà dans votre vocabulaire.",
+    "de": "Der Begriff aus der Datei ist bereits in Ihrem Vokabular."
+  },
+  "All {0} terms in the file are already in your vocabulary.": {
+    "ja": "ファイルの {0} 語はすべてすでに語彙にあります。",
+    "ko": "파일의 단어 {0}개가 모두 이미 어휘에 있습니다.",
+    "es": "Los {0} términos del archivo ya están en tu vocabulario.",
+    "pt": "Os {0} termos do arquivo já estão no seu vocabulário.",
+    "ru": "Все слова из файла ({0}) уже есть в словаре.",
+    "fr": "Les {0} termes du fichier sont déjà dans votre vocabulaire.",
+    "de": "Alle {0} Begriffe aus der Datei sind bereits in Ihrem Vokabular."
+  },
+  "Import 1 new term?": {
+    "ja": "新しい語を 1 つ読み込みますか？",
+    "ko": "새 단어 1개를 가져올까요?",
+    "es": "¿Importar 1 término nuevo?",
+    "pt": "Importar 1 termo novo?",
+    "ru": "Импортировать 1 новое слово?",
+    "fr": "Importer 1 nouveau terme ?",
+    "de": "1 neuen Begriff importieren?"
+  },
+  "Import {0} new terms?": {
+    "ja": "新しい語を {0} 個読み込みますか？",
+    "ko": "새 단어 {0}개를 가져올까요?",
+    "es": "¿Importar {0} términos nuevos?",
+    "pt": "Importar {0} termos novos?",
+    "ru": "Импортировать новые слова ({0})?",
+    "fr": "Importer {0} nouveaux termes ?",
+    "de": "{0} neue Begriffe importieren?"
+  },
+  "1 more is already in your vocabulary.": {
+    "ja": "ほかに 1 語はすでに語彙にあります。",
+    "ko": "그 밖의 1개는 이미 어휘에 있습니다.",
+    "es": "Otro ya está en tu vocabulario.",
+    "pt": "Outro já está no seu vocabulário.",
+    "ru": "Ещё одно слово уже есть в словаре.",
+    "fr": "Un autre est déjà dans votre vocabulaire.",
+    "de": "Ein weiterer ist bereits in Ihrem Vokabular."
+  },
+  "{0} more are already in your vocabulary.": {
+    "ja": "ほかに {0} 語はすでに語彙にあります。",
+    "ko": "그 밖의 {0}개는 이미 어휘에 있습니다.",
+    "es": "Otros {0} ya están en tu vocabulario.",
+    "pt": "Outros {0} já estão no seu vocabulário.",
+    "ru": "Ещё слов уже в словаре: {0}.",
+    "fr": "{0} autres sont déjà dans votre vocabulaire.",
+    "de": "{0} weitere sind bereits in Ihrem Vokabular."
+  },
+  "That file is too big to be a vocabulary list.": {
+    "ja": "このファイルは大きすぎて、語彙リストとは思えません。",
+    "ko": "이 파일은 너무 커서 어휘 목록이 아닌 것 같습니다.",
+    "es": "Ese archivo es demasiado grande para ser una lista de vocabulario.",
+    "pt": "Esse arquivo é grande demais para ser uma lista de vocabulário.",
+    "ru": "Этот файл слишком большой для списка слов.",
+    "fr": "Ce fichier est trop volumineux pour être une liste de vocabulaire.",
+    "de": "Diese Datei ist zu groß für eine Vokabelliste."
+  },
+  "This file isn't UTF-8 text. Save it as UTF-8 (in Excel, choose “CSV UTF-8”) and import it again.": {
+    "ja": "このファイルは UTF-8 のテキストではありません。UTF-8 で保存し直して（Excel では「CSV UTF-8」を選択）、もう一度読み込んでください。",
+    "ko": "이 파일은 UTF-8 텍스트가 아닙니다. UTF-8로 저장한 뒤(Excel에서는 “CSV UTF-8” 선택) 다시 가져오세요.",
+    "es": "Este archivo no es texto UTF-8. Guárdalo como UTF-8 (en Excel, elige «CSV UTF-8») e impórtalo de nuevo.",
+    "pt": "Este arquivo não é texto UTF-8. Salve-o como UTF-8 (no Excel, escolha “CSV UTF-8”) e importe de novo.",
+    "ru": "Этот файл не в кодировке UTF-8. Сохраните его в UTF-8 (в Excel выберите «CSV UTF-8») и импортируйте снова.",
+    "fr": "Ce fichier n’est pas du texte UTF-8. Enregistrez-le en UTF-8 (dans Excel, choisissez « CSV UTF-8 ») et importez-le à nouveau.",
+    "de": "Diese Datei ist kein UTF-8-Text. Speichern Sie sie als UTF-8 (in Excel: „CSV UTF-8“) und importieren Sie sie erneut."
+  },
+  "No permission to use that location. Try another folder.": {
+    "ja": "この場所を使う権限がありません。別のフォルダを試してください。",
+    "ko": "이 위치를 사용할 권한이 없습니다. 다른 폴더를 사용해 보세요.",
+    "es": "No hay permiso para usar esa ubicación. Prueba con otra carpeta.",
+    "pt": "Sem permissão para usar esse local. Tente outra pasta.",
+    "ru": "Нет доступа к этому месту. Попробуйте другую папку.",
+    "fr": "Pas d’autorisation pour cet emplacement. Essayez un autre dossier.",
+    "de": "Keine Berechtigung für diesen Ort. Versuchen Sie einen anderen Ordner."
+  },
+  "There isn't enough space on the disk.": {
+    "ja": "ディスクの空き容量が足りません。",
+    "ko": "디스크 공간이 부족합니다.",
+    "es": "No hay suficiente espacio en el disco.",
+    "pt": "Não há espaço suficiente no disco.",
+    "ru": "Недостаточно места на диске.",
+    "fr": "Espace disque insuffisant.",
+    "de": "Nicht genügend Speicherplatz auf dem Datenträger."
+  },
+  "That location is read-only. Try another folder.": {
+    "ja": "この場所は読み取り専用です。別のフォルダを試してください。",
+    "ko": "이 위치는 읽기 전용입니다. 다른 폴더를 사용해 보세요.",
+    "es": "Esa ubicación es de solo lectura. Prueba con otra carpeta.",
+    "pt": "Esse local é somente leitura. Tente outra pasta.",
+    "ru": "Это место только для чтения. Попробуйте другую папку.",
+    "fr": "Cet emplacement est en lecture seule. Essayez un autre dossier.",
+    "de": "Dieser Ort ist schreibgeschützt. Versuchen Sie einen anderen Ordner."
+  },
+  "The file is no longer there.": {
+    "ja": "ファイルがもうありません。",
+    "ko": "파일이 더 이상 없습니다.",
+    "es": "El archivo ya no está.",
+    "pt": "O arquivo não está mais lá.",
+    "ru": "Файла больше нет.",
+    "fr": "Le fichier n’est plus là.",
+    "de": "Die Datei ist nicht mehr vorhanden."
+  },
+  "The file dialog couldn't open": {
+    "ja": "ファイルダイアログを開けませんでした",
+    "ko": "파일 대화상자를 열 수 없습니다",
+    "es": "No se pudo abrir el cuadro de diálogo de archivos",
+    "pt": "Não foi possível abrir a caixa de diálogo de arquivos",
+    "ru": "Не удалось открыть окно выбора файла",
+    "fr": "Impossible d’ouvrir la fenêtre de fichiers",
+    "de": "Der Dateidialog konnte nicht geöffnet werden"
+  },
+  "Windows doesn't allow it while OpenTypeless runs as administrator. Open OpenTypeless normally and try again.": {
+    "ja": "OpenTypeless を管理者として実行していると、Windows はこれを許可しません。OpenTypeless を通常どおり開き直してから、もう一度お試しください。",
+    "ko": "OpenTypeless를 관리자 권한으로 실행하는 동안에는 Windows에서 허용하지 않습니다. OpenTypeless를 일반 방식으로 다시 열고 시도하세요.",
+    "es": "Windows no lo permite mientras OpenTypeless se ejecuta como administrador. Abre OpenTypeless de forma normal e inténtalo de nuevo.",
+    "pt": "O Windows não permite isso enquanto o OpenTypeless é executado como administrador. Abra o OpenTypeless normalmente e tente de novo.",
+    "ru": "Windows не разрешает это, пока OpenTypeless запущен от имени администратора. Откройте OpenTypeless обычным способом и попробуйте снова.",
+    "fr": "Windows ne le permet pas tant qu’OpenTypeless s’exécute en tant qu’administrateur. Ouvrez OpenTypeless normalement et réessayez.",
+    "de": "Windows erlaubt das nicht, solange OpenTypeless als Administrator läuft. Öffnen Sie OpenTypeless normal und versuchen Sie es erneut."
+  },
+  "Choose a folder on this PC.": {
+    "ja": "この PC 上のフォルダを選んでください。",
+    "ko": "이 PC의 폴더를 선택하세요.",
+    "es": "Elige una carpeta de este PC.",
+    "pt": "Escolha uma pasta neste PC.",
+    "ru": "Выберите папку на этом компьютере.",
+    "fr": "Choisissez un dossier sur ce PC.",
+    "de": "Wählen Sie einen Ordner auf diesem PC."
+  },
+  "Text around the cursor": {
+    "ja": "カーソル周辺のテキスト",
+    "ko": "커서 주변 텍스트",
+    "es": "Texto alrededor del cursor",
+    "pt": "Texto ao redor do cursor",
+    "ru": "Текст вокруг курсора",
+    "fr": "Texte autour du curseur",
+    "de": "Text um den Cursor"
+  },
+  "Use text around the cursor to spell names": {
+    "ja": "カーソル周辺のテキストで名前の表記を合わせる",
+    "ko": "커서 주변 텍스트로 이름 철자 맞추기",
+    "es": "Usar el texto alrededor del cursor para escribir bien los nombres",
+    "pt": "Usar o texto ao redor do cursor para grafar nomes",
+    "ru": "Писать имена по тексту вокруг курсора",
+    "fr": "Orthographier les noms d’après le texte autour du curseur",
+    "de": "Namen nach dem Text um den Cursor schreiben"
+  },
+  "When recording starts, up to 1,500 characters around your cursor in the field you're dictating into are read and sent with the transcript to your clean-up models, only so that the names and terms you say are spelled the way they appear there. Nothing from it is copied into your text. Password fields are never read, and the text isn't kept in History.": {
+    "ja": "録音を始めると、入力中の欄にあるカーソル前後の最大 1,500 文字を読み取り、文字起こしと一緒に整形モデルへ送ります。話した名前や用語をそこにある表記に合わせるためだけに使い、その内容をあなたの文章に書き写すことはありません。パスワード欄は決して読み取らず、このテキストは履歴にも保存されません。",
+    "ko": "녹음을 시작하면 입력 중인 칸에서 커서 앞뒤로 최대 1,500자를 읽어 받아쓰기와 함께 다듬기 모델에 보냅니다. 말한 이름과 용어를 그곳에 적힌 철자대로 맞추는 데만 쓰이며, 그 내용이 글에 옮겨지지는 않습니다. 비밀번호 칸은 절대 읽지 않으며, 이 텍스트는 기록에도 저장되지 않습니다.",
+    "es": "Al empezar a grabar, se leen hasta 1.500 caracteres alrededor del cursor en el campo en el que dictas y se envían con la transcripción a tus modelos de limpieza, solo para que los nombres y términos que dices se escriban como aparecen ahí. Nada de ese texto se copia en el tuyo. Los campos de contraseña nunca se leen y el texto no se guarda en el Historial.",
+    "pt": "Ao começar a gravar, até 1.500 caracteres ao redor do cursor no campo em que você está ditando são lidos e enviados com a transcrição aos seus modelos de limpeza, só para que os nomes e termos que você diz sejam grafados como aparecem ali. Nada desse texto é copiado para o seu. Campos de senha nunca são lidos, e o texto não fica guardado no Histórico.",
+    "ru": "Когда начинается запись, до 1500 символов вокруг курсора в поле, куда вы диктуете, считываются и отправляются вместе с расшифровкой моделям очистки — только чтобы названные вами имена и термины были написаны так, как там. Ничего из этого текста не копируется в ваш. Поля паролей никогда не читаются, а сам текст не сохраняется в истории.",
+    "fr": "Au début de l’enregistrement, jusqu’à 1 500 caractères autour du curseur dans le champ où vous dictez sont lus et envoyés avec la transcription à vos modèles de nettoyage, uniquement pour que les noms et termes que vous prononcez soient écrits comme ils y figurent. Rien de ce texte n’est recopié dans le vôtre. Les champs de mot de passe ne sont jamais lus, et le texte n’est pas conservé dans l’historique.",
+    "de": "Beim Start der Aufnahme werden bis zu 1.500 Zeichen um den Cursor im Feld, in das du diktierst, gelesen und mit der Transkription an deine Bereinigungsmodelle gesendet – nur damit die Namen und Begriffe, die du sagst, so geschrieben werden, wie sie dort stehen. Nichts davon wird in deinen Text übernommen. Passwortfelder werden nie gelesen, und der Text wird nicht im Verlauf gespeichert."
+  },
+  "with text around the cursor": {
+    "ja": "カーソル周辺のテキストを参照",
+    "ko": "커서 주변 텍스트 참고",
+    "es": "con el texto alrededor del cursor",
+    "pt": "com o texto ao redor do cursor",
+    "ru": "с текстом вокруг курсора",
+    "fr": "avec le texte autour du curseur",
+    "de": "mit dem Text um den Cursor"
+  },
+  "Snippets": {
+    "ja": "スニペット",
+    "ko": "스니펫",
+    "es": "Fragmentos",
+    "pt": "Atalhos de texto",
+    "ru": "Фрагменты",
+    "fr": "Extraits",
+    "de": "Textbausteine"
+  },
+  "Say a trigger and the text you wrote goes in instead, word for word, even mid-sentence. Triggers go to speech-to-text and clean-up as vocabulary, so they come through intact. Pick a phrase you wouldn't otherwise say, so it isn't replaced by accident.": {
+    "ja": "トリガーを話すと、書いておいたテキストが一字一句そのまま代わりに入ります。文の途中でも使えます。トリガーは語彙として音声認識と整形に渡されるので、そのまま残ります。誤って置き換わらないよう、普段は言わない言い回しを選んでください。",
+    "ko": "트리거를 말하면 미리 써 둔 텍스트가 한 글자도 바뀌지 않고 대신 들어갑니다. 문장 중간에서도 됩니다. 트리거는 어휘로 음성 인식과 정리에 전달되어 그대로 유지됩니다. 실수로 바뀌지 않도록 평소에 잘 하지 않는 말을 고르세요.",
+    "es": "Di un activador y en su lugar entra el texto que escribiste, palabra por palabra, incluso a mitad de frase. Los activadores se pasan como vocabulario a la transcripción y a la limpieza, para que lleguen intactos. Elige una frase que no dirías de otro modo, para que no se reemplace por accidente.",
+    "pt": "Diga um gatilho e o texto que você escreveu entra no lugar, palavra por palavra, mesmo no meio de uma frase. Os gatilhos vão como vocabulário para a transcrição e para a limpeza, para chegarem intactos. Escolha uma frase que você não diria normalmente, para que não seja substituída por engano.",
+    "ru": "Произнесите триггер — и вместо него вставится написанный вами текст, слово в слово, даже посреди фразы. Триггеры передаются распознаванию и обработке как словарь, чтобы дойти без изменений. Выберите фразу, которую вы обычно не говорите, чтобы её не заменило случайно.",
+    "fr": "Dites un déclencheur et le texte que vous avez écrit est inséré à sa place, mot pour mot, même en milieu de phrase. Les déclencheurs sont transmis comme vocabulaire à la transcription et au nettoyage, pour arriver intacts. Choisissez une expression que vous ne diriez pas autrement, pour éviter un remplacement par accident.",
+    "de": "Sag einen Auslöser, und an seiner Stelle wird der Text eingefügt, den du geschrieben hast, Wort für Wort, auch mitten im Satz. Auslöser gehen als Vokabular an die Spracherkennung und die Bereinigung, damit sie unverändert ankommen. Wähle eine Formulierung, die du sonst nicht sagst, damit nichts versehentlich ersetzt wird."
+  },
+  "No snippets yet": {
+    "ja": "スニペットはまだありません",
+    "ko": "아직 스니펫이 없습니다",
+    "es": "Aún no hay fragmentos",
+    "pt": "Nenhum atalho de texto ainda",
+    "ru": "Фрагментов пока нет",
+    "fr": "Aucun extrait pour l’instant",
+    "de": "Noch keine Textbausteine"
+  },
+  "For example, say “my email” to insert name@example.com": {
+    "ja": "例：「私のメール」と言うと name@example.com を入力",
+    "ko": "예: “내 이메일”이라고 말하면 name@example.com 입력",
+    "es": "Por ejemplo, di «mi correo» para insertar name@example.com",
+    "pt": "Por exemplo, diga “meu e-mail” para inserir name@example.com",
+    "ru": "Например, скажите «мой email», чтобы вставить name@example.com",
+    "fr": "Par exemple, dites « mon e-mail » pour insérer name@example.com",
+    "de": "Sag zum Beispiel „meine E-Mail“, um name@example.com einzufügen"
+  },
+  "Add Snippet": {
+    "ja": "スニペットを追加",
+    "ko": "스니펫 추가",
+    "es": "Añadir fragmento",
+    "pt": "Adicionar atalho",
+    "ru": "Добавить фрагмент",
+    "fr": "Ajouter un extrait",
+    "de": "Textbaustein hinzufügen"
+  },
+  "Edit snippet": {
+    "ja": "スニペットを編集",
+    "ko": "스니펫 편집",
+    "es": "Editar fragmento",
+    "pt": "Editar atalho",
+    "ru": "Изменить фрагмент",
+    "fr": "Modifier l’extrait",
+    "de": "Textbaustein bearbeiten"
+  },
+  "Trigger, e.g. my email": {
+    "ja": "トリガー（例：私のメール）",
+    "ko": "트리거(예: 내 이메일)",
+    "es": "Activador, p. ej. mi correo",
+    "pt": "Gatilho, ex.: meu e-mail",
+    "ru": "Триггер, например: мой email",
+    "fr": "Déclencheur, p. ex. mon e-mail",
+    "de": "Auslöser, z. B. meine E-Mail"
+  },
+  "What goes in instead (can be several lines)": {
+    "ja": "代わりに入るテキスト（複数行可）",
+    "ko": "대신 들어갈 텍스트(여러 줄 가능)",
+    "es": "Lo que entra en su lugar (puede tener varias líneas)",
+    "pt": "O que entra no lugar (pode ter várias linhas)",
+    "ru": "Что вставить вместо него (можно в несколько строк)",
+    "fr": "Ce qui est inséré à la place (plusieurs lignes possibles)",
+    "de": "Was stattdessen eingefügt wird (auch mehrzeilig)"
+  },
+  "That trigger is already in use": {
+    "ja": "このトリガーはすでに使われています",
+    "ko": "이미 사용 중인 트리거입니다",
+    "es": "Ese activador ya está en uso",
+    "pt": "Esse gatilho já está em uso",
+    "ru": "Такой триггер уже есть",
+    "fr": "Ce déclencheur est déjà utilisé",
+    "de": "Dieser Auslöser wird schon verwendet"
+  },
+  "Save": {
+    "ja": "保存",
+    "ko": "저장",
+    "es": "Guardar",
+    "pt": "Salvar",
+    "ru": "Сохранить",
+    "fr": "Enregistrer",
+    "de": "Speichern"
+  },
+  "Before snippets": {
+    "ja": "スニペット置き換え前",
+    "ko": "스니펫 적용 전",
+    "es": "Antes de los fragmentos",
+    "pt": "Antes dos atalhos",
+    "ru": "До замены фрагментов",
+    "fr": "Avant les extraits",
+    "de": "Vor den Textbausteinen"
+  },
+  "Paste last dictation": {
+    "ja": "前回の音声入力を貼り付け",
+    "ko": "마지막 받아쓰기 붙여넣기",
+    "es": "Pegar el último dictado",
+    "pt": "Colar o último ditado",
+    "ru": "Вставить последнюю диктовку",
+    "fr": "Coller la dernière dictée",
+    "de": "Letztes Diktat einfügen"
+  },
+  "Inserts your latest dictation at the cursor again; if it failed, it's transcribed again first": {
+    "ja": "最新の音声入力をもう一度カーソル位置に挿入します。失敗していた場合は、先に文字起こしをやり直します",
+    "ko": "가장 최근 받아쓰기를 커서 위치에 다시 넣습니다. 실패했다면 먼저 다시 전사합니다",
+    "es": "Vuelve a insertar tu último dictado en el cursor; si falló, primero se transcribe de nuevo",
+    "pt": "Insere de novo o seu último ditado no cursor; se ele falhou, é transcrito novamente antes",
+    "ru": "Снова вставляет последнюю диктовку в позицию курсора; если она не удалась, сначала распознаёт её заново",
+    "fr": "Réinsère votre dernière dictée au curseur ; si elle a échoué, elle est d’abord retranscrite",
+    "de": "Fügt dein letztes Diktat erneut am Cursor ein; ist es fehlgeschlagen, wird es zuerst neu transkribiert"
+  },
+  "A modifier on its own can't be used here — add a key to it.": {
+    "ja": "修飾キー単独はここでは使えません。ほかのキーと組み合わせてください。",
+    "ko": "보조 키 하나만으로는 여기서 쓸 수 없습니다. 다른 키와 함께 누르세요.",
+    "es": "Aquí no se puede usar un modificador solo: añádele una tecla.",
+    "pt": "Um modificador sozinho não pode ser usado aqui — combine-o com outra tecla.",
+    "ru": "Одну клавишу-модификатор здесь использовать нельзя — добавьте к ней ещё клавишу.",
+    "fr": "Un modificateur seul ne peut pas servir ici — ajoutez-lui une touche.",
+    "de": "Eine Sondertaste allein geht hier nicht – nimm noch eine Taste dazu."
+  },
+  "Esc cancels a dictation — pick another key.": {
+    "ja": "Esc は音声入力のキャンセルに使います。別のキーを選んでください。",
+    "ko": "Esc는 받아쓰기를 취소하는 키입니다. 다른 키를 고르세요.",
+    "es": "Esc cancela un dictado: elige otra tecla.",
+    "pt": "O Esc cancela um ditado — escolha outra tecla.",
+    "ru": "Esc отменяет диктовку — выберите другую клавишу.",
+    "fr": "Échap annule une dictée — choisissez une autre touche.",
+    "de": "Esc bricht ein Diktat ab – wähle eine andere Taste."
+  },
+  "That's the dictation shortcut — pick another.": {
+    "ja": "これは音声入力のショートカットです。別のものを選んでください。",
+    "ko": "받아쓰기 단축키입니다. 다른 조합을 고르세요.",
+    "es": "Ese es el atajo de dictado: elige otro.",
+    "pt": "Esse é o atalho de ditado — escolha outro.",
+    "ru": "Это сочетание для диктовки — выберите другое.",
+    "fr": "C’est le raccourci de dictée — choisissez-en un autre.",
+    "de": "Das ist das Diktierkürzel – wähle ein anderes."
+  },
+  "Already used by “{0}” — pick another.": {
+    "ja": "「{0}」で使用中です。別のものを選んでください。",
+    "ko": "“{0}”에서 이미 쓰고 있습니다. 다른 조합을 고르세요.",
+    "es": "Ya lo usa «{0}»: elige otro.",
+    "pt": "Já está em uso por “{0}” — escolha outro.",
+    "ru": "Уже используется для «{0}» — выберите другое.",
+    "fr": "Déjà utilisé par « {0} » — choisissez-en un autre.",
+    "de": "Wird schon für „{0}“ verwendet – wähle ein anderes."
+  },
+  "A plain key would break normal typing — combine it with ⌃ ⌥ ⇧ ⌘, or use F1–F20.": {
+    "ja": "単独の文字キーは通常の入力を妨げます。⌃ ⌥ ⇧ ⌘ と組み合わせるか、F1–F20 を使ってください。",
+    "ko": "일반 키만 쓰면 평소 타이핑에 방해가 됩니다. ⌃ ⌥ ⇧ ⌘와 조합하거나 F1–F20을 쓰세요.",
+    "es": "Una tecla normal interferiría al escribir: combínala con ⌃ ⌥ ⇧ ⌘, o usa F1–F20.",
+    "pt": "Uma tecla comum atrapalharia a digitação — combine com ⌃ ⌥ ⇧ ⌘ ou use F1–F20.",
+    "ru": "Обычная клавиша помешает набору — сочетайте её с ⌃ ⌥ ⇧ ⌘ или используйте F1–F20.",
+    "fr": "Une touche simple gênerait la saisie — combinez-la avec ⌃ ⌥ ⇧ ⌘, ou utilisez F1–F20.",
+    "de": "Eine normale Taste würde das Tippen stören – kombiniere sie mit ⌃ ⌥ ⇧ ⌘ oder nimm F1–F20."
+  },
+  "A plain key would break normal typing — combine it with Ctrl / Alt / Shift / Win, or use F1–F24.": {
+    "ja": "単独の文字キーは通常の入力を妨げます。Ctrl / Alt / Shift / Win と組み合わせるか、F1–F24 を使ってください。",
+    "ko": "일반 키만 쓰면 평소 타이핑에 방해가 됩니다. Ctrl / Alt / Shift / Win과 조합하거나 F1–F24를 쓰세요.",
+    "es": "Una tecla normal interferiría al escribir: combínala con Ctrl / Alt / Shift / Win, o usa F1–F24.",
+    "pt": "Uma tecla comum atrapalharia a digitação — combine com Ctrl / Alt / Shift / Win ou use F1–F24.",
+    "ru": "Обычная клавиша помешает набору — сочетайте её с Ctrl / Alt / Shift / Win или используйте F1–F24.",
+    "fr": "Une touche simple gênerait la saisie — combinez-la avec Ctrl / Alt / Shift / Win, ou utilisez F1–F24.",
+    "de": "Eine normale Taste würde das Tippen stören – kombiniere sie mit Ctrl / Alt / Shift / Win oder nimm F1–F24."
+  },
+  "More shortcuts": {
+    "ja": "その他のショートカット",
+    "ko": "기타 단축키",
+    "es": "Más atajos",
+    "pt": "Mais atalhos",
+    "ru": "Другие сочетания",
+    "fr": "Autres raccourcis",
+    "de": "Weitere Kürzel"
+  },
+  "They work between dictations. Use a combination with ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) or F1–F20.": {
+    "ja": "音声入力をしていないときに使えます。⌃ ⌥ ⇧ ⌘ との組み合わせ（⌃⌘V など）か F1–F20 を使ってください。",
+    "ko": "받아쓰기 중이 아닐 때 동작합니다. ⌃ ⌥ ⇧ ⌘ 조합(⌃⌘V 등)이나 F1–F20을 쓰세요.",
+    "es": "Funcionan entre dictados. Usa una combinación con ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) o F1–F20.",
+    "pt": "Funcionam entre ditados. Use uma combinação com ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) ou F1–F20.",
+    "ru": "Работают между диктовками. Используйте сочетание с ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) или F1–F20.",
+    "fr": "Ils fonctionnent entre deux dictées. Utilisez une combinaison avec ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) ou F1–F20.",
+    "de": "Sie wirken zwischen Diktaten. Nimm eine Kombination mit ⌃ ⌥ ⇧ ⌘ (⌃⌘V …) oder F1–F20."
+  },
+  "They work between dictations. Use a combination with Ctrl / Alt / Shift / Win (Alt + Shift + Z…) or F1–F24.": {
+    "ja": "音声入力をしていないときに使えます。Ctrl / Alt / Shift / Win との組み合わせ（Alt + Shift + Z など）か F1–F24 を使ってください。",
+    "ko": "받아쓰기 중이 아닐 때 동작합니다. Ctrl / Alt / Shift / Win 조합(Alt + Shift + Z 등)이나 F1–F24를 쓰세요.",
+    "es": "Funcionan entre dictados. Usa una combinación con Ctrl / Alt / Shift / Win (Alt + Shift + Z…) o F1–F24.",
+    "pt": "Funcionam entre ditados. Use uma combinação com Ctrl / Alt / Shift / Win (Alt + Shift + Z…) ou F1–F24.",
+    "ru": "Работают между диктовками. Используйте сочетание с Ctrl / Alt / Shift / Win (Alt + Shift + Z…) или F1–F24.",
+    "fr": "Ils fonctionnent entre deux dictées. Utilisez une combinaison avec Ctrl / Alt / Shift / Win (Alt + Shift + Z…) ou F1–F24.",
+    "de": "Sie wirken zwischen Diktaten. Nimm eine Kombination mit Ctrl / Alt / Shift / Win (Alt + Shift + Z …) oder F1–F24."
+  },
+  "Change": {
+    "ja": "変更",
+    "ko": "변경",
+    "es": "Cambiar",
+    "pt": "Alterar",
+    "ru": "Изменить",
+    "fr": "Modifier",
+    "de": "Ändern"
+  },
+  "Clear shortcut": {
+    "ja": "ショートカットを解除",
+    "ko": "단축키 지우기",
+    "es": "Quitar atajo",
+    "pt": "Remover atalho",
+    "ru": "Убрать сочетание",
+    "fr": "Effacer le raccourci",
+    "de": "Kürzel entfernen"
+  },
+  "No dictation to paste yet": {
+    "ja": "貼り付けられる音声入力はまだありません",
+    "ko": "아직 붙여넣을 받아쓰기가 없습니다",
+    "es": "Aún no hay ningún dictado para pegar",
+    "pt": "Ainda não há ditado para colar",
+    "ru": "Пока нечего вставить",
+    "fr": "Aucune dictée à coller pour l’instant",
+    "de": "Noch kein Diktat zum Einfügen"
+  },
+  "On keyboard layouts such as German or French, Ctrl + Alt with a letter is AltGr, which types characters like @ and €, so this shortcut would block them. If you type those, pick another shortcut.": {
+    "ja": "ドイツ語やフランス語などのキーボード配列では、Ctrl + Alt と文字キーの組み合わせは AltGr として @ や € などの入力に使われるため、このショートカットはそれらの入力を妨げます。それらを入力する場合は別のショートカットを選んでください。",
+    "ko": "독일어나 프랑스어 같은 키보드 배열에서는 Ctrl + Alt와 글자 키 조합이 AltGr로 @, € 같은 문자를 입력하므로, 이 단축키가 그 입력을 막습니다. 그런 문자를 입력한다면 다른 단축키를 고르세요.",
+    "es": "En distribuciones de teclado como la alemana, la francesa o la española, Ctrl + Alt con una letra es AltGr, que escribe caracteres como @ y €, así que este atajo los bloquearía. Si los escribes, elige otro atajo.",
+    "pt": "Em layouts de teclado como o alemão, o francês ou o ABNT2, Ctrl + Alt com uma letra é o AltGr, que digita caracteres como @ e €, então este atalho os bloquearia. Se você os digita, escolha outro atalho.",
+    "ru": "В раскладках вроде немецкой или французской Ctrl + Alt с буквой — это AltGr, который вводит символы вроде @ и €, так что это сочетание их заблокирует. Если вы их набираете, выберите другое сочетание.",
+    "fr": "Sur les dispositions de clavier comme l’allemand ou le français, Ctrl + Alt avec une lettre équivaut à AltGr, qui sert à taper @ ou €, donc ce raccourci les bloquerait. Si vous les tapez, choisissez un autre raccourci.",
+    "de": "Bei Tastaturlayouts wie Deutsch oder Französisch ist Ctrl + Alt mit einem Buchstaben AltGr, das Zeichen wie @ und € tippt – dieses Kürzel würde sie blockieren. Wenn du sie tippst, wähle ein anderes Kürzel."
+  },
+  "Finish and send": {
+    "ja": "話し終えて送信",
+    "ko": "말하고 바로 보내기",
+    "es": "Terminar y enviar",
+    "pt": "Terminar e enviar",
+    "ru": "Закончить и отправить",
+    "fr": "Terminer et envoyer",
+    "de": "Beenden und senden"
+  },
+  "Translation": {
+    "ja": "翻訳",
+    "ko": "번역",
+    "es": "Traducción",
+    "pt": "Tradução",
+    "ru": "Перевод",
+    "fr": "Traduction",
+    "de": "Übersetzung"
+  },
+  "Translation mode": {
+    "ja": "翻訳モード",
+    "ko": "번역 모드",
+    "es": "Modo de traducción",
+    "pt": "Modo de tradução",
+    "ru": "Режим перевода",
+    "fr": "Mode traduction",
+    "de": "Übersetzungsmodus"
+  },
+  "Hold the dictation shortcut and press {0} too: that dictation goes in translated": {
+    "ja": "音声入力のショートカットを押したまま {0} も押すと、その音声入力は翻訳されて挿入されます",
+    "ko": "받아쓰기 단축키를 누른 채 {0}도 누르면 그 받아쓰기는 번역되어 삽입됩니다",
+    "es": "Mantén pulsado el atajo de dictado y pulsa también {0}: ese dictado se inserta traducido",
+    "pt": "Mantenha o atalho de ditado pressionado e pressione também {0}: esse ditado é inserido traduzido",
+    "ru": "Удерживая сочетание клавиш для диктовки, нажмите ещё {0}: эта диктовка будет вставлена в переводе",
+    "fr": "Maintenez le raccourci de dictée et appuyez aussi sur {0} : cette dictée est insérée traduite",
+    "de": "Halte das Diktier-Tastenkürzel und drücke zusätzlich {0}: Dieses Diktat wird übersetzt eingefügt"
+  },
+  "Translate into": {
+    "ja": "翻訳先",
+    "ko": "번역할 언어",
+    "es": "Traducir al",
+    "pt": "Traduzir para",
+    "ru": "Переводить на",
+    "fr": "Traduire en",
+    "de": "Übersetzen in"
+  },
+  "Other…": {
+    "ja": "その他…",
+    "ko": "기타…",
+    "es": "Otro…",
+    "pt": "Outro…",
+    "ru": "Другой…",
+    "fr": "Autre…",
+    "de": "Andere…"
+  },
+  "By its name: Italiano, 繁體中文, Tiếng Việt…": {
+    "ja": "言語名で入力：Italiano、繁體中文、Tiếng Việt…",
+    "ko": "언어 이름으로 입력: Italiano, 繁體中文, Tiếng Việt…",
+    "es": "Por su nombre: Italiano, 繁體中文, Tiếng Việt…",
+    "pt": "Pelo nome: Italiano, 繁體中文, Tiếng Việt…",
+    "ru": "Названием языка: Italiano, 繁體中文, Tiếng Việt…",
+    "fr": "Par son nom : Italiano, 繁體中文, Tiếng Việt…",
+    "de": "Mit ihrem Namen: Italiano, 繁體中文, Tiếng Việt…"
+  },
+  "Switch key": {
+    "ja": "切り替えキー",
+    "ko": "전환 키",
+    "es": "Tecla de cambio",
+    "pt": "Tecla de troca",
+    "ru": "Клавиша переключения",
+    "fr": "Touche de bascule",
+    "de": "Umschalttaste"
+  },
+  "Pressed while you hold the dictation shortcut (either side)": {
+    "ja": "音声入力のショートカットを押している間に押します（左右どちらでも可）",
+    "ko": "받아쓰기 단축키를 누르고 있는 동안 누릅니다(왼쪽, 오른쪽 모두 가능)",
+    "es": "Se pulsa mientras mantienes el atajo de dictado (cualquiera de los dos lados)",
+    "pt": "Pressionada enquanto você segura o atalho de ditado (qualquer um dos lados)",
+    "ru": "Нажимается, пока вы удерживаете сочетание для диктовки (любая из двух)",
+    "fr": "À presser pendant que vous maintenez le raccourci de dictée (l’une ou l’autre)",
+    "de": "Wird gedrückt, während du das Diktier-Tastenkürzel hältst (linke oder rechte)"
+  },
+  "Speak in any language; what goes in is the translation. It takes one model request, as quick as a clean-up. When the translation can't be used, the cleaned-up original goes in instead.": {
+    "ja": "どの言語で話してもかまいません。挿入されるのは翻訳です。モデルへのリクエストは 1 回だけなので、整形と同じくらい速く仕上がります。翻訳が使えないときは、代わりに整形した原文が挿入されます。",
+    "ko": "어떤 언어로 말해도 됩니다. 삽입되는 것은 번역입니다. 모델 요청은 한 번뿐이라 다듬기만큼 빠릅니다. 번역을 쓸 수 없을 때는 다듬은 원문이 대신 삽입됩니다.",
+    "es": "Habla en cualquier idioma; lo que se inserta es la traducción. Basta con una petición al modelo, tan rápida como una limpieza. Si la traducción no se puede usar, se inserta en su lugar el original limpio.",
+    "pt": "Fale em qualquer idioma; o que é inserido é a tradução. Basta uma requisição ao modelo, tão rápida quanto uma limpeza. Quando a tradução não pode ser usada, o original limpo é inserido no lugar.",
+    "ru": "Говорите на любом языке — вставляется перевод. Нужен всего один запрос к модели, так же быстро, как очистка. Если перевод не годится, вместо него вставляется очищенный оригинал.",
+    "fr": "Parlez dans n’importe quelle langue : c’est la traduction qui est insérée. Une seule requête au modèle suffit, aussi rapide qu’un nettoyage. Si la traduction est inutilisable, c’est l’original nettoyé qui est inséré.",
+    "de": "Sprich in jeder beliebigen Sprache – eingefügt wird die Übersetzung. Sie braucht nur eine Modellanfrage und ist so schnell wie eine Bereinigung. Ist die Übersetzung unbrauchbar, wird stattdessen das bereinigte Original eingefügt."
+  },
+  "Hold + {0}: translate": {
+    "ja": "押したまま + {0}：翻訳",
+    "ko": "누른 채 + {0}: 번역",
+    "es": "Mantén + {0}: traducir",
+    "pt": "Segure + {0}: traduzir",
+    "ru": "Удерживать + {0}: перевод",
+    "fr": "Maintenir + {0} : traduire",
+    "de": "Halten + {0}: übersetzen"
+  },
+  "Inserted translated into {0} (set up under Vocabulary & Style)": {
+    "ja": "{0} に翻訳して挿入（「語彙とスタイル」で設定）",
+    "ko": "{0}(으)로 번역해 삽입(「어휘 및 스타일」에서 설정)",
+    "es": "Se inserta traducido al {0} (se configura en Vocabulario y estilo)",
+    "pt": "Inserido traduzido para {0} (configure em Vocabulário e estilo)",
+    "ru": "Вставляется в переводе на {0} (настраивается в разделе «Словарь и стиль»)",
+    "fr": "Inséré traduit en {0} (à régler dans Vocabulaire et style)",
+    "de": "Wird übersetzt in {0} eingefügt (einzurichten unter Vokabular & Stil)"
+  },
+  "Translation → {0}": {
+    "ja": "翻訳 → {0}",
+    "ko": "번역 → {0}",
+    "es": "Traducción → {0}",
+    "pt": "Tradução → {0}",
+    "ru": "Перевод → {0}",
+    "fr": "Traduction → {0}",
+    "de": "Übersetzung → {0}"
+  },
+  "Couldn't translate: {0}": {
+    "ja": "翻訳できませんでした：{0}",
+    "ko": "번역하지 못했습니다: {0}",
+    "es": "No se pudo traducir: {0}",
+    "pt": "Não foi possível traduzir: {0}",
+    "ru": "Не удалось перевести: {0}",
+    "fr": "Traduction impossible : {0}",
+    "de": "Übersetzung nicht möglich: {0}"
+  },
+  "Couldn't translate — inserted the clean-up": {
+    "ja": "翻訳できなかったため、整形した原文を挿入しました",
+    "ko": "번역하지 못해 다듬은 원문을 삽입함",
+    "es": "No se pudo traducir: se insertó el texto limpio",
+    "pt": "Não foi possível traduzir — o texto limpo foi inserido",
+    "ru": "Не удалось перевести — вставлен очищенный текст",
+    "fr": "Traduction impossible — le texte nettoyé a été inséré",
+    "de": "Übersetzung nicht möglich – der bereinigte Text wurde eingefügt"
+  },
+  "Couldn't translate — inserted as spoken": {
+    "ja": "翻訳できなかったため、話したままの文を挿入しました",
+    "ko": "번역하지 못해 말한 그대로 삽입함",
+    "es": "No se pudo traducir: se insertó tal como se dijo",
+    "pt": "Não foi possível traduzir — inserido como foi falado",
+    "ru": "Не удалось перевести — вставлено как сказано",
+    "fr": "Traduction impossible — inséré tel que dicté",
+    "de": "Übersetzung nicht möglich – so eingefügt, wie gesprochen"
+  },
+  "the translation was cut off": {
+    "ja": "翻訳が途中で切れました",
+    "ko": "번역이 중간에 끊겼습니다",
+    "es": "la traducción quedó cortada",
+    "pt": "a tradução foi cortada",
+    "ru": "перевод оборвался",
+    "fr": "la traduction a été coupée",
+    "de": "die Übersetzung brach ab"
+  },
+  "the model answered instead of translating": {
+    "ja": "モデルが翻訳せずに内容に答えました",
+    "ko": "모델이 번역하지 않고 내용에 답했습니다",
+    "es": "el modelo respondió en lugar de traducir",
+    "pt": "o modelo respondeu em vez de traduzir",
+    "ru": "модель ответила вместо перевода",
+    "fr": "le modèle a répondu au lieu de traduire",
+    "de": "das Modell hat geantwortet, statt zu übersetzen"
+  },
+  "the translation left too much out": {
+    "ja": "翻訳で抜け落ちた内容が多すぎます",
+    "ko": "번역에서 빠진 내용이 너무 많습니다",
+    "es": "la traducción omitió demasiado",
+    "pt": "a tradução deixou de fora conteúdo demais",
+    "ru": "в переводе пропущено слишком много",
+    "fr": "la traduction omettait trop de choses",
+    "de": "die Übersetzung ließ zu viel weg"
+  },
+  "it didn't come back in the target language": {
+    "ja": "結果が翻訳先の言語ではありませんでした",
+    "ko": "결과가 번역할 언어로 나오지 않았습니다",
+    "es": "no volvió en el idioma de destino",
+    "pt": "não voltou no idioma de destino",
+    "ru": "результат пришёл не на нужном языке",
+    "fr": "le résultat n’était pas dans la langue cible",
+    "de": "es kam nicht in der Zielsprache zurück"
+  },
+  "no usable translation came back": {
+    "ja": "使える翻訳が返ってきませんでした",
+    "ko": "쓸 수 있는 번역이 돌아오지 않았습니다",
+    "es": "no llegó ninguna traducción utilizable",
+    "pt": "nenhuma tradução utilizável voltou",
+    "ru": "пригодного перевода не пришло",
+    "fr": "aucune traduction utilisable n’est revenue",
+    "de": "es kam keine brauchbare Übersetzung zurück"
+  },
+  "An edit of a selection can't be retried": {
+    "ja": "選択範囲の編集はやり直せません",
+    "ko": "선택 영역 편집은 다시 시도할 수 없습니다",
+    "es": "Una edición de una selección no se puede reintentar",
+    "pt": "Uma edição de uma seleção não pode ser repetida",
+    "ru": "Правку выделенного текста нельзя повторить",
+    "fr": "Une modification de sélection ne peut pas être relancée",
+    "de": "Eine Bearbeitung einer Auswahl kann nicht wiederholt werden"
+  },
+  "Answer copied: ": {
+    "ja": "回答をコピーしました：",
+    "ko": "답변을 복사했습니다: ",
+    "es": "Respuesta copiada: ",
+    "pt": "Resposta copiada: ",
+    "ru": "Ответ скопирован: ",
+    "fr": "Réponse copiée : ",
+    "de": "Antwort kopiert: "
+  },
+  "Can't paste there — the edited text is on the clipboard": {
+    "ja": "そこには貼り付けられません — 編集後のテキストはクリップボードにあります",
+    "ko": "그곳에는 붙여넣을 수 없습니다 — 편집된 텍스트는 클립보드에 있습니다",
+    "es": "No se puede pegar ahí: el texto editado está en el portapapeles",
+    "pt": "Não é possível colar aí — o texto editado está na área de transferência",
+    "ru": "Сюда нельзя вставить — изменённый текст в буфере обмена",
+    "fr": "Impossible de coller ici — le texte modifié est dans le presse-papiers",
+    "de": "Dort kann nicht eingefügt werden – der bearbeitete Text ist in der Zwischenablage"
+  },
+  "Can't read the selection in this editor": {
+    "ja": "このエディタでは選択範囲を読み取れません",
+    "ko": "이 편집기에서는 선택한 텍스트를 읽을 수 없습니다",
+    "es": "No se puede leer la selección en este editor",
+    "pt": "Não é possível ler a seleção neste editor",
+    "ru": "Не удаётся прочитать выделение в этом редакторе",
+    "fr": "Impossible de lire la sélection dans cet éditeur",
+    "de": "Die Auswahl in diesem Editor kann nicht gelesen werden"
+  },
+  "Command mode": {
+    "ja": "編集モード",
+    "ko": "편집 모드",
+    "es": "Modo de edición",
+    "pt": "Modo de edição",
+    "ru": "Режим правки",
+    "fr": "Mode édition",
+    "de": "Bearbeitungsmodus"
+  },
+  "Couldn't edit the selection: ": {
+    "ja": "選択範囲を編集できませんでした：",
+    "ko": "선택한 텍스트를 편집하지 못했습니다: ",
+    "es": "No se pudo editar la selección: ",
+    "pt": "Não foi possível editar a seleção: ",
+    "ru": "Не удалось изменить выделенный текст: ",
+    "fr": "Impossible de modifier la sélection : ",
+    "de": "Die Auswahl konnte nicht bearbeitet werden: "
+  },
+  "Couldn't edit: ": {
+    "ja": "編集できませんでした：",
+    "ko": "편집하지 못했습니다: ",
+    "es": "No se pudo editar: ",
+    "pt": "Não foi possível editar: ",
+    "ru": "Не удалось изменить: ",
+    "fr": "Modification impossible : ",
+    "de": "Bearbeiten fehlgeschlagen: "
+  },
+  "Couldn't edit: {0}": {
+    "ja": "編集できませんでした：{0}",
+    "ko": "편집하지 못했습니다: {0}",
+    "es": "No se pudo editar: {0}",
+    "pt": "Não foi possível editar: {0}",
+    "ru": "Не удалось изменить: {0}",
+    "fr": "Modification impossible : {0}",
+    "de": "Bearbeiten fehlgeschlagen: {0}"
+  },
+  "Couldn't edit: {0}. Your text is unchanged": {
+    "ja": "編集できませんでした：{0}。テキストは変更されていません",
+    "ko": "편집하지 못했습니다: {0}. 텍스트는 바뀌지 않았습니다",
+    "es": "No se pudo editar: {0}. Tu texto no ha cambiado",
+    "pt": "Não foi possível editar: {0}. Seu texto não foi alterado",
+    "ru": "Не удалось изменить: {0}. Ваш текст не изменён",
+    "fr": "Modification impossible : {0}. Votre texte est inchangé",
+    "de": "Bearbeiten fehlgeschlagen: {0}. Dein Text ist unverändert"
+  },
+  "Edit selected text by voice": {
+    "ja": "選択したテキストを音声で編集",
+    "ko": "선택한 텍스트를 음성으로 편집",
+    "es": "Editar el texto seleccionado con la voz",
+    "pt": "Editar o texto selecionado por voz",
+    "ru": "Правка выделенного текста голосом",
+    "fr": "Modifier le texte sélectionné à la voix",
+    "de": "Ausgewählten Text per Sprache bearbeiten"
+  },
+  "Edited a selection ({0} characters)": {
+    "ja": "選択範囲を編集（{0} 文字）",
+    "ko": "선택 영역 편집({0}자)",
+    "es": "Edición de una selección ({0} caracteres)",
+    "pt": "Edição de uma seleção ({0} caracteres)",
+    "ru": "Правка выделения ({0} симв.)",
+    "fr": "Modification d'une sélection ({0} caractères)",
+    "de": "Auswahl bearbeitet ({0} Zeichen)"
+  },
+  "Hold + {0}: edit the selection": {
+    "ja": "押したまま + {0}：選択範囲を編集",
+    "ko": "누른 채 + {0}: 선택 영역 편집",
+    "es": "Mantén + {0}: editar la selección",
+    "pt": "Segure + {0}: editar a seleção",
+    "ru": "Удерживать + {0}: правка выделения",
+    "fr": "Maintenir + {0} : modifier la sélection",
+    "de": "Halten + {0}: Auswahl bearbeiten"
+  },
+  "Hold the dictation shortcut and press {0} too: what you say edits the selected text": {
+    "ja": "音声入力のショートカットを押したまま {0} も押すと、話した内容で選択したテキストを編集します",
+    "ko": "받아쓰기 단축키를 누른 채 {0}도 누르면 말한 내용으로 선택한 텍스트를 편집합니다",
+    "es": "Mantén pulsado el atajo de dictado y pulsa también {0}: lo que digas edita el texto seleccionado",
+    "pt": "Mantenha o atalho de ditado pressionado e pressione também {0}: o que você disser edita o texto selecionado",
+    "ru": "Удерживая сочетание клавиш для диктовки, нажмите ещё {0}: сказанное изменит выделенный текст",
+    "fr": "Maintenez le raccourci de dictée et appuyez aussi sur {0} : ce que vous dites modifie le texte sélectionné",
+    "de": "Halte das Diktier-Tastenkürzel und drücke zusätzlich {0}: Was du sagst, bearbeitet den ausgewählten Text"
+  },
+  "No text selected — select the text to change, then hold the dictation shortcut and say how": {
+    "ja": "テキストが選択されていません — 変更するテキストを選択してから、音声入力のショートカットを押したまま指示を話してください",
+    "ko": "선택한 텍스트가 없습니다 — 바꿀 텍스트를 선택한 뒤 받아쓰기 단축키를 누른 채 어떻게 바꿀지 말하세요",
+    "es": "No hay texto seleccionado: selecciona el texto que quieres cambiar, mantén pulsado el atajo de dictado y di cómo",
+    "pt": "Nenhum texto selecionado — selecione o texto a alterar, segure o atalho de ditado e diga como",
+    "ru": "Текст не выделен — выделите текст, удерживайте сочетание клавиш для диктовки и скажите, что изменить",
+    "fr": "Aucun texte sélectionné — sélectionnez le texte à modifier, maintenez le raccourci de dictée et dites comment",
+    "de": "Kein Text ausgewählt – wähle den Text aus, halte das Diktier-Tastenkürzel und sag, wie er sich ändern soll"
+  },
+  "Nothing to change": {
+    "ja": "変更する箇所はありません",
+    "ko": "바꿀 부분이 없습니다",
+    "es": "Nada que cambiar",
+    "pt": "Nada a alterar",
+    "ru": "Менять нечего",
+    "fr": "Rien à modifier",
+    "de": "Nichts zu ändern"
+  },
+  "Password fields can't be edited by voice": {
+    "ja": "パスワード欄は音声で編集できません",
+    "ko": "비밀번호 입력란은 음성으로 편집할 수 없습니다",
+    "es": "Los campos de contraseña no se pueden editar con la voz",
+    "pt": "Campos de senha não podem ser editados por voz",
+    "ru": "Поля паролей нельзя править голосом",
+    "fr": "Les champs de mot de passe ne peuvent pas être modifiés à la voix",
+    "de": "Passwortfelder können nicht per Sprache bearbeitet werden"
+  },
+  "Say how to change it, and the selection is replaced": {
+    "ja": "どう変えるかを話すと、選択範囲が置き換えられます",
+    "ko": "어떻게 바꿀지 말하면 선택 영역이 바뀝니다",
+    "es": "Di cómo cambiarlo y la selección se reemplaza",
+    "pt": "Diga como alterá-lo e a seleção é substituída",
+    "ru": "Скажите, как изменить, — и выделение будет заменено",
+    "fr": "Dites comment le modifier, et la sélection est remplacée",
+    "de": "Sag, wie er sich ändern soll, und die Auswahl wird ersetzt"
+  },
+  "Screen locked — the edited text is on the clipboard": {
+    "ja": "画面がロックされました — 編集後のテキストはクリップボードにあります",
+    "ko": "화면이 잠겼습니다 — 편집된 텍스트는 클립보드에 있습니다",
+    "es": "Pantalla bloqueada: el texto editado está en el portapapeles",
+    "pt": "Tela bloqueada — o texto editado está na área de transferência",
+    "ru": "Экран заблокирован — изменённый текст в буфере обмена",
+    "fr": "Écran verrouillé — le texte modifié est dans le presse-papiers",
+    "de": "Bildschirm gesperrt – der bearbeitete Text ist in der Zwischenablage"
+  },
+  "Select text in any app, hold the dictation shortcut and press {0} too, and say how to change it (“more formal”, “translate to English”, “fix the grammar”): when you let go, the selection is replaced, and Undo brings it back. Ask about it (“what does this mean”) and the answer is shown and copied. Nothing changes when no text is selected; password fields and terminals are never read.": {
+    "ja": "任意のアプリでテキストを選択し、音声入力のショートカットを押したまま {0} も押して、どう変えるかを話します（「もっと丁寧に」「英語に翻訳して」「文法を直して」）。キーを離すと選択範囲が置き換えられ、取り消しで元に戻せます。内容について質問すると（「これはどういう意味？」）、回答が表示されコピーされます。テキストが選択されていないときは何も変わりません。パスワード欄とターミナルは読み取りません。",
+    "ko": "아무 앱에서나 텍스트를 선택하고 받아쓰기 단축키를 누른 채 {0}도 누른 뒤 어떻게 바꿀지 말하세요(“더 격식 있게”, “영어로 번역해 줘”, “문법 고쳐 줘”). 키를 놓으면 선택 영역이 바뀌고, 실행 취소로 되돌릴 수 있습니다. 내용에 대해 물어보면(“이게 무슨 뜻이야”) 답변이 표시되고 복사됩니다. 선택한 텍스트가 없으면 아무것도 바뀌지 않으며, 비밀번호 입력란과 터미널은 읽지 않습니다.",
+    "es": "Selecciona texto en cualquier app, mantén pulsado el atajo de dictado, pulsa también {0} y di cómo cambiarlo («más formal», «tradúcelo al inglés», «corrige la gramática»): al soltar, la selección se reemplaza y Deshacer la recupera. Pregunta sobre él («¿qué significa esto?») y la respuesta se muestra y se copia. Si no hay texto seleccionado, no cambia nada; los campos de contraseña y los terminales nunca se leen.",
+    "pt": "Selecione texto em qualquer app, segure o atalho de ditado, pressione também {0} e diga como alterá-lo (“mais formal”, “traduza para o inglês”, “corrija a gramática”): ao soltar, a seleção é substituída, e Desfazer a traz de volta. Pergunte sobre ele (“o que isso significa?”) e a resposta é mostrada e copiada. Nada muda quando não há texto selecionado; campos de senha e terminais nunca são lidos.",
+    "ru": "Выделите текст в любом приложении, удерживая сочетание клавиш для диктовки, нажмите ещё {0} и скажите, как его изменить («официальнее», «переведи на английский», «исправь грамматику»): когда вы отпустите клавиши, выделение будет заменено, а «Отменить» вернёт его. Спросите о тексте («что это значит?») — ответ будет показан и скопирован. Если ничего не выделено, ничего не меняется; поля паролей и терминалы никогда не читаются.",
+    "fr": "Sélectionnez du texte dans n'importe quelle app, maintenez le raccourci de dictée, appuyez aussi sur {0} et dites comment le modifier (« plus formel », « traduis en anglais », « corrige la grammaire ») : quand vous relâchez, la sélection est remplacée, et Annuler la rétablit. Posez une question à son sujet (« qu'est-ce que ça veut dire ? ») et la réponse est affichée et copiée. Rien ne change si aucun texte n'est sélectionné ; les champs de mot de passe et les terminaux ne sont jamais lus.",
+    "de": "Wähle in einer beliebigen App Text aus, halte das Diktier-Tastenkürzel, drücke zusätzlich {0} und sag, wie er sich ändern soll („förmlicher“, „übersetze ins Englische“, „korrigiere die Grammatik“): Beim Loslassen wird die Auswahl ersetzt, und Widerrufen holt sie zurück. Frag nach dem Text („was bedeutet das?“), und die Antwort wird angezeigt und kopiert. Ohne Auswahl ändert sich nichts; Passwortfelder und Terminals werden nie gelesen."
+  },
+  "Text in a terminal can't be edited by voice": {
+    "ja": "ターミナルのテキストは音声で編集できません",
+    "ko": "터미널의 텍스트는 음성으로 편집할 수 없습니다",
+    "es": "El texto de un terminal no se puede editar con la voz",
+    "pt": "Texto em um terminal não pode ser editado por voz",
+    "ru": "Текст в терминале нельзя править голосом",
+    "fr": "Le texte d'un terminal ne peut pas être modifié à la voix",
+    "de": "Text in einem Terminal kann nicht per Sprache bearbeitet werden"
+  },
+  "The selection changed — the edited text is on the clipboard": {
+    "ja": "選択範囲が変わりました — 編集後のテキストはクリップボードにあります",
+    "ko": "선택 영역이 바뀌었습니다 — 편집된 텍스트는 클립보드에 있습니다",
+    "es": "La selección cambió: el texto editado está en el portapapeles",
+    "pt": "A seleção mudou — o texto editado está na área de transferência",
+    "ru": "Выделение изменилось — изменённый текст в буфере обмена",
+    "fr": "La sélection a changé — le texte modifié est dans le presse-papiers",
+    "de": "Die Auswahl hat sich geändert – der bearbeitete Text ist in der Zwischenablage"
+  },
+  "The selection is too long ({0} characters; up to {1})": {
+    "ja": "選択範囲が長すぎます（{0} 文字、上限 {1}）",
+    "ko": "선택한 텍스트가 너무 깁니다({0}자, 최대 {1}자)",
+    "es": "La selección es demasiado larga ({0} caracteres; máximo {1})",
+    "pt": "A seleção é longa demais ({0} caracteres; até {1})",
+    "ru": "Выделение слишком длинное ({0} симв.; не больше {1})",
+    "fr": "La sélection est trop longue ({0} caractères ; {1} au maximum)",
+    "de": "Die Auswahl ist zu lang ({0} Zeichen; höchstens {1})"
+  },
+  "Transcription failed — your text is unchanged": {
+    "ja": "文字起こしに失敗しました — テキストは変更されていません",
+    "ko": "받아쓰기에 실패했습니다 — 텍스트는 바뀌지 않았습니다",
+    "es": "La transcripción falló: tu texto no ha cambiado",
+    "pt": "A transcrição falhou — seu texto não foi alterado",
+    "ru": "Не удалось распознать речь — ваш текст не изменён",
+    "fr": "La transcription a échoué — votre texte est inchangé",
+    "de": "Transkription fehlgeschlagen – dein Text ist unverändert"
+  },
+  "Translation mode uses this key too — pick another": {
+    "ja": "翻訳モードもこのキーを使っています — 別のキーを選んでください",
+    "ko": "번역 모드도 이 키를 씁니다 — 다른 키를 고르세요",
+    "es": "El modo de traducción también usa esta tecla: elige otra",
+    "pt": "O modo de tradução também usa esta tecla — escolha outra",
+    "ru": "Эту клавишу использует и режим перевода — выберите другую",
+    "fr": "Le mode traduction utilise aussi cette touche — choisissez-en une autre",
+    "de": "Der Übersetzungsmodus nutzt diese Taste auch – wähle eine andere"
+  },
+  "You moved to another window — the edited text is on the clipboard": {
+    "ja": "別のウインドウに移動しました — 編集後のテキストはクリップボードにあります",
+    "ko": "다른 창으로 이동했습니다 — 편집된 텍스트는 클립보드에 있습니다",
+    "es": "Cambiaste a otra ventana: el texto editado está en el portapapeles",
+    "pt": "Você mudou para outra janela — o texto editado está na área de transferência",
+    "ru": "Вы перешли в другое окно — изменённый текст в буфере обмена",
+    "fr": "Vous êtes passé à une autre fenêtre — le texte modifié est dans le presse-papiers",
+    "de": "Du bist in ein anderes Fenster gewechselt – der bearbeitete Text ist in der Zwischenablage"
+  },
+  "no usable rewrite came back": {
+    "ja": "使える書き換え結果が返ってきませんでした",
+    "ko": "쓸 수 있는 수정 결과가 오지 않았습니다",
+    "es": "no llegó ninguna reescritura utilizable",
+    "pt": "nenhuma reescrita utilizável voltou",
+    "ru": "не пришло пригодной правки",
+    "fr": "aucune réécriture utilisable n'est revenue",
+    "de": "es kam keine brauchbare Überarbeitung zurück"
+  },
+  "the model replied instead of editing": {
+    "ja": "モデルが編集せずに返答しました",
+    "ko": "모델이 편집하지 않고 답했습니다",
+    "es": "el modelo respondió en lugar de editar",
+    "pt": "o modelo respondeu em vez de editar",
+    "ru": "модель ответила вместо правки",
+    "fr": "le modèle a répondu au lieu de modifier",
+    "de": "das Modell hat geantwortet, statt zu bearbeiten"
+  },
+  "the rewrite was cut off": {
+    "ja": "書き換え結果が途中で切れました",
+    "ko": "수정 결과가 중간에 잘렸습니다",
+    "es": "la reescritura quedó cortada",
+    "pt": "a reescrita foi cortada",
+    "ru": "правка оборвалась",
+    "fr": "la réécriture a été tronquée",
+    "de": "die Überarbeitung wurde abgeschnitten"
+  },
+  "✎ Edit": {
+    "ja": "✎ 編集",
+    "ko": "✎ 편집",
+    "es": "✎ Editar",
+    "pt": "✎ Editar",
+    "ru": "✎ Правка",
+    "fr": "✎ Modifier",
+    "de": "✎ Bearbeiten"
+  },
+  "Apps": {
+    "ja": "アプリ",
+    "ko": "앱",
+    "es": "Apps",
+    "pt": "Apps",
+    "ru": "Приложения",
+    "fr": "Apps",
+    "de": "Apps"
+  },
+  "Settings used when you dictate into a particular app": {
+    "ja": "特定のアプリで音声入力するときに使う設定",
+    "ko": "특정 앱에서 받아쓸 때 사용하는 설정",
+    "es": "Ajustes que se usan al dictar en una app concreta",
+    "pt": "Configurações usadas ao ditar em um app específico",
+    "ru": "Настройки для диктовки в конкретном приложении",
+    "fr": "Réglages utilisés quand vous dictez dans une app précise",
+    "de": "Einstellungen fürs Diktieren in einer bestimmten App"
+  },
+  "No app profiles yet": {
+    "ja": "アプリ別の設定はまだありません",
+    "ko": "아직 앱별 설정이 없습니다",
+    "es": "Aún no hay perfiles de apps",
+    "pt": "Ainda não há perfis de apps",
+    "ru": "Профилей приложений пока нет",
+    "fr": "Aucun profil d’app pour l’instant",
+    "de": "Noch keine App-Profile"
+  },
+  "Add an app to give it its own settings: send messages right away in Slack, say, or a more formal tone in your email app. Everywhere else your usual settings apply.": {
+    "ja": "アプリを追加すると、そのアプリ専用の設定を使えます。たとえば Slack では話し終えたらすぐ送信、メールアプリではよりていねいな口調に。それ以外のアプリではいつもの設定が使われます。",
+    "ko": "앱을 추가하면 그 앱만의 설정을 쓸 수 있습니다. 예를 들어 Slack에서는 말하자마자 바로 보내고, 메일 앱에서는 더 격식 있는 어조로. 다른 앱에서는 평소 설정이 그대로 적용됩니다.",
+    "es": "Añade una app para darle sus propios ajustes: enviar los mensajes al momento en Slack, por ejemplo, o un tono más formal en tu app de correo. En todas las demás se aplican tus ajustes habituales.",
+    "pt": "Adicione um app para dar a ele configurações próprias: enviar as mensagens na hora no Slack, por exemplo, ou um tom mais formal no seu app de e-mail. Em todos os outros valem suas configurações de sempre.",
+    "ru": "Добавьте приложение, чтобы задать для него свои настройки: например, сразу отправлять сообщения в Slack или писать более официально в почте. Во всех остальных приложениях действуют ваши обычные настройки.",
+    "fr": "Ajoutez une app pour lui donner ses propres réglages : envoyer les messages tout de suite dans Slack, par exemple, ou un ton plus formel dans votre app de messagerie. Partout ailleurs, vos réglages habituels s’appliquent.",
+    "de": "Füge eine App hinzu, um ihr eigene Einstellungen zu geben: in Slack Nachrichten sofort senden, zum Beispiel, oder in deiner Mail-App ein förmlicherer Ton. Überall sonst gelten deine üblichen Einstellungen."
+  },
+  "The app in front when you start recording decides which profile is used, even if you switch apps before you finish. Whatever a profile leaves on Default follows your usual settings.": {
+    "ja": "録音を始めたときに前面にあるアプリで、使う設定が決まります。話し終える前に別のアプリに切り替えても変わりません。「デフォルト」のままの項目は、いつもの設定に従います。",
+    "ko": "녹음을 시작할 때 맨 앞에 있는 앱이 어떤 프로필을 쓸지 정합니다. 말을 마치기 전에 다른 앱으로 바꿔도 달라지지 않습니다. 프로필에서 ‘기본값’으로 둔 항목은 평소 설정을 따릅니다.",
+    "es": "La app que está delante al empezar a grabar decide qué perfil se usa, aunque cambies de app antes de terminar. Lo que un perfil deja en Predeterminado sigue tus ajustes habituales.",
+    "pt": "O app em primeiro plano quando você começa a gravar decide qual perfil é usado, mesmo que você troque de app antes de terminar. O que um perfil deixa em Padrão segue suas configurações de sempre.",
+    "ru": "Профиль выбирается по приложению, которое было на переднем плане, когда вы начали запись, даже если вы переключитесь до конца диктовки. Всё, что в профиле оставлено «По умолчанию», следует вашим обычным настройкам.",
+    "fr": "L’app au premier plan quand vous commencez l’enregistrement détermine le profil utilisé, même si vous changez d’app avant d’avoir fini. Ce qu’un profil laisse sur Par défaut suit vos réglages habituels.",
+    "de": "Die App im Vordergrund beim Start der Aufnahme bestimmt, welches Profil gilt, auch wenn du vor dem Ende die App wechselst. Was ein Profil auf Standard lässt, folgt deinen üblichen Einstellungen."
+  },
+  "Running apps": {
+    "ja": "実行中のアプリ",
+    "ko": "실행 중인 앱",
+    "es": "Apps abiertas",
+    "pt": "Apps abertos",
+    "ru": "Запущенные приложения",
+    "fr": "Apps ouvertes",
+    "de": "Laufende Apps"
+  },
+  "No other running apps": {
+    "ja": "ほかに実行中のアプリはありません",
+    "ko": "실행 중인 다른 앱이 없습니다",
+    "es": "No hay otras apps abiertas",
+    "pt": "Nenhum outro app aberto",
+    "ru": "Других запущенных приложений нет",
+    "fr": "Aucune autre app ouverte",
+    "de": "Keine weiteren laufenden Apps"
+  },
+  "Choose from Applications…": {
+    "ja": "「アプリケーション」から選択…",
+    "ko": "응용 프로그램에서 선택…",
+    "es": "Elegir en Aplicaciones…",
+    "pt": "Escolher em Aplicativos…",
+    "ru": "Выбрать в «Программах»…",
+    "fr": "Choisir dans Applications…",
+    "de": "Aus „Programme“ wählen …"
+  },
+  "Add app": {
+    "ja": "アプリを追加",
+    "ko": "앱 추가",
+    "es": "Añadir app",
+    "pt": "Adicionar app",
+    "ru": "Добавить приложение",
+    "fr": "Ajouter une app",
+    "de": "App hinzufügen"
+  },
+  "Add": {
+    "ja": "追加",
+    "ko": "추가",
+    "es": "Añadir",
+    "pt": "Adicionar",
+    "ru": "Добавить",
+    "fr": "Ajouter",
+    "de": "Hinzufügen"
+  },
+  "Default ({0})": {
+    "ja": "デフォルト（{0}）",
+    "ko": "기본값({0})",
+    "es": "Predeterminado ({0})",
+    "pt": "Padrão ({0})",
+    "ru": "По умолчанию ({0})",
+    "fr": "Par défaut ({0})",
+    "de": "Standard ({0})"
+  },
+  "Default (on)": {
+    "ja": "デフォルト（オン）",
+    "ko": "기본값(켬)",
+    "es": "Predeterminado (activado)",
+    "pt": "Padrão (ligado)",
+    "ru": "По умолчанию (вкл.)",
+    "fr": "Par défaut (activé)",
+    "de": "Standard (an)"
+  },
+  "Default (off)": {
+    "ja": "デフォルト（オフ）",
+    "ko": "기본값(끔)",
+    "es": "Predeterminado (desactivado)",
+    "pt": "Padrão (desligado)",
+    "ru": "По умолчанию (выкл.)",
+    "fr": "Par défaut (désactivé)",
+    "de": "Standard (aus)"
+  },
+  "On": {
+    "ja": "オン",
+    "ko": "켬",
+    "es": "Activado",
+    "pt": "Ligado",
+    "ru": "Вкл.",
+    "fr": "Activé",
+    "de": "An"
+  },
+  "Off": {
+    "ja": "オフ",
+    "ko": "끔",
+    "es": "Desactivado",
+    "pt": "Desligado",
+    "ru": "Выкл.",
+    "fr": "Désactivé",
+    "de": "Aus"
+  },
+  "Send key": {
+    "ja": "送信キー",
+    "ko": "보내기 키",
+    "es": "Tecla de envío",
+    "pt": "Tecla de envio",
+    "ru": "Клавиша отправки",
+    "fr": "Touche d’envoi",
+    "de": "Sendetaste"
+  },
+  "Press it while recording to end the dictation; once the text is in, the same key is pressed in that app to send it. Hands-free, that ends and sends in one go.": {
+    "ja": "録音中に押すと音声入力が終わり、テキストが入力されたあと、同じキーがそのアプリで押されて送信されます。ハンズフリーなら、終了と送信が一度で済みます。",
+    "ko": "녹음 중에 누르면 받아쓰기가 끝나고, 텍스트가 입력된 뒤 같은 키를 그 앱에서 눌러 보냅니다. 핸즈프리라면 끝내기와 보내기가 한 번에 됩니다.",
+    "es": "Púlsala mientras grabas para terminar el dictado; cuando el texto esté dentro, se pulsa la misma tecla en esa app para enviarlo. En manos libres, terminas y envías de una vez.",
+    "pt": "Pressione-a durante a gravação para terminar o ditado; quando o texto estiver inserido, a mesma tecla é pressionada nesse app para enviá-lo. No modo mãos livres, você termina e envia de uma vez.",
+    "ru": "Нажмите её во время записи, чтобы закончить диктовку; когда текст вставлен, та же клавиша нажимается в этом приложении, чтобы отправить его. В режиме без рук это завершает и отправляет за один раз.",
+    "fr": "Appuyez dessus pendant l’enregistrement pour terminer la dictée ; une fois le texte inséré, la même touche est pressée dans cette app pour l’envoyer. En mode mains libres, vous terminez et envoyez d’un coup.",
+    "de": "Drück sie während der Aufnahme, um das Diktat zu beenden; sobald der Text drin ist, wird dieselbe Taste in dieser App gedrückt, um ihn zu senden. Freihändig beendest und sendest du so in einem Schritt."
+  },
+  "Only pressed once the text is pasted into the app you were dictating in: not when it only goes to the clipboard, after Esc, or once the screen locks.": {
+    "ja": "テキストが音声入力していたアプリに貼り付けられたときだけ押されます。クリップボードにコピーされただけのとき、Esc を押したとき、画面がロックされたときは押されません。",
+    "ko": "받아쓰던 앱에 텍스트가 붙여넣어졌을 때만 누릅니다. 클립보드에만 복사됐을 때, Esc를 눌렀을 때, 화면이 잠겼을 때는 누르지 않습니다.",
+    "es": "Solo se pulsa cuando el texto se pega en la app en la que dictabas: no cuando solo va al portapapeles, tras Esc ni si se bloquea la pantalla.",
+    "pt": "Só é pressionada quando o texto é colado no app em que você ditava: não quando ele vai só para a área de transferência, depois de Esc nem quando a tela é bloqueada.",
+    "ru": "Нажимается, только когда текст вставлен в приложение, в котором вы диктовали: не когда он попал только в буфер обмена, не после Esc и не после блокировки экрана.",
+    "fr": "N’est pressée que si le texte est collé dans l’app où vous dictiez : pas s’il va seulement dans le presse-papiers, après Échap, ni une fois l’écran verrouillé.",
+    "de": "Wird nur gedrückt, wenn der Text in die App eingefügt wurde, in der du diktiert hast: nicht, wenn er nur in die Zwischenablage geht, nach Esc oder sobald der Bildschirm gesperrt wird."
+  },
+  "Say “new line” for a line break": {
+    "ja": "「改行」で行を変える",
+    "ko": "“줄 바꿈”으로 줄 바꾸기",
+    "es": "Di “nueva línea” para un salto de línea",
+    "pt": "Diga “nova linha” para quebrar a linha",
+    "ru": "Скажите «новая строка» для переноса строки",
+    "fr": "Dites « à la ligne » pour un retour à la ligne",
+    "de": "Sag „neue Zeile“ für einen Zeilenumbruch"
+  },
+  "Say “new line” or “new paragraph” on its own, with a short pause before and after, for a line break or a blank line; 换行 / 新段落 and the other languages’ words work too. Said within a sentence, the words stay as they are; said on their own in a list (“spaces, new line, tabs”), they become a break too.": {
+    "ja": "「改行」や「新しい段落」を単独で（前後に少し間をおいて）言うと、改行や空行になります。new line、换行 など他の言語の言い方も使えます。文の途中で言ったときはそのまま文字として残りますが、列挙の中で単独で言ったとき（「スペース、改行、タブ」）も改行になります。",
+    "ko": "“줄 바꿈”이나 “새 문단”을 따로(앞뒤로 잠깐 쉬고) 말하면 줄 바꿈이나 빈 줄이 됩니다. new line, 换行 같은 다른 언어의 말도 됩니다. 문장 중간에 말하면 그대로 글자로 남지만, 나열하면서 따로 말하면(“공백, 줄바꿈, 탭”) 그것도 줄 바꿈이 됩니다.",
+    "es": "Di “nueva línea” o “nuevo párrafo” por separado, con una breve pausa antes y después, para un salto de línea o una línea en blanco; “new line”, 换行 y las palabras de los otros idiomas también sirven. Dichas dentro de una frase, las palabras se quedan como están; dichas por separado en una lista (“espacios, nueva línea, tabuladores”), también se convierten en un salto.",
+    "pt": "Diga “nova linha” ou “novo parágrafo” sozinho, com uma pausa curta antes e depois, para quebrar a linha ou deixar uma linha em branco; “new line”, 换行 e as palavras dos outros idiomas também funcionam. Ditas no meio de uma frase, as palavras ficam como estão; ditas sozinhas numa lista (“espaços, nova linha, tabulações”), também viram uma quebra.",
+    "ru": "Скажите «новая строка» или «новый абзац» отдельно, с короткой паузой до и после, чтобы получить перенос строки или пустую строку; «new line», 换行 и слова других языков тоже работают. Сказанные посреди предложения, слова остаются как есть; сказанные отдельно в перечислении («пробелы, новая строка, табуляция»), они тоже станут переносом.",
+    "fr": "Dites « à la ligne » ou « nouveau paragraphe » seul, avec une courte pause avant et après, pour un retour à la ligne ou une ligne vide ; « new line », 换行 et les mots des autres langues fonctionnent aussi. Dits au milieu d’une phrase, les mots restent tels quels ; dits seuls dans une énumération (« espaces, nouvelle ligne, tabulations »), ils deviennent aussi un retour à la ligne.",
+    "de": "Sag „neue Zeile“ oder „neuer Absatz“ für sich, mit einer kurzen Pause davor und danach, für einen Zeilenumbruch oder eine Leerzeile; „new line“, 换行 und die Wörter der anderen Sprachen gehen auch. Mitten in einem Satz bleiben die Wörter, wie sie sind; für sich in einer Aufzählung gesagt („Leerzeichen, neue Zeile, Tabs“), werden sie ebenfalls zum Umbruch."
+  },
+  "Your dictation shortcut uses this key too, and while recording it's read as the shortcut first, so the send key won't work. Pick another send key or shortcut.": {
+    "ja": "音声入力のショートカットもこのキーを使っているため、録音中は先にショートカットとして読み取られ、送信キーは動作しません。別の送信キーかショートカットを選んでください。",
+    "ko": "받아쓰기 단축키도 이 키를 쓰고 있어서 녹음 중에는 단축키로 먼저 인식되므로 보내기 키가 작동하지 않습니다. 다른 보내기 키나 단축키를 고르세요.",
+    "es": "Tu atajo de dictado también usa esta tecla y, mientras grabas, se lee primero como el atajo, así que la tecla de envío no funcionará. Elige otra tecla de envío u otro atajo.",
+    "pt": "Seu atalho de ditado também usa esta tecla e, durante a gravação, ela é lida primeiro como o atalho, então a tecla de envio não vai funcionar. Escolha outra tecla de envio ou outro atalho.",
+    "ru": "Сочетание для диктовки тоже использует эту клавишу, и во время записи она сначала читается как сочетание, поэтому клавиша отправки не сработает. Выберите другую клавишу отправки или другое сочетание.",
+    "fr": "Votre raccourci de dictée utilise aussi cette touche ; pendant l’enregistrement, elle est d’abord lue comme le raccourci, donc la touche d’envoi ne fonctionnera pas. Choisissez une autre touche d’envoi ou un autre raccourci.",
+    "de": "Dein Diktat-Tastenkürzel nutzt diese Taste auch, und während der Aufnahme wird sie zuerst als Tastenkürzel gelesen, sodass die Sendetaste nicht funktioniert. Wähle eine andere Sendetaste oder ein anderes Tastenkürzel."
+  },
+  "Clean-up preferences for this app": {
+    "ja": "このアプリでの整形の好み",
+    "ko": "이 앱의 다듬기 선호 설정",
+    "es": "Preferencias de limpieza para esta app",
+    "pt": "Preferências de limpeza para este app",
+    "ru": "Предпочтения очистки для этого приложения",
+    "fr": "Préférences de nettoyage pour cette app",
+    "de": "Vorlieben für die Bereinigung in dieser App"
+  },
+  "Added after your clean-up preferences under Vocabulary & Style, in this app only. e.g. “Use a more formal tone”, “Never use bullet lists”.": {
+    "ja": "「語彙とスタイル」の整形の好みのあとに加わり、このアプリでだけ使われます。例：「よりていねいな口調にする」「箇条書きは使わない」。",
+    "ko": "‘어휘 및 스타일’의 다듬기 선호 설정 뒤에 덧붙여지며, 이 앱에서만 적용됩니다. 예: “더 격식 있는 어조로”, “글머리 기호 목록 쓰지 않기”.",
+    "es": "Se añaden tras tus preferencias de limpieza de Vocabulario y estilo, solo en esta app. p. ej., «Usa un tono más formal», «Nunca uses listas con viñetas».",
+    "pt": "Adicionadas depois das suas preferências de limpeza em Vocabulário e estilo, só neste app. ex.: “Use um tom mais formal”, “Nunca use listas com marcadores”.",
+    "ru": "Добавляются после ваших предпочтений очистки из раздела «Словарь и стиль», только в этом приложении. Например: «Пиши более официально», «Никогда не используй маркированные списки».",
+    "fr": "Ajoutées après vos préférences de nettoyage de Vocabulaire et style, dans cette app uniquement. p. ex. « Ton plus formel », « Jamais de listes à puces ».",
+    "de": "Werden nach deinen Vorlieben für die Bereinigung unter „Vokabular & Stil“ angefügt, nur in dieser App. z. B. „Förmlicheren Ton verwenden“, „Keine Aufzählungen verwenden“."
+  },
+  "Remove": {
+    "ja": "削除",
+    "ko": "제거",
+    "es": "Quitar",
+    "pt": "Remover",
+    "ru": "Убрать",
+    "fr": "Retirer",
+    "de": "Entfernen"
+  },
+  "Clean-up on": {
+    "ja": "整形：オン",
+    "ko": "다듬기: 켬",
+    "es": "Limpieza activada",
+    "pt": "Limpeza ligada",
+    "ru": "Очистка вкл.",
+    "fr": "Nettoyage activé",
+    "de": "Bereinigung an"
+  },
+  "Clean-up off": {
+    "ja": "整形：オフ",
+    "ko": "다듬기: 끔",
+    "es": "Limpieza desactivada",
+    "pt": "Limpeza desligada",
+    "ru": "Очистка выкл.",
+    "fr": "Nettoyage désactivé",
+    "de": "Bereinigung aus"
+  },
+  "Return on": {
+    "ja": "Return：オン",
+    "ko": "Return: 켬",
+    "es": "Retorno activado",
+    "pt": "Return ligado",
+    "ru": "Return вкл.",
+    "fr": "Retour activé",
+    "de": "Return an"
+  },
+  "Return off": {
+    "ja": "Return：オフ",
+    "ko": "Return: 끔",
+    "es": "Retorno desactivado",
+    "pt": "Return desligado",
+    "ru": "Return выкл.",
+    "fr": "Retour désactivé",
+    "de": "Return aus"
+  },
+  "Enter on": {
+    "ja": "Enter：オン",
+    "ko": "Enter: 켬",
+    "es": "Intro activado",
+    "pt": "Enter ligado",
+    "ru": "Enter вкл.",
+    "fr": "Entrée activée",
+    "de": "Eingabe an"
+  },
+  "Enter off": {
+    "ja": "Enter：オフ",
+    "ko": "Enter: 끔",
+    "es": "Intro desactivado",
+    "pt": "Enter desligado",
+    "ru": "Enter выкл.",
+    "fr": "Entrée désactivée",
+    "de": "Eingabe aus"
+  },
+  "Own clean-up preferences": {
+    "ja": "独自の整形の好み",
+    "ko": "자체 다듬기 선호 설정",
+    "es": "Preferencias de limpieza propias",
+    "pt": "Preferências de limpeza próprias",
+    "ru": "Свои предпочтения очистки",
+    "fr": "Préférences de nettoyage propres",
+    "de": "Eigene Vorlieben für die Bereinigung"
+  },
+  "Uses your usual settings": {
+    "ja": "いつもの設定を使用",
+    "ko": "평소 설정 사용",
+    "es": "Usa tus ajustes habituales",
+    "pt": "Usa suas configurações de sempre",
+    "ru": "Обычные настройки",
+    "fr": "Utilise vos réglages habituels",
+    "de": "Nutzt deine üblichen Einstellungen"
+  },
+  "Choose a program…": {
+    "ja": "プログラムを選択…",
+    "ko": "프로그램 선택…",
+    "es": "Elegir un programa…",
+    "pt": "Escolher um programa…",
+    "ru": "Выбрать программу…",
+    "fr": "Choisir un programme…",
+    "de": "Programm auswählen …"
   }
 }

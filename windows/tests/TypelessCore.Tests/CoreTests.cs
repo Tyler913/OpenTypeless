@@ -1,9 +1,97 @@
+using System.Buffers.Binary;
 using System.Text.Json.Nodes;
 
 namespace TypelessCore.Tests;
 
 public class WavTests
 {
+
+    [Fact]
+    public void UnfinalizedDataAfterAnOddSizedMetadataChunk()
+    {
+        foreach (var size in new uint[] { 0, uint.MaxValue, 1000 })
+        {
+            var data = Wav.Encode([7, -8, short.MinValue, short.MaxValue]);
+            BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(40), size);
+            // Three metadata bytes and a pad byte move the data header away from offset 36.
+            byte[] metadata = [(byte)'J', (byte)'U', (byte)'N', (byte)'K', 3, 0, 0, 0, 1, 2, 3, 0];
+            data = [.. data[..36], .. metadata, .. data[36..], 0x12];
+            Assert.Equal(new short[] { 7, -8, short.MinValue, short.MaxValue }, Wav.DecodeSamples(data));
+        }
+        Assert.Empty(Wav.DecodeSamples(Wav.Header(0))!);
+    }
+
+    // Test-only I/O injection, without filling a real disk or adding a production hook.
+    private sealed class FailingFileStream(string path) : FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read, 1)
+    {
+        public bool FailWrites;
+        public int WriteAttempts;
+        public IOException Error = new("injected disk write failure");
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            WriteAttempts++;
+            if (FailWrites) throw Error;
+            base.Write(buffer);
+        }
+    }
+
+    private static FailingFileStream ReplaceStream(WavFileWriter writer, string path)
+    {
+        var field = typeof(WavFileWriter).GetField("_stream", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        ((FileStream)field.GetValue(writer)!).Dispose();
+        var stream = new FailingFileStream(path);
+        stream.Seek(0, SeekOrigin.End);
+        field.SetValue(writer, stream);
+        return stream;
+    }
+
+    [Fact]
+    public void WriteAndFinalizeFailuresKeepTheFirstErrorAndSavedAudio()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
+        try
+        {
+            using var writer = new WavFileWriter(path);
+            writer.Append([7, -8]);
+            var stream = ReplaceStream(writer, path);
+            stream.FailWrites = true;
+            writer.Append([]);
+            Assert.Null(writer.Failure);
+            writer.Append([9]);
+            var firstError = stream.Error;
+            Assert.Same(firstError, writer.Failure);
+            Assert.Equal(1, stream.WriteAttempts);
+            writer.Append([10]);
+            Assert.Equal(1, stream.WriteAttempts); // a failed append disables later appends
+            stream.Error = new IOException("a later header failure");
+            writer.FinalizeHeader();
+            Assert.Same(firstError, writer.Failure);
+            writer.Close();
+            var data = File.ReadAllBytes(path);
+            Assert.Equal(0u, Wav.ReadLE32(data, 40));
+            Assert.Equal(new short[] { 7, -8 }, Wav.DecodeSamples(data));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void FinalizeFailureIsReportedEvenWithoutAnAppendFailure()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
+        try
+        {
+            using var writer = new WavFileWriter(path);
+            writer.Append([1, 2]);
+            var stream = ReplaceStream(writer, path);
+            stream.FailWrites = true;
+            writer.FinalizeHeader();
+            Assert.Same(stream.Error, writer.Failure);
+            writer.Close();
+            Assert.Equal(new short[] { 1, 2 }, Wav.DecodeSamples(File.ReadAllBytes(path)));
+        }
+        finally { File.Delete(path); }
+    }
+
     [Fact]
     public void RoundTrip()
     {
@@ -35,10 +123,77 @@ public class WavTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void UnfinalizedFileStillDecodes()
+    {
+        // The app quit or crashed mid-recording: the header still says 0 bytes, but the samples are all there.
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
+        var writer = new WavFileWriter(path);
+        try
+        {
+            writer.Append(new short[] { 1, 2, 3 });
+            writer.Append(new short[] { -4, 5 });
+            byte[] data;
+            using (var reader = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var copy = new MemoryStream())
+            {
+                reader.CopyTo(copy);
+                data = copy.ToArray();
+            }
+            Assert.Equal(0u, Wav.ReadLE32(data, 40));
+            Assert.Equal(new short[] { 1, 2, 3, -4, 5 }, Wav.DecodeSamples(data));
+            Assert.Null(writer.Failure);
+        }
+        finally
+        {
+            writer.Close();
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void UnknownOrOversizedDataSizeReadsToTheEnd()
+    {
+        short[] samples = [7, -8, 9];
+        byte[] Patched(uint size, params byte[] extra)
+        {
+            var wav = Wav.Encode(samples).Concat(extra).ToArray();
+            BinaryPrimitives.WriteUInt32LittleEndian(wav.AsSpan(40), size);
+            return wav;
+        }
+        Assert.Equal(samples, Wav.DecodeSamples(Patched(0xFFFF_FFFF)));
+        Assert.Equal(samples, Wav.DecodeSamples(Patched(1000)));
+        // Whole samples only: half a sample at the end of a cut-off file is dropped.
+        Assert.Equal(samples, Wav.DecodeSamples(Patched(0, 0x01)));
+        // A size that fits is still trusted (whatever follows the chunk isn't audio).
+        Assert.Equal(new short[] { 7, -8 }, Wav.DecodeSamples(Patched(4, 0x01, 0x02)));
+    }
 }
 
 public class ChunkerTests
 {
+
+    [Fact]
+    public void PauseRequiresItsLastSampleAndLayoutIsVersioned()
+    {
+        Assert.Equal(2, Chunker.Layout); // saved chunkTexts from layout 1 must not be reused
+        var chunker = new Chunker();
+        var speech = Enumerable.Repeat((short)6000, 144_000).ToArray();
+        Assert.Empty(chunker.Append(speech));
+        Assert.Empty(chunker.Append(new short[4_799]));
+        var first = Assert.Single(chunker.Append(new short[] { 0 })); // exactly ten quiet frames
+        Assert.Equal(0, first.Index);
+        Assert.Equal(0, first.StartSample);
+        Assert.Equal(146_400, first.Samples.Length);
+        var tail = Assert.IsType<AudioChunk>(chunker.Finish());
+        Assert.Equal(1, tail.Index);
+        Assert.Equal(146_400, tail.StartSample);
+        Assert.Equal(2_400, tail.Samples.Length);
+        Assert.Equal(speech.Concat(new short[4_800]), first.Samples.Concat(tail.Samples));
+        Assert.Null(chunker.Finish());
+    }
+
     /// <summary>Loud "speech" with quiet gaps at the given seconds.</summary>
     internal static short[] Signal(double seconds, double[] gaps)
     {
@@ -107,6 +262,16 @@ public class ChunkerTests
 
 public class JoinerTests
 {
+
+    [Fact]
+    public void KoreanSpacingSurvivesEmptyChunksAndPunctuation()
+    {
+        Assert.Equal("오늘은 좋아요, 정말! Next 한국어 123", TranscriptJoiner.Join([" 오늘은 ", "\n", "좋아요", ",", "정말", "!", "Next", "한국어", "123"]));
+        // Decomposed and compatibility Jamo still need word spacing.
+        Assert.Equal("한 글", TranscriptJoiner.Join(["한", "글"]));
+        Assert.Equal("ㄱㄴ ㄷㄹ", TranscriptJoiner.Join(["ㄱㄴ", "ㄷㄹ"]));
+    }
+
     [Fact]
     public void Join()
     {
@@ -115,6 +280,19 @@ public class JoinerTests
         Assert.Equal("用 SwiftUI写界面", TranscriptJoiner.Join(["用 SwiftUI", "写界面"]));
         Assert.Equal("done. Next", TranscriptJoiner.Join(["done.", " Next"]));
         Assert.Equal("a", TranscriptJoiner.Join(["", "  a ", ""]));
+    }
+
+    [Fact]
+    public void KoreanChunksGetASpace()
+    {
+        // Korean puts spaces between words, so chunks don't run together like Chinese or Japanese ones do.
+        Assert.Equal("안녕하세요 반갑습니다", TranscriptJoiner.Join(["안녕하세요", "반갑습니다"]));
+        Assert.Equal("오늘은 OpenTypeless", TranscriptJoiner.Join(["오늘은", "OpenTypeless"]));
+        Assert.Equal("今日はいい天気", TranscriptJoiner.Join(["今日は", "いい天気"]));
+        Assert.Equal("안녕하세요。", TranscriptJoiner.Join(["안녕하세요", "。"]));
+        // Counting still treats Hangul as CJK.
+        Assert.True(TranscriptJoiner.IsCJK(new System.Text.Rune('한')));
+        Assert.False(TranscriptJoiner.JoinsWithoutSpace(new System.Text.Rune('한')));
     }
 }
 
@@ -130,6 +308,19 @@ public class SseParserTests
         Assert.Equal([new SseEvent.Finished("length")], p.Parse("""data: {"choices":[{"delta":{},"finish_reason":"length"}]}"""));
         Assert.Equal([new SseEvent.Done()], p.Parse("data: [DONE]"));
         Assert.IsType<SseEvent.Error>(p.Parse("""data: {"error":{"message":"boom"}}""").First());
+        // An integer code is the status to classify the error by; a string code isn't one.
+        Assert.Equal([new SseEvent.Error("boom", 402)], p.Parse("""data: {"error":{"code":402,"message":"boom"}}"""));
+        Assert.Equal([new SseEvent.Error("boom")], p.Parse("""data: {"error":{"code":"server_error","message":"boom"}}"""));
+    }
+
+    [Fact]
+    public void Truncation()
+    {
+        Assert.True(ApiClient.IsTruncated("length", receivedDone: true));
+        Assert.True(ApiClient.IsTruncated("content_filter", receivedDone: true));
+        Assert.True(ApiClient.IsTruncated(null, receivedDone: false));
+        Assert.False(ApiClient.IsTruncated(null, receivedDone: true));
+        Assert.False(ApiClient.IsTruncated("stop", receivedDone: false));
     }
 }
 
@@ -172,6 +363,36 @@ public class RetryTests
             throw ApiException.Http(401, "");
         }));
         Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task TimeoutsCanBeLeftUnretried()
+    {
+        var policy = new RetryPolicy(MaxAttempts: 3, BaseDelay: 0.01, RetriesTimeouts: false);
+        var calls = 0;
+        await Assert.ThrowsAsync<ApiException>(() => policy.Run<int>((_, _) =>
+        {
+            calls += 1;
+            throw ApiException.TimedOut(10);
+        }));
+        Assert.Equal(1, calls);
+        calls = 0;
+        var value = await policy.Run<int>((_, _) =>
+        {
+            calls += 1;
+            if (calls < 2) throw ApiException.Http(503, "");
+            return Task.FromResult(7);
+        });
+        Assert.Equal(7, value);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public void PolishTimeoutScalesWithLength()
+    {
+        Assert.Equal(20.2, ApiClient.PolishTimeout("好的收到"), 3);
+        Assert.Equal(50, ApiClient.PolishTimeout(new string('字', 600)), 3);
+        Assert.Equal(120.0, ApiClient.PolishTimeout(new string('字', 5000)));
     }
 
     [Fact]

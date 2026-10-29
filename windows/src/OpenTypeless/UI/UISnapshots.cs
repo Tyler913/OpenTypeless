@@ -18,8 +18,21 @@ namespace OpenTypeless.UI;
 /// </summary>
 public static class UISnapshots
 {
+    /// <summary>Set first thing in <see cref="Run"/>, before any page exists: pages show fixed samples instead of asking the system.</summary>
+    public static bool Active { get; private set; }
+
+    /// <summary>The profiles the Apps page shows in the snapshots, instead of the saved ones.</summary>
+    private static readonly AppProfile[] SampleAppProfiles =
+    [
+        new() { Id = "sample-slack", App = "slack.exe", Name = "Slack", PressEnter = true },
+        new() { Id = "sample-outlook", App = "olk.exe", Name = "Outlook", Instructions = "Use a more formal tone", Polish = true, Language = "en" },
+        new() { Id = "sample-terminal", App = "WindowsTerminal.exe", Name = "Terminal", Polish = false },
+    ];
+
     public static async Task Run(string directory)
     {
+        Active = true;
+        AppSettings.Shared.ShowSampleAppProfiles(SampleAppProfiles);
         var args = Environment.GetCommandLineArgs();
         Permissions.AssumeGranted = args.Contains("--demo");
         var lang = Array.IndexOf(args, "--lang") is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
@@ -70,7 +83,9 @@ public static class UISnapshots
                 ("hud-working", new HudPhase.Working()),
                 ("hud-copied", new HudPhase.Copied()),
                 ("hud-learned", new HudPhase.Learned("Typeless、罗技")),
-                ("hud-error", new HudPhase.Error(L("转写失败，可在托盘菜单重试", "Failed — retry from the tray menu"))),
+                // A long, real error, to check that it wraps instead of losing its end.
+                ("hud-error", new HudPhase.Error(L("需要麦克风权限：设置 → 隐私和安全性 → 麦克风",
+                                                   "Microphone access needed: Settings → Privacy & security → Microphone"))),
             ];
             foreach (var (name, phase) in phases)
             {

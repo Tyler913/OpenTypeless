@@ -29,10 +29,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setUpStatusItem()
 
         hotkey.hotkey = settings.hotkey
-        hotkey.onPress = { [weak self] in self?.controller.hotkeyPressed() }
-        hotkey.onRelease = { [weak self] in self?.controller.hotkeyReleased() }
-        hotkey.onOtherKey = { [weak self] in self?.controller.otherKeyPressed() }
+        hotkey.shortcuts = settings.shortcutMap
+        hotkey.modeChordKeys = controller.updateModeChords()
+        hotkey.onPress = { [weak self] time in self?.controller.hotkeyPressed(at: time) }
+        hotkey.onRelease = { [weak self] time in self?.controller.hotkeyReleased(at: time) }
+        hotkey.onOtherKey = { [weak self] key, time in self?.controller.otherKeyPressed(key, at: time) }
         hotkey.onEscape = { [weak self] in self?.controller.escapePressed() }
+        hotkey.onSendKey = { [weak self] in self?.controller.sendKeyPressed() }
+        hotkey.onAction = { [weak self] action in
+            guard let self else { return }
+            self.controller.perform(action, shortcut: self.settings.shortcut(for: action))
+        }
         hotkey.start()
 
         settings.objectWillChange
@@ -40,6 +47,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] in
                 guard let self else { return }
                 if self.hotkey.hotkey != self.settings.hotkey { self.hotkey.hotkey = self.settings.hotkey }
+                let shortcuts = self.settings.shortcutMap
+                if self.hotkey.shortcuts != shortcuts { self.hotkey.shortcuts = shortcuts }
+                // Translation or command mode turned on or off, a chord changed, or the hotkey became one of a chord's keys.
+                let chordKeys = self.controller.updateModeChords()
+                if self.hotkey.modeChordKeys != chordKeys { self.hotkey.modeChordKeys = chordKeys }
+                self.updateSendKey(self.controller.state)
                 if self.menuLanguage != AppLanguage.resolved { self.setUpMainMenu() }
                 self.controller.updateWarmMicrophone()
             }
@@ -48,9 +61,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.$state
             .receive(on: RunLoop.main)
             .sink { [weak self] state in
+                // Esc cancels a dictation under way, and then shouldn't reach the focused app too.
+                self?.hotkey.swallowsEscape = state != .idle
                 self?.updateStatusIcon(state)
-                if state == .idle { self?.updater.sessionBecameIdle() }
+                guard state == .idle else { return }
+                self?.updater.sessionBecameIdle()
+                // A warm microphone that failed, or that the chosen input came back for, during the dictation.
+                self?.controller.updateWarmMicrophone()
             }
+            .store(in: &cancellables)
+        // Not a run-loop turn later, like the above: a Return pressed just after the recording ended would still be
+        // taken for the send key then, and kept from the app for nothing.
+        controller.$state
+            .sink { [weak self] state in self?.updateSendKey(state) }
             .store(in: &cancellables)
 
         NotificationCenter.default.addObserver(forName: .openSettings, object: nil, queue: .main) { [weak self] note in
@@ -84,6 +107,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// The send key only means "finish and send" while a dictation is recording; otherwise it's the focused app's.
+    private func updateSendKey(_ state: SessionController.State) {
+        let key = state == .recording ? settings.sendKey : .off
+        if hotkey.recordingSendKey != key { hotkey.recordingSendKey = key }
+    }
+
     /// After the guide: the page for whatever is still missing, or Home.
     private func showSetupOrHome() {
         if !Permissions.accessibilityGranted {
@@ -95,8 +124,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Audio and video files opened with the app (Finder's Open With, or dropped on its icon): History offers to
+    /// transcribe them.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        settingsWindow.show(page: .history)
+        controller.files.offer(urls)
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
-        // Quitting mid-recording mustn't leave the speakers muted.
+        // Quitting mid-recording keeps what was said, retryable from History; so does a file being transcribed.
+        controller.stopForQuit()
+        controller.files.stopForQuit()
+        // And mustn't leave the speakers muted.
         OutputMute.restoreLeftover()
     }
 

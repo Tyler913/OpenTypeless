@@ -8,6 +8,7 @@ struct MenuPopoverView: View {
     @ObservedObject var settings = AppSettings.shared
     @ObservedObject var history = HistoryStore.shared
     @ObservedObject var updater = Updater.shared
+    @ObservedObject var permissions = PermissionsMonitor.shared
     let openSettings: (SettingsPage?) -> Void
     let close: () -> Void
     @State private var copiedID: String?
@@ -82,7 +83,7 @@ struct MenuPopoverView: View {
     }
 
     @ViewBuilder private var recent: some View {
-        let records = Array(history.records.filter { !$0.finalText.isEmpty }.prefix(5))
+        let records = Array(history.records.filter { !$0.outputText.isEmpty }.prefix(5))
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(L("最近", "Recent")).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
@@ -123,6 +124,7 @@ struct MenuPopoverView: View {
             HStack(spacing: 8) {
                 Button { close(); openSettings(nil) } label: { Label(L("设置", "Settings"), systemImage: "gearshape") }
                 Button { close(); openSettings(.history) } label: { Label(L("历史", "History"), systemImage: "clock") }
+                pasteLastButton
                 Spacer()
                 Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }
                     .help(L("退出 OpenTypeless", "Quit OpenTypeless"))
@@ -130,6 +132,16 @@ struct MenuPopoverView: View {
         }
         .controlSize(.regular)
         .padding(.top, 2)
+    }
+
+    /// Puts the newest dictation at the cursor of the app that had focus before the panel opened (see
+    /// `SessionController.pasteLastDictation`); its tooltip shows the shortcut, when there is one.
+    private var pasteLastButton: some View {
+        let action = ShortcutAction.pasteLastDictation
+        return Button { close(); controller.pasteLastDictation(releasing: nil) } label: { Image(systemName: action.symbol) }
+            .help(action.title + (settings.shortcut(for: action).map { " (\($0.displayName))" } ?? ""))
+            .accessibilityLabel(action.title)
+            .disabled(controller.state != .idle || history.records.isEmpty)
     }
 
     // MARK: Helpers
@@ -142,23 +154,25 @@ struct MenuPopoverView: View {
             issues.append(Issue(text: L("还没有配置 \(settings.sttProvider.displayName) 的 API Key",
                                         "No API key for \(settings.sttProvider.displayName)"), page: .providers))
         }
-        if !Permissions.accessibilityGranted {
+        if !permissions.accessibilityGranted {
             issues.append(Issue(text: L("需要辅助功能权限", "Accessibility permission needed"), page: .general))
         }
-        if !Permissions.microphoneGranted {
+        if !permissions.microphoneGranted {
             issues.append(Issue(text: L("需要麦克风权限", "Microphone permission needed"), page: .general))
         }
         return issues
     }
 
+    /// The last dictation, when it failed. A transcribed file is retried from History instead: its text is never pasted.
     private var failedRecord: DictationRecord? {
-        guard controller.state == .idle, let last = history.records.first,
-              last.status == .failed, last.hasAudio else { return nil }
+        // An edit of a selection can't be run again without its selection.
+        guard controller.state == .idle, let last = history.records.first, !last.isFile,
+              last.status == .failed, last.hasAudio, !last.isCommand else { return nil }
         return last
     }
 
     private func copy(_ record: DictationRecord) {
-        TextInserter.copyToClipboard(record.finalText)
+        TextInserter.copyToClipboard(record.outputText)
         copiedID = record.id
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             if copiedID == record.id { copiedID = nil }
@@ -173,7 +187,7 @@ private struct RecentRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(record.finalText)
+                Text(record.outputText)
                     .font(.system(size: 12.5))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)

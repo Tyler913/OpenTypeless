@@ -81,6 +81,22 @@ public static class VoiceActivity
         var pad = AudioFormat.SampleCount(padding);
         return (Math.Max(0, first * FrameSamples - pad), Math.Min(samples.Length, (last + 1) * FrameSamples + pad));
     }
+
+    /// <summary>
+    /// Whether any frame of <paramref name="samples"/> that ends before the last <paramref name="ignoringLast"/> samples is
+    /// speech. At the end of a recording, the moment before the key was let go (its click, a breath) isn't something said.
+    /// </summary>
+    public static bool ContainsSpeech(ReadOnlySpan<short> samples, int ignoringLast = 0)
+    {
+        var levels = FrameLevels(samples);
+        var threshold = Threshold(levels);
+        var counted = Math.Min(levels.Length, Math.Max(0, samples.Length - ignoringLast) / FrameSamples);
+        for (var i = 0; i < counted; i++)
+        {
+            if (levels[i] > threshold) return true;
+        }
+        return false;
+    }
 }
 
 /// <summary>
@@ -134,17 +150,18 @@ public sealed class PauseTracker
 
     /// <summary>
     /// Whether any audio after <paramref name="sample"/> is speech, the frame straddling it included. With
-    /// <paramref name="includePartial"/> the last, not yet complete frame counts too (at the end of the recording).
+    /// <paramref name="before"/>, only the frames that end by then count: the last moment of a recording (the key's click as
+    /// it's let go, a breath) can be left out.
     /// </summary>
-    public bool SpeechAfter(int sample, bool includePartial = false)
+    public bool SpeechAfter(int sample, int? before = null)
     {
         var threshold = VoiceActivity.Threshold(_levels);
         var from = Math.Max(0, sample / VoiceActivity.FrameSamples - _firstFrame);
-        for (var i = from; i < _levels.Count; i++)
+        var to = Math.Min(_levels.Count, before is { } end ? end / VoiceActivity.FrameSamples - _firstFrame : _levels.Count);
+        for (var i = from; i < to; i++)
         {
             if (_levels[i] > threshold) return true;
         }
-        return includePartial && _partialCount > 0 && SampleCount > sample
-            && AudioLevel.Rms(_partial.AsSpan(0, _partialCount)) > threshold;
+        return false;
     }
 }

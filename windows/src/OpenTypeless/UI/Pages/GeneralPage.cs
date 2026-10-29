@@ -149,10 +149,26 @@ public sealed class GeneralPage : PageBase
         dictation.Body.Add(new CardDivider());
         dictation.Body.Add(new CardRow
         {
+            Glyph = Glyphs.Font, Tint = Tint.Blue, Title = L("贴合前后文的空格和大小写", "Fit spacing and capitalisation to the surrounding text"),
+            Subtitle = L("插入到已有文字中间时，按光标前后的文字补上缺的空格、把句中的首字母改成小写、去掉会提前结束句子的句号。读不到光标附近的文字时（比如密码框），按原样插入。",
+                         "When you dictate into existing text, adds a missing space, lowercases a capital in mid-sentence and drops a full stop that would end the sentence early, going by the text around the cursor. Where that can't be read (a password field, some apps), the text goes in as it is."),
+            Trailing = Toggle(_settings.FitToSurroundingText, on => _settings.FitToSurroundingText = on),
+        });
+        dictation.Body.Add(new CardDivider());
+        dictation.Body.Add(new CardRow
+        {
             Glyph = Glyphs.ReturnKey, Tint = Tint.Green, Title = L("插入后自动回车", "Press Enter after inserting"),
             Subtitle = L("文字粘贴进去后自动按一次回车，在聊天框或给 AI 写提示词时直接发送。文字只复制到剪贴板时不会按。",
                          "Presses Enter once the text is pasted, so a chat message or AI prompt is sent right away. Not pressed when the text only goes to the clipboard."),
             Trailing = Toggle(_settings.PressEnterAfterInsert, on => _settings.PressEnterAfterInsert = on),
+        });
+        dictation.Body.Add(new CardDivider());
+        dictation.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.LineBreak, Tint = Tint.Blue, Title = L("说“换行”另起一行", "Say “new line” for a line break"),
+            Subtitle = L("单独说“换行”或“新段落”（前后稍作停顿），会换成换行或空一行；其他语言的说法也可以，比如 new line、new paragraph。在一句话中间说到这些词时照原样保留；但在列举里单独说出（“空格，换行，制表符”）时也会变成换行。",
+                         "Say “new line” or “new paragraph” on its own, with a short pause before and after, for a line break or a blank line; 换行 / 新段落 and the other languages’ words work too. Said within a sentence, the words stay as they are; said on their own in a list (“spaces, new line, tabs”), they become a break too."),
+            Trailing = Toggle(_settings.SpokenLayoutCommands, on => _settings.SpokenLayoutCommands = on),
         });
         dictation.Body.Add(new CardDivider());
         dictation.Body.Add(new CardRow

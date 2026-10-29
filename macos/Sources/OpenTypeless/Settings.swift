@@ -33,6 +33,15 @@ final class AppSettings: ObservableObject {
     @AppStorage("restoreClipboard") var restoreClipboard: Bool = true
     /// Press Return once the text is pasted, so a chat message or AI prompt is sent without touching the keyboard.
     @AppStorage("pressEnterAfterInsert") var pressEnterAfterInsert: Bool = false
+    /// Fit the spacing and capitalisation of pasted text to the text around the cursor (see InsertionJoiner). Safe on by
+    /// default: a field that can't be read gets the text as it is.
+    @AppStorage("fitToSurroundingText") var fitToSurroundingText: Bool = true
+    /// "New line" and "new paragraph" said on their own become line breaks (see `SpokenLayout`). Off until the user turns
+    /// it on: a command word said on its own in a list ("spaces, new line, tabs") becomes a break too.
+    @AppStorage("spokenLayoutCommands") var spokenLayoutCommands: Bool = false
+    /// "Finish and send": the key that, pressed while recording, ends the dictation and sends it once it's pasted (see
+    /// `SendKey`). Off until the user picks one; a choice this version can't read is off too.
+    @AppStorage("sendKey") var sendKey: SendKey = .off
     /// Mute the speakers while recording (see OutputMute).
     @AppStorage("muteWhileRecording") var muteWhileRecording: Bool = false
     @AppStorage("maxRecordingMinutes") var maxRecordingMinutes: Int = 20
@@ -49,31 +58,75 @@ final class AppSettings: ObservableObject {
     @AppStorage("showHomeAtLogin") var showHomeAtLogin: Bool = false
     /// The typing speed "time saved" on the Home page is measured against.
     @AppStorage("typingWordsPerMinute") var typingWordsPerMinute: Int = UsageTotals.defaultTypingWordsPerMinute
+    /// Clean up the transcript of a file transcribed from History (the switch in its import sheet), when clean-up is on.
+    @AppStorage("fileCleanUp") var fileCleanUp: Bool = true
+
+    /// Translation mode: holding the hotkey and pressing `translationChord` inserts that dictation translated (see
+    /// `translationTarget`). Off until the user turns it on and picks a language.
+    @AppStorage("translationEnabled") var translationEnabled: Bool = false
+    /// A listed language's code (see `TranslationLanguage`), or `otherTranslationLanguage` for the one typed in
+    /// `translationOtherLanguage`.
+    @AppStorage("translationLanguage") var translationLanguage: String = TranslationLanguage.english.rawValue
+    @AppStorage("translationOtherLanguage") var translationOtherLanguage: String = ""
+    @AppStorage("translationChord") var translationChord: TranslationChord = .shift
+
+    /// Command mode: holding the hotkey and pressing `commandChord` edits the text selected in the app in front by what
+    /// is said (see `SelectionCommand`). Off until the user turns it on: while it's on, the chord's key pressed with
+    /// the hotkey is kept from the app in front.
+    @AppStorage("commandModeEnabled") var commandModeEnabled: Bool = false
+    /// One of the modifiers translation's chord is chosen from (see `TranslationChord`); one translation mode also has
+    /// is left to translation (see `SelectionCommand.chordKeys`).
+    @AppStorage("commandChord") var commandChord: TranslationChord = .control
 
     /// Learn vocabulary from the fixes the user makes to dictated text (see EditWatcher).
     @AppStorage("learnFromEdits") var learnFromEdits: Bool = true
     @Published private(set) var learnedTerms: [LearnedTerm]
+    /// Send the text around the cursor with the transcript, for the clean-up to spell names by (see CursorContextReader).
+    /// Off by default: it goes to the clean-up provider.
+    @AppStorage("useCursorContext") var useCursorContext: Bool = false
     /// Learned terms the user removed; never learned again (lowercased).
     private var forgottenTerms: Set<String>
+    /// Spoken shortcuts: a trigger said in a dictation is replaced by its expansion (see SnippetExpander). None at first.
+    @Published private(set) var snippets: [Snippet]
 
+    /// The saved keys only: OPENROUTER_API_KEY overrides one in `apiKey(for:)` but never lands in here.
     @Published private(set) var apiKeys: [String: String]
     @Published private(set) var baseURLs: [String: String]
     /// Prices the user entered for models of providers other than OpenRouter (whose prices are live), by `ModelPrice.key`.
     @Published private(set) var modelPrices: [String: ModelPrice]
     /// The OpenRouter host the user picked for a clean-up model (endpoint tag, by model ID); none means automatic.
     @Published private(set) var openRouterHosts: [String: String]
+    /// Settings for particular apps, by bundle ID, applied to a dictation started in them (see AppProfile). None at first.
+    @Published private(set) var appProfiles: [AppProfile]
+    /// The shortcuts the user gave to actions besides dictating (see `ShortcutAction`), by the action's name; none by
+    /// default.
+    @Published private var actionShortcuts: [String: Hotkey]
+    /// The same as saved, changed one entry at a time (see `StoredEntries`), so one saved by a newer version, or one
+    /// that can't be read, is kept as it is.
+    private var storedShortcuts: Data?
 
     private init() {
-        // In CLI mode with OPENROUTER_API_KEY set, the saved keys aren't needed.
-        let cli = !(ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"] ?? "").isEmpty
-        apiKeys = cli ? [:] : Credentials.load()
+        // Loaded even when OPENROUTER_API_KEY is set: it only stands in for the OpenRouter key, and the app launched
+        // with it still needs the others (and must not save over them when one is edited).
+        apiKeys = Credentials.load()
         baseURLs = (UserDefaults.standard.dictionary(forKey: "baseURLs") as? [String: String]) ?? [:]
         learnedTerms = UserDefaults.standard.data(forKey: "learnedVocabulary")
             .flatMap { try? JSONDecoder().decode([LearnedTerm].self, from: $0) } ?? []
         forgottenTerms = Set(UserDefaults.standard.stringArray(forKey: "forgottenVocabulary") ?? [])
+        let savedSnippets = UserDefaults.standard.data(forKey: "snippets").map(Snippet.list(from:))
+        snippets = savedSnippets?.snippets ?? []
         modelPrices = UserDefaults.standard.data(forKey: "modelPrices")
             .flatMap { try? JSONDecoder().decode([String: ModelPrice].self, from: $0) } ?? [:]
         openRouterHosts = (UserDefaults.standard.dictionary(forKey: "openRouterHosts") as? [String: String]) ?? [:]
+        storedShortcuts = UserDefaults.standard.data(forKey: "shortcuts")
+        actionShortcuts = StoredEntries.decode(storedShortcuts, as: Hotkey.self)
+        // An entry that isn't a profile is skipped, not the whole list; an ID that's missing or taken is repaired once and
+        // saved, so edits, Remove and retries keep finding their profile.
+        let savedProfiles = UserDefaults.standard.data(forKey: "appProfiles").flatMap(AppProfile.list(from:)) ?? []
+        appProfiles = AppProfile.withUniqueIDs(savedProfiles)
+        if appProfiles != savedProfiles { saveAppProfiles() }
+        // IDs given to entries that had none (or another's) are kept, so editing or deleting them works next time too.
+        if savedSnippets?.repaired == true { saveSnippets() }
     }
 
     // MARK: Hotkey
@@ -92,20 +145,72 @@ final class AppSettings: ObservableObject {
         set { hotkeyData = (try? JSONEncoder().encode(newValue)) ?? Data() }
     }
 
+    // MARK: Action shortcuts
+
+    func shortcut(for action: ShortcutAction) -> Hotkey? {
+        actionShortcuts[action.rawValue]
+    }
+
+    /// nil clears it.
+    func setShortcut(_ hotkey: Hotkey?, for action: ShortcutAction) {
+        guard let stored = StoredEntries.replacing(action.rawValue, with: hotkey, in: storedShortcuts) else { return }
+        storedShortcuts = stored
+        UserDefaults.standard.set(stored, forKey: "shortcuts")
+        actionShortcuts = StoredEntries.decode(stored, as: Hotkey.self)
+    }
+
+    /// The actions' shortcuts, as the hotkey monitor matches keys against them.
+    var shortcutMap: ShortcutMap {
+        var chords: [ShortcutAction: KeyChord] = [:]
+        for action in ShortcutAction.allCases {
+            if let hotkey = shortcut(for: action) { chords[action] = hotkey.chord }
+        }
+        return ShortcutMap(chords)
+    }
+
+    // MARK: Translation
+
+    /// What `translationLanguage` holds when the language is typed in.
+    static let otherTranslationLanguage = "other"
+
+    /// What a translation dictation is translated into; nil while translation mode is off, or another language is picked
+    /// without a name.
+    var translationTarget: TranslationTarget? {
+        guard translationEnabled else { return nil }
+        return TranslationTarget(translationLanguage == Self.otherTranslationLanguage ? translationOtherLanguage
+                                                                                      : translationLanguage)
+    }
+
+    /// Whether command mode's chord is the same as translation's, while both are on: then it does nothing.
+    var commandChordClashes: Bool {
+        commandModeEnabled && translationTarget != nil && commandChord == translationChord
+    }
+
     // MARK: Providers
 
+    /// The key requests use: OPENROUTER_API_KEY, when set, in place of the saved OpenRouter key.
     func apiKey(for id: ProviderID) -> String {
-        if id == .openrouter, let env = ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"], !env.isEmpty {
-            return env
-        }
-        return apiKeys[id.rawValue] ?? ""
+        if id == .openrouter, let env = Self.openRouterKeyFromEnvironment { return env }
+        return savedAPIKey(for: id)
+    }
+
+    /// The key saved in Settings, which is what a key field shows and edits, so OPENROUTER_API_KEY is never saved.
+    func savedAPIKey(for id: ProviderID) -> String {
+        apiKeys[id.rawValue] ?? ""
+    }
+
+    static var openRouterKeyFromEnvironment: String? {
+        ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"].flatMap { $0.isEmpty ? nil : $0 }
     }
 
     func setAPIKey(_ key: String, for id: ProviderID) {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard apiKeys[id.rawValue, default: ""] != trimmed else { return }
-        apiKeys[id.rawValue] = trimmed.isEmpty ? nil : trimmed
-        Credentials.save(apiKeys)
+        // On top of what the file holds now, not only what was read at launch, so a key never read here isn't erased.
+        var keys = apiKeys.merging(Credentials.saved()) { current, _ in current }
+        keys[id.rawValue] = trimmed.isEmpty ? nil : trimmed
+        apiKeys = keys
+        Credentials.save(keys)
     }
 
     func baseURL(for id: ProviderID) -> String {
@@ -188,6 +293,60 @@ final class AppSettings: ObservableObject {
         UserDefaults.standard.set(openRouterHosts, forKey: "openRouterHosts")
     }
 
+    // MARK: App profiles
+
+    /// What a dictation runs with when no profile applies.
+    var globalDictationSettings: DictationSettings {
+        DictationSettings(polishEnabled: polishEnabled, pressEnter: pressEnterAfterInsert, language: sttLanguage,
+                          extraInstructions: extraInstructions)
+    }
+
+    /// What a dictation started in the app with this bundle ID runs with.
+    func dictationSettings(forApp bundleID: String?) -> DictationSettings {
+        globalDictationSettings.applying(AppProfile.matching(bundleID, in: appProfiles))
+    }
+
+    /// What a retry of a dictation made with the profile `id` runs with: that profile's settings while it still exists,
+    /// the global ones otherwise.
+    func dictationSettings(profileID id: String?) -> DictationSettings {
+        globalDictationSettings.applying(appProfiles.first { $0.id == id })
+    }
+
+    /// Adds a profile for an app, following the global settings until it's edited; an app that has one already keeps it.
+    @discardableResult
+    func addAppProfile(bundleID: String, name: String) -> AppProfile {
+        if let existing = AppProfile.matching(bundleID, in: appProfiles) { return existing }
+        let profile = AppProfile(app: bundleID, name: name)
+        appProfiles.append(profile)
+        saveAppProfiles()
+        return profile
+    }
+
+    func updateAppProfile(_ profile: AppProfile) {
+        guard let index = appProfiles.firstIndex(where: { $0.id == profile.id }), appProfiles[index] != profile else { return }
+        appProfiles[index] = profile
+        saveAppProfiles()
+    }
+
+    func removeAppProfile(id: String) {
+        appProfiles.removeAll { $0.id == id }
+        saveAppProfiles()
+    }
+
+    /// Set for the UI snapshots: the profiles shown are samples, and nothing about them is saved.
+    private var appProfilesAreSamples = false
+
+    /// For the UI snapshots: shows these profiles in place of the saved ones, which stay as they are.
+    func showSampleAppProfiles(_ profiles: [AppProfile]) {
+        appProfilesAreSamples = true
+        appProfiles = profiles
+    }
+
+    private func saveAppProfiles() {
+        guard !appProfilesAreSamples else { return }
+        UserDefaults.standard.set(try? JSONEncoder().encode(appProfiles), forKey: "appProfiles")
+    }
+
     // MARK: Model prices
 
     func customPrice(_ provider: ProviderID, _ model: String) -> ModelPrice? {
@@ -238,6 +397,27 @@ final class AppSettings: ObservableObject {
         saveLearnedTerms()
     }
 
+    /// Adds an imported file's new terms to the vocabulary, leaving out ones already in it (ignoring case) and ones
+    /// `VocabularyTransfer.plan` keeps out of every clean-up request. Importing is the user asking for these terms, so
+    /// one they once removed from the learned terms may be learned again too. Returns what it did.
+    @discardableResult
+    func importVocabulary(_ terms: [String]) -> VocabularyTransfer.ImportPlan {
+        let plan = VocabularyTransfer.plan(terms, existing: vocabularyList)
+        if !plan.added.isEmpty { vocabulary = VocabularyTransfer.merged(vocabulary, adding: plan.added) }
+        let kept = Set(vocabularyList.map { $0.lowercased() }).intersection(terms.map { $0.lowercased() })
+        if !forgottenTerms.isDisjoint(with: kept) {
+            forgottenTerms.subtract(kept)
+            UserDefaults.standard.set(Array(forgottenTerms), forKey: "forgottenVocabulary")
+        }
+        return plan
+    }
+
+    /// The vocabulary as it's exported: each term with how recognition misheard it, when it was learned from a fix.
+    var vocabularyForExport: [VocabularyTransfer.Term] {
+        let learned = Dictionary(learnedTerms.map { ($0.term.lowercased(), $0.heardAs) }, uniquingKeysWith: { first, _ in first })
+        return vocabularyList.map { VocabularyTransfer.Term(term: $0, heardAs: learned[$0.lowercased()] ?? []) }
+    }
+
     /// Misheard forms of vocabulary terms, newest first, for the clean-up prompt.
     var misheardHints: [Correction] {
         let terms = Set(vocabularyList.map { $0.lowercased() })
@@ -255,6 +435,31 @@ final class AppSettings: ObservableObject {
         vocabulary.split(whereSeparator: { $0 == "," || $0 == "，" || $0 == "\n" })
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+    }
+
+    /// What speech-to-text and the clean-up are given as vocabulary: the snippets' triggers ahead of the vocabulary, so a
+    /// trigger comes through as written for its snippet to be found.
+    var dictationVocabulary: [String] { SnippetExpander.vocabulary(snippets, before: vocabularyList) }
+
+    // MARK: Snippets
+
+    /// Adds the snippet, or replaces the one with its ID.
+    func saveSnippet(_ snippet: Snippet) {
+        if let index = snippets.firstIndex(where: { $0.id == snippet.id }) {
+            snippets[index] = snippet
+        } else {
+            snippets.append(snippet)
+        }
+        saveSnippets()
+    }
+
+    func deleteSnippet(_ snippet: Snippet) {
+        snippets.removeAll { $0.id == snippet.id }
+        saveSnippets()
+    }
+
+    private func saveSnippets() {
+        UserDefaults.standard.set(try? JSONEncoder().encode(snippets), forKey: "snippets")
     }
 }
 
@@ -314,15 +519,30 @@ enum Credentials {
     private static let movedFromKeychainKey = "credentialsMovedFromKeychain"
 
     static func load() -> [String: String] {
-        if let data = try? Data(contentsOf: file) {
-            return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
+        var keys = saved()
+        // Earlier versions kept the keys in the keychain: read them there once (the last prompt) and move them. Only a
+        // read that worked, or found nothing, counts: after Deny, or with the keychain still locked at login, it's
+        // tried again next launch.
+        if !UserDefaults.standard.bool(forKey: movedFromKeychainKey), let legacy = LegacyKeychain.load() {
+            if !legacy.isEmpty {
+                keys = legacy.merging(keys) { _, saved in saved }
+                save(keys)
+            }
+            UserDefaults.standard.set(true, forKey: movedFromKeychainKey)
         }
-        // Earlier versions kept the keys in the keychain: read them there once (the last prompt) and move them.
-        guard !UserDefaults.standard.bool(forKey: movedFromKeychainKey) else { return [:] }
-        let keys = LegacyKeychain.load()
-        save(keys)
-        UserDefaults.standard.set(true, forKey: movedFromKeychainKey)
         return keys
+    }
+
+    /// What the file holds. One that can't be read is moved aside (see SafeFile), so the next save doesn't overwrite it.
+    static func saved() -> [String: String] {
+        let url = file
+        guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
+        protect(url)
+        if let data = try? Data(contentsOf: url), let keys = try? JSONDecoder().decode([String: String].self, from: data) {
+            return keys
+        }
+        SafeFile.moveAside(url)
+        return [:]
     }
 
     static func save(_ keys: [String: String]) {
@@ -331,6 +551,8 @@ enum Credentials {
             return
         }
         let url = file
+        // There but unreadable: replacing it would lose the keys this run couldn't read.
+        if FileManager.default.fileExists(atPath: url.path), (try? Data(contentsOf: url)) == nil { return }
         // Created owner-only (0600) from the start, then swapped in whole.
         let temporary = url.deletingLastPathComponent().appendingPathComponent(".credentials-\(UUID().uuidString)")
         guard FileManager.default.createFile(atPath: temporary.path, contents: data,
@@ -338,6 +560,17 @@ enum Credentials {
         if (try? FileManager.default.replaceItemAt(url, withItemAt: temporary)) == nil {
             try? FileManager.default.removeItem(at: temporary)
         }
+        protect(url)
+    }
+
+    /// Owner-only again, in case a copy or a restore loosened it, and left out of backups, which would carry the keys
+    /// off this Mac.
+    private static func protect(_ url: URL) {
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var url = url
+        try? url.setResourceValues(values)
     }
 }
 
@@ -346,18 +579,27 @@ enum Credentials {
 private enum LegacyKeychain {
     private static let service = "OpenTypeless"
 
-    static func load() -> [String: String] {
-        if let data = read("credentials"), let keys = try? JSONDecoder().decode([String: String].self, from: data) {
+    /// Nil when the keychain couldn't be read (the user clicked Deny, or it's locked); empty when there's nothing in it.
+    static func load() -> [String: String]? {
+        guard let credentials = read("credentials") else { return nil }
+        if case let .found(data) = credentials, let keys = try? JSONDecoder().decode([String: String].self, from: data) {
             return keys
         }
         // v0.1 stored a single OpenRouter key.
-        if let data = read("openrouter"), let key = String(data: data, encoding: .utf8), !key.isEmpty {
+        guard let openRouter = read("openrouter") else { return nil }
+        if case let .found(data) = openRouter, let key = String(data: data, encoding: .utf8), !key.isEmpty {
             return ["openrouter": key]
         }
         return [:]
     }
 
-    private static func read(_ account: String) -> Data? {
+    private enum Item {
+        case found(Data)
+        case missing
+    }
+
+    /// Nil when the keychain wouldn't say (any error other than "no such item").
+    private static func read(_ account: String) -> Item? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -366,8 +608,11 @@ private enum LegacyKeychain {
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else { return nil }
-        return item as? Data
+        switch SecItemCopyMatching(query as CFDictionary, &item) {
+        case errSecSuccess: return (item as? Data).map(Item.found) ?? .missing
+        case errSecItemNotFound: return .missing
+        default: return nil
+        }
     }
 }
 

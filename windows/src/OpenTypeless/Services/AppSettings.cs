@@ -28,33 +28,83 @@ public sealed class AppSettings : INotifyPropertyChanged
     private readonly object _lock = new();
     private readonly string _path;
     private readonly JsonObject _store;
-    private Dictionary<string, string> _apiKeys;
+    /// <summary>False when the settings file is there but couldn't be read: the defaults run and nothing is saved over it.</summary>
+    private readonly bool _writable = true;
+    /// <summary>The saved keys only: OPENROUTER_API_KEY overrides one in <see cref="ApiKey"/> but never lands in here.</summary>
+    private readonly Dictionary<string, string> _apiKeys;
 
     private AppSettings()
     {
         _path = AppPaths.SettingsFile;
-        JsonObject? loaded = null;
-        try
-        {
-            // Read as text so a byte-order mark (e.g. after hand-editing in Notepad) is handled.
-            if (File.Exists(_path)) loaded = JsonNode.Parse(File.ReadAllText(_path)) as JsonObject;
-        }
-        catch (JsonException)
-        {
-            // A corrupt file falls back to defaults rather than blocking launch.
-        }
-        _store = loaded ?? new JsonObject();
+        var existed = File.Exists(_path);
+        _store = existed ? LoadStore(_path, out _writable) : new JsonObject();
         // The hotkey is always stored, so a new default only reaches new installs: one that ran before without
         // choosing a hotkey had Right Ctrl, the default until 1.4.0, and keeps it.
         if (_store["hotkey"] == null)
         {
-            _store["hotkey"] = JsonSerializer.SerializeToNode(File.Exists(_path) ? Hotkey.RightControl : Hotkey.Default);
+            _store["hotkey"] = JsonSerializer.SerializeToNode(existed ? Hotkey.RightControl : Hotkey.Default);
             Save();
         }
-        // In CLI mode with OPENROUTER_API_KEY set, don't touch the credential store.
-        var cli = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENROUTER_API_KEY"));
-        _apiKeys = cli ? new() : Credentials.Load();
+        // Profiles are read from the store on every access, so an ID that's missing or taken is repaired once, here, and
+        // saved: edits, Remove and retries then keep finding their profile.
+        if (_store["appProfiles"] is JsonArray savedProfiles)
+        {
+            var profiles = AppProfile.ListFromJson(savedProfiles);
+            var repaired = AppProfile.WithUniqueIds(profiles);
+            if (!repaired.SequenceEqual(profiles))
+            {
+                _store["appProfiles"] = AppProfile.ListToJson(repaired);
+                Save();
+            }
+        }
+        // Snippets are told apart by ID: one saved without its own (none, or another's) is given one now, and kept, so
+        // editing or deleting it works (an ID made up on every read would change under the editor).
+        var (savedSnippets, snippetsRepaired) = Snippet.ReadList(_store["snippets"]);
+        if (snippetsRepaired)
+        {
+            _store["snippets"] = JsonSerializer.SerializeToNode(savedSnippets);
+            Save();
+        }
+        // Loaded even when OPENROUTER_API_KEY is set: it only stands in for the OpenRouter key, and the app launched
+        // with it still needs the others (and must not save over them when one is edited).
+        _apiKeys = Credentials.Load();
         Localization.Preference = () => GetString(Localization.SettingsKey, "system");
+    }
+
+    /// <summary>
+    /// The saved settings. One that can't be parsed is moved aside (see <see cref="SafeFile"/>) and the defaults start,
+    /// rather than blocking launch or being saved over it. One that still can't be read after a few tries is held by
+    /// another program (antivirus, OneDrive) rather than damaged: it stays, the defaults run for this session, and
+    /// <paramref name="writable"/> is false so nothing is saved over it.
+    /// </summary>
+    private static JsonObject LoadStore(string path, out bool writable)
+    {
+        writable = true;
+        string text;
+        try
+        {
+            // Read as text so a byte-order mark (e.g. after hand-editing in Notepad) is handled.
+            text = SafeFile.ReadAllText(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Debug("settings", $"can't read {path}, not saving over it this session: {e.Message}");
+            writable = false;
+            return new JsonObject();
+        }
+        try
+        {
+            if (JsonNode.Parse(text) is JsonObject loaded) return loaded;
+        }
+        catch (JsonException e)
+        {
+            AppLog.Debug("settings", $"can't parse {path}: {e.Message}");
+        }
+        var aside = SafeFile.MoveAside(path);
+        AppLog.Debug("settings", aside != null ? $"damaged settings moved to {aside}" : "damaged settings couldn't be moved aside");
+        // Not moved aside: it's the only copy, so it isn't saved over either.
+        writable = aside != null;
+        return new JsonObject();
     }
 
     // MARK: Stored values
@@ -191,6 +241,36 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("pressEnterAfterInsert", value);
     }
 
+    /// <summary>
+    /// Fit the spacing and capitalisation of pasted text to the text around the cursor (see InsertionJoiner). Safe on by
+    /// default: a field that can't be read gets the text as it is.
+    /// </summary>
+    public bool FitToSurroundingText
+    {
+        get => GetBool("fitToSurroundingText", true);
+        set => SetValue("fitToSurroundingText", value);
+    }
+
+    /// <summary>
+    /// "New line" and "new paragraph" said on their own become line breaks (see <see cref="TypelessCore.SpokenLayout"/>). Off
+    /// until the user turns it on: a command word said on its own in a list ("spaces, new line, tabs") becomes a break too.
+    /// </summary>
+    public bool SpokenLayoutCommands
+    {
+        get => GetBool("spokenLayoutCommands", false);
+        set => SetValue("spokenLayoutCommands", value);
+    }
+
+    /// <summary>
+    /// "Finish and send": the key that, pressed while recording, ends the dictation and sends it once it's pasted (see
+    /// <see cref="TypelessCore.SendKey"/>). Off until the user picks one; a choice this version can't read is off too.
+    /// </summary>
+    public SendKey SendKey
+    {
+        get => SendKeys.Parse(GetString("sendKey", "off"));
+        set => SetValue("sendKey", value.RawValue());
+    }
+
     /// <summary>Mute the speakers while recording (see OutputMute).</summary>
     public bool MuteWhileRecording
     {
@@ -215,6 +295,84 @@ public sealed class AppSettings : INotifyPropertyChanged
     {
         get => GetBool("learnFromEdits", true);
         set => SetValue("learnFromEdits", value);
+    }
+
+    /// <summary>
+    /// Translation mode: holding the hotkey and pressing <see cref="TranslationChord"/> inserts that dictation translated
+    /// (see <see cref="TranslationTarget"/>). Off until the user turns it on and picks a language.
+    /// </summary>
+    public bool TranslationEnabled
+    {
+        get => GetBool("translationEnabled", false);
+        set => SetValue("translationEnabled", value);
+    }
+
+    /// <summary>
+    /// A listed language's code (see <see cref="TypelessCore.TranslationLanguage"/>), or <see cref="OtherTranslationLanguage"/>
+    /// for the one typed in <see cref="TranslationOtherLanguage"/>.
+    /// </summary>
+    public string TranslationLanguage
+    {
+        get => GetString("translationLanguage", TypelessCore.TranslationLanguage.English.Code());
+        set => SetValue("translationLanguage", value);
+    }
+
+    public string TranslationOtherLanguage
+    {
+        get => GetString("translationOtherLanguage", "");
+        set => SetValue("translationOtherLanguage", value);
+    }
+
+    public TranslationChord TranslationChord
+    {
+        get => TranslationChords.Parse(GetString("translationChord", "")) ?? TypelessCore.TranslationChord.Shift;
+        set => SetValue("translationChord", value.RawValue());
+    }
+
+    /// <summary>
+    /// Command mode: holding the hotkey and pressing <see cref="CommandChord"/> edits the text selected in the app in front
+    /// by what is said (see <see cref="SelectionCommand"/>). Off until the user turns it on: while it's on, the chord's key
+    /// pressed with the hotkey is kept from the app in front.
+    /// </summary>
+    public bool CommandModeEnabled
+    {
+        get => GetBool("commandModeEnabled", false);
+        set => SetValue("commandModeEnabled", value);
+    }
+
+    /// <summary>
+    /// One of the modifiers translation's chord is chosen from (see <see cref="TypelessCore.TranslationChord"/>); one
+    /// translation mode also has is left to translation (see <see cref="SelectionCommand.ChordKeys"/>).
+    /// </summary>
+    public TranslationChord CommandChord
+    {
+        get => TranslationChords.Parse(GetString("commandChord", "")) ?? TypelessCore.TranslationChord.Control;
+        set => SetValue("commandChord", value.RawValue());
+    }
+
+    /// <summary>Whether command mode's chord is the same as translation's, while both are on: then it does nothing.</summary>
+    public bool CommandChordClashes => CommandModeEnabled && TranslationTarget != null && CommandChord == TranslationChord;
+
+    /// <summary>What <see cref="TranslationLanguage"/> holds when the language is typed in.</summary>
+    public const string OtherTranslationLanguage = "other";
+
+    /// <summary>
+    /// What a translation dictation is translated into; null while translation mode is off, or another language is picked
+    /// without a name.
+    /// </summary>
+    public TranslationTarget? TranslationTarget =>
+        TranslationEnabled
+            ? TypelessCore.TranslationTarget.From(TranslationLanguage == OtherTranslationLanguage ? TranslationOtherLanguage : TranslationLanguage)
+            : null;
+
+    /// <summary>
+    /// Send the text around the cursor with the transcript, for the clean-up to spell names by (see CursorContextReader).
+    /// Off by default: it goes to the clean-up provider.
+    /// </summary>
+    public bool UseCursorContext
+    {
+        get => GetBool("useCursorContext", false);
+        set => SetValue("useCursorContext", value);
     }
 
     /// <summary>The microphone to record from, by endpoint ID; "" follows the default input.</summary>
@@ -243,6 +401,13 @@ public sealed class AppSettings : INotifyPropertyChanged
     {
         get => GetBool("showHomeAtLogin", false);
         set => SetValue("showHomeAtLogin", value);
+    }
+
+    /// <summary>Clean up the transcript of a file transcribed from History (the switch in its import dialog), when clean-up is on.</summary>
+    public bool FileCleanUp
+    {
+        get => GetBool("fileCleanUp", true);
+        set => SetValue("fileCleanUp", value);
     }
 
     /// <summary>The typing speed "time saved" on the Home page is measured against.</summary>
@@ -295,22 +460,40 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     // MARK: Providers
 
+    /// <summary>The key requests use: OPENROUTER_API_KEY, when set, in place of the saved OpenRouter key.</summary>
     public string ApiKey(ProviderId id)
     {
-        if (id == ProviderId.OpenRouter && Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") is { Length: > 0 } env) return env;
+        if (id == ProviderId.OpenRouter && OpenRouterKeyFromEnvironment is { } env) return env;
+        return SavedApiKey(id);
+    }
+
+    /// <summary>The key saved in Settings, which is what a key field shows and edits, so OPENROUTER_API_KEY is never saved.</summary>
+    public string SavedApiKey(ProviderId id)
+    {
         lock (_lock) return _apiKeys.GetValueOrDefault(id.RawValue(), "");
     }
 
-    public void SetApiKey(string key, ProviderId id)
+    public static string? OpenRouterKeyFromEnvironment =>
+        Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") is { Length: > 0 } env ? env : null;
+
+    /// <summary>
+    /// Saves the key. False when Credential Manager refused it: the key still works until the app quits, but the
+    /// caller should say it wasn't saved.
+    /// </summary>
+    public bool SetApiKey(string key, ProviderId id)
     {
         var trimmed = key.Trim();
+        bool saved;
         lock (_lock)
         {
-            if (_apiKeys.GetValueOrDefault(id.RawValue(), "") == trimmed) return;
+            if (_apiKeys.GetValueOrDefault(id.RawValue(), "") == trimmed) return true;
+            // On top of what's stored now, not only what was read at launch, so a key never read here isn't erased.
+            foreach (var (name, value) in Credentials.Load()) _apiKeys.TryAdd(name, value);
             if (trimmed.Length == 0) _apiKeys.Remove(id.RawValue()); else _apiKeys[id.RawValue()] = trimmed;
-            Credentials.Save(new Dictionary<string, string>(_apiKeys));
+            saved = Credentials.Save(new Dictionary<string, string>(_apiKeys));
         }
         Raise("ApiKeys");
+        return saved;
     }
 
     public string BaseUrl(ProviderId id)
@@ -408,6 +591,59 @@ public sealed class AppSettings : INotifyPropertyChanged
         PolishBackupModel = id.DefaultBackupChatModel();
     }
 
+    // MARK: Action shortcuts
+
+    /// <summary>The shortcut the user gave <paramref name="action"/> (see <see cref="ShortcutAction"/>); none by default.</summary>
+    public Hotkey? Shortcut(ShortcutAction action)
+    {
+        lock (_lock)
+        {
+            if ((_store["shortcuts"] as JsonObject)?[action.RawValue()] is JsonObject obj)
+            {
+                try
+                {
+                    return obj.Deserialize<Hotkey>();
+                }
+                catch (JsonException) { }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Null clears it. Saved under "shortcuts" by the action's name, as on macOS; one saved by a newer version for an
+    /// action this one doesn't know is left as it is.
+    /// </summary>
+    public void SetShortcut(ShortcutAction action, Hotkey? hotkey)
+    {
+        lock (_lock)
+        {
+            if (_store["shortcuts"] is not JsonObject shortcuts)
+            {
+                shortcuts = new JsonObject();
+                _store["shortcuts"] = shortcuts;
+            }
+            if (hotkey is null) shortcuts.Remove(action.RawValue());
+            else shortcuts[action.RawValue()] = JsonSerializer.SerializeToNode(hotkey);
+            Save();
+        }
+        Raise(nameof(Shortcuts));
+    }
+
+    /// <summary>The actions' shortcuts, as the hotkey hook matches keys against them.</summary>
+    public ShortcutMap Shortcuts
+    {
+        get
+        {
+            var chords = new Dictionary<ShortcutAction, KeyChord>();
+            foreach (var action in ShortcutActions.All)
+            {
+                if (Shortcut(action) is { } hotkey) chords[action] = hotkey.Chord;
+            }
+            return new ShortcutMap(chords);
+        }
+    }
+
     // MARK: OpenRouter hosts
 
     /// <summary>The OpenRouter host (endpoint tag) to ask first for this clean-up model, or null to let OpenRouter pick the fastest.</summary>
@@ -434,6 +670,69 @@ public sealed class AppSettings : INotifyPropertyChanged
         }
         Raise("OpenRouterHosts");
     }
+
+    // MARK: App profiles
+
+    /// <summary>Settings for particular apps, by executable name, applied to a dictation started in them (see AppProfile). None at first.</summary>
+    public List<AppProfile> AppProfiles
+    {
+        get
+        {
+            if (_sampleProfiles is { } samples) return samples.ToList();
+            lock (_lock) return AppProfile.ListFromJson(_store["appProfiles"]);
+        }
+        private set
+        {
+            if (_sampleProfiles != null)
+            {
+                _sampleProfiles = value.ToList();
+                Raise(nameof(AppProfiles));
+                return;
+            }
+            SetNode("appProfiles", AppProfile.ListToJson(value));
+        }
+    }
+
+    /// <summary>Set for the UI snapshots: these profiles are shown in place of the saved ones, and nothing about them is saved.</summary>
+    private List<AppProfile>? _sampleProfiles;
+
+    /// <summary>For the UI snapshots: shows these profiles in place of the saved ones, which stay as they are.</summary>
+    public void ShowSampleAppProfiles(IEnumerable<AppProfile> profiles) => _sampleProfiles = profiles.ToList();
+
+    /// <summary>What a dictation runs with when no profile applies.</summary>
+    public DictationSettings GlobalDictationSettings => new(PolishEnabled, PressEnterAfterInsert, SttLanguage, ExtraInstructions);
+
+    /// <summary>What a dictation started in the app with this executable name ("slack.exe") runs with.</summary>
+    public DictationSettings DictationSettingsForApp(string? executable) =>
+        GlobalDictationSettings.Applying(AppProfile.Matching(executable, AppProfiles));
+
+    /// <summary>
+    /// What a retry of a dictation made with the profile <paramref name="id"/> runs with: that profile's settings while it
+    /// still exists, the global ones otherwise.
+    /// </summary>
+    public DictationSettings DictationSettingsForProfile(string? id) =>
+        GlobalDictationSettings.Applying(AppProfiles.FirstOrDefault(p => p.Id == id));
+
+    /// <summary>Adds a profile for an app, following the global settings until it's edited; an app that has one already keeps it.</summary>
+    public AppProfile AddAppProfile(string executable, string name)
+    {
+        var profiles = AppProfiles;
+        if (AppProfile.Matching(executable, profiles) is { } existing) return existing;
+        var profile = new AppProfile { App = executable, Name = name };
+        AppProfiles = [.. profiles, profile];
+        return profile;
+    }
+
+    public void UpdateAppProfile(AppProfile profile)
+    {
+        var profiles = AppProfiles;
+        var index = profiles.FindIndex(p => p.Id == profile.Id);
+        if (index < 0 || profiles[index] == profile) return;
+        profiles[index] = profile;
+        AppProfiles = profiles;
+    }
+
+    public void RemoveAppProfile(string id) => AppProfiles = AppProfiles.Where(p => p.Id != id).ToList();
 
     // MARK: Model prices
 
@@ -538,6 +837,35 @@ public sealed class AppSettings : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Adds an imported file's new terms to the vocabulary, leaving out ones already in it (ignoring case) and ones
+    /// <see cref="VocabularyTransfer.Plan"/> keeps out of every clean-up request. Importing is the user asking for these
+    /// terms, so one they once removed from the learned terms may be learned again too. Returns what it did.
+    /// </summary>
+    public VocabularyTransfer.ImportPlan ImportVocabulary(IReadOnlyCollection<string> terms)
+    {
+        var plan = VocabularyTransfer.Plan(terms, VocabularyList);
+        if (plan.Added.Count > 0) Vocabulary = VocabularyTransfer.Merged(Vocabulary, plan.Added);
+        var kept = VocabularyList.Select(t => t.ToLowerInvariant()).ToHashSet();
+        kept.IntersectWith(terms.Select(t => t.ToLowerInvariant()));
+        var forgotten = ForgottenTerms;
+        if (forgotten.Any(kept.Contains)) ForgottenTerms = forgotten.Where(t => !kept.Contains(t)).ToList();
+        return plan;
+    }
+
+    /// <summary>The vocabulary as it's exported: each term with how recognition misheard it, when it was learned from a fix.</summary>
+    public List<VocabularyTransfer.Term> VocabularyForExport
+    {
+        get
+        {
+            var learned = new Dictionary<string, List<string>>();
+            foreach (var term in LearnedTerms) learned.TryAdd(term.Term.ToLowerInvariant(), term.HeardAs);
+            return VocabularyList
+                .Select(t => new VocabularyTransfer.Term(t, learned.TryGetValue(t.ToLowerInvariant(), out var heard) ? heard : new List<string>()))
+                .ToList();
+        }
+    }
+
     /// <summary>Misheard forms of vocabulary terms, newest first, for the clean-up prompt.</summary>
     public List<Correction> MisheardHints
     {
@@ -557,6 +885,36 @@ public sealed class AppSettings : INotifyPropertyChanged
                   .Select(t => t.Trim(' ', '\t', '\r'))
                   .Where(t => t.Length > 0)
                   .ToList();
+
+    /// <summary>
+    /// What speech-to-text and the clean-up are given as vocabulary: the snippets' triggers ahead of the vocabulary, so a
+    /// trigger comes through as written for its snippet to be found.
+    /// </summary>
+    public List<string> DictationVocabulary => SnippetExpander.Vocabulary(Snippets, VocabularyList);
+
+    // MARK: Snippets
+
+    /// <summary>Spoken shortcuts: a trigger said in a dictation is replaced by its expansion (see SnippetExpander). None at first.</summary>
+    public List<Snippet> Snippets
+    {
+        get
+        {
+            // Entry by entry: one edited by hand into null, or without its text, is left out rather than hiding the others.
+            lock (_lock) return Snippet.ReadList(_store["snippets"]).Snippets;
+        }
+        private set => SetNode("snippets", JsonSerializer.SerializeToNode(value));
+    }
+
+    /// <summary>Adds the snippet, or replaces the one with its ID.</summary>
+    public void SaveSnippet(Snippet snippet)
+    {
+        var snippets = Snippets;
+        var index = snippets.FindIndex(s => s.Id == snippet.Id);
+        if (index >= 0) snippets[index] = snippet; else snippets.Add(snippet);
+        Snippets = snippets;
+    }
+
+    public void DeleteSnippet(Snippet snippet) => Snippets = Snippets.Where(s => s.Id != snippet.Id).ToList();
 
     // MARK: Storage
 
@@ -593,15 +951,16 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     private void Save()
     {
+        if (!_writable) return;
         try
         {
-            var temp = _path + ".tmp";
-            File.WriteAllText(temp, _store.ToJsonString(FileJson));
-            File.Move(temp, _path, overwrite: true);
+            // Flushed to disk before it replaces the old file, so a power cut can't leave a file of zeros.
+            SafeFile.WriteAllText(_path, _store.ToJsonString(FileJson));
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             // Best effort: the next change writes again.
+            AppLog.Debug("settings", $"can't save {_path}: {e.Message}");
         }
     }
 

@@ -61,13 +61,45 @@ final class MockChatServer: URLProtocol {
 }
 
 @Suite(.serialized) struct HedgedPolishTests {
+    /// The text around the cursor goes with the route, and its answer is checked against it.
+    @Test func cleanUpIsCheckedAgainstTheRoutesContext() async throws {
+        MockChatServer.reset(["primary": .init(text: "Could you send me the Q3 numbers when you get a chance? Sure, I will send them tomorrow.")])
+        var route = MockChatServer.route("primary")
+        route.options.context = "Hi Tyler,\n\nCould you send me the Q3 numbers when you get a chance?\n\nThanks,\nMarcus"
+        let outcome = try await SegmentedPolish.run(transcript: "sure I will send them tomorrow", primary: route, backup: nil)
+        #expect(outcome.parts.map(\.fallback) == [.copied])
+        #expect(outcome.text == "sure I will send them tomorrow")
+    }
+
+    /// History says the text around the cursor went out only when a request carried it: told as each request goes out,
+    /// never for a route without it, and never for the backup that was never started.
+    @Test func contextSentIsToldOnlyForRequestsThatCarryIt() async throws {
+        MockChatServer.reset(["primary": .init(text: "Hi Siobhan."), "backup": .init(text: "Hi Siobhan.")])
+        let told = Recorded<String>()
+        var primary = MockChatServer.route("primary"), backup = MockChatServer.route("backup")
+        primary.options.onContextSent = { told.add("primary") }
+        backup.options.onContextSent = { told.add("backup") }
+        _ = try await HedgedPolish.run(transcript: "hi shivon", primary: primary, backup: backup, hedgeDelay: 5)
+        #expect(told.all.isEmpty)
+        // Blank: nothing to send.
+        primary.options.context = " \n "
+        backup.options.context = "Siobhan Kelly"
+        _ = try await HedgedPolish.run(transcript: "hi shivon", primary: primary, backup: backup, hedgeDelay: 5)
+        #expect(told.all.isEmpty)
+        primary.options.context = "Siobhan Kelly"
+        _ = try await HedgedPolish.run(transcript: "hi shivon", primary: primary, backup: backup, hedgeDelay: 5)
+        #expect(told.all == ["primary"])
+    }
+
     @Test func fastPrimaryNeverStartsBackup() async throws {
         MockChatServer.reset(["primary": .init(text: "A"), "backup": .init(text: "B")])
+        // The primary answers at once; the hedge delay leaves room for a busy test machine (CI's Intel runners).
         let outcome = try await HedgedPolish.run(transcript: "x", primary: MockChatServer.route("primary"),
-                                                 backup: MockChatServer.route("backup"), hedgeDelay: 0.5)
+                                                 backup: MockChatServer.route("backup"), hedgeDelay: 5)
         #expect(outcome.result.text == "A")
         #expect(!outcome.usedBackup)
         #expect(MockChatServer.lock.withLock { MockChatServer.requested } == ["primary"])
+        #expect(outcome.cancelled.isEmpty)
     }
 
     @Test func slowPrimaryIsOvertakenByBackup() async throws {
@@ -77,6 +109,10 @@ final class MockChatServer: URLProtocol {
         #expect(outcome.result.text == "B")
         #expect(outcome.usedBackup && outcome.model == "backup")
         #expect(outcome.totalSeconds < 1.5)
+        // The primary's request was sent, then cancelled: what it read is estimated and billed with the answer.
+        #expect(outcome.cancelled.map(\.model) == ["primary"])
+        #expect(outcome.cancelled.first?.usage.estimated == true)
+        #expect((outcome.cancelled.first?.usage.inputTokens ?? 0) > 1000)
     }
 
     @Test func partialTextComesOnlyFromTheStreamThatWon() async throws {
@@ -95,10 +131,13 @@ final class MockChatServer: URLProtocol {
                                                  backup: MockChatServer.route("backup"), hedgeDelay: 5)
         #expect(outcome.result.text == "B")
         #expect(outcome.totalSeconds < 2)
+        // A request that failed isn't billed.
+        #expect(outcome.cancelled.isEmpty)
     }
 
     @Test func slowBackupDoesNotBeatPrimaryThatAnswersFirst() async throws {
-        MockChatServer.reset(["primary": .init(delay: 0.4, text: "A"), "backup": .init(delay: 2, text: "B")])
+        // The primary's delay leaves the backup's 0.1 s start room on a busy runner; the backup answers well after it.
+        MockChatServer.reset(["primary": .init(delay: 1.5, text: "A"), "backup": .init(delay: 4, text: "B")])
         let outcome = try await HedgedPolish.run(transcript: "x", primary: MockChatServer.route("primary"),
                                                  backup: MockChatServer.route("backup"), hedgeDelay: 0.1)
         #expect(outcome.result.text == "A")

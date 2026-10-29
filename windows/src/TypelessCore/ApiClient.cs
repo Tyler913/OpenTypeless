@@ -33,17 +33,47 @@ public sealed partial class ApiClient
         Timeout = System.Threading.Timeout.InfiniteTimeSpan,
     };
 
+    /// <summary>
+    /// A client for a file being transcribed, with connections of its own, fewer per host (see
+    /// <see cref="FileTranscription.MaxConnectionsPerHost"/>): a dictation's requests never wait behind a file's.
+    /// </summary>
+    public static ApiClient ForFiles(ProviderEndpoint endpoint) => new(endpoint, FileHttp);
+
+    internal static readonly HttpClient FileHttp = new(new SocketsHttpHandler
+    {
+        MaxConnectionsPerServer = FileTranscription.MaxConnectionsPerHost,
+        PooledConnectionIdleTimeout = TimeSpan.FromSeconds(60),
+        ConnectTimeout = TimeSpan.FromSeconds(30),
+        AutomaticDecompression = DecompressionMethods.All,
+    })
+    {
+        Timeout = System.Threading.Timeout.InfiniteTimeSpan,
+    };
+
     internal static readonly JsonSerializerOptions BodyJson = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     internal bool IsOpenRouter => Endpoint.Id == ProviderId.OpenRouter;
 
     internal Uri Url(string path) => new(Endpoint.BaseUrl.AbsoluteUri.TrimEnd('/') + "/" + path);
 
+    /// <summary>
+    /// Every request to a provider: HTTP/2 where the server speaks it, as URLSession does on macOS, so a chunk's hedged
+    /// pair, a cancelled request and its retry, and the speech-to-text and clean-up requests to one host share a single
+    /// multiplexed connection instead of each opening its own (an HttpRequestMessage defaults to HTTP/1.1). A plain
+    /// http:// server, such as one running locally, gets HTTP/1.1.
+    /// </summary>
+    internal static HttpRequestMessage NewRequest(HttpMethod method, Uri url) => new(method, url)
+    {
+        Version = HttpVersion.Version20,
+        VersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
+    };
+
     internal HttpRequestMessage Request(string path, HttpContent? content = null)
     {
         var key = Endpoint.ApiKey.Trim();
         if (key.Length == 0 && Endpoint.Id.RequiresKey()) throw ApiException.MissingApiKey(Endpoint.Id.DisplayName());
-        var request = new HttpRequestMessage(HttpMethod.Post, Url(path)) { Content = content };
+        var request = NewRequest(HttpMethod.Post, Url(path));
+        request.Content = content;
         if (key.Length > 0) request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + key);
         if (IsOpenRouter)
         {
@@ -84,6 +114,26 @@ public sealed partial class ApiClient
         }
         catch (JsonException) { }
         return Utf8Prefix(data, 300) ?? "unknown error";
+    }
+
+    /// <summary>
+    /// The HTTP status an error body carries in <c>error.code</c> (OpenRouter puts 401, 402, 429… there, also inside a 200
+    /// response or a stream), so the error is classified like that status and e.g. a 402 isn't retried. Null for string
+    /// codes and anything else.
+    /// </summary>
+    internal static int? ErrorStatus(ReadOnlySpan<byte> data)
+    {
+        try
+        {
+            if (JsonNode.Parse(data.ToArray()) is JsonObject obj && obj["error"] is JsonObject error
+                && error["code"] is JsonValue code && code.GetValueKind() == JsonValueKind.Number
+                && code.TryGetValue<int>(out var status) && status is >= 400 and <= 599)
+            {
+                return status;
+            }
+        }
+        catch (JsonException) { }
+        return null;
     }
 
     internal static string? Utf8Prefix(ReadOnlySpan<byte> data, int maxBytes)
@@ -184,7 +234,7 @@ public sealed partial class ApiClient
         if (obj.ContainsKey("error"))
         {
             // Some upstream failures arrive as 200 + error body.
-            throw ApiException.Http(502, ErrorMessage(data));
+            throw ApiException.Http(ErrorStatus(data) ?? 502, ErrorMessage(data));
         }
         if (obj["text"] is JsonValue value && value.TryGetValue<string>(out var transcript))
         {
@@ -293,7 +343,7 @@ public sealed partial class ApiClient
         // A variant suffix (":nitro", ":free") isn't part of the path.
         var id = model.Trim().Split(':')[0];
         if (!IsOpenRouter || !id.Contains('/')) return [];
-        using var request = new HttpRequestMessage(HttpMethod.Get, Url("models/" + id + "/endpoints"));
+        using var request = NewRequest(HttpMethod.Get, Url("models/" + id + "/endpoints"));
         var (status, data) = await Send(request, 20, cancellationToken).ConfigureAwait(false);
         // An ID OpenRouter doesn't know: nothing to choose from.
         if ((int)status == 404) return [];
@@ -332,7 +382,7 @@ public sealed partial class ApiClient
     {
         var url = Url("models");
         if (outputModality != null && IsOpenRouter) url = new Uri(url + "?output_modalities=" + Uri.EscapeDataString(outputModality));
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var request = NewRequest(HttpMethod.Get, url);
         var key = Endpoint.ApiKey.Trim();
         if (key.Length > 0) request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + key);
         var (status, data) = await Send(request, 20, cancellationToken).ConfigureAwait(false);
@@ -367,7 +417,7 @@ public sealed partial class ApiClient
     {
         if (IsOpenRouter)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, Url("key"));
+            using var request = NewRequest(HttpMethod.Get, Url("key"));
             request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + Endpoint.ApiKey.Trim());
             var (status, data) = await Send(request, 15, cancellationToken).ConfigureAwait(false);
             if (!IsSuccess(status)) throw ApiException.Http((int)status, ErrorMessage(data));

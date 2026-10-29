@@ -10,6 +10,10 @@ enum PolishEval {
         var mustContain: [String]?
         var mustNotContain: [String]?
         var anyOf: [[String]]?
+        /// Translate into this language (a `TranslationTarget` id) instead of cleaning up, as translation mode does.
+        var translateTo: String?
+        /// Text around the cursor sent with the transcript (see CursorContext), as the app would.
+        var context: String?
     }
     struct Job: Codable {
         let id: String
@@ -125,7 +129,10 @@ enum PolishEval {
                     let offset = (index + round - 1) % models.count
                     for i in 0..<models.count {
                         let model = models[(i + offset) % models.count], price = prices[model]!
-                        let plan = try client.evaluationPlan(transcript: c.input, options: options[model]!,
+                        var caseOptions = options[model]!
+                        caseOptions.translation = c.translateTo.flatMap { TranslationTarget($0) }
+                        caseOptions.context = c.context
+                        let plan = try client.evaluationPlan(transcript: c.input, options: caseOptions,
                                                             promptPrice: price.0, completionPrice: price.1, providerTag: providerTag,
                                                             providerRouting: providerRouting)
                         if let threshold = tierThresholds[model], plan.inputTokenBound >= threshold {
@@ -161,10 +168,19 @@ enum PolishEval {
                 for s in c.mustContain ?? [] where !attempt.output.contains(s) { failures.append("missing “\(s)”") }
                 for s in c.mustNotContain ?? [] where attempt.output.contains(s) { failures.append("still has “\(s)”") }
                 for g in c.anyOf ?? [] where !g.contains(where: attempt.output.contains) { failures.append("none of \(g)") }
-                if Prompts.looksLikeAnAnswer(input: c.input, output: attempt.output) { failures.append("looks like an answer") }
+                // The app's own checks: it would insert the transcript as spoken (or, for a translation, its clean-up)
+                // instead of this output.
+                let translation = c.translateTo.flatMap { TranslationTarget($0) }
+                let fallback = if let translation {
+                    Prompts.translationFallback(input: c.input, output: attempt.output, truncated: false, target: translation)
+                } else {
+                    Prompts.fallback(input: c.input, output: attempt.output, truncated: false, context: c.context)
+                }
+                if !attempt.output.isEmpty, let fallback { failures.append("the app would reject it: \(fallback.rawValue)") }
                 if attempt.truncated { failures.append("truncated") }
                 if attempt.error != nil { failures.append("request error; see private attempt") }
-                let ok = attempt.error == nil && !attempt.output.isEmpty
+                // English kept and similarity measure a clean-up against its transcript, which a translation isn't.
+                let ok = attempt.error == nil && !attempt.output.isEmpty && translation == nil
                 results.append(Result(id: c.id, round: job.round, model: job.plan.model, reservationID: reservation,
                                       parameters: job.plan, attempt: attempt, failures: failures,
                                       latinRetention: ok ? PolishMetrics.latinRetention(

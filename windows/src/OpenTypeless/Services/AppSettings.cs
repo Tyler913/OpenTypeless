@@ -45,6 +45,18 @@ public sealed class AppSettings : INotifyPropertyChanged
             _store["hotkey"] = JsonSerializer.SerializeToNode(existed ? Hotkey.RightControl : Hotkey.Default);
             Save();
         }
+        // Profiles are read from the store on every access, so an ID that's missing or taken is repaired once, here, and
+        // saved: edits, Remove and retries then keep finding their profile.
+        if (_store["appProfiles"] is JsonArray savedProfiles)
+        {
+            var profiles = AppProfile.ListFromJson(savedProfiles);
+            var repaired = AppProfile.WithUniqueIds(profiles);
+            if (!repaired.SequenceEqual(profiles))
+            {
+                _store["appProfiles"] = AppProfile.ListToJson(repaired);
+                Save();
+            }
+        }
         // Loaded even when OPENROUTER_API_KEY is set: it only stands in for the OpenRouter key, and the app launched
         // with it still needs the others (and must not save over them when one is edited).
         _apiKeys = Credentials.Load();
@@ -482,6 +494,69 @@ public sealed class AppSettings : INotifyPropertyChanged
         }
         Raise("OpenRouterHosts");
     }
+
+    // MARK: App profiles
+
+    /// <summary>Settings for particular apps, by executable name, applied to a dictation started in them (see AppProfile). None at first.</summary>
+    public List<AppProfile> AppProfiles
+    {
+        get
+        {
+            if (_sampleProfiles is { } samples) return samples.ToList();
+            lock (_lock) return AppProfile.ListFromJson(_store["appProfiles"]);
+        }
+        private set
+        {
+            if (_sampleProfiles != null)
+            {
+                _sampleProfiles = value.ToList();
+                Raise(nameof(AppProfiles));
+                return;
+            }
+            SetNode("appProfiles", AppProfile.ListToJson(value));
+        }
+    }
+
+    /// <summary>Set for the UI snapshots: these profiles are shown in place of the saved ones, and nothing about them is saved.</summary>
+    private List<AppProfile>? _sampleProfiles;
+
+    /// <summary>For the UI snapshots: shows these profiles in place of the saved ones, which stay as they are.</summary>
+    public void ShowSampleAppProfiles(IEnumerable<AppProfile> profiles) => _sampleProfiles = profiles.ToList();
+
+    /// <summary>What a dictation runs with when no profile applies.</summary>
+    public DictationSettings GlobalDictationSettings => new(PolishEnabled, PressEnterAfterInsert, SttLanguage, ExtraInstructions);
+
+    /// <summary>What a dictation started in the app with this executable name ("slack.exe") runs with.</summary>
+    public DictationSettings DictationSettingsForApp(string? executable) =>
+        GlobalDictationSettings.Applying(AppProfile.Matching(executable, AppProfiles));
+
+    /// <summary>
+    /// What a retry of a dictation made with the profile <paramref name="id"/> runs with: that profile's settings while it
+    /// still exists, the global ones otherwise.
+    /// </summary>
+    public DictationSettings DictationSettingsForProfile(string? id) =>
+        GlobalDictationSettings.Applying(AppProfiles.FirstOrDefault(p => p.Id == id));
+
+    /// <summary>Adds a profile for an app, following the global settings until it's edited; an app that has one already keeps it.</summary>
+    public AppProfile AddAppProfile(string executable, string name)
+    {
+        var profiles = AppProfiles;
+        if (AppProfile.Matching(executable, profiles) is { } existing) return existing;
+        var profile = new AppProfile { App = executable, Name = name };
+        AppProfiles = [.. profiles, profile];
+        return profile;
+    }
+
+    public void UpdateAppProfile(AppProfile profile)
+    {
+        var profiles = AppProfiles;
+        var index = profiles.FindIndex(p => p.Id == profile.Id);
+        if (index < 0 || profiles[index] == profile) return;
+        profiles[index] = profile;
+        AppProfiles = profiles;
+    }
+
+    public void RemoveAppProfile(string id) => AppProfiles = AppProfiles.Where(p => p.Id != id).ToList();
 
     // MARK: Model prices
 

@@ -38,11 +38,23 @@ public sealed class DictationRecord
     /// retry that cuts it differently can't reuse them by index.
     /// </summary>
     [JsonPropertyName("chunkLayout")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? ChunkLayout { get; set; }
+    /// <summary>
+    /// The language hint those chunks were transcribed with ("" auto-detect; null before it was saved): a retry with
+    /// another one sends them again (see <see cref="TypelessCore.DictationSettings.ReusesTranscripts"/>).
+    /// </summary>
+    [JsonPropertyName("chunkLanguage")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ChunkLanguage { get; set; }
     [JsonPropertyName("timing")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public DictationTiming? Timing { get; set; }
     /// <summary>What processing it cost so far in USD, retries included (null when nothing could be priced).</summary>
     [JsonPropertyName("cost")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Cost { get; set; }
     /// <summary>Its words are in the usage totals (so re-transcribing it doesn't count them twice).</summary>
     [JsonPropertyName("counted")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Counted { get; set; }
+    /// <summary>
+    /// The app profile it was made with (see <see cref="TypelessCore.AppProfile"/>), so a retry uses that profile again while
+    /// it exists; null when none applied.
+    /// </summary>
+    [JsonPropertyName("profileID")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ProfileId { get; set; }
+    /// <summary>That profile's name, for History.</summary>
+    [JsonPropertyName("profileName")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ProfileName { get; set; }
 
     /// <summary>What was (or would be) inserted.</summary>
     [JsonIgnore] public string FinalText => PolishedText ?? RawText;

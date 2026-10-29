@@ -3,7 +3,7 @@ import SwiftUI
 import TypelessCore
 
 enum SettingsPage: String, CaseIterable, Identifiable {
-    case home, general, shortcut, providers, models, style, history
+    case home, general, shortcut, providers, models, style, apps, history
 
     var id: String { rawValue }
 
@@ -15,6 +15,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .providers: return L("服务商", "Providers")
         case .models: return L("模型", "Models")
         case .style: return L("词汇与风格", "Vocabulary & Style")
+        case .apps: return L("应用", "Apps")
         case .history: return L("历史记录", "History")
         }
     }
@@ -28,6 +29,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
                                   "Add API keys. Speech-to-text and clean-up can use different providers.")
         case .models: return L("为语音转文字和文字整理分别选择模型", "Pick a model for each step")
         case .style: return L("让整理结果更符合你的用词和习惯", "Teach the clean-up your terms and preferences")
+        case .apps: return L("在特定应用里听写时使用的设置", "Settings used when you dictate into a particular app")
         case .history: return L("每次听写都会保存，失败的可以重试", "Every dictation is saved; failed ones can be retried")
         }
     }
@@ -40,6 +42,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .providers: return "key.fill"
         case .models: return "cpu.fill"
         case .style: return "textformat"
+        case .apps: return "square.grid.2x2.fill"
         case .history: return "clock.fill"
         }
     }
@@ -52,6 +55,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .providers: return .orange
         case .models: return .purple
         case .style: return .green
+        case .apps: return .teal
         case .history: return .indigo
         }
     }
@@ -96,6 +100,7 @@ struct SettingsDetailView: View {
         case .providers: ProvidersPage(settings: settings)
         case .models: ModelsPage(settings: settings, navigation: navigation, controller: controller)
         case .style: StylePage(settings: settings)
+        case .apps: AppsPage(settings: settings)
         case .history: HistoryPage(history: HistoryStore.shared, settings: settings, controller: controller)
         }
     }

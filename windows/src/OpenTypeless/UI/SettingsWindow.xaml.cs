@@ -12,7 +12,7 @@ using Windows.Graphics;
 
 namespace OpenTypeless.UI;
 
-/// <summary>The settings window: a Mica window with a sidebar of six pages, kept alive while hidden.</summary>
+/// <summary>The settings window: a Mica window with a sidebar of eight pages, kept alive while hidden.</summary>
 public sealed partial class SettingsWindow : Window
 {
     private readonly SessionController _controller;
@@ -125,6 +125,7 @@ public sealed partial class SettingsWindow : Window
             SettingsPage.Providers => new ProvidersPage(),
             SettingsPage.Models => new ModelsPage(this, _controller),
             SettingsPage.Style => new StylePage(),
+            SettingsPage.Apps => new AppsPage(this),
             _ => new HistoryPage(_controller),
         };
     }

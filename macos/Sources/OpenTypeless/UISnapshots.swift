@@ -6,7 +6,21 @@ import TypelessCore
 /// the UI without screen-recording permission.
 @MainActor
 enum UISnapshots {
+    /// Set first thing in `run`, before any view exists: pages show fixed samples instead of asking the system (the Apps
+    /// page doesn't look up running apps or icons, which can stall on a CI machine).
+    nonisolated(unsafe) static var active = false
+
+    /// The profiles the Apps page shows in the snapshots, instead of the saved ones.
+    static let sampleAppProfiles = [
+        AppProfile(id: "sample-slack", app: "com.tinyspeck.slackmacgap", name: "Slack", pressEnter: true),
+        AppProfile(id: "sample-mail", app: "com.apple.mail", name: "Mail", instructions: "Use a more formal tone",
+                   polish: true, language: "en"),
+        AppProfile(id: "sample-terminal", app: "com.apple.Terminal", name: "Terminal", polish: false),
+    ]
+
     static func run(outputDirectory: String) throws {
+        active = true
+        AppSettings.shared.showSampleAppProfiles(sampleAppProfiles)
         // `--demo`: pretend permissions are granted (pair with OPENTYPELESS_SUPPORT_DIR pointing at sample history).
         Permissions.assumeGranted = CommandLine.arguments.contains("--demo")
         // `--dark`: dark appearance whatever the system uses, so README screenshots match each other.

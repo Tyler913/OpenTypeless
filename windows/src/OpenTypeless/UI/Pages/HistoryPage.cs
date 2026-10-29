@@ -424,6 +424,8 @@ public sealed class HistoryPage : PageBase
         var words = WordCount.Count(record.FinalText);
         if (words > 0) details.Add(L($"{UsageFormat.Count(words)} 字", $"{UsageFormat.Count(words)} words"));
         if (record.Cost is { } cost) details.Add(UsageFormat.Money(cost));
+        // The app profile it was made with, if any.
+        if (record.ProfileName is { } profile) details.Add(profile);
 
         var header = new Grid { Padding = new Thickness(16) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

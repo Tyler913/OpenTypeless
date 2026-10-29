@@ -29,11 +29,19 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     /// How the recording was cut into those chunks (`Chunker.layout`; nil before it was saved): a retry that cuts it
     /// differently can't reuse them by index.
     var chunkLayout: Int?
+    /// The language hint those chunks were transcribed with ("" auto-detect; nil before it was saved): a retry with
+    /// another one sends them again (see `DictationSettings.reusesTranscripts`).
+    var chunkLanguage: String?
     var timing: Timing?
     /// What processing it cost so far in USD, retries included (nil when nothing could be priced).
     var cost: Double?
     /// Its words are in the usage totals (so re-transcribing it doesn't count them twice).
     var counted: Bool?
+    /// The app profile it was made with (see AppProfile), so a retry uses that profile again while it exists; nil when
+    /// none applied.
+    var profileID: String?
+    /// That profile's name, for History.
+    var profileName: String?
 
     /// Where the wait after the key was released went, in seconds.
     struct Timing: Codable, Equatable {

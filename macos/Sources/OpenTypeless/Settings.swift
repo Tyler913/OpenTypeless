@@ -65,6 +65,9 @@ final class AppSettings: ObservableObject {
     /// Learn vocabulary from the fixes the user makes to dictated text (see EditWatcher).
     @AppStorage("learnFromEdits") var learnFromEdits: Bool = true
     @Published private(set) var learnedTerms: [LearnedTerm]
+    /// Send the text around the cursor with the transcript, for the clean-up to spell names by (see CursorContextReader).
+    /// Off by default: it goes to the clean-up provider.
+    @AppStorage("useCursorContext") var useCursorContext: Bool = false
     /// Learned terms the user removed; never learned again (lowercased).
     private var forgottenTerms: Set<String>
     /// Spoken shortcuts: a trigger said in a dictation is replaced by its expansion (see SnippetExpander). None at first.

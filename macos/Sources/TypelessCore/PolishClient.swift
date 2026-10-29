@@ -15,10 +15,16 @@ public struct PolishOptions: Sendable {
     public var host: String?
     /// Translate into this language instead of cleaning up (see `Prompts.translateSystemPrompt`).
     public var translation: TranslationTarget?
+    /// The text around the speaker's cursor, sent after the transcript to spell names by (see CursorContext); nil for none.
+    /// A clean-up's only: a translation goes without it.
+    public var context: String?
+    /// Called as a request that carries `context` goes out (each attempt), so History can say it was sent.
+    public var onContextSent: (@Sendable () -> Void)?
 
     public init(model: String, vocabulary: [String] = [], misheard: [Correction] = [], extraInstructions: String = "",
                 modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil,
-                translation: TranslationTarget? = nil) {
+                translation: TranslationTarget? = nil, context: String? = nil,
+                onContextSent: (@Sendable () -> Void)? = nil) {
         self.model = model
         self.vocabulary = vocabulary
         self.misheard = misheard
@@ -27,6 +33,8 @@ public struct PolishOptions: Sendable {
         self.systemPromptOverride = systemPromptOverride
         self.host = host
         self.translation = translation
+        self.context = context
+        self.onContextSent = onContextSent
     }
 }
 
@@ -124,7 +132,7 @@ extension APIClient {
         }
         return [options.systemPromptOverride ?? Prompts.polishSystemPrompt(
                     vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions),
-                Prompts.polishUserMessage(transcript: transcript)]
+                Prompts.polishUserMessage(transcript: transcript, context: options.context)]
     }
 
     /// Builds the chat request body. Optional tuning parameters are only sent where they're known to
@@ -212,13 +220,18 @@ extension APIClient {
         let reminder = Prompts.reminder(translation: options.translation)
         let session = self.session
         let answering = OnceFlag()
+        // Told as the request goes out (not when it's built, nor for one cancelled first), so History says so only when
+        // the text around the cursor really went to the provider.
+        let sentContext = options.translation == nil && Prompts.contextBlock(options.context) != nil
+        if sentContext, !Task.isCancelled { options.onContextSent?() }
 
         return try await withTimeout(limits.total) { [request] in
             try await withThrowingTaskGroup(of: PolishResult?.self) { group in
                 group.addTask {
                     do {
                         return try await Self.readPolishStream(session: session, request: request, messages: messages,
-                                                               reminder: reminder, answering: answering,
+                                                               reminder: reminder, sentContext: sentContext,
+                                                               answering: answering,
                                                                onPartial: onPartial)
                     } catch let error as URLError where error.code == .timedOut {
                         // No byte for the idle timeout.
@@ -240,7 +253,8 @@ extension APIClient {
     }
 
     private static func readPolishStream(
-        session: URLSession, request: URLRequest, messages: [String], reminder: String, answering: OnceFlag,
+        session: URLSession, request: URLRequest, messages: [String], reminder: String, sentContext: Bool,
+        answering: OnceFlag,
         onPartial: (@Sendable (String) -> Void)?
     ) async throws -> PolishResult {
         let (bytes, response) = try await session.bytes(for: request)
@@ -276,7 +290,7 @@ extension APIClient {
                 }
             }
         }
-        let cleaned = Prompts.sanitizePolishOutput(text, reminder: reminder)
+        let cleaned = Prompts.sanitizePolishOutput(text, reminder: reminder, sentContext: sentContext)
         guard !cleaned.isEmpty else { throw APIError.badResponse(L("模型返回了空内容", "the model returned nothing")) }
         if usage == nil || (usage?.inputTokens == nil && usage?.outputTokens == nil && usage?.cost == nil) {
             usage = APIClient.estimatedUsage(messages: messages, output: text)

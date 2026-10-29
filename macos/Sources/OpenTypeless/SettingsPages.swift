@@ -1228,6 +1228,13 @@ struct StylePage: View {
                     }
                 }
             }
+            CardSection(title: L("光标附近的文字", "Text around the cursor"),
+                        footer: L("开始录音时，读取你正在输入的文本框里光标前后最多 1500 个字符，连同转写一起发给文字整理模型，只用来把你说到的名字和术语拼成那里的写法，不会把其中的内容抄进你的文字。密码框永远不会读取，这些文字也不会保存在历史记录里。",
+                                  "When recording starts, up to 1,500 characters around your cursor in the field you're dictating into are read and sent with the transcript to your clean-up models, only so that the names and terms you say are spelled the way they appear there. Nothing from it is copied into your text. Password fields are never read, and the text isn't kept in History.")) {
+                CardRow(icon: "text.magnifyingglass", iconColor: .blue,
+                        title: L("参考光标附近的文字拼写名字", "Use text around the cursor to spell names"),
+                        isOn: $settings.useCursorContext)
+            }
             CardSection(title: L("整理偏好（可选）", "Clean-up preferences (optional)"),
                         footer: L("例如：「不要使用列表」「保留我的口语语气」「英文术语保持小写」。",
                                   "e.g. “Never use bullet lists”, “Keep my casual tone”, “Keep technical terms lowercase”.")) {

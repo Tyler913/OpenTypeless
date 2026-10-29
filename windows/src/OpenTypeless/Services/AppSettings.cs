@@ -321,6 +321,16 @@ public sealed class AppSettings : INotifyPropertyChanged
             ? TypelessCore.TranslationTarget.From(TranslationLanguage == OtherTranslationLanguage ? TranslationOtherLanguage : TranslationLanguage)
             : null;
 
+    /// <summary>
+    /// Send the text around the cursor with the transcript, for the clean-up to spell names by (see CursorContextReader).
+    /// Off by default: it goes to the clean-up provider.
+    /// </summary>
+    public bool UseCursorContext
+    {
+        get => GetBool("useCursorContext", false);
+        set => SetValue("useCursorContext", value);
+    }
+
     /// <summary>The microphone to record from, by endpoint ID; "" follows the default input.</summary>
     public string MicrophoneId
     {

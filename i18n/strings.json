@@ -3392,6 +3392,42 @@
     "fr": "Son enregistrement est aussi supprimé : impossible de la retranscrire ensuite.",
     "de": "Die Aufnahme wird mitgelöscht und kann nicht neu transkribiert werden."
   },
+  "Text around the cursor": {
+    "ja": "カーソル周辺のテキスト",
+    "ko": "커서 주변 텍스트",
+    "es": "Texto alrededor del cursor",
+    "pt": "Texto ao redor do cursor",
+    "ru": "Текст вокруг курсора",
+    "fr": "Texte autour du curseur",
+    "de": "Text um den Cursor"
+  },
+  "Use text around the cursor to spell names": {
+    "ja": "カーソル周辺のテキストで名前の表記を合わせる",
+    "ko": "커서 주변 텍스트로 이름 철자 맞추기",
+    "es": "Usar el texto alrededor del cursor para escribir bien los nombres",
+    "pt": "Usar o texto ao redor do cursor para grafar nomes",
+    "ru": "Писать имена по тексту вокруг курсора",
+    "fr": "Orthographier les noms d’après le texte autour du curseur",
+    "de": "Namen nach dem Text um den Cursor schreiben"
+  },
+  "When recording starts, up to 1,500 characters around your cursor in the field you're dictating into are read and sent with the transcript to your clean-up models, only so that the names and terms you say are spelled the way they appear there. Nothing from it is copied into your text. Password fields are never read, and the text isn't kept in History.": {
+    "ja": "録音を始めると、入力中の欄にあるカーソル前後の最大 1,500 文字を読み取り、文字起こしと一緒に整形モデルへ送ります。話した名前や用語をそこにある表記に合わせるためだけに使い、その内容をあなたの文章に書き写すことはありません。パスワード欄は決して読み取らず、このテキストは履歴にも保存されません。",
+    "ko": "녹음을 시작하면 입력 중인 칸에서 커서 앞뒤로 최대 1,500자를 읽어 받아쓰기와 함께 다듬기 모델에 보냅니다. 말한 이름과 용어를 그곳에 적힌 철자대로 맞추는 데만 쓰이며, 그 내용이 글에 옮겨지지는 않습니다. 비밀번호 칸은 절대 읽지 않으며, 이 텍스트는 기록에도 저장되지 않습니다.",
+    "es": "Al empezar a grabar, se leen hasta 1.500 caracteres alrededor del cursor en el campo en el que dictas y se envían con la transcripción a tus modelos de limpieza, solo para que los nombres y términos que dices se escriban como aparecen ahí. Nada de ese texto se copia en el tuyo. Los campos de contraseña nunca se leen y el texto no se guarda en el Historial.",
+    "pt": "Ao começar a gravar, até 1.500 caracteres ao redor do cursor no campo em que você está ditando são lidos e enviados com a transcrição aos seus modelos de limpeza, só para que os nomes e termos que você diz sejam grafados como aparecem ali. Nada desse texto é copiado para o seu. Campos de senha nunca são lidos, e o texto não fica guardado no Histórico.",
+    "ru": "Когда начинается запись, до 1500 символов вокруг курсора в поле, куда вы диктуете, считываются и отправляются вместе с расшифровкой моделям очистки — только чтобы названные вами имена и термины были написаны так, как там. Ничего из этого текста не копируется в ваш. Поля паролей никогда не читаются, а сам текст не сохраняется в истории.",
+    "fr": "Au début de l’enregistrement, jusqu’à 1 500 caractères autour du curseur dans le champ où vous dictez sont lus et envoyés avec la transcription à vos modèles de nettoyage, uniquement pour que les noms et termes que vous prononcez soient écrits comme ils y figurent. Rien de ce texte n’est recopié dans le vôtre. Les champs de mot de passe ne sont jamais lus, et le texte n’est pas conservé dans l’historique.",
+    "de": "Beim Start der Aufnahme werden bis zu 1.500 Zeichen um den Cursor im Feld, in das du diktierst, gelesen und mit der Transkription an deine Bereinigungsmodelle gesendet – nur damit die Namen und Begriffe, die du sagst, so geschrieben werden, wie sie dort stehen. Nichts davon wird in deinen Text übernommen. Passwortfelder werden nie gelesen, und der Text wird nicht im Verlauf gespeichert."
+  },
+  "with text around the cursor": {
+    "ja": "カーソル周辺のテキストを参照",
+    "ko": "커서 주변 텍스트 참고",
+    "es": "con el texto alrededor del cursor",
+    "pt": "com o texto ao redor do cursor",
+    "ru": "с текстом вокруг курсора",
+    "fr": "avec le texte autour du curseur",
+    "de": "mit dem Text um den Cursor"
+  },
   "Snippets": {
     "ja": "スニペット",
     "ko": "스니펫",

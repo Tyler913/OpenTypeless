@@ -23,6 +23,8 @@ public static class PolishEval
         [JsonPropertyName("anyOf")] public List<List<string>>? AnyOf { get; set; }
         /// <summary>Translate into this language (a <see cref="TranslationTarget"/> id) instead of cleaning up, as translation mode does.</summary>
         [JsonPropertyName("translateTo")] public string? TranslateTo { get; set; }
+        /// <summary>Text around the cursor sent with the transcript (see <see cref="CursorContext"/>), as the app would.</summary>
+        [JsonPropertyName("context")] public string? Context { get; set; }
     }
 
     public sealed record Job(
@@ -177,7 +179,7 @@ public static class PolishEval
                     {
                         var model = models[(i + offset) % models.Count];
                         var price = prices[model];
-                        var caseOptions = options[model] with { Translation = TranslationTarget.From(c.TranslateTo) };
+                        var caseOptions = options[model] with { Translation = TranslationTarget.From(c.TranslateTo), Context = c.Context };
                         var plan = client.EvaluationPlan(c.Input, caseOptions, price.Prompt, price.Completion, providerTag, providerRouting);
                         if (tierThresholds.TryGetValue(model, out var threshold) && plan.InputTokenBound >= threshold)
                         {
@@ -218,7 +220,7 @@ public static class PolishEval
                 // instead of this output.
                 var translation = TranslationTarget.From(c.TranslateTo);
                 var rejected = translation is null
-                    ? Prompts.Fallback(c.Input, attempt.Output, truncated: false)
+                    ? Prompts.Fallback(c.Input, attempt.Output, truncated: false, c.Context)
                     : Prompts.TranslationFallback(c.Input, attempt.Output, truncated: false, translation);
                 if (attempt.Output.Length > 0 && rejected is { } fallback)
                 {

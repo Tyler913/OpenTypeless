@@ -25,9 +25,17 @@ private extension PolishFallback {
         case .answered: return L("模型回答了内容，没有翻译", "the model answered instead of translating")
         case .summarised: return L("翻译漏掉了太多内容", "the translation left too much out")
         case .untranslated: return L("结果不是目标语言", "it didn't come back in the target language")
-        case .failed, .unrelated: return L("没有可用的翻译", "no usable translation came back")
+        case .failed, .unrelated, .copied: return L("没有可用的翻译", "no usable translation came back")
         }
     }
+}
+
+/// Whether a clean-up request carried the text around the cursor (set as the requests go out, read on main), for History.
+private final class ContextSent: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    func mark() { lock.withLock { value = true } }
+    var isSet: Bool { lock.withLock { value } }
 }
 
 /// Orchestrates one dictation: hotkey → record → chunked STT → polish → paste.
@@ -100,6 +108,14 @@ final class SessionController: ObservableObject {
     private var modelInfo: [String: APIClient.ModelInfo] = [:]
     /// False when retrying from the history window, or once the screen locked: the result goes to the clipboard instead.
     private var deliverByPaste = true
+    /// The text around the cursor in the field being dictated into, read as recording started, for the clean-up to spell
+    /// names by (see CursorContext); nil when that's off or there was none. Never saved.
+    private var cursorContext: String?
+    /// That read, while it's still under way.
+    private var cursorRead: CursorContextRead?
+    /// Whether this dictation's clean-up requests carried that text, for History. A new one for each dictation: work still
+    /// out for an earlier one holds on to its own.
+    private var contextSent = ContextSent()
 
     init() {
         editWatcher.onCorrections = { [weak self] corrections, quiet in
@@ -273,6 +289,8 @@ final class SessionController: ObservableObject {
     func systemLocked(_ reason: String) {
         // A warm microphone doesn't stay on behind the lock screen either; see `systemUnlocked`.
         isLocked = true
+        // Nor is the text around the cursor read on: what it would find now isn't the speaker's.
+        stopCursorContextRead()
         defer {
             updateWarmMicrophone()
             silenceWarmMicrophoneIfLocked()
@@ -335,6 +353,7 @@ final class SessionController: ObservableObject {
         history.update(record)
         note(String(format: "cancelled after %.1fs — kept in History", record.duration))
         let discarded = takeDiscardedPolishes()
+        let sent = contextSent
         reset()
         hud.show(.error(L("已取消，录音在历史记录中保留 24 小时", "Cancelled — kept in History for 24 hours")), autoHideAfter: 2.5)
 
@@ -353,13 +372,13 @@ final class SessionController: ObservableObject {
             guard let self else { return }
             if self.keptInBackground.remove(record.id) == nil {
                 // Retried from History meanwhile: that run owns the record now. Only what this one spent is counted.
-                self.account(&record, pipeline: pipeline, polished: nil, discarded: discarded)
+                self.account(&record, pipeline: pipeline, polished: nil, discarded: discarded, context: sent)
                 return
             }
             guard self.history.records.contains(where: { $0.id == record.id }) else { return }
             record.rawText = raw
             record.chunkTexts = pipeline.completedTranscripts()
-            self.account(&record, pipeline: pipeline, polished: nil, discarded: discarded)
+            self.account(&record, pipeline: pipeline, polished: nil, discarded: discarded, context: sent)
             self.history.update(record)
         }
     }
@@ -485,6 +504,8 @@ final class SessionController: ObservableObject {
         hud.model.badge = nil
         hud.show(.recording)
         playSound("Tink")
+        // Read now, while the field holds only what the speaker typed: the dictation goes in at the end.
+        if dictation.polishEnabled, settings.useCursorContext { startCursorContextRead() }
         // After the start sound, which muting would cut off.
         if settings.muteWhileRecording { outputMute.mute(after: .milliseconds(settings.playSounds ? 300 : 0)) }
 
@@ -497,6 +518,27 @@ final class SessionController: ObservableObject {
         warmTimer = Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.warmConnections(polishes: dictation.polishEnabled) }
         }
+    }
+
+    /// Starts reading the text around the cursor in the app in front, off the main thread. What comes back is taken only
+    /// while the read is still this dictation's: not stopped by its end, by the screen locking, or by the clean-up taking
+    /// what was in by then. Nothing waits for it.
+    private func startCursorContextRead() {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return }
+        let generation = self.generation
+        cursorRead = CursorContextReader.start(pid: app.processIdentifier) { [weak self] read, context in
+            guard let self, self.cursorRead === read, self.generation == generation, !self.isLocked else { return }
+            self.cursorRead = nil
+            self.cursorContext = context
+            // Its length only: the text stays out of the log.
+            self.note(context.map { "text around the cursor: \($0.count) characters" } ?? "no text around the cursor")
+        }
+    }
+
+    /// Stops the read of the text around the cursor: whatever it finds is dropped.
+    private func stopCursorContextRead() {
+        cursorRead?.cancel()
+        cursorRead = nil
     }
 
     /// Opens the connections this dictation's requests will use (speech-to-text and clean-up, main and backup routes)
@@ -616,6 +658,7 @@ final class SessionController: ObservableObject {
     private func process(record initial: DictationRecord, pipeline: TranscriptionPipeline, generation: Int,
                          dictation: DictationSettings) async {
         var record = initial
+        let sent = contextSent
         let started = ProcessInfo.processInfo.systemUptime
         // Moves the bar as the speech-to-text chunks still out come back.
         let bar = hud.model.bar
@@ -653,19 +696,20 @@ final class SessionController: ObservableObject {
             record.error = nil
             guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 record.status = .done
-                account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes())
+                account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes(), context: sent)
                 history.update(record)
                 finish(showing: .error(L("没有识别到语音", "No speech detected")), hideAfter: 2)
                 return
             }
-            await polishAndDeliver(record: &record, pipeline: pipeline, generation: generation, dictation: dictation)
+            await polishAndDeliver(record: &record, pipeline: pipeline, generation: generation, dictation: dictation,
+                                   contextSent: sent)
         } catch let failure as PipelineFailure {
             guard isCurrent(generation) else { return }
             record.chunkTexts = pipeline.completedTranscripts()
             record.rawText = failure.partialText
             record.status = .failed
             record.error = failure.localizedDescription
-            account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes())
+            account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes(), context: sent)
             history.update(record)
             lastError = failure.localizedDescription
             finish(showing: .error(L("转写失败，可在菜单栏重试", "Failed — retry from the menu bar")), hideAfter: 4)
@@ -673,7 +717,7 @@ final class SessionController: ObservableObject {
             if APIError.from(error) == .cancelled || !isCurrent(generation) { return }
             record.status = .failed
             record.error = error.localizedDescription
-            account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes())
+            account(&record, pipeline: pipeline, polished: nil, discarded: takeDiscardedPolishes(), context: sent)
             history.update(record)
             lastError = error.localizedDescription
             finish(showing: .error(error.localizedDescription), hideAfter: 5)
@@ -681,7 +725,7 @@ final class SessionController: ObservableObject {
     }
 
     private func polishAndDeliver(record: inout DictationRecord, pipeline: TranscriptionPipeline, generation: Int,
-                                  dictation: DictationSettings) async {
+                                  dictation: DictationSettings, contextSent sent: ContextSent) async {
         let begun = ProcessInfo.processInfo.systemUptime
         var text = record.rawText
         var notice: String?
@@ -699,8 +743,13 @@ final class SessionController: ObservableObject {
             // transcript started while they were still holding the key: take it over (often it's already done).
             let polishing: Task<SegmentedPolishResult, Error>
             var ahead = 0.0
-            // One that already failed (while recording) gets a fresh attempt instead.
+            // What came in by now is what goes: a read still out is dropped, so no later request differs from this one.
+            stopCursorContextRead()
+            let context = cursorContext
+            // One that already failed (while recording) gets a fresh attempt instead, and so does one started before the
+            // text around the cursor was in.
             if let speculative = speculativePolish, speculative.raw == record.rawText, speculative.translation == translation,
+               speculative.context == context,
                !speculative.outcome.failed {
                 speculativePolish = nil
                 polishing = speculative.task
@@ -715,7 +764,8 @@ final class SessionController: ObservableObject {
                 let raw = record.rawText
                 let onPartial = onPolishPartial(expected: raw)
                 polishing = Task {
-                    try await self.polish(raw, with: dictation, translation: translation, onPartial: onPartial)
+                    try await self.polish(raw, with: dictation, translation: translation, context: context, sent: sent,
+                                          onPartial: onPartial)
                 }
             }
             // Saved while the clean-up runs, so the transcript survives a crash.
@@ -729,7 +779,8 @@ final class SessionController: ObservableObject {
                     if dictation.polishEnabled {
                         cleanUp = { [weak self] () async throws -> SegmentedPolishResult in
                             guard let self else { throw APIError.cancelled }
-                            return try await self.polish(raw, with: dictation, translation: nil, onPartial: onPartial)
+                            return try await self.polish(raw, with: dictation, translation: nil, context: context, sent: sent,
+                                                         onPartial: onPartial)
                         }
                     }
                     let outcome = try await withTaskCancellationHandler {
@@ -796,7 +847,7 @@ final class SessionController: ObservableObject {
                     let billed = ledger.all
                     guard !billed.isEmpty else { return }
                     record.status = .cancelled
-                    account(&record, pipeline: pipeline, polished: nil, discarded: billed)
+                    account(&record, pipeline: pipeline, polished: nil, discarded: billed, context: sent)
                     history.update(record)
                     return
                 }
@@ -828,7 +879,7 @@ final class SessionController: ObservableObject {
         // so it stays, now with its clean-up.
         if Task.isCancelled { record.status = .cancelled }
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
-        account(&record, pipeline: pipeline, polished: polished, discarded: discarded)
+        account(&record, pipeline: pipeline, polished: polished, discarded: discarded, context: sent)
         history.update(record)
     }
 
@@ -866,10 +917,12 @@ final class SessionController: ObservableObject {
 
     // MARK: - Clean-up ahead of time
 
-    /// A clean-up of `raw` (or its translation into `translation`), started while recording.
+    /// A clean-up of `raw` (or its translation into `translation`), started while recording, with the text around the
+    /// cursor that was in by then.
     private struct SpeculativePolish {
         let raw: String
         let translation: TranslationTarget?
+        let context: String?
         let startedAt: TimeInterval
         let task: Task<SegmentedPolishResult, Error>
         let outcome: PolishOutcome
@@ -908,11 +961,13 @@ final class SessionController: ObservableObject {
         let outcome = PolishOutcome()
         let partials = PartialRelay()
         let translation = record?.translation
+        let context = cursorContext
+        let sent = contextSent
         let task = Task { [weak self] () async throws -> SegmentedPolishResult in
             guard let self else { throw APIError.cancelled }
             do {
-                let result = try await self.polish(raw, with: dictation, translation: translation,
-                                                   onPartial: { partials.send($0) })
+                let result = try await self.polish(raw, with: dictation, translation: translation, context: context,
+                                                   sent: sent, onPartial: { partials.send($0) })
                 outcome.result = result
                 return result
             } catch {
@@ -920,7 +975,7 @@ final class SessionController: ObservableObject {
                 throw error
             }
         }
-        speculativePolish = SpeculativePolish(raw: raw, translation: translation,
+        speculativePolish = SpeculativePolish(raw: raw, translation: translation, context: context,
                                               startedAt: ProcessInfo.processInfo.systemUptime, task: task,
                                               outcome: outcome, partials: partials)
         note("clean-up started ahead of time (speaker paused)")
@@ -1041,22 +1096,26 @@ final class SessionController: ObservableObject {
     }
 
     /// Cleans up `raw` with the dictation's preferences (the global ones and its app profile's), or translates it into
-    /// `translation`, on the main model and the backup alike.
+    /// `translation`, on the main model and the backup alike. `context`: the text around the cursor, which goes with
+    /// every clean-up request (both routes, every part); `sent` is told when one of them goes out, for the dictation the
+    /// clean-up is for.
     private func polish(_ raw: String, with dictation: DictationSettings, translation: TranslationTarget?,
+                        context: String?, sent: ContextSent,
                         onPartial: (@Sendable (String) -> Void)? = nil) async throws -> SegmentedPolishResult {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
         let primary = route(endpoint, model: settings.polishModel, instructions: dictation.extraInstructions,
-                            translation: translation)
+                            translation: translation, context: context, sent: sent)
         let backup = settings.polishBackupEndpoint.map {
-            route($0, model: settings.polishBackupModel, instructions: dictation.extraInstructions, translation: translation)
+            route($0, model: settings.polishBackupModel, instructions: dictation.extraInstructions, translation: translation,
+                  context: context, sent: sent)
         }
         return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup, onPartial: onPartial)
     }
 
     private func route(_ endpoint: ProviderEndpoint, model: String, instructions: String,
-                       translation: TranslationTarget?) -> PolishRoute {
+                       translation: TranslationTarget?, context: String?, sent: ContextSent) -> PolishRoute {
         let model = model.trimmingCharacters(in: .whitespaces)
         return PolishRoute(client: APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
@@ -1065,15 +1124,19 @@ final class SessionController: ObservableObject {
             extraInstructions: instructions,
             modelInfo: endpoint.id == .openrouter ? modelInfo[model] : nil,
             host: endpoint.id == .openrouter ? settings.openRouterHost(for: model) : nil,
-            translation: translation
+            translation: translation,
+            context: context,
+            onContextSent: { sent.mark() }
         ))
     }
 
     /// Prices what this run's requests used (the speech-to-text of every chunk sent, and every clean-up answer, used or
     /// not, with the hedge's cancelled requests) and adds it, with the dictation's words once it's finished, to the Home
     /// page totals. `discarded`: clean-ups done ahead of time for a transcript the speaker then went on from.
+    /// `context`: whether this run's requests carried the text around the cursor, which History notes (never the text).
     private func account(_ record: inout DictationRecord, pipeline: TranscriptionPipeline, polished: SegmentedPolishResult?,
-                         discarded: [SegmentedPolishResult]) {
+                         discarded: [SegmentedPolishResult], context: ContextSent) {
+        noteContext(&record, context)
         let prices = PriceStore.shared
         let transcription = CostEstimator.transcriptions(pipeline.requestUsages(),
                                                          price: prices.price(settings.sttProvider, settings.sttModel),
@@ -1100,6 +1163,13 @@ final class SessionController: ObservableObject {
         if transcriptionCost + cleanup > 0 { record.cost = (record.cost ?? 0) + transcriptionCost + cleanup }
         note(String(format: "cost: transcription $%.6f, clean-up $%.6f, unpriced requests %d", transcriptionCost, cleanup, unpriced))
         UsageStore.shared.record(&record, transcriptionCost: transcriptionCost, cleanupCost: cleanup, unpriced: unpriced)
+    }
+
+    /// Notes in History that a clean-up request of this run carried the text around the cursor; the text isn't kept.
+    private func noteContext(_ record: inout DictationRecord, _ sent: ContextSent) {
+        guard sent.isSet else { return }
+        if record.timing == nil { record.timing = DictationRecord.Timing() }
+        record.timing?.usedContext = true
     }
 
     // MARK: - Action shortcuts
@@ -1285,6 +1355,7 @@ final class SessionController: ObservableObject {
                 }
             }
             record.status = .cancelled
+            noteContext(&record, contextSent)
             history.update(record)
         }
         reset()
@@ -1332,6 +1403,9 @@ final class SessionController: ObservableObject {
         handsFree = false
         mode = .dictation
         processingTask = nil
+        stopCursorContextRead()
+        cursorContext = nil
+        contextSent = ContextSent()
     }
 
     // MARK: - Misc

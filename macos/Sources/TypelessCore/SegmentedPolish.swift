@@ -37,8 +37,10 @@ public struct SegmentedPolishResult: Sendable {
 /// of 54 real dictations of a minute or more, 15 came back with under 60% of their words (the worst 2,023 → 379), often
 /// rewritten into numbered lists. A part of a few hundred words gets edited as asked. The parts are split at sentence
 /// ends, cleaned up in parallel with the same prompt, checked one by one, and joined again, so a long dictation is also
-/// ready sooner. Each part goes on its own: the prompt has no place for read-only context, and a neighbouring part
-/// pasted in as such could end up cleaned up into the answer as well.
+/// ready sooner. Each part goes on its own: a neighbouring part pasted in as reference could end up cleaned up into the
+/// answer as well. The text around the cursor (see CursorContext), when there is some, goes with every part, since each
+/// is a request of its own and a name can come up in any of them; it's at most a few hundred tokens, and only long
+/// dictations have more than one part.
 public enum SegmentedPolish {
     /// Up to this many words (see WordCount: a Chinese character is one) a transcript goes in one request: about a
     /// minute and a half of Chinese, or two and a half of English.
@@ -121,7 +123,8 @@ public enum SegmentedPolish {
     ) async throws -> SegmentedPolishResult {
         let policy = RetryPolicy(maxAttempts: 2, retriesTimeouts: false)
         return try await run(transcript: transcript, translation: primary.options.translation,
-                             vocabulary: primary.options.vocabulary, polish: { part, partial in
+                             vocabulary: primary.options.vocabulary, context: primary.options.context,
+                             polish: { part, partial in
             try await policy.run { _ in
                 try await HedgedPolish.run(transcript: part, primary: primary, backup: backup, onPartial: partial)
             }
@@ -132,11 +135,12 @@ public enum SegmentedPolish {
     /// `Prompts.fallback` (`Prompts.translationFallback` when it's a translation into `translation`): a part whose answer
     /// is unusable, or that got none, goes in as spoken. Throws only when no part got an answer (the first part's
     /// error), or when cancelled. `onPartial` gets the parts' text so far, joined. `vocabulary`: the speaker's terms,
-    /// which a translation keeps as they are.
+    /// which a translation keeps as they are. `context`: the text around the cursor the requests carry, if any.
     public static func run(
         transcript: String,
         translation: TranslationTarget? = nil,
         vocabulary: [String] = [],
+        context: String? = nil,
         polish: @escaping @Sendable (String, (@Sendable (String) -> Void)?) async throws -> HedgedPolishResult,
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> SegmentedPolishResult {
@@ -167,7 +171,7 @@ public enum SegmentedPolish {
                     Prompts.translationFallback(input: text, output: output, truncated: truncated, target: translation,
                                                 vocabulary: vocabulary)
                 } else {
-                    Prompts.fallback(input: text, output: output, truncated: truncated)
+                    Prompts.fallback(input: text, output: output, truncated: truncated, context: context)
                 }
                 results.append(.init(transcript: text, answer: answer, fallback: fallback, error: nil))
             case let .failure(error)?:

@@ -184,7 +184,9 @@ internal static class UIAutomation
         void FindAllBuildCache();
         void BuildUpdatedCache();
         [PreserveSig] int GetCurrentPropertyValue(int propertyId, [MarshalAs(UnmanagedType.Struct)] out object? value);
-        void GetCurrentPropertyValueEx();
+        // ignoreDefaultValue nonzero: a property the element doesn't give comes back as UI Automation's "not supported"
+        // value, not as its default (false for IsPassword), so an answer can be told from a silence.
+        [PreserveSig] int GetCurrentPropertyValueEx(int propertyId, int ignoreDefaultValue, [MarshalAs(UnmanagedType.Struct)] out object? value);
         void GetCachedPropertyValue();
         void GetCachedPropertyValueEx();
         void GetCurrentPatternAs();
@@ -218,7 +220,7 @@ internal static class UIAutomation
         void ExpandToEnclosingUnit();
         void FindAttribute();
         void FindText();
-        void GetAttributeValue();
+        [PreserveSig] int GetAttributeValue(int attributeId, [MarshalAs(UnmanagedType.Struct)] out object? value);
         void GetBoundingRectangles();
         void GetEnclosingElement();
         [PreserveSig] int GetText(int maxLength, [MarshalAs(UnmanagedType.BStr)] out string? text);

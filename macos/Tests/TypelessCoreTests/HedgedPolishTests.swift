@@ -61,6 +61,36 @@ final class MockChatServer: URLProtocol {
 }
 
 @Suite(.serialized) struct HedgedPolishTests {
+    /// The text around the cursor goes with the route, and its answer is checked against it.
+    @Test func cleanUpIsCheckedAgainstTheRoutesContext() async throws {
+        MockChatServer.reset(["primary": .init(text: "Could you send me the Q3 numbers when you get a chance? Sure, I will send them tomorrow.")])
+        var route = MockChatServer.route("primary")
+        route.options.context = "Hi Tyler,\n\nCould you send me the Q3 numbers when you get a chance?\n\nThanks,\nMarcus"
+        let outcome = try await SegmentedPolish.run(transcript: "sure I will send them tomorrow", primary: route, backup: nil)
+        #expect(outcome.parts.map(\.fallback) == [.copied])
+        #expect(outcome.text == "sure I will send them tomorrow")
+    }
+
+    /// History says the text around the cursor went out only when a request carried it: told as each request goes out,
+    /// never for a route without it, and never for the backup that was never started.
+    @Test func contextSentIsToldOnlyForRequestsThatCarryIt() async throws {
+        MockChatServer.reset(["primary": .init(text: "Hi Siobhan."), "backup": .init(text: "Hi Siobhan.")])
+        let told = Recorded<String>()
+        var primary = MockChatServer.route("primary"), backup = MockChatServer.route("backup")
+        primary.options.onContextSent = { told.add("primary") }
+        backup.options.onContextSent = { told.add("backup") }
+        _ = try await HedgedPolish.run(transcript: "hi shivon", primary: primary, backup: backup, hedgeDelay: 5)
+        #expect(told.all.isEmpty)
+        // Blank: nothing to send.
+        primary.options.context = " \n "
+        backup.options.context = "Siobhan Kelly"
+        _ = try await HedgedPolish.run(transcript: "hi shivon", primary: primary, backup: backup, hedgeDelay: 5)
+        #expect(told.all.isEmpty)
+        primary.options.context = "Siobhan Kelly"
+        _ = try await HedgedPolish.run(transcript: "hi shivon", primary: primary, backup: backup, hedgeDelay: 5)
+        #expect(told.all == ["primary"])
+    }
+
     @Test func fastPrimaryNeverStartsBackup() async throws {
         MockChatServer.reset(["primary": .init(text: "A"), "backup": .init(text: "B")])
         // The primary answers at once; the hedge delay leaves room for a busy test machine (CI's Intel runners).

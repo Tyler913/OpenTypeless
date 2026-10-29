@@ -21,7 +21,14 @@ public sealed record PolishOptions(
     /// </summary>
     string? Host = null,
     /// <summary>Translate into this language instead of cleaning up (see <see cref="Prompts.TranslateSystemPrompt"/>).</summary>
-    TranslationTarget? Translation = null);
+    TranslationTarget? Translation = null,
+    /// <summary>
+    /// The text around the speaker's cursor, sent after the transcript to spell names by (see <see cref="CursorContext"/>);
+    /// null for none. A clean-up's only: a translation goes without it.
+    /// </summary>
+    string? Context = null,
+    /// <summary>Called as a request that carries <c>Context</c> goes out (each attempt), so History can say it was sent.</summary>
+    Action? OnContextSent = null);
 
 public static class ReasoningConfig
 {
@@ -140,7 +147,7 @@ public sealed partial class ApiClient
         return
         [
             options.SystemPromptOverride ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard),
-            Prompts.PolishUserMessage(transcript),
+            Prompts.PolishUserMessage(transcript, options.Context),
         ];
     }
 
@@ -228,6 +235,10 @@ public sealed partial class ApiClient
         var body = PolishBody(transcript, options, includeOptional);
         var request = Request("chat/completions", JsonContent(body));
         request.Headers.TryAddWithoutValidation("Accept", "text/event-stream");
+        // Told as the request goes out (not when it's built, nor for one cancelled first), so History says so only when the
+        // text around the cursor really went to the provider.
+        var sentContext = options.Translation is null && Prompts.ContextBlock(options.Context) != null;
+        if (sentContext && !cancellationToken.IsCancellationRequested) options.OnContextSent?.Invoke();
 
         return await Timeouts.WithTimeout(limits.Total, async ct =>
         {
@@ -288,7 +299,7 @@ public sealed partial class ApiClient
                         }
                         if (receivedDone) break;
                     }
-                    var cleaned = Prompts.SanitizePolishOutput(text.ToString(), Prompts.Reminder(options.Translation));
+                    var cleaned = Prompts.SanitizePolishOutput(text.ToString(), Prompts.Reminder(options.Translation), sentContext);
                     if (cleaned.Length == 0) throw ApiException.BadResponse(L("模型返回了空内容", "the model returned nothing"));
                     if (usage is null || (usage.InputTokens == null && usage.OutputTokens == null && usage.Cost == null))
                     {

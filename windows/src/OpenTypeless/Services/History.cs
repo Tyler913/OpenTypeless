@@ -146,6 +146,8 @@ public sealed class DictationTiming
     [JsonPropertyName("lastChunkRoute")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? LastChunkRoute { get; set; }
     /// <summary>How long the clean-up taken over at release had been running by then (started while the speaker paused).</summary>
     [JsonPropertyName("polishHeadStart")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? PolishHeadStart { get; set; }
+    /// <summary>The clean-up was sent the text around the cursor to spell names by (see <see cref="TypelessCore.CursorContext"/>); the text isn't kept.</summary>
+    [JsonPropertyName("usedContext")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? UsedContext { get; set; }
     /// <summary>Release → the text ready and handed over for delivery (focus is checked, then it's pasted or copied at once).</summary>
     [JsonPropertyName("delivered")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Delivered { get; set; }
     /// <summary>
@@ -176,6 +178,7 @@ public sealed class DictationTiming
                 var detail = new List<string>();
                 if (PolishFirstToken is { } firstToken) detail.Add(L("首字 ", "first token ") + Secs(firstToken));
                 if (PolishModel is { } model) detail.Add((UsedBackup == true ? L("备用 ", "backup ") : "") + model);
+                if (UsedContext == true) detail.Add(L("参考了光标附近的文字", "with text around the cursor"));
                 parts.Add(L("整理 ", "Clean-up ") + Secs(polish)
                           + (detail.Count == 0 ? "" : L("（", " (") + string.Join(L("，", ", "), detail) + L("）", ")")));
             }

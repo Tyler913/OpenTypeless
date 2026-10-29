@@ -12,6 +12,8 @@ enum PolishEval {
         var anyOf: [[String]]?
         /// Translate into this language (a `TranslationTarget` id) instead of cleaning up, as translation mode does.
         var translateTo: String?
+        /// Text around the cursor sent with the transcript (see CursorContext), as the app would.
+        var context: String?
     }
     struct Job: Codable {
         let id: String
@@ -129,6 +131,7 @@ enum PolishEval {
                         let model = models[(i + offset) % models.count], price = prices[model]!
                         var caseOptions = options[model]!
                         caseOptions.translation = c.translateTo.flatMap { TranslationTarget($0) }
+                        caseOptions.context = c.context
                         let plan = try client.evaluationPlan(transcript: c.input, options: caseOptions,
                                                             promptPrice: price.0, completionPrice: price.1, providerTag: providerTag,
                                                             providerRouting: providerRouting)
@@ -171,7 +174,7 @@ enum PolishEval {
                 let fallback = if let translation {
                     Prompts.translationFallback(input: c.input, output: attempt.output, truncated: false, target: translation)
                 } else {
-                    Prompts.fallback(input: c.input, output: attempt.output, truncated: false)
+                    Prompts.fallback(input: c.input, output: attempt.output, truncated: false, context: c.context)
                 }
                 if !attempt.output.isEmpty, let fallback { failures.append("the app would reject it: \(fallback.rawValue)") }
                 if attempt.truncated { failures.append("truncated") }

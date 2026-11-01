@@ -1,5 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="576.512" height="634.88" viewBox="210.944 194.56 576.512 634.88">
+<svg xmlns="http://www.w3.org/2000/svg" width="1110" height="1168" viewBox="0 0 1109.68 1167.74">
   <title>OpenTypeless</title>
-  <defs><linearGradient id="bars" x1="231.424" y1="0" x2="598.016" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#8A78FF"/><stop offset="1" stop-color="#37C3FF"/></linearGradient></defs>
-  <rect x="231.424" y="389.12" width="90.112" height="245.76" rx="45.056" fill="url(#bars)"/><rect x="369.664" y="276.48" width="90.112" height="471.04" rx="45.056" fill="url(#bars)"/><rect x="507.904" y="348.16" width="90.112" height="327.68" rx="45.056" fill="url(#bars)"/><rect x="676.864" y="215.04" width="90.112" height="593.92" rx="45.056" fill="#14122E"/>
+  <rect x="83.871" y="374.194" width="167.742" height="419.355" rx="83.871" fill="#FFB000"/>
+  <rect x="325.806" y="180.645" width="167.742" height="806.452" rx="83.871" fill="#FF8A00"/>
+  <rect x="567.742" y="309.677" width="167.742" height="548.387" rx="83.871" fill="#FF5A1F"/>
+  <rect x="858.065" y="83.871" width="167.742" height="1000" rx="83.871" fill="#EE1B45"/>
 </svg>

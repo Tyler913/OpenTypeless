@@ -16,17 +16,14 @@ enum Theme {
 /// geometry and colours as the app icon (`scripts/make_icon.py` draws that), in tile units (0…1, y down).
 enum Logo {
     /// Centre x and height of each voice bar; the bars and the caret are all `stroke` wide and centred on y = 0.5.
-    static let bars: [(x: CGFloat, height: CGFloat)] = [(0.270, 0.24), (0.405, 0.46), (0.540, 0.32)]
-    static let caret: (x: CGFloat, height: CGFloat) = (0.705, 0.58)
-    static let stroke: CGFloat = 0.088
+    static let bars: [(x: CGFloat, height: CGFloat)] = [(0.245, 0.26), (0.395, 0.50), (0.545, 0.34)]
+    static let caret: (x: CGFloat, height: CGFloat) = (0.725, 0.62)
+    static let stroke: CGFloat = 0.104
 
-    static let tile = LinearGradient(colors: [rgb(0x2A2566), rgb(0x0C0B20)],
-                                     startPoint: UnitPoint(x: 0.2, y: 0), endPoint: UnitPoint(x: 0.8, y: 1))
-    static let glow = rgb(0x5A5CFF)
-    /// Across the bars, from the first one's left edge to the last one's right edge.
-    static let barGradient = LinearGradient(colors: [rgb(0x8A78FF), rgb(0x37C3FF)],
-                                            startPoint: UnitPoint(x: bars[0].x - stroke / 2, y: 0.5),
-                                            endPoint: UnitPoint(x: bars[bars.count - 1].x + stroke / 2, y: 0.5))
+    /// Amber, tangerine and vermilion, left to right, as the voice warms up.
+    static let barColors = [rgb(0xFFB000), rgb(0xFF8A00), rgb(0xFF5A1F)]
+    static let caretColor = rgb(0xEE1B45)
+    static let tile = LinearGradient(colors: [rgb(0xFFFFFF), rgb(0xEEEEF2)], startPoint: .top, endPoint: .bottom)
 
     private static func rgb(_ hex: Int) -> Color {
         Color(red: Double(hex >> 16 & 0xFF) / 255, green: Double(hex >> 8 & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
@@ -53,7 +50,7 @@ enum Logo {
                 NSColor.black.setFill()
                 path.fill()
             } else {
-                let tile = Logo.frame(centredIn: rect, caretHeight: 14)
+                let tile = Logo.frame(centredIn: rect, caretHeight: 13.5)
                 let layers: [(items: [(x: CGFloat, height: CGFloat)], alpha: CGFloat)] = [(Logo.bars, 0.5), ([Logo.caret], 1)]
                 for layer in layers {
                     NSColor.black.withAlphaComponent(layer.alpha).setFill()
@@ -77,20 +74,20 @@ enum Logo {
     }
 }
 
-/// The voice bars of the mark, or its caret, drawn across the tile's frame.
-struct LogoShape: Shape {
-    var caret = false
+/// One stroke of the mark (a voice bar or the caret) drawn across the tile's frame.
+struct LogoStroke: Shape {
+    let item: (x: CGFloat, height: CGFloat)
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        for r in Logo.capsules(caret ? [Logo.caret] : Logo.bars, in: rect) {
+        for r in Logo.capsules([item], in: rect) {
             path.addRoundedRect(in: r, cornerSize: CGSize(width: r.width / 2, height: r.width / 2), style: .circular)
         }
         return path
     }
 }
 
-/// The app's tile: the mark on its deep indigo tile, the same artwork as the app icon.
+/// The app's tile: the mark on a white tile, the same artwork as the macOS app icon.
 struct AppTile: View {
     var size: CGFloat = 32
 
@@ -98,18 +95,14 @@ struct AppTile: View {
         let tile = RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
         ZStack {
             tile.fill(Logo.tile)
-            tile.fill(RadialGradient(colors: [Logo.glow.opacity(0.38), Logo.glow.opacity(0)],
-                                     center: UnitPoint(x: 0.40, y: 0.52), startRadius: 0, endRadius: size * 0.48))
-            tile.strokeBorder(LinearGradient(stops: [.init(color: .white.opacity(0.22), location: 0),
-                                                     .init(color: .white.opacity(0.04), location: 0.5),
-                                                     .init(color: .white.opacity(0.08), location: 1)],
-                                             startPoint: .top, endPoint: .bottom),
-                              lineWidth: max(0.5, size * 0.006))
-            LogoShape().fill(Logo.barGradient)
-            LogoShape(caret: true).fill(.white)
+            tile.strokeBorder(Color.black.opacity(0.07), lineWidth: max(0.5, size * 0.006))
+            ForEach(Logo.bars.indices, id: \.self) { i in
+                LogoStroke(item: Logo.bars[i]).fill(Logo.barColors[i])
+            }
+            LogoStroke(item: Logo.caret).fill(Logo.caretColor)
         }
         .frame(width: size, height: size)
-        .shadow(color: Color(red: 0.10, green: 0.08, blue: 0.30).opacity(0.35), radius: size * 0.12, y: size * 0.05)
+        .shadow(color: .black.opacity(0.18), radius: size * 0.1, y: size * 0.04)
     }
 }
 

@@ -3,18 +3,21 @@
 
     python3 scripts/make_icon.py        (from anywhere; standard library only)
 
-The mark is three voice bars running into a text caret: what you say becomes text at your cursor. The bars carry
-the brand's violet-to-azure gradient, the caret is plain white, and both sit on a deep indigo tile. This file is the
-one source of the artwork: the in-app tiles (macos/.../DesignSystem.swift, windows/.../UI/DesignSystem.cs), the macOS
-menu-bar icon and the Windows tray icon draw the same geometry with the same numbers.
+The mark is three voice bars running into a text caret: what you say becomes text at your cursor. The bars step from
+amber through tangerine to vermilion as the voice warms up, and the caret, the tallest stroke, is crimson. The mark
+works on its own, with no tile, on light and dark backgrounds alike; the macOS icon and the in-app tiles put it on a
+white tile, like text on a page.
+
+This file is the one source of the artwork: the in-app tiles (macos/.../DesignSystem.swift, windows/.../UI/
+DesignSystem.cs), the macOS menu-bar icon and the Windows tray icon draw the same geometry with the same numbers.
 
 Writes:
-    macos/Resources/AppIcon.icns, AppIcon.png        Apple icon grid: 824/1024 tile with a soft drop shadow
-    windows/src/OpenTypeless/Assets/AppIcon.ico, .png   near full-bleed tile, every size Windows asks for
-    docs/brand/app-icon.svg, mark.svg, mark-mono.svg   vector masters for the web, docs and print
+    macos/Resources/AppIcon.icns, AppIcon.png           the mark on its tile, on Apple's icon grid, with a drop shadow
+    windows/src/OpenTypeless/Assets/AppIcon.ico, .png    the mark alone, no tile, every size Windows asks for
+    docs/brand/app-icon.svg, mark.svg, mark-mono.svg     vector masters for the web, docs and print
 
-Every bitmap is drawn at its own pixel size (not scaled down from a big one), with the bars snapped to whole pixels,
-so the 16 and 32 px icons stay sharp.
+Every bitmap is drawn at its own pixel size (not scaled down from a big one), with the strokes snapped to whole
+pixels, so the 16 and 32 px icons stay sharp.
 """
 
 import math
@@ -26,26 +29,22 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # --- The artwork, in tile units (0…1 across the tile, y down) -----------------------------------------------------
 
-STROKE = 0.088                                    # width of every bar and of the caret
-BARS = ((0.270, 0.24), (0.405, 0.46), (0.540, 0.32))  # (centre x, height) of the voice bars, centred on y = 0.5
-CARET = (0.705, 0.58)                             # the text caret: taller, set apart, white
+STROKE = 0.104                                    # width of every bar and of the caret; the ends are round
+BARS = ((0.245, 0.26), (0.395, 0.50), (0.545, 0.34))  # (centre x, height) of the voice bars, centred on y = 0.5
+CARET = (0.725, 0.62)                             # the text caret: the tallest stroke, set a little apart
 TILE_RADIUS = 0.225                               # corner radius of the tile
 
-TILE_TOP = (0x2A, 0x25, 0x66)                     # tile gradient, from (0.2, 0) to (0.8, 1)
-TILE_BOTTOM = (0x0C, 0x0B, 0x20)
-GLOW = (0x5A, 0x5C, 0xFF)                         # soft light behind the bars
-GLOW_CENTER, GLOW_RADIUS, GLOW_ALPHA = (0.40, 0.52), 0.48, 0.38
-RIM_WIDTH = 0.006                                 # hairline highlight inside the tile's edge
-RIM_ALPHA = ((0.0, 0.22), (0.5, 0.04), (1.0, 0.08))  # white, by height
-BAR_START = (0x8A, 0x78, 0xFF)                    # bar gradient across the bars, left edge to right edge
-BAR_END = (0x37, 0xC3, 0xFF)
-CARET_COLOR = (0xFF, 0xFF, 0xFF)
-INK = (0x14, 0x12, 0x2E)                          # the caret's colour when the mark stands on a light background
+BAR_COLORS = ((0xFF, 0xB0, 0x00), (0xFF, 0x8A, 0x00), (0xFF, 0x5A, 0x1F))  # amber, tangerine, vermilion
+CARET_COLOR = (0xEE, 0x1B, 0x45)                  # crimson
+TILE_TOP = (0xFF, 0xFF, 0xFF)                     # tile gradient, top to bottom
+TILE_BOTTOM = (0xEE, 0xEE, 0xF2)
+EDGE_WIDTH, EDGE_ALPHA = 0.004, 0.07              # black hairline inside the tile's edge, so it holds on white
 
-BARS_LEFT = BARS[0][0] - STROKE / 2
-BARS_RIGHT = BARS[-1][0] + STROKE / 2
-GLYPH_LEFT, GLYPH_RIGHT = BARS_LEFT, CARET[0] + STROKE / 2
-GLYPH_TOP, GLYPH_BOTTOM = 0.5 - CARET[1] / 2, 0.5 + CARET[1] / 2
+GLYPH_LEFT = BARS[0][0] - STROKE / 2
+GLYPH_RIGHT = CARET[0] + STROKE / 2
+MARK_CX = (GLYPH_LEFT + GLYPH_RIGHT) / 2          # the mark's centre, a little left of the tile's for optical balance
+MARK_SPAN = GLYPH_RIGHT - GLYPH_LEFT
+BARE_HEIGHT = 0.88                                # the caret's share of the canvas in the tile-less icon
 
 
 def mix(a, b, t):
@@ -74,7 +73,7 @@ class Canvas:
         self.px = [[0.0, 0.0, 0.0, 0.0] for _ in range(size * size)]
 
     def over(self, x, y, rgb, alpha):
-        if alpha <= 0:
+        if alpha <= 0 or not (0 <= x < self.size and 0 <= y < self.size):
             return
         p = self.px[y * self.size + x]
         keep = 1.0 - alpha
@@ -93,17 +92,41 @@ class Canvas:
         return bytes(out)
 
 
+def mark_layout(t, cx, cy):
+    """The four strokes as (left, top, width, height, colour) in pixels, for a tile `t` pixels wide with the mark
+    centred on (cx, cy). Strokes land on whole pixels, the bars keep one pitch, and no gap closes up when small."""
+    w = max(1, round(STROKE * t))
+    pitch = max(w + 1, round((BARS[1][0] - BARS[0][0]) * t))
+    gap = max(w + 1, round((CARET[0] - BARS[-1][0]) * t))
+    offsets = [i * pitch for i in range(len(BARS))] + [(len(BARS) - 1) * pitch + gap]
+    left = round(cx - (offsets[-1] + w) / 2)
+    heights = [h for _, h in BARS] + [CARET[1]]
+    colors = list(BAR_COLORS) + [CARET_COLOR]
+    strokes = []
+    for o, h, color in zip(offsets, heights, colors):
+        hp = max(w, round(h * t))
+        strokes.append((left + o, round(cy - hp / 2), w, hp, color))
+    return strokes
+
+
+def draw_strokes(canvas, strokes):
+    for left, top, w, h, color in strokes:
+        for y in range(top - 1, top + h + 1):
+            for x in range(left - 1, left + w + 1):
+                d = rounded_rect_distance(x + 0.5, y + 0.5, left + w / 2, top + h / 2, w / 2, h / 2, w / 2)
+                canvas.over(x, y, color, clamp01(0.5 - d))
+
+
 def draw_icon(size, inset, shadow=None):
-    """The tile with the mark, `inset` (a fraction of `size`) from each edge. `shadow` = (alpha, dy, sigma) in
+    """The mark on its tile, `inset` (a fraction of `size`) from each edge. `shadow` = (alpha, dy, sigma) in
     fractions of `size`, for the macOS drop shadow."""
     c = Canvas(size)
     edge = round(size * inset)
     t = size - 2 * edge                       # tile size in pixels, snapped to the pixel grid
-    tx = ty = edge
     half = t / 2
-    cx = cy = tx + half
+    cx = cy = edge + half
     radius = TILE_RADIUS * t
-    rim = RIM_WIDTH * t
+    hairline = max(0.6, EDGE_WIDTH * t)
 
     if shadow:
         s_alpha, s_dy, s_sigma = shadow[0], shadow[1] * size, max(0.5, shadow[2] * size)
@@ -116,61 +139,28 @@ def draw_icon(size, inset, shadow=None):
                 if a > 0.001:
                     c.over(x, y, (0, 0, 0), a)
 
-    gx0, gy0 = tx + 0.2 * t, ty
-    gdx, gdy = 0.6 * t, t
-    glen2 = gdx * gdx + gdy * gdy
-    glow_x, glow_y, glow_r = tx + GLOW_CENTER[0] * t, ty + GLOW_CENTER[1] * t, GLOW_RADIUS * t
-    for y in range(ty, ty + t):
-        for x in range(tx, tx + t):
-            px, py = x + 0.5, y + 0.5
-            d = rounded_rect_distance(px, py, cx, cy, half, half, radius)
+    for y in range(edge, edge + t):
+        rgb = mix(TILE_TOP, TILE_BOTTOM, (y + 0.5 - edge) / t)
+        for x in range(edge, edge + t):
+            d = rounded_rect_distance(x + 0.5, y + 0.5, cx, cy, half, half, radius)
             cover = clamp01(0.5 - d)
             if cover <= 0:
                 continue
-            k = clamp01(((px - gx0) * gdx + (py - gy0) * gdy) / glen2)
-            rgb = mix(TILE_TOP, TILE_BOTTOM, k)
-            g = clamp01(1 - math.hypot(px - glow_x, py - glow_y) / glow_r) * GLOW_ALPHA
-            rgb = mix(rgb, GLOW, g)
             c.over(x, y, rgb, cover)
-            band = cover - clamp01(0.5 - (d + rim))     # the part of the pixel within `rim` of the edge
+            band = cover - clamp01(0.5 - (d + hairline))   # the part of the pixel within `hairline` of the edge
             if band > 0:
-                v = (py - ty) / t
-                lo, hi = (RIM_ALPHA[0], RIM_ALPHA[1]) if v < RIM_ALPHA[1][0] else (RIM_ALPHA[1], RIM_ALPHA[2])
-                a = lo[1] + (hi[1] - lo[1]) * clamp01((v - lo[0]) / (hi[0] - lo[0]))
-                c.over(x, y, (255, 255, 255), band * a)
+                c.over(x, y, (0, 0, 0), band * EDGE_ALPHA)
 
-    w, centers, heights = glyph_layout(t)
-    for i, (gx, h) in enumerate(zip(centers, heights)):
-        caret = i == len(centers) - 1
-        bx = tx + gx
-        top = ty + round(half - h / 2)
-        left_edge = tx + BARS_LEFT * t
-        span = (BARS_RIGHT - BARS_LEFT) * t
-        for y in range(top - 1, top + h + 1):
-            for x in range(math.floor(bx - w / 2) - 1, math.ceil(bx + w / 2) + 1):
-                d = rounded_rect_distance(x + 0.5, y + 0.5, bx, top + h / 2, w / 2, h / 2, w / 2)
-                cover = clamp01(0.5 - d)
-                if cover <= 0:
-                    continue
-                rgb = CARET_COLOR if caret else mix(BAR_START, BAR_END, clamp01((x + 0.5 - left_edge) / span))
-                c.over(x, y, rgb, cover)
+    draw_strokes(c, mark_layout(t, edge + MARK_CX * t, cy))
     return c
 
 
-def glyph_layout(t):
-    """Bar width, centres (from the tile's left edge) and heights in pixels for a tile `t` pixels wide: the bars
-    land on whole pixels, the pitch is the same between every bar, and no gap closes up at small sizes."""
-    w = max(1, round(STROKE * t))
-    pitch = max(w + 1, round((BARS[1][0] - BARS[0][0]) * t))
-    gap = max(w + 1, round((CARET[0] - BARS[-1][0]) * t))
-    offsets = [i * pitch for i in range(len(BARS))] + [(len(BARS) - 1) * pitch + gap]
-    ideal_left = (BARS[0][0] - STROKE / 2) * t
-    span = offsets[-1] + w
-    ideal_center = ideal_left + ((GLYPH_RIGHT - GLYPH_LEFT) * t) / 2
-    left = round(ideal_center - span / 2)
-    centers = [left + o + w / 2 for o in offsets]
-    heights = [max(w, round(h * t)) for _, h in BARS] + [max(w, round(CARET[1] * t))]
-    return w, centers, heights
+def draw_bare(size):
+    """The mark alone on a transparent canvas, centred, its caret `BARE_HEIGHT` of the canvas tall."""
+    c = Canvas(size)
+    t = BARE_HEIGHT * size / CARET[1]
+    draw_strokes(c, mark_layout(t, size / 2, size / 2))
+    return c
 
 
 # --- File formats -------------------------------------------------------------------------------------------------
@@ -230,60 +220,47 @@ def hexcolor(rgb):
     return "#%02X%02X%02X" % tuple(round(v) for v in rgb)
 
 
-def capsule(x, h, s, fill, extra=""):
-    return (f'<rect x="{(x - STROKE / 2) * s:g}" y="{(0.5 - h / 2) * s:g}" width="{STROKE * s:g}" height="{h * s:g}" '
-            f'rx="{STROKE * s / 2:g}" fill="{fill}"{extra}/>')
-
-
-def svg_glyph(s, caret_fill, bars_fill="url(#bars)", bars_extra=""):
-    return "".join(capsule(x, h, s, bars_fill, bars_extra) for x, h in BARS) + capsule(CARET[0], CARET[1], s, caret_fill)
-
-
-def svg_bar_gradient(s):
-    return (f'<linearGradient id="bars" x1="{BARS_LEFT * s:g}" y1="0" x2="{BARS_RIGHT * s:g}" y2="0" '
-            f'gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{hexcolor(BAR_START)}"/>'
-            f'<stop offset="1" stop-color="{hexcolor(BAR_END)}"/></linearGradient>')
+def svg_strokes(s, ox=0.0, oy=0.0, fills=None, bar_extra=""):
+    """The four strokes in an `s`-unit tile whose top-left corner is at (ox, oy)."""
+    fills = fills or [hexcolor(c) for c in BAR_COLORS] + [hexcolor(CARET_COLOR)]
+    out = []
+    for i, ((x, h), fill) in enumerate(zip(list(BARS) + [CARET], fills)):
+        extra = bar_extra if i < len(BARS) else ""
+        out.append(f'<rect x="{ox + (x - STROKE / 2) * s:g}" y="{oy + (0.5 - h / 2) * s:g}" width="{STROKE * s:g}" '
+                   f'height="{h * s:g}" rx="{STROKE * s / 2:g}" fill="{fill}"{extra}/>')
+    return "\n  ".join(out)
 
 
 def svg_app_icon():
     s = 1024
-    rim = "".join(f'<stop offset="{o:g}" stop-color="#FFFFFF" stop-opacity="{a:g}"/>' for o, a in RIM_ALPHA)
-    r = RIM_WIDTH * s
+    e = EDGE_WIDTH * s
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{s}" height="{s}" viewBox="0 0 {s} {s}">
   <title>OpenTypeless</title>
   <defs>
-    <linearGradient id="tile" x1="0.2" y1="0" x2="0.8" y2="1">
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="{hexcolor(TILE_TOP)}"/><stop offset="1" stop-color="{hexcolor(TILE_BOTTOM)}"/>
     </linearGradient>
-    <radialGradient id="glow" cx="{GLOW_CENTER[0]:g}" cy="{GLOW_CENTER[1]:g}" r="{GLOW_RADIUS:g}">
-      <stop offset="0" stop-color="{hexcolor(GLOW)}" stop-opacity="{GLOW_ALPHA:g}"/>
-      <stop offset="1" stop-color="{hexcolor(GLOW)}" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">{rim}</linearGradient>
-    {svg_bar_gradient(s)}
   </defs>
   <rect width="{s}" height="{s}" rx="{TILE_RADIUS * s:g}" fill="url(#tile)"/>
-  <rect width="{s}" height="{s}" rx="{TILE_RADIUS * s:g}" fill="url(#glow)"/>
-  <rect x="{r / 2:g}" y="{r / 2:g}" width="{s - r:g}" height="{s - r:g}" rx="{TILE_RADIUS * s - r / 2:g}" fill="none" stroke="url(#rim)" stroke-width="{r:g}"/>
-  {svg_glyph(s, hexcolor(CARET_COLOR))}
+  <rect x="{e / 2:g}" y="{e / 2:g}" width="{s - e:g}" height="{s - e:g}" rx="{TILE_RADIUS * s - e / 2:g}" fill="none" stroke="#000000" stroke-opacity="{EDGE_ALPHA:g}" stroke-width="{e:g}"/>
+  {svg_strokes(s)}
 </svg>
 '''
 
 
 def svg_mark(mono):
-    s = 1024
-    pad = 0.02 * s
-    x, y = GLYPH_LEFT * s - pad, GLYPH_TOP * s - pad
-    w, h = (GLYPH_RIGHT - GLYPH_LEFT) * s + 2 * pad, (GLYPH_BOTTOM - GLYPH_TOP) * s + 2 * pad
+    """The mark alone, cropped to its strokes with a margin of half a stroke. `mono`: one colour (currentColor) with
+    the bars at half strength, as in the menu-bar and tray icons."""
+    s = 1000 / CARET[1]                       # caret 1000 units tall
+    pad = STROKE * s / 2
+    w, h = MARK_SPAN * s + 2 * pad, CARET[1] * s + 2 * pad
+    ox, oy = pad - GLYPH_LEFT * s, pad - (0.5 - CARET[1] / 2) * s
     if mono:
-        # One colour (currentColor): the bars at half strength, the caret solid, as in the menu-bar and tray icons.
-        body = svg_glyph(s, "currentColor", "currentColor", ' fill-opacity="0.5"')
-        defs = ""
+        body = svg_strokes(s, ox, oy, ["currentColor"] * 4, ' fill-opacity="0.5"')
     else:
-        body = svg_glyph(s, hexcolor(INK))
-        defs = f"\n  <defs>{svg_bar_gradient(s)}</defs>"
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{w:g}" height="{h:g}" viewBox="{x:g} {y:g} {w:g} {h:g}">
-  <title>OpenTypeless</title>{defs}
+        body = svg_strokes(s, ox, oy)
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{w:.4g}" height="{h:.4g}" viewBox="0 0 {w:.6g} {h:.6g}">
+  <title>OpenTypeless</title>
   {body}
 </svg>
 '''
@@ -294,18 +271,22 @@ def svg_mark(mono):
 def write(path, data):
     path = os.path.join(ROOT, path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb" if isinstance(data, bytes) else "w", **({} if isinstance(data, bytes) else {"newline": "\n"})) as f:
-        f.write(data)
+    if isinstance(data, bytes):
+        with open(path, "wb") as f:
+            f.write(data)
+    else:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(data)
     print("✓", os.path.relpath(path, ROOT))
 
 
 def main():
-    # macOS: the Apple icon grid (an 824 px tile on a 1024 px canvas) with its drop shadow.
+    # macOS: the tile on Apple's icon grid (an 824 px tile on a 1024 px canvas) with its drop shadow.
     mac = {}
 
     def mac_icon(size):
         if size not in mac:
-            mac[size] = draw_icon(size, 100 / 1024, shadow=(0.30, 10 / 1024, 8 / 1024))
+            mac[size] = draw_icon(size, 100 / 1024, shadow=(0.22, 10 / 1024, 9 / 1024))
         return mac[size]
 
     entries = [
@@ -323,10 +304,10 @@ def main():
     write("macos/Resources/AppIcon.icns", icns(entries))
     write("macos/Resources/AppIcon.png", png(mac_icon(512)))
 
-    # Windows: a near full-bleed tile at every size the shell asks for.
+    # Windows: the mark alone, with no tile (Windows icons carry their own silhouette rather than sit on a plate).
     sizes = (16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
-    write("windows/src/OpenTypeless/Assets/AppIcon.ico", ico([(s, png(draw_icon(s, 0.04))) for s in sizes]))
-    write("windows/src/OpenTypeless/Assets/AppIcon.png", png(draw_icon(512, 0.04)))
+    write("windows/src/OpenTypeless/Assets/AppIcon.ico", ico([(s, png(draw_bare(s))) for s in sizes]))
+    write("windows/src/OpenTypeless/Assets/AppIcon.png", png(draw_bare(512)))
 
     write("docs/brand/app-icon.svg", svg_app_icon())
     write("docs/brand/mark.svg", svg_mark(mono=False))

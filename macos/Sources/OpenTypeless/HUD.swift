@@ -449,9 +449,9 @@ private struct SendButton: View {
     }
 }
 
-/// A soft bloom of blue, teal, green and yellow behind the capsule as a recording starts, seen through the glass; it fades within
-/// two seconds. It's only in the view while it shows: blurred, it's work to draw, and the snapshots' offscreen
-/// rendering can't draw it at all.
+/// The glow round the capsule as a recording starts: a halo of halftone dots over a soft wash of colour, cyan-blue above,
+/// teal at the sides and yellow-green below, seen through the glass too; it fades within two seconds. It's only in the
+/// view while it shows: blurred, it's work to draw, and the snapshots' offscreen rendering can't draw it at all.
 private struct RecordingGlow: View {
     /// `HUDModel.recordingStarts`: each new value blooms once.
     let trigger: Int
@@ -460,23 +460,20 @@ private struct RecordingGlow: View {
     /// The bloom running now, so the end of an earlier one doesn't take it away.
     @State private var bloom = 0
 
-    private static let colors: [Color] = [
-        Color(red: 0.26, green: 0.52, blue: 0.96), // blue
-        Color(red: 0.14, green: 0.76, blue: 0.88), // teal
-        Color(red: 0.20, green: 0.66, blue: 0.33), // green
-        Color(red: 0.98, green: 0.74, blue: 0.02), // yellow
-        Color(red: 0.26, green: 0.52, blue: 0.96),
-    ]
-
     var body: some View {
         ZStack {
             if shown {
-                Capsule()
-                    .fill(AngularGradient(colors: Self.colors, center: .center))
-                    .padding(-8)
-                    .blur(radius: 12)
-                    .opacity(glow)
-                    .scaleEffect(0.9 + 0.1 * glow)
+                ZStack {
+                    Capsule()
+                        .fill(LinearGradient(gradient: Halftone.gradient, startPoint: .top, endPoint: .bottom))
+                        .padding(-8)
+                        .blur(radius: 10)
+                        .opacity(0.4)
+                    HalftoneHalo()
+                        .padding(-Halftone.margin)
+                }
+                .opacity(glow)
+                .scaleEffect(0.96 + 0.04 * glow)
             }
         }
         .allowsHitTesting(false)
@@ -492,12 +489,81 @@ private struct RecordingGlow: View {
         // Shown in the same animation, so it fades in (a view only just added has no earlier opacity to animate from).
         withAnimation(.easeOut(duration: 0.35)) {
             shown = true
-            glow = 0.9
+            glow = 1
         } completion: {
             withAnimation(.easeInOut(duration: 1.1).delay(0.35)) { glow = 0 } completion: {
                 if bloom == current { shown = false }
             }
         }
+    }
+}
+
+/// The glow's pattern and colours, the same as the Windows glow's.
+private enum Halftone {
+    /// How far the dots reach beyond the capsule, and how far apart they are.
+    static let margin: CGFloat = 22
+    static let spacing: CGFloat = 3.4
+    /// Top to bottom: cyan-blue, teal, green, yellow-green.
+    static let stops: [(location: CGFloat, red: CGFloat, green: CGFloat, blue: CGFloat)] = [
+        (0, 70, 170, 245), (0.4, 40, 200, 210), (0.7, 90, 215, 130), (1, 195, 238, 85),
+    ]
+
+    static var gradient: Gradient {
+        Gradient(stops: stops.map { .init(color: color($0.red, $0.green, $0.blue), location: $0.location) })
+    }
+
+    /// The colour `t` of the way down (0…1).
+    static func shade(_ t: CGFloat) -> Color {
+        let t = min(max(t, 0), 1)
+        let index = stops.firstIndex { $0.location >= t } ?? stops.count - 1
+        guard index > 0 else { return color(stops[0].red, stops[0].green, stops[0].blue) }
+        let from = stops[index - 1], to = stops[index]
+        let f = (t - from.location) / (to.location - from.location)
+        return color(from.red + (to.red - from.red) * f, from.green + (to.green - from.green) * f,
+                     from.blue + (to.blue - from.blue) * f)
+    }
+
+    private static func color(_ red: CGFloat, _ green: CGFloat, _ blue: CGFloat) -> Color {
+        Color(red: red / 255, green: green / 255, blue: blue / 255)
+    }
+}
+
+/// Halftone dots round the capsule, on a grid turned 45°: as large as they get next to it, shrinking to nothing
+/// `Halftone.margin` away. Laid out `Halftone.margin` beyond the capsule on every side.
+private struct HalftoneHalo: View {
+    var body: some View {
+        Canvas { context, size in
+            let margin = Halftone.margin, spacing = Halftone.spacing
+            let capsule = CGRect(origin: .zero, size: size).insetBy(dx: margin, dy: margin)
+            guard capsule.width > 0, capsule.height > 0 else { return }
+            let radius = min(capsule.height / 2, capsule.width / 2, 22)
+            let halfWidth = capsule.width / 2, halfHeight = capsule.height / 2
+            // The points of a square grid `step` apart whose row and column add up to an even number: a grid turned 45°
+            // with neighbours `spacing` apart.
+            let step = spacing / CGFloat(2).squareRoot()
+            var row = 0
+            var y: CGFloat = 0
+            while y <= size.height {
+                var dots = Path()
+                var x = row % 2 == 0 ? 0 : step
+                while x <= size.width {
+                    // How far outside the capsule; under it the glass would only blur the dots.
+                    let qx = abs(x - size.width / 2) - (halfWidth - radius)
+                    let qy = abs(y - size.height / 2) - (halfHeight - radius)
+                    let outside = hypot(max(qx, 0), max(qy, 0)) + min(max(qx, qy), 0) - radius
+                    let strength = 1 - min(max(outside / margin, 0), 1)
+                    if outside >= 0, strength > 0 {
+                        let r = 0.42 * spacing * strength.squareRoot()
+                        dots.addEllipse(in: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r))
+                    }
+                    x += 2 * step
+                }
+                context.fill(dots, with: .color(Halftone.shade(y / size.height).opacity(0.9)))
+                y += step
+                row += 1
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 

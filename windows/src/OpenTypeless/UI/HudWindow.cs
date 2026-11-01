@@ -3,13 +3,13 @@ using System.Numerics;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
-using XamlAnimation = Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Shapes;
 using OpenTypeless.Native;
 using OpenTypeless.Session;
@@ -129,12 +129,13 @@ public sealed class HudWindow : Window
 
     private readonly HudModel _model;
     private readonly ActiveMicaBackdrop _backdrop = new();
-    /// <summary>The glow, <see cref="_root"/> (the capsule's content) and the rim, stacked.</summary>
+    /// <summary>Holds <see cref="_root"/>, the capsule's content.</summary>
     private readonly Grid _frame = new();
     private readonly Grid _root = new();
-    private readonly Border _glow;
-    private readonly XamlAnimation.Storyboard _bloom;
-    private readonly Border _rim;
+    /// <summary>The glow round the capsule as a recording starts, in a window of its own behind this one.</summary>
+    private readonly HudGlow _glow = new();
+    /// <summary>A recording has started: the glow blooms once the capsule is placed and showing.</summary>
+    private bool _bloomPending;
     private readonly Stopwatch _frameClock = new();
     private TimeSpan _lastFrame;
     private bool _animating;
@@ -160,6 +161,11 @@ public sealed class HudWindow : Window
         Title = "OpenTypeless HUD";
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         WindowHelpers.MakeFloating(this);
+        // No frame at all: the window region cuts the capsule out, and Windows would otherwise still draw its thin border
+        // (a white ring round the capsule).
+        if (AppWindow.Presenter is OverlappedPresenter presenter) presenter.SetBorderAndTitleBar(false, false);
+        var noBorder = Win32.DWMWA_COLOR_NONE;
+        Win32.DwmSetWindowAttribute(Hwnd, Win32.DWMWA_BORDER_COLOR, ref noBorder, sizeof(uint)); // Windows 11 only
         WindowHelpers.AddExtendedStyle(Hwnd, Win32.WS_EX_NOACTIVATE | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST);
         _subclass = Subclass;
         Win32.SetWindowSubclass(Hwnd, _subclass, 1, 0);
@@ -167,12 +173,7 @@ public sealed class HudWindow : Window
 
         _bars = new LevelBars();
         _root.VerticalAlignment = VerticalAlignment.Stretch;
-        _glow = new Border { CornerRadius = new CornerRadius(CornerDips), IsHitTestVisible = false, Background = GlowBrush(), Opacity = 0 };
-        _bloom = BloomStoryboard(_glow);
-        _rim = new Border { CornerRadius = new CornerRadius(CornerDips), BorderThickness = new Thickness(1), IsHitTestVisible = false };
-        _frame.Children.Add(_glow);
         _frame.Children.Add(_root);
-        _frame.Children.Add(_rim);
         Content = _frame;
 
         _model.PhaseChanged += Render;
@@ -207,11 +208,18 @@ public sealed class HudWindow : Window
             Win32.ShowWindow(Hwnd, Win32.SW_SHOWNOACTIVATE);
             Win32.SetWindowPos(Hwnd, Win32.HWND_TOPMOST, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
         }
+        if (_bloomPending)
+        {
+            _bloomPending = false;
+            _glow.Bloom(_placed, WindowHelpers.Scale(Hwnd), Hwnd);
+        }
     }
 
     public void HideHud()
     {
         _visible = false;
+        _bloomPending = false;
+        _glow.Stop();
         SetAnimating(false);
         Win32.ShowWindow(Hwnd, Win32.SW_HIDE);
     }
@@ -228,7 +236,6 @@ public sealed class HudWindow : Window
         _rendered = phase;
         var working = phase is HudPhase.Working;
         _ring = null;
-        _rim.BorderBrush = Palette.Theme("CardStrokeColorDefaultBrush");
         FrameworkElement row;
         if (HasButtons)
         {
@@ -250,7 +257,7 @@ public sealed class HudWindow : Window
             _root.Children.Add(row);
         }
         SetAnimating(working);
-        if (bloom) Bloom();
+        if (bloom) _bloomPending = true;
         if (_visible) Resize(position: false);
     }
 
@@ -332,6 +339,8 @@ public sealed class HudWindow : Window
             Width = ButtonDips, Height = ButtonDips, VerticalAlignment = VerticalAlignment.Center,
             // Transparent rather than none, so the corners outside the circle take the click too.
             Background = new SolidColorBrush(Colors.Transparent),
+            // A click never moves keyboard focus here (nor shows a focus rectangle).
+            AllowFocusOnInteraction = false,
             Children = { new Ellipse { Width = ButtonDips, Height = ButtonDips, Fill = fill }, icon },
         };
         AutomationProperties.SetName(button, label);
@@ -416,48 +425,6 @@ public sealed class HudWindow : Window
         var shown = _model.Progress.Tick((now - _lastFrame).TotalSeconds);
         _lastFrame = now;
         _ring?.SetProgress(shown);
-    }
-
-    /// <summary>Blue, teal, green and yellow, washed through the Mica as a recording starts (see <see cref="Bloom"/>).</summary>
-    private static LinearGradientBrush GlowBrush() => new()
-    {
-        StartPoint = new Windows.Foundation.Point(0, 1),
-        EndPoint = new Windows.Foundation.Point(1, 0),
-        GradientStops =
-        {
-            new GradientStop { Color = Color.FromArgb(110, 66, 133, 244), Offset = 0 },   // blue
-            new GradientStop { Color = Color.FromArgb(100, 36, 193, 224), Offset = 0.35 }, // teal
-            new GradientStop { Color = Color.FromArgb(95, 52, 168, 83), Offset = 0.65 },   // green
-            new GradientStop { Color = Color.FromArgb(95, 251, 188, 4), Offset = 1 },      // yellow
-        },
-    };
-
-    /// <summary>
-    /// The glow as a recording starts: in within 0.35 s, held a moment, gone within two seconds, like the macOS bloom
-    /// behind the glass (here inside the capsule: Mica covers the whole window).
-    /// </summary>
-    private void Bloom()
-    {
-        _bloom.Stop();
-        _bloom.Begin();
-    }
-
-    private static XamlAnimation.Storyboard BloomStoryboard(UIElement glow)
-    {
-        var ease = new XamlAnimation.SineEase { EasingMode = XamlAnimation.EasingMode.EaseInOut };
-        var animation = new XamlAnimation.DoubleAnimationUsingKeyFrames
-        {
-            KeyFrames =
-            {
-                new XamlAnimation.DiscreteDoubleKeyFrame { KeyTime = XamlAnimation.KeyTime.FromTimeSpan(TimeSpan.Zero), Value = 0 },
-                new XamlAnimation.EasingDoubleKeyFrame { KeyTime = XamlAnimation.KeyTime.FromTimeSpan(TimeSpan.FromSeconds(0.35)), Value = 1, EasingFunction = ease },
-                new XamlAnimation.DiscreteDoubleKeyFrame { KeyTime = XamlAnimation.KeyTime.FromTimeSpan(TimeSpan.FromSeconds(0.7)), Value = 1 },
-                new XamlAnimation.EasingDoubleKeyFrame { KeyTime = XamlAnimation.KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.8)), Value = 0, EasingFunction = ease },
-            },
-        };
-        XamlAnimation.Storyboard.SetTarget(animation, glow);
-        XamlAnimation.Storyboard.SetTargetProperty(animation, "Opacity");
-        return new XamlAnimation.Storyboard { Children = { animation } };
     }
 
     /// <summary>
@@ -559,6 +526,7 @@ public sealed class HudWindow : Window
             _placed = new RectInt32(_centerX - width / 2, _bottom - height, width, height);
             WindowHelpers.PlaceClient(this, _placed);
             Shape(width, height, scale);
+            _glow.Follow(_placed, scale);
         }
         else
         {
@@ -572,6 +540,7 @@ public sealed class HudWindow : Window
             _placed = rect;
             WindowHelpers.PlaceClient(this, rect);
             Shape(width, height, scale);
+            _glow.Follow(_placed, scale);
         }
     }
 
@@ -581,7 +550,7 @@ public sealed class HudWindow : Window
 
     /// <summary>
     /// Cuts the window to the capsule: its client area (<paramref name="width"/> × <paramref name="height"/> physical
-    /// pixels) with corners of <see cref="CornerDips"/>. The rim drawn over the edge softens the region's hard steps.
+    /// pixels) with corners of <see cref="CornerDips"/>.
     /// </summary>
     private void Shape(int width, int height, double scale)
     {

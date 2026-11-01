@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>OpenTypeless</title>
+  <defs>
+    <linearGradient id="tile" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#2A2566"/><stop offset="1" stop-color="#0C0B20"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.4" cy="0.52" r="0.48">
+      <stop offset="0" stop-color="#5A5CFF" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#5A5CFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/><stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.04"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0.08"/></linearGradient>
+    <linearGradient id="bars" x1="231.424" y1="0" x2="598.016" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#8A78FF"/><stop offset="1" stop-color="#37C3FF"/></linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="230.4" fill="url(#tile)"/>
+  <rect width="1024" height="1024" rx="230.4" fill="url(#glow)"/>
+  <rect x="3.072" y="3.072" width="1017.86" height="1017.86" rx="227.328" fill="none" stroke="url(#rim)" stroke-width="6.144"/>
+  <rect x="231.424" y="389.12" width="90.112" height="245.76" rx="45.056" fill="url(#bars)"/><rect x="369.664" y="276.48" width="90.112" height="471.04" rx="45.056" fill="url(#bars)"/><rect x="507.904" y="348.16" width="90.112" height="327.68" rx="45.056" fill="url(#bars)"/><rect x="676.864" y="215.04" width="90.112" height="593.92" rx="45.056" fill="#FFFFFF"/>
+</svg>

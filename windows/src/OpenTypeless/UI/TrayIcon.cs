@@ -182,8 +182,9 @@ public sealed class TrayIcon : IDisposable
 }
 
 /// <summary>
-/// Monochrome tray glyphs drawn with antialiased signed-distance shapes: idle (waveform), recording (filled
-/// circle with the waveform cut out), processing (circle with an ellipsis), the three SF Symbols the mac app uses.
+/// Monochrome tray glyphs drawn with antialiased signed-distance shapes, the same three the mac app's menu bar shows:
+/// idle (the app's mark, its voice bars at half strength and its caret solid), recording (a filled circle with the
+/// mark cut out), processing (a circle with an ellipsis).
 /// </summary>
 public static class TrayGlyphs
 {
@@ -196,7 +197,7 @@ public static class TrayGlyphs
         {
             for (var x = 0; x < size; x++)
             {
-                var covered = 0;
+                var covered = 0.0;
                 for (var sy = 0; sy < samples; sy++)
                 {
                     for (var sx = 0; sx < samples; sx++)
@@ -204,10 +205,10 @@ public static class TrayGlyphs
                         // Normalised coordinates in 0…1 across the icon.
                         var u = (x + (sx + 0.5) / samples) / size;
                         var v = (y + (sy + 0.5) / samples) / size;
-                        if (Inside(state, u, v)) covered++;
+                        covered += Ink(state, u, v);
                     }
                 }
-                var alpha = (uint)(covered * 255 / (samples * samples));
+                var alpha = (uint)Math.Round(covered * 255 / (samples * samples));
                 // BGRA with straight (non-premultiplied) alpha, as icons expect.
                 pixels[y * size + x] = alpha == 0 ? 0 : (alpha << 24) | ink;
             }
@@ -215,38 +216,47 @@ public static class TrayGlyphs
         return CreateIcon(pixels, size);
     }
 
-    private static bool Inside(SessionController.SessionState state, double u, double v)
+    /// <summary>How much ink (0…1) the glyph for <paramref name="state"/> puts at (u, v).</summary>
+    private static double Ink(SessionController.SessionState state, double u, double v)
     {
         switch (state)
         {
             case SessionController.SessionState.Recording:
-                // Filled disc with the waveform knocked out.
-                return Distance(u, v, 0.5, 0.5) <= 0.47 && !Waveform(u, v, 0.56, 0.5);
+                // Filled disc with the mark knocked out.
+                return Distance(u, v, 0.5, 0.5) <= 0.47 && Mark(u, v, 0.56) == 0 ? 1 : 0;
             case SessionController.SessionState.Processing:
                 var ring = Math.Abs(Distance(u, v, 0.5, 0.5) - 0.41) <= 0.055;
                 var dots = Distance(u, v, 0.29, 0.5) <= 0.07 || Distance(u, v, 0.5, 0.5) <= 0.07 || Distance(u, v, 0.71, 0.5) <= 0.07;
-                return ring || dots;
+                return ring || dots ? 1 : 0;
             default:
-                return Waveform(u, v, 0.92, 0.5);
+                return Mark(u, v, 0.88);
         }
     }
 
-    /// <summary>Six rounded bars (the app icon's waveform) centred on (0.5, cy), spanning <paramref name="width"/>.</summary>
-    private static bool Waveform(double u, double v, double width, double cy)
+    /// <summary>
+    /// The app's mark (<see cref="Logo"/>) centred in the icon with its caret <paramref name="height"/> tall: 1 on the
+    /// caret, 0.5 on a voice bar, 0 elsewhere.
+    /// </summary>
+    private static double Mark(double u, double v, double height)
     {
-        var bars = AppTile.Bars;
-        var pitch = width / (bars.Length - 0.35);
-        var radius = pitch * 0.27;
-        var x0 = 0.5 - pitch * (bars.Length - 1) / 2;
-        for (var i = 0; i < bars.Length; i++)
+        // Back to tile units, with the mark's centre on the icon's centre.
+        var scale = height / Logo.Caret.Height;
+        var x = Logo.CenterX + (u - 0.5) / scale;
+        var y = 0.5 + (v - 0.5) / scale;
+        if (InCapsule(x, y, Logo.Caret)) return 1;
+        foreach (var bar in Logo.Bars)
         {
-            var half = Math.Max(0, width * bars[i] / 2 - radius);
-            var cx = x0 + i * pitch;
-            // Capsule: distance to the vertical segment.
-            var dy = Math.Max(0, Math.Abs(v - cy) - half);
-            if (Math.Sqrt((u - cx) * (u - cx) + dy * dy) <= radius) return true;
+            if (InCapsule(x, y, bar)) return 0.5;
         }
-        return false;
+        return 0;
+    }
+
+    /// <summary>Whether (x, y) is on a bar of the mark: a vertical capsule centred on y = 0.5.</summary>
+    private static bool InCapsule(double x, double y, (double X, double Height) item)
+    {
+        var radius = Logo.Stroke / 2;
+        var dy = Math.Max(0, Math.Abs(y - 0.5) - (item.Height / 2 - radius));
+        return (x - item.X) * (x - item.X) + dy * dy <= radius * radius;
     }
 
     private static double Distance(double u, double v, double cx, double cy) => Math.Sqrt((u - cx) * (u - cx) + (v - cy) * (v - cy));

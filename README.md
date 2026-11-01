@@ -250,18 +250,20 @@ macos/                      The macOS app (Swift Package)
   Sources/TypelessCore/       Pipeline logic, no UI: chunker, WAV, provider client, retries, clean-up prompt
   Sources/OpenTypeless/       The app: hotkey, recorder, HUD, settings, history, paste, CLI tools
   Tests/                      swift-testing suites
-  scripts/                    Build, signing, icon and test scripts
+  scripts/                    Build, signing and test scripts
 windows/                    The Windows app (.NET solution)
   src/TypelessCore/           The same pipeline logic, ported line by line
   src/OpenTypeless/           The WinUI app: hotkey hook, WASAPI recorder, HUD, tray, settings, history, paste
   src/OpenTypeless.Cli/       Command-line tools (transcribe a file, chunk analysis, prompt evaluation)
   tests/                      xUnit suites
-  scripts/                    Build, test and icon scripts
+  scripts/                    Build and test scripts
 eval/                       Clean-up test sets and the evaluation guide, shared by both apps
 i18n/                       UI translations (other than Chinese and English), shared by both apps
 docs/DESIGN.md              Architecture and design decisions
 docs/WINDOWS-PORT.md        How each macOS file and system API maps to Windows
 docs/images/                README screenshots
+docs/brand/                 The logo: vector masters and how to use them
+scripts/make_icon.py        Draws the logo and writes every app icon from it
 ```
 
 The clean-up prompt (`Prompts.swift` / `Prompts.cs`) is byte-identical in both apps; change both together and check the result with [eval/](eval/).

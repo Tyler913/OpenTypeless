@@ -54,7 +54,7 @@ failure handling. Only the system-integration layer and the look differ.
 | Concern | macOS | Windows |
 |---|---|---|
 | App shell | `LSUIElement` menu-bar app | No main window; notification-area (tray) icon via `Shell_NotifyIcon`. Single instance (named mutex); launching again opens Home, like reopening from Finder. |
-| Tray icon states | SF Symbols `waveform` / `waveform.circle.fill` / `ellipsis.circle` | Same three glyphs rasterised at runtime for the current DPI and taskbar theme (light/dark). |
+| Tray icon states | The app's mark / the mark cut out of a disc (template images drawn by `Logo.menuBarImage`) / SF Symbol `ellipsis.circle` | Same three glyphs rasterised at runtime for the current DPI and taskbar theme (light/dark). |
 | Menu-bar popover | `NSPopover` sized before showing | Borderless WinUI window anchored above the tray, sized to its content before it is shown, closes when it loses focus. |
 | Global hotkey | `CGEventTap` (flagsChanged/keyDown/keyUp) | `WH_KEYBOARD_LL` hook on a dedicated thread with its own message loop (never blocked by UI). Same rules: modifier-only keys, combos swallowed, tap < 0.35 s → hands-free, Esc cancels, another *physical* key within 1 s cancels (injected keys are ignored, like the Logi Options+ case). Alt/Win hotkeys get a masking key so Windows doesn't open the menu bar / Start. |
 | Default hotkey | Fn | **Right Alt** (Windows keyboards don't expose Fn to software, and Copilot+ PCs have the Copilot key where Right Ctrl was). Installs from before 1.4.0 keep Right Ctrl. See the Hotkey section for presets. |

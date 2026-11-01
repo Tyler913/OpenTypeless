@@ -206,13 +206,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateStatusIcon(_ state: SessionController.State) {
-        let name: String
+        let image: NSImage?
         switch state {
-        case .idle: name = "waveform"
-        case .recording: name = "waveform.circle.fill"
-        case .processing: name = "ellipsis.circle"
+        case .idle: image = Logo.menuBarImage(recording: false)
+        case .recording: image = Logo.menuBarImage(recording: true)
+        case .processing: image = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "OpenTypeless")
         }
-        let image = NSImage(systemSymbolName: name, accessibilityDescription: "OpenTypeless")
         image?.isTemplate = true
         statusItem.button?.image = image
     }

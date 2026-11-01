@@ -144,12 +144,34 @@ public static class Ui
     public static Brush Primary => Palette.Theme("TextFillColorPrimaryBrush");
 }
 
-/// <summary>The app's gradient tile with the waveform glyph (the same artwork as the app icon).</summary>
+/// <summary>
+/// The app's mark: three voice bars running into a text caret, so what you say becomes text at your cursor. The same
+/// geometry and colours as the app icon (scripts/make_icon.py draws that), in tile units (0…1, y down); the bars and
+/// the caret are all <see cref="Stroke"/> wide and centred on y = 0.5. The tray glyphs draw it too.
+/// </summary>
+public static class Logo
+{
+    /// <summary>Centre x and height of each voice bar.</summary>
+    public static readonly (double X, double Height)[] Bars = [(0.270, 0.24), (0.405, 0.46), (0.540, 0.32)];
+    public static readonly (double X, double Height) Caret = (0.705, 0.58);
+    public const double Stroke = 0.088;
+
+    public static readonly Color TileTop = Color.FromArgb(255, 0x2A, 0x25, 0x66);
+    public static readonly Color TileBottom = Color.FromArgb(255, 0x0C, 0x0B, 0x20);
+    public static readonly Color Glow = Color.FromArgb(255, 0x5A, 0x5C, 0xFF);
+    public static readonly Color BarStart = Color.FromArgb(255, 0x8A, 0x78, 0xFF);
+    public static readonly Color BarEnd = Color.FromArgb(255, 0x37, 0xC3, 0xFF);
+
+    /// <summary>The bar gradient runs from the first bar's left edge to the last bar's right edge.</summary>
+    public static double BarsLeft => Bars[0].X - Stroke / 2;
+    public static double BarsRight => Bars[^1].X + Stroke / 2;
+    /// <summary>Horizontal centre of the whole mark, bars and caret.</summary>
+    public static double CenterX => (BarsLeft + Caret.X + Stroke / 2) / 2;
+}
+
+/// <summary>The app's tile: the mark on its deep indigo tile, the same artwork as the app icon.</summary>
 public sealed class AppTile : UserControl
 {
-    /// <summary>Relative bar heights of the waveform, shared with the icon and tray glyphs.</summary>
-    public static readonly double[] Bars = [0.26, 0.6, 1.0, 0.55, 0.82, 0.33];
-
     private double _tileSize = 32;
     public double TileSize
     {
@@ -165,28 +187,87 @@ public sealed class AppTile : UserControl
     private void Render()
     {
         var size = _tileSize;
-        var glyph = size * 0.5;
-        var pitch = glyph / (Bars.Length - 0.35);
-        var barWidth = Math.Max(1.5, pitch * 0.5);
         var canvas = new Canvas { Width = size, Height = size };
-        var x0 = size / 2 - pitch * (Bars.Length - 1) / 2;
-        for (var i = 0; i < Bars.Length; i++)
+        foreach (var bar in Logo.Bars)
         {
-            var h = Math.Max(barWidth, glyph * Bars[i]);
-            var bar = new Rectangle { Width = barWidth, Height = h, RadiusX = barWidth / 2, RadiusY = barWidth / 2, Fill = new SolidColorBrush(Colors.White) };
-            Canvas.SetLeft(bar, x0 + i * pitch - barWidth / 2);
-            Canvas.SetTop(bar, size / 2 - h / 2);
-            canvas.Children.Add(bar);
+            // One gradient across all the bars: each bar's brush is in that bar's own coordinates.
+            var left = (bar.X - Logo.Stroke / 2) * size;
+            canvas.Children.Add(Capsule(bar, size, new LinearGradientBrush
+            {
+                MappingMode = BrushMappingMode.Absolute,
+                StartPoint = new Windows.Foundation.Point(Logo.BarsLeft * size - left, 0),
+                EndPoint = new Windows.Foundation.Point(Logo.BarsRight * size - left, 0),
+                GradientStops = { new GradientStop { Color = Logo.BarStart, Offset = 0 }, new GradientStop { Color = Logo.BarEnd, Offset = 1 } },
+            }));
         }
-        Content = new Border
+        canvas.Children.Add(Capsule(Logo.Caret, size, new SolidColorBrush(Colors.White)));
+
+        var corner = new CornerRadius(size * 0.26);
+        var glow = new Windows.Foundation.Point(0.40, 0.52);
+        Content = new Grid
         {
             Width = size,
             Height = size,
-            CornerRadius = new CornerRadius(size * 0.26),
-            Background = Palette.Brand(),
-            Child = canvas,
+            Children =
+            {
+                new Border
+                {
+                    CornerRadius = corner,
+                    Background = new LinearGradientBrush
+                    {
+                        StartPoint = new Windows.Foundation.Point(0.2, 0),
+                        EndPoint = new Windows.Foundation.Point(0.8, 1),
+                        GradientStops = { new GradientStop { Color = Logo.TileTop, Offset = 0 }, new GradientStop { Color = Logo.TileBottom, Offset = 1 } },
+                    },
+                },
+                new Border
+                {
+                    CornerRadius = corner,
+                    Background = new RadialGradientBrush
+                    {
+                        Center = glow,
+                        GradientOrigin = glow,
+                        RadiusX = 0.48,
+                        RadiusY = 0.48,
+                        GradientStops =
+                        {
+                            new GradientStop { Color = WithAlpha(Logo.Glow, 0.38), Offset = 0 },
+                            new GradientStop { Color = WithAlpha(Logo.Glow, 0), Offset = 1 },
+                        },
+                    },
+                },
+                // A hairline highlight inside the edge, brightest at the top.
+                new Border
+                {
+                    CornerRadius = corner,
+                    BorderThickness = new Thickness(Math.Max(0.5, size * 0.006)),
+                    BorderBrush = new LinearGradientBrush
+                    {
+                        StartPoint = new Windows.Foundation.Point(0, 0),
+                        EndPoint = new Windows.Foundation.Point(0, 1),
+                        GradientStops =
+                        {
+                            new GradientStop { Color = WithAlpha(Colors.White, 0.22), Offset = 0 },
+                            new GradientStop { Color = WithAlpha(Colors.White, 0.04), Offset = 0.5 },
+                            new GradientStop { Color = WithAlpha(Colors.White, 0.08), Offset = 1 },
+                        },
+                    },
+                },
+                canvas,
+            },
         };
     }
+
+    private static Rectangle Capsule((double X, double Height) item, double size, Brush fill)
+    {
+        var width = Logo.Stroke * size;
+        var capsule = new Rectangle { Width = width, Height = item.Height * size, RadiusX = width / 2, RadiusY = width / 2, Fill = fill };
+        Canvas.SetLeft(capsule, (item.X - Logo.Stroke / 2) * size);
+        Canvas.SetTop(capsule, (0.5 - item.Height / 2) * size);
+        return capsule;
+    }
+
+    private static Color WithAlpha(Color color, double alpha) => Color.FromArgb((byte)Math.Round(alpha * 255), color.R, color.G, color.B);
 }
 
 /// <summary>Coloured rounded square with a white glyph, like the macOS System Settings icons.</summary>

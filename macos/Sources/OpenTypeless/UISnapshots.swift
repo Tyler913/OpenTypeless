@@ -99,7 +99,7 @@ enum UISnapshots {
     /// Opens the real popover from a real status item and checks it sits under the icon, on screen.
     private static func checkPopover(controller: SessionController, dir: URL) throws {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil)
+        item.button?.image = Logo.menuBarImage(recording: false)
         let popover = StatusPopover(rootView: MenuPopoverView(controller: controller, openSettings: { _ in }, close: {}))
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
         guard let button = item.button, let buttonWindow = button.window else {

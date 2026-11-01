@@ -231,18 +231,20 @@ macos/                      Die macOS-App (Swift Package)
   Sources/TypelessCore/       Verarbeitungslogik ohne UI: Zerteilung, WAV, Anbieter-Client, Wiederholungen, Bereinigungs-Prompt
   Sources/OpenTypeless/       Die App: Tastenkürzel, Aufnahme, HUD, Einstellungen, Verlauf, Einfügen, CLI-Werkzeuge
   Tests/                      swift-testing-Tests
-  scripts/                    Skripte für Build, Signatur, Symbol und Tests
+  scripts/                    Skripte für Build, Signatur und Tests
 windows/                    Die Windows-App (.NET-Projektmappe)
   src/TypelessCore/           Dieselbe Verarbeitungslogik, Zeile für Zeile portiert
   src/OpenTypeless/           Die WinUI-App: Tastatur-Hook, WASAPI-Aufnahme, HUD, Infobereich, Einstellungen, Verlauf, Einfügen
   src/OpenTypeless.Cli/       Kommandozeilenwerkzeuge (Datei transkribieren, Zerteilungsanalyse, Prompt-Evaluierung)
   tests/                      xUnit-Tests
-  scripts/                    Skripte für Build, Tests und Symbol
+  scripts/                    Skripte für Build und Tests
 eval/                       Bereinigungs-Testsets und der Evaluierungsleitfaden, von beiden Apps genutzt
 i18n/                       UI-Übersetzungen (außer Chinesisch und Englisch), von beiden Apps genutzt
 docs/DESIGN.md              Architektur und Designentscheidungen
 docs/WINDOWS-PORT.md        Wie jede macOS-Datei und System-API unter Windows abgebildet wird
 docs/images/                README-Screenshots
+docs/brand/                 Das Logo: Vektorvorlagen und ihre Verwendung
+scripts/make_icon.py        Zeichnet das Logo und erzeugt daraus alle App-Symbole
 ```
 
 Der Bereinigungs-Prompt (`Prompts.swift` / `Prompts.cs`) ist in beiden Apps byte-identisch; ändere beide gemeinsam und prüfe das Ergebnis mit [eval/](eval/).

@@ -250,18 +250,20 @@ macos/                      macOS 应用（Swift Package）
   Sources/TypelessCore/       处理流程逻辑，不含 UI：切分器、WAV、服务商客户端、重试、整理提示词
   Sources/OpenTypeless/       应用本身：快捷键、录音、HUD、设置、历史、粘贴、命令行工具
   Tests/                      swift-testing 测试
-  scripts/                    构建、签名、图标和测试脚本
+  scripts/                    构建、签名和测试脚本
 windows/                    Windows 应用（.NET 解决方案）
   src/TypelessCore/           同样的处理流程逻辑，逐行移植
   src/OpenTypeless/           WinUI 应用：快捷键钩子、WASAPI 录音、HUD、托盘、设置、历史、粘贴
   src/OpenTypeless.Cli/       命令行工具（转写文件、切分分析、提示词评测）
   tests/                      xUnit 测试
-  scripts/                    构建、测试和图标脚本
+  scripts/                    构建和测试脚本
 eval/                       整理测试集和评测指南，两个应用共用
 i18n/                       界面翻译（中文和英文以外的语言），两个应用共用
 docs/DESIGN.md              架构和设计决策
 docs/WINDOWS-PORT.md        每个 macOS 文件和系统 API 在 Windows 上的对应
 docs/images/                README 截图
+docs/brand/                 Logo：矢量源文件与使用说明
+scripts/make_icon.py        绘制 Logo 并生成全部应用图标
 ```
 
 整理提示词（`Prompts.swift` / `Prompts.cs`）在两个应用里逐字节相同；要改就两边一起改，并用 [eval/](eval/) 检查效果。

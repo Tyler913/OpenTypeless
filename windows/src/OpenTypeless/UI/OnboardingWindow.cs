@@ -490,7 +490,7 @@ public sealed class OnboardingWindow : Window
             Children =
             {
                 ModelRow(Glyphs.Speech, Tint.Blue, L("语音转文字", "Speech-to-text"), stt),
-                new CardDivider(),
+                new CardDivider { Inset = 50 },
                 ModelRow(Glyphs.Font, Tint.Purple, L("文字整理", "Clean-up"), chat),
             },
         }));
@@ -661,13 +661,13 @@ public sealed class OnboardingWindow : Window
                     Glyph = Glyphs.Microphone, Tint = Tint.Blue, Title = L("按住说话", "Hold to talk"),
                     Subtitle = L("按住快捷键说话，松开后自动整理并插入到光标处", "Hold the shortcut while you speak; release to clean up and insert"),
                 },
-                new CardDivider(),
+                new CardDivider { Inset = 50 },
                 new CardRow
                 {
                     Glyph = Glyphs.TouchPointer, Tint = Tint.Purple, Title = L("轻点一下：免手持", "Tap once: hands-free"),
                     Subtitle = L("适合长段口述，说完再按一次结束", "For long dictation — press again when done"),
                 },
-                new CardDivider(),
+                new CardDivider { Inset = 50 },
                 new CardRow
                 {
                     Glyph = Glyphs.Cancel, Tint = Tint.Gray, Title = L("Esc 取消", "Esc to cancel"),

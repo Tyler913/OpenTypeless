@@ -41,7 +41,7 @@ public sealed class ModelsPage : PageBase
             _settings.SttModel = text;
             _sttPrice.Show(_settings.SttProvider, text);
             _sttHost.Show(_settings.SttProvider, text);
-            if (_sttRow != null) _sttRow.Subtitle = VocabularyHintNote();
+            if (_sttRow != null) _sttRow.Help = VocabularyHintNote();
         };
         _chatField.TextChanged = text =>
         {
@@ -85,7 +85,7 @@ public sealed class ModelsPage : PageBase
     }
 
     private static CardRow PriceRow(PriceEditor editor) =>
-        new() { Glyph = Glyphs.Money, Tint = Tint.Green, Title = L("价格", "Price"), Trailing = editor };
+        new() { Title = L("价格", "Price"), Trailing = editor };
 
     private string VocabularyHintNote() => VocabularyHints.StyleFor(_settings.SttProvider, _settings.SttModel) != null
         ? L("你的词汇表会作为拼写提示一起发给这个模型", "Your vocabulary is sent to this model as spelling hints")
@@ -121,16 +121,16 @@ public sealed class ModelsPage : PageBase
         var stt = new CardSection
         {
             Title = L("语音转文字", "Speech to text"),
-            Footer = L("长语音会在停顿处自动切成 ≤28 秒的片段，边录边转，每片失败会自动重试。",
-                       "Long recordings are split at pauses into ≤28 s segments that are transcribed while you talk, each retried on failure."),
+            Help = L("长语音会在停顿处自动切成 ≤28 秒的片段，边录边转，每片失败会自动重试。",
+                     "Long recordings are split at pauses into ≤28 s segments that are transcribed while you talk, each retried on failure."),
         };
         stt.Body.Add(new CardRow
         {
-            Glyph = Glyphs.Cloud, Tint = Tint.Indigo, Title = L("服务商", "Provider"),
+            Title = L("服务商", "Provider"),
             Trailing = ProviderPicker(_settings.SttProvider, ProviderIdExtensions.All.Where(p => p.SupportsStt()), _settings.SelectSttProvider),
         });
         stt.Body.Add(new CardDivider());
-        _sttRow = new CardRow { Glyph = Glyphs.Microphone, Tint = Tint.Blue, Title = L("模型", "Model"), Subtitle = VocabularyHintNote(), Trailing = _sttField };
+        _sttRow = new CardRow { Title = L("模型", "Model"), Help = VocabularyHintNote(), Trailing = _sttField };
         stt.Body.Add(_sttRow);
         _sttHost.AddTo(stt.Body);
         stt.Body.Add(new CardDivider());
@@ -149,8 +149,8 @@ public sealed class ModelsPage : PageBase
         language.SelectionChanged += (_, _) => _settings.SttLanguage = languages[Math.Max(0, language.SelectedIndex)].Code;
         stt.Body.Add(new CardRow
         {
-            Glyph = Glyphs.Message, Tint = Tint.Teal, Title = L("说话语言", "Spoken language"),
-            Subtitle = L("固定语言可以提高准确率；中英混说请选自动", "Fixing it can help accuracy; use Auto for mixed speech"),
+            Title = L("说话语言", "Spoken language"),
+            Help = L("固定语言可以提高准确率；中英混说请选自动", "Fixing it can help accuracy; use Auto for mixed speech"),
             Trailing = language,
         });
         stt.Body.Add(new CardDivider());
@@ -158,9 +158,10 @@ public sealed class ModelsPage : PageBase
         sttBackup.Toggled += (_, _) => _settings.SttBackupEnabled = sttBackup.IsOn;
         stt.Body.Add(new CardRow
         {
-            Glyph = Glyphs.Lightning, Tint = Tint.Orange, Title = L("备用语音转文字", "Backup speech-to-text"),
-            Subtitle = L("某一段比平时慢很多（按音频长度和最近的速度估算）或者失败时，同时请求备用服务商，用先返回的那个",
-                         "If a segment takes much longer than usual (judged by its length and recent speed) or fails, the backup is asked too and the first answer wins"),
+            Title = L("备用语音转文字", "Backup speech-to-text"),
+            Subtitle = L("太慢或失败时同时请求备用，用先返回的", "Asked too when a request is slow or fails"),
+            Help = L("某一段比平时慢很多（按音频长度和最近的速度估算）或者失败时，同时请求备用服务商，用先返回的那个",
+                     "If a segment takes much longer than usual (judged by its length and recent speed) or fails, the backup is asked too and the first answer wins"),
             Trailing = sttBackup,
         });
         if (_settings.SttBackupEnabled)
@@ -168,14 +169,14 @@ public sealed class ModelsPage : PageBase
             stt.Body.Add(new CardDivider());
             stt.Body.Add(new CardRow
             {
-                Glyph = Glyphs.Cloud, Tint = Tint.Indigo, Title = L("备用服务商", "Backup provider"),
+                Title = L("备用服务商", "Backup provider"),
                 Trailing = ProviderPicker(_settings.SttBackupProvider, ProviderIdExtensions.All.Where(p => p.SupportsStt()), _settings.SelectSttBackupProvider),
             });
             stt.Body.Add(new CardDivider());
             _sttBackupRow = new CardRow
             {
-                Glyph = Glyphs.Microphone, Tint = Tint.Teal, Title = L("备用模型 ID", "Backup model ID"),
-                Subtitle = L("选一个不同厂商的模型，两边不容易同时变慢", "Pick a model from another vendor so both are rarely slow at once"),
+                Title = L("备用模型 ID", "Backup model ID"),
+                Help = L("选一个不同厂商的模型，两边不容易同时变慢", "Pick a model from another vendor so both are rarely slow at once"),
                 Trailing = _sttBackupField,
             };
             stt.Body.Add(_sttBackupRow);
@@ -193,7 +194,7 @@ public sealed class ModelsPage : PageBase
         enabled.Toggled += (_, _) => _settings.PolishEnabled = enabled.IsOn;
         polish.Body.Add(new CardRow
         {
-            Glyph = Glyphs.StarFill, Tint = Tint.Purple, Title = L("用 AI 整理文字", "Clean up with AI"),
+            Title = L("用 AI 整理文字", "Clean up with AI"),
             Subtitle = L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists"),
             Trailing = enabled,
         });
@@ -202,7 +203,7 @@ public sealed class ModelsPage : PageBase
             polish.Body.Add(new CardDivider());
             polish.Body.Add(new CardRow
             {
-                Glyph = Glyphs.Cloud, Tint = Tint.Indigo, Title = L("服务商", "Provider"),
+                Title = L("服务商", "Provider"),
                 Trailing = ProviderPicker(_settings.PolishProvider, ProviderIdExtensions.All, id =>
                 {
                     _settings.SelectPolishProvider(id);
@@ -212,8 +213,8 @@ public sealed class ModelsPage : PageBase
             polish.Body.Add(new CardDivider());
             _chatRow = new CardRow
             {
-                Glyph = Glyphs.Component, Tint = Tint.Pink, Title = L("模型", "Model"),
-                Subtitle = _settings.PolishProvider == ProviderId.OpenRouter ? L("推理会自动关闭或降到最低，以减少延迟", "Reasoning is turned off or minimised for speed") : null,
+                Title = L("模型", "Model"),
+                Help = _settings.PolishProvider == ProviderId.OpenRouter ? L("推理会自动关闭或降到最低，以减少延迟", "Reasoning is turned off or minimised for speed") : null,
                 Trailing = _chatField,
             };
             polish.Body.Add(_chatRow);
@@ -233,9 +234,10 @@ public sealed class ModelsPage : PageBase
             var delay = HedgedPolish.DefaultHedgeDelay.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + L(" 秒", " s");
             polish.Body.Add(new CardRow
             {
-                Glyph = Glyphs.Lightning, Tint = Tint.Orange, Title = L("备用模型", "Backup model"),
-                Subtitle = L($"首选模型 {delay} 内还没开始输出、或请求失败时，同时请求备用模型，用先出字的那个",
-                             $"If the main model hasn't started answering within {delay}, or fails, the backup is asked too and the first to answer wins"),
+                Title = L("备用模型", "Backup model"),
+                Subtitle = L("太慢或失败时同时请求备用，用先返回的", "Asked too when a request is slow or fails"),
+                Help = L($"首选模型 {delay} 内还没开始输出、或请求失败时，同时请求备用模型，用先出字的那个",
+                         $"If the main model hasn't started answering within {delay}, or fails, the backup is asked too and the first to answer wins"),
                 Trailing = backup,
             });
             if (_settings.PolishBackupEnabled)
@@ -243,7 +245,7 @@ public sealed class ModelsPage : PageBase
                 polish.Body.Add(new CardDivider());
                 polish.Body.Add(new CardRow
                 {
-                    Glyph = Glyphs.Cloud, Tint = Tint.Indigo, Title = L("备用服务商", "Backup provider"),
+                    Title = L("备用服务商", "Backup provider"),
                     Trailing = ProviderPicker(_settings.PolishBackupProvider, ProviderIdExtensions.All, id =>
                     {
                         _settings.SelectPolishBackupProvider(id);
@@ -253,8 +255,8 @@ public sealed class ModelsPage : PageBase
                 polish.Body.Add(new CardDivider());
                 _backupRow = new CardRow
                 {
-                    Glyph = Glyphs.Component, Tint = Tint.Pink, Title = L("备用模型 ID", "Backup model ID"),
-                    Subtitle = L("选一个不同厂商的快速模型，两边不容易同时变慢", "Pick a fast model from another vendor so both are rarely slow at once"),
+                    Title = L("备用模型 ID", "Backup model ID"),
+                    Help = L("选一个不同厂商的快速模型，两边不容易同时变慢", "Pick a fast model from another vendor so both are rarely slow at once"),
                     Trailing = _backupField,
                 };
                 polish.Body.Add(_backupRow);
@@ -446,14 +448,14 @@ internal sealed class PriceEditor : UserControl
     private readonly AppSettings _settings = AppSettings.Shared;
     private string? _shown;
 
-    /// <summary>The row the editor sits in, whose subtitle says where the price comes from.</summary>
+    /// <summary>The row the editor sits in, whose "?" says where the price comes from.</summary>
     public CardRow? Row
     {
         get => _row;
         set
         {
             _row = value;
-            _shown = null; // the new row needs its subtitle
+            _shown = null; // the new row needs its "?" filled in
         }
     }
 
@@ -477,7 +479,7 @@ internal sealed class PriceEditor : UserControl
             var price = catalog.Price(model);
             if (Row != null)
             {
-                Row.Subtitle = catalog.IsEmpty
+                Row.Help = catalog.IsEmpty
                     ? L("正在从 OpenRouter 获取最新价格…", "Getting the latest prices from OpenRouter…")
                     : L($"OpenRouter 实时价格，更新于 {Formatting.ShortStamp(catalog.FetchedAt)}。实际按每次请求的扣费计算。",
                         $"Live from OpenRouter, updated {Formatting.ShortStamp(catalog.FetchedAt)}. Each request counts what OpenRouter billed.");
@@ -495,7 +497,7 @@ internal sealed class PriceEditor : UserControl
 
         if (Row != null)
         {
-            Row.Subtitle = _speech
+            Row.Help = _speech
                 ? L("按录音时长计费，美元 / 分钟。留空则不计入花费。", "Per minute of audio, in USD. Leave empty to leave it out of the spend.")
                 : L("美元 / 百万 token（服务商不返回用量时按字数估算）。留空则不计入花费。",
                     "USD per million tokens (estimated from the text when the server doesn't say). Leave empty to leave it out of the spend.");
@@ -573,7 +575,7 @@ internal sealed class HostPicker
     public HostPicker(bool speech)
     {
         _speech = speech;
-        _row = new CardRow { Glyph = Glyphs.Globe, Tint = Tint.Gray, Title = L("托管方", "Host") };
+        _row = new CardRow { Title = L("托管方", "Host") };
         SetVisible(false);
     }
 
@@ -641,13 +643,13 @@ internal sealed class HostPicker
                          $"Served by {names}. For speech to text OpenRouter picks by price and can't be told which.");
             if (_hosts.Any(h => h.Tag.StartsWith("groq", StringComparison.Ordinal)))
                 text += L("想一直用 Groq，就把服务商换成 Groq 并填上它的 Key。", " To always use Groq, choose Groq as the provider and add a Groq key.");
-            _row.Subtitle = text;
+            _row.Help = text;
             _row.Trailing = Ui.Text(L("自动（按价格）", "Automatic (by price)"), 12.5, foreground: Ui.Secondary);
             return;
         }
 
         var automatic = L("自动（最快）", "Automatic (fastest)");
-        _row.Subtitle = chosen is null
+        _row.Help = chosen is null
             ? L("OpenRouter 选当下延迟最低的托管方", "OpenRouter uses whichever host is answering fastest")
             : L($"先请求 {Label(chosen)}；它出错或不可用时，OpenRouter 自动换最快的另一家",
                 $"{Label(chosen)} is asked first; if it errors or is down, OpenRouter falls back to the fastest other host");

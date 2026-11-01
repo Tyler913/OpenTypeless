@@ -29,19 +29,6 @@ public static class SettingsPageInfo
         _ => L("历史记录", "History"),
     };
 
-    public static string Subtitle(this SettingsPage page) => page switch
-    {
-        SettingsPage.Home => L("你用语音写了多少、省了多少时间、花了多少钱", "What you've dictated, the time it saved and what it cost"),
-        SettingsPage.General => L("界面语言、开机启动与系统权限", "Language, startup and system permissions"),
-        SettingsPage.Shortcut => L("选择用来开始听写的按键", "Choose the key that starts dictation"),
-        SettingsPage.Providers => L("填写 API Key。语音转文字和文字整理可以使用不同的服务商。",
-                                    "Add API keys. Speech-to-text and clean-up can use different providers."),
-        SettingsPage.Models => L("为语音转文字和文字整理分别选择模型", "Pick a model for each step"),
-        SettingsPage.Style => L("让整理结果更符合你的用词和习惯", "Teach the clean-up your terms and preferences"),
-        SettingsPage.Apps => L("在特定应用里听写时使用的设置", "Settings used when you dictate into a particular app"),
-        _ => L("每次听写都会保存，失败的可以重试", "Every dictation is saved; failed ones can be retried"),
-    };
-
     public static string Glyph(this SettingsPage page) => page switch
     {
         SettingsPage.Home => Glyphs.Home,
@@ -53,53 +40,63 @@ public static class SettingsPageInfo
         SettingsPage.Apps => Glyphs.AllApps,
         _ => Glyphs.History,
     };
-
-    public static Tint Tint(this SettingsPage page) => page switch
-    {
-        SettingsPage.Home => UI.Tint.Blue,
-        SettingsPage.General => UI.Tint.Gray,
-        SettingsPage.Shortcut => UI.Tint.Blue,
-        SettingsPage.Providers => UI.Tint.Orange,
-        SettingsPage.Models => UI.Tint.Purple,
-        SettingsPage.Style => UI.Tint.Green,
-        SettingsPage.Apps => UI.Tint.Teal,
-        _ => UI.Tint.Indigo,
-    };
 }
 
-/// <summary>Title + subtitle + (optionally scrolling) content, shared by every page.</summary>
+/// <summary>
+/// The page's title, with an explanation behind a "?" and controls for the whole page at its end, above the (optionally
+/// scrolling) content. Shared by every page.
+/// </summary>
 public abstract class PageBase : UserControl
 {
-    protected readonly StackPanel Body = new() { Spacing = 22 };
+    /// <summary>How wide a page of settings gets, margins included: past this, rows only put more space between a title and its control.</summary>
+    private const double FormWidth = 784;
 
-    protected PageBase(SettingsPage page, bool scrolls = true)
+    /// <summary>The content of a page that scrolls.</summary>
+    protected readonly StackPanel Body = new() { Spacing = 20 };
+    /// <summary>The content of a page that doesn't: it's given the height left under the title (a stack would let it grow without end).</summary>
+    protected readonly Grid Fill = new();
+    private readonly ContentPresenter _accessory = new() { VerticalAlignment = VerticalAlignment.Center };
+
+    /// <param name="page">The page.</param>
+    /// <param name="help">What the title's "?" explains.</param>
+    /// <param name="scrolls">Whether the content scrolls.</param>
+    /// <param name="formWidth">Whether the content stops at <see cref="FormWidth"/>, rather than filling the window for pages that have use for the room.</param>
+    protected PageBase(SettingsPage page, string? help = null, bool scrolls = true, bool formWidth = true)
     {
-        var header = new StackPanel
+        var title = new StackPanel
         {
-            Spacing = 4,
-            Children =
-            {
-                Ui.Text(page.Title(), 26, FontWeights.SemiBold),
-                Ui.Text(page.Subtitle(), 13, foreground: Ui.Secondary, wrap: true),
-            },
+            Orientation = Orientation.Horizontal, Spacing = 6,
+            Children = { Ui.Text(page.Title(), 24, FontWeights.SemiBold) },
         };
+        if (help != null) title.Children.Add(new HelpTip(help, page.Title()));
+        var header = new Grid { ColumnSpacing = 12 };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.Children.Add(title);
+        Grid.SetColumn(_accessory, 1);
+        header.Children.Add(_accessory);
         if (scrolls)
         {
-            var stack = new StackPanel { Spacing = 22, Padding = new Thickness(32, 8, 32, 28), Children = { header, Body } };
-            Content = new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            var stack = new StackPanel { Spacing = 20, Padding = new Thickness(32, 4, 32, 28), Children = { header, Body } };
+            if (formWidth) stack.MaxWidth = FormWidth;
+            // In a grid so that the width limit centres it.
+            Content = new ScrollViewer { Content = new Grid { Children = { stack } }, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         }
         else
         {
-            var grid = new Grid { Padding = new Thickness(32, 8, 32, 28), RowSpacing = 22 };
+            var grid = new Grid { Padding = new Thickness(32, 4, 32, 28), RowSpacing = 20 };
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            Grid.SetRow(Body, 1);
+            Grid.SetRow(Fill, 1);
             grid.Children.Add(header);
-            grid.Children.Add(Body);
+            grid.Children.Add(Fill);
             Content = grid;
         }
         Unloaded += (_, _) => OnClosed();
     }
+
+    /// <summary>Controls for the whole page, at the end of the title.</summary>
+    protected UIElement? Accessory { set => _accessory.Content = value; }
 
     /// <summary>Called when the page leaves the window (navigation, language change, window hidden).</summary>
     protected virtual void OnClosed() { }

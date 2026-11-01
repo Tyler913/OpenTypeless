@@ -57,14 +57,14 @@ public sealed class ShortcutPage : PageBase
         var section = new CardSection
         {
             Title = L("用语音编辑选中的文字", "Edit selected text by voice"),
-            Footer = L($"选中任意应用里的文字，按住听写快捷键时再按一下 {key}，说出怎么改（“正式一点”“翻译成英文”“修正语法”），松开后选中的文字就会被替换，可以用撤销恢复。问关于它的问题（“这是什么意思”），答案会显示并复制。没有选中文字时什么都不会改；密码框和终端不会被读取。",
-                       $"Select text in any app, hold the dictation shortcut and press {key} too, and say how to change it (“more formal”, “translate to English”, “fix the grammar”): when you let go, the selection is replaced, and Undo brings it back. Ask about it (“what does this mean”) and the answer is shown and copied. Nothing changes when no text is selected; password fields and terminals are never read."),
+            Help = L($"选中任意应用里的文字，按住听写快捷键时再按一下 {key}，说出怎么改（“正式一点”“翻译成英文”“修正语法”），松开后选中的文字就会被替换，可以用撤销恢复。问关于它的问题（“这是什么意思”），答案会显示并复制。没有选中文字时什么都不会改；密码框和终端不会被读取。",
+                     $"Select text in any app, hold the dictation shortcut and press {key} too, and say how to change it (“more formal”, “translate to English”, “fix the grammar”): when you let go, the selection is replaced, and Undo brings it back. Ask about it (“what does this mean”) and the answer is shown and copied. Nothing changes when no text is selected; password fields and terminals are never read."),
         };
         var enabled = new ToggleSwitch { IsOn = _settings.CommandModeEnabled, OnContent = "", OffContent = "", MinWidth = 0 };
         enabled.Toggled += (_, _) => _settings.CommandModeEnabled = enabled.IsOn;
         section.Body.Add(new CardRow
         {
-            Glyph = Glyphs.Edit, Tint = Tint.Pink, Title = L("编辑模式", "Command mode"),
+            Title = L("编辑模式", "Command mode"),
             Subtitle = L($"按住听写快捷键时再按一下 {key}，这次说的话会用来修改选中的文字",
                          $"Hold the dictation shortcut and press {key} too: what you say edits the selected text"),
             Trailing = enabled,
@@ -78,55 +78,59 @@ public sealed class ShortcutPage : PageBase
         section.Body.Add(new CardDivider());
         section.Body.Add(new CardRow
         {
-            Glyph = Glyphs.Keyboard, Tint = Tint.Blue, Title = L("切换键", "Switch key"),
-            Subtitle = _settings.CommandChordClashes
-                ? L("和翻译模式的切换键相同，请换一个", "Translation mode uses this key too — pick another")
-                : L("按住听写快捷键时按下它（左右两边都可以）", "Pressed while you hold the dictation shortcut (either side)"),
+            Title = L("切换键", "Switch key"),
+            Subtitle = _settings.CommandChordClashes ? L("和翻译模式的切换键相同，请换一个", "Translation mode uses this key too — pick another") : null,
+            Help = L("按住听写快捷键时按下它（左右两边都可以）", "Pressed while you hold the dictation shortcut (either side)"),
             Trailing = chord,
         });
         return section;
     }
 
-    /// <summary>When it goes, and a warning when the dictation hotkey takes the send key's presses (see <see cref="SendKeys.IsTakenByHotkey"/>).</summary>
-    private string SendKeyFooter()
+    /// <summary>A warning when the dictation hotkey takes the send key's presses (see <see cref="SendKeys.IsTakenByHotkey"/>).</summary>
+    private string? SendKeyWarning()
     {
-        var footer = L("只在文字粘贴进录音时所在的应用后才按；文字只复制到剪贴板、按了 Esc 或锁屏时不会发送。",
-                       "Only pressed once the text is pasted into the app you were dictating in: not when it only goes to the clipboard, after Esc, or once the screen locks.");
         var hotkey = _settings.Hotkey;
-        if (!_settings.SendKey.IsTakenByHotkey(hotkey.KeyCode, hotkey.IsModifierOnly, SendKeyText.Codes)) return footer;
-        return footer + "\n" + L("听写快捷键也用到了这个键，录音时会先被当作听写快捷键，发送键就不起作用了。请换一个发送键或快捷键。",
-                                 "Your dictation shortcut uses this key too, and while recording it's read as the shortcut first, so the send key won't work. Pick another send key or shortcut.");
+        if (!_settings.SendKey.IsTakenByHotkey(hotkey.KeyCode, hotkey.IsModifierOnly, SendKeyText.Codes)) return null;
+        return L("听写快捷键也用到了这个键，录音时会先被当作听写快捷键，发送键就不起作用了。请换一个发送键或快捷键。",
+                 "Your dictation shortcut uses this key too, and while recording it's read as the shortcut first, so the send key won't work. Pick another send key or shortcut.");
     }
+
+    /// <summary>How the shortcut works, and what it can be.</summary>
+    private static string HotkeyHelp() => string.Join("\n\n",
+        L("按住快捷键说话，松开后自动整理并插入到光标处", "Hold the shortcut while you speak; release to clean up and insert"),
+        L("轻点一下：免手持", "Tap once: hands-free") + "\n" + L("适合长段口述，说完再按一次结束", "For long dictation — press again when done"),
+        L("Esc 取消", "Esc to cancel") + "\n" + L("录音或处理过程中随时取消", "Cancel any time while recording or processing"),
+        L("可以是单个修饰键（如 右 Ctrl、右 Alt），也可以是组合键（如 Alt + Space、F5）", "A single modifier (Right Ctrl, Right Alt…) or a combination (Alt + Space, F5…)"));
 
     private void Render()
     {
         var hotkey = _settings.Hotkey;
         Body.Children.Clear();
 
-        // Current shortcut / recorder
-        var center = new StackPanel { Spacing = 16, Padding = new Thickness(20, 26, 20, 26), HorizontalAlignment = HorizontalAlignment.Stretch };
-        center.Children.Add(Centered(Ui.Text(_recorder.IsRecording ? L("请按下新的快捷键…", "Press the new shortcut…") : L("当前快捷键", "Current shortcut"),
-                                             12, FontWeights.Medium, Ui.Secondary)));
-        center.Children.Add(_recorder.IsRecording ? RecordingPlaceholder() : new KeyCaps { Caps = hotkey.KeyCaps, Large = true, HorizontalAlignment = HorizontalAlignment.Center });
+        // The dictation shortcut, the recorder, and the presets under them
+        var shortcut = new CardSection { Title = L("听写快捷键", "Dictation shortcut"), Help = HotkeyHelp() };
+        var texts = new StackPanel
+        {
+            Spacing = 1, VerticalAlignment = VerticalAlignment.Center,
+            Children = { Ui.Text(_recorder.IsRecording ? L("请按下新的快捷键…", "Press the new shortcut…") : L("按住说话", "Hold to talk"), 13.5) },
+        };
+        if (!_recorder.IsRecording) texts.Children.Add(Ui.Text(L("轻点一下进入免手持 · Esc 取消", "Tap once for hands-free · Esc to cancel"), 12, foreground: Ui.Secondary));
+        var current = new Grid { ColumnSpacing = 14, Padding = new Thickness(14, 12, 14, 12) };
+        current.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        current.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        current.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        current.Children.Add(_recorder.IsRecording ? RecordingPlaceholder() : new KeyCaps { Caps = hotkey.KeyCaps, Large = true });
+        Grid.SetColumn(texts, 1);
+        current.Children.Add(texts);
+        Button record;
         if (_recorder.IsRecording)
         {
-            var cancel = new Button { Content = L("取消", "Cancel"), HorizontalAlignment = HorizontalAlignment.Center };
-            cancel.Click += (_, _) => _recorder.Stop();
-            center.Children.Add(cancel);
+            record = new Button { Content = L("取消", "Cancel") };
+            record.Click += (_, _) => _recorder.Stop();
         }
         else
         {
-            var record = new Button
-            {
-                Style = (Style)Application.Current.Resources["AccentButtonStyle"],
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Content = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal, Spacing = 8,
-                    Children = { Ui.Icon(Glyphs.Keyboard, 14), new TextBlock { Text = L("录制快捷键", "Record shortcut") } },
-                },
-            };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(record, L("录制快捷键", "Record shortcut"));
+            record = new Button { Content = L("录制快捷键", "Record shortcut") };
             record.Click += (_, _) =>
             {
                 _actionRecorder.Stop();
@@ -145,39 +149,29 @@ public sealed class ShortcutPage : PageBase
                 };
                 _recorder.Start();
             };
-            center.Children.Add(record);
         }
-        center.Children.Add(Centered(_recorder.Message is { } message
-            ? Ui.Text(message, 12, foreground: Palette.Brush(Tint.Orange), wrap: true)
-            : Ui.Text(L("可以是单个修饰键（如 右 Ctrl、右 Alt），也可以是组合键（如 Alt + Space、F5）",
-                        "A single modifier (Right Ctrl, Right Alt…) or a combination (Alt + Space, F5…)"), 12, foreground: Ui.Secondary, wrap: true)));
-        Body.Children.Add(Card.Make(center));
-
-        // Presets
-        var presets = new CardSection { Title = L("常用", "Presets") };
-        var grid = new Grid { ColumnSpacing = 10, Padding = new Thickness(12) };
+        record.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(record, 2);
+        current.Children.Add(record);
+        shortcut.Body.Add(current);
+        if (_recorder.Message is { } message)
+        {
+            var warning = Ui.Text(message, 12, foreground: Palette.Brush(Tint.Orange), wrap: true);
+            warning.Margin = new Thickness(14, 0, 14, 10);
+            shortcut.Body.Add(warning);
+        }
+        shortcut.Body.Add(new CardDivider());
+        var grid = new Grid { ColumnSpacing = 8, Padding = new Thickness(10) };
         for (var i = 0; i < Hotkey.Presets.Length; i++)
         {
             var preset = Hotkey.Presets[i];
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var selected = hotkey == preset;
             var chip = new Button
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Padding = new Thickness(8),
-                CornerRadius = new CornerRadius(8),
-                Content = new StackPanel
-                {
-                    Spacing = 4,
-                    Children =
-                    {
-                        Centered(Ui.Text(preset.DisplayName, 13.5, FontWeights.SemiBold)),
-                        Centered(Ui.Text(preset == Hotkey.Default ? L("默认", "Default") : " ", 11,
-                                         foreground: selected ? null : Ui.Secondary)),
-                    },
-                },
+                Content = Ui.Text(preset.DisplayName, 13, FontWeights.Medium),
             };
-            if (selected) chip.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
+            if (hotkey == preset) chip.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, preset.DisplayName);
             chip.Click += (_, _) =>
             {
@@ -187,54 +181,12 @@ public sealed class ShortcutPage : PageBase
             Grid.SetColumn(chip, i);
             grid.Children.Add(chip);
         }
-        presets.Body.Add(grid);
-        Body.Children.Add(presets);
-
-        // How it works
-        var how = new CardSection { Title = L("使用方法", "How it works") };
-        how.Body.Add(new CardRow
-        {
-            Glyph = Glyphs.Microphone, Tint = Tint.Blue, Title = L("按住说话", "Hold to talk"),
-            Subtitle = L("按住快捷键说话，松开后自动整理并插入到光标处", "Hold the shortcut while you speak; release to clean up and insert"),
-        });
-        how.Body.Add(new CardDivider());
-        how.Body.Add(new CardRow
-        {
-            Glyph = Glyphs.TouchPointer, Tint = Tint.Purple, Title = L("轻点一下：免手持", "Tap once: hands-free"),
-            Subtitle = L("适合长段口述，说完再按一次结束", "For long dictation — press again when done"),
-        });
-        how.Body.Add(new CardDivider());
-        how.Body.Add(new CardRow
-        {
-            Glyph = Glyphs.Cancel, Tint = Tint.Gray, Title = L("Esc 取消", "Esc to cancel"),
-            Subtitle = L("录音或处理过程中随时取消", "Cancel any time while recording or processing"),
-        });
-        if (_settings.TranslationTarget is { } target)
-        {
-            var key = _settings.TranslationChord.KeyCap();
-            how.Body.Add(new CardDivider());
-            how.Body.Add(new CardRow
-            {
-                Glyph = Glyphs.Speech, Tint = Tint.Indigo, Title = L($"按住 + {key}：翻译", $"Hold + {key}: translate"),
-                Subtitle = L($"插入时翻译成：{target.DisplayName}（在「词汇与风格」里设置）",
-                             $"Inserted translated into {target.DisplayName} (set up under Vocabulary & Style)"),
-            });
-        }
-        if (_settings.CommandModeEnabled && !_settings.CommandChordClashes)
-        {
-            var key = _settings.CommandChord.KeyCap();
-            how.Body.Add(new CardDivider());
-            how.Body.Add(new CardRow
-            {
-                Glyph = Glyphs.Edit, Tint = Tint.Pink, Title = L($"按住 + {key}：编辑选中的文字", $"Hold + {key}: edit the selection"),
-                Subtitle = L("说出怎么改，选中的文字会被替换", "Say how to change it, and the selection is replaced"),
-            });
-        }
-        Body.Children.Add(how);
+        shortcut.Body.Add(grid);
+        Body.Children.Add(shortcut);
         Body.Children.Add(CommandModeSection());
 
         // Finish and send
-        var send = new CardSection { Title = L("说完即发送", "Finish and send"), Footer = SendKeyFooter() };
+        var send = new CardSection { Title = L("说完即发送", "Finish and send"), Footer = SendKeyWarning() };
         var sendKeys = SendKeys.All;
         var sendPicker = new ComboBox { MinWidth = 140 };
         foreach (var key in sendKeys) sendPicker.Items.Add(key.Title());
@@ -243,13 +195,16 @@ public sealed class ShortcutPage : PageBase
         {
             if (sendPicker.SelectedIndex < 0 || sendKeys[sendPicker.SelectedIndex] == _settings.SendKey) return;
             _settings.SendKey = sendKeys[sendPicker.SelectedIndex];
-            send.Footer = SendKeyFooter();
+            send.Footer = SendKeyWarning();
         };
         send.Body.Add(new CardRow
         {
-            Glyph = Glyphs.Send, Tint = Tint.Green, Title = L("发送键", "Send key"),
-            Subtitle = L("录音时按下它会结束听写，文字插入后再在同一个应用里按一次这个键把它发出去。免手持时可以一步说完并发送。",
-                         "Press it while recording to end the dictation; once the text is in, the same key is pressed in that app to send it. Hands-free, that ends and sends in one go."),
+            Title = L("发送键", "Send key"),
+            Subtitle = L("结束听写，文字插入后自动发送", "Ends the dictation, then sends the text"),
+            Help = L("录音时按下它会结束听写，文字插入后再在同一个应用里按一次这个键把它发出去。免手持时可以一步说完并发送。",
+                     "Press it while recording to end the dictation; once the text is in, the same key is pressed in that app to send it. Hands-free, that ends and sends in one go.")
+                + "\n\n" + L("只在文字粘贴进录音时所在的应用后才按；文字只复制到剪贴板、按了 Esc 或锁屏时不会发送。",
+                              "Only pressed once the text is pasted into the app you were dictating in: not when it only goes to the clipboard, after Esc, or once the screen locks."),
             Trailing = sendPicker,
         });
         Body.Children.Add(send);
@@ -258,13 +213,13 @@ public sealed class ShortcutPage : PageBase
         var actions = new CardSection
         {
             Title = L("更多快捷键", "More shortcuts"),
-            Footer = L("在两次听写之间按下时生效。可以是 Ctrl / Alt / Shift / Win 组合键（如 Alt + Shift + Z），也可以是 F1–F24。",
-                       "They work between dictations. Use a combination with Ctrl / Alt / Shift / Win (Alt + Shift + Z…) or F1–F24."),
+            Help = L("在两次听写之间按下时生效。可以是 Ctrl / Alt / Shift / Win 组合键（如 Alt + Shift + Z），也可以是 F1–F24。",
+                     "They work between dictations. Use a combination with Ctrl / Alt / Shift / Win (Alt + Shift + Z…) or F1–F24."),
         };
         foreach (var action in ShortcutActions.All)
         {
             if (actions.Body.Count > 0) actions.Body.Add(new CardDivider());
-            actions.Body.Add(new CardRow { Glyph = Glyphs.Paste, Tint = Tint.Teal, Title = action.Title(), Subtitle = action.Subtitle(), Trailing = ActionControls(action) });
+            actions.Body.Add(new CardRow { Title = action.Title(), Help = action.Subtitle(), Trailing = ActionControls(action) });
         }
         Body.Children.Add(actions);
         if (_actionRecorder.Message is { } actionMessage) Body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, actionMessage));
@@ -342,13 +297,6 @@ public sealed class ShortcutPage : PageBase
         _actionRecorder.Start();
     }
 
-    private static FrameworkElement Centered(TextBlock text)
-    {
-        text.HorizontalAlignment = HorizontalAlignment.Center;
-        text.TextAlignment = TextAlignment.Center;
-        return text;
-    }
-
     private static FrameworkElement RecordingPlaceholder()
     {
         var dot = new Ellipse { Width = 10, Height = 10, Fill = Palette.Brush(Tint.Red) };
@@ -360,7 +308,7 @@ public sealed class ShortcutPage : PageBase
         dot.Unloaded += (_, _) => storyboard.Stop();
         return new Grid
         {
-            Width = 180, Height = 50, HorizontalAlignment = HorizontalAlignment.Center,
+            Width = 96, Height = 38,
             Children =
             {
                 new Rectangle

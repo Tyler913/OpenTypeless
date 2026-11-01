@@ -19,9 +19,9 @@ using Windows.Storage.Pickers;
 namespace OpenTypeless.UI;
 
 /// <summary>
-/// Every dictation, newest first and grouped by day, with search; the selected one's text, details and actions on
-/// the right. How long recordings are kept, and exporting what the list shows, sit in the toolbar, next to transcribing
-/// a file (also by dropping one on the page).
+/// Every dictation, newest first and grouped by day, under a search box; the selected one's text, details and actions on
+/// the right, in one card. How much the recordings take and how long they're kept, exporting what the list shows, and
+/// transcribing a file (also by dropping one on the page) sit at the end of the title.
 /// </summary>
 public sealed class HistoryPage : PageBase
 {
@@ -29,7 +29,7 @@ public sealed class HistoryPage : PageBase
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly SettingsWindow _window;
     private readonly SessionController _controller;
-    /// <summary>Just the icon, with "Export" as its tooltip: the toolbar has no room for a label next to the retention picker.</summary>
+    /// <summary>Just the icon, with "Export" as its tooltip.</summary>
     private readonly DropDownButton _export = new();
     private readonly FontIcon _exportIcon = Ui.Icon(Glyphs.Export, 14);
     private bool _exporting;
@@ -38,9 +38,9 @@ public sealed class HistoryPage : PageBase
     {
         PlaceholderText = L("搜索听写内容", "Search dictations"),
         QueryIcon = new SymbolIcon(Symbol.Find),
-        MinWidth = 120,
+        Margin = new Thickness(10, 10, 10, 4),
     };
-    private readonly TextBlock _storage = Ui.Text("", 12, foreground: Ui.Secondary);
+    private readonly TextBlock _storage = Ui.Text("…", 13);
     private readonly ContentControl _content = new()
     {
         HorizontalContentAlignment = HorizontalAlignment.Stretch,
@@ -53,14 +53,16 @@ public sealed class HistoryPage : PageBase
     /// </summary>
     private readonly ListView _list;
     private ObservableCollection<Entry> _entries = [];
-    private readonly Border _listCard = Card.Make();
+    private readonly Border _listHost = new();
     private readonly TextBlock _noMatches = Ui.Text(L("没有匹配的听写", "No matching dictations"), 12, foreground: Ui.Secondary);
     private readonly ContentControl _detailHost = new()
     {
         HorizontalContentAlignment = HorizontalAlignment.Stretch,
         VerticalContentAlignment = VerticalAlignment.Stretch,
     };
-    private readonly Grid _split = new() { ColumnSpacing = 14 };
+    private readonly Grid _split = new();
+    /// <summary>The list and the detail in one card; the toolbar above it is built once, so typing in the search box survives new dictations arriving.</summary>
+    private readonly Border _splitCard = Card.Make();
     /// <summary>Set while the page itself changes the list, whose selection changes then aren't the user's.</summary>
     private bool _syncing;
     /// <summary>A dialog is open (one at a time: a second ShowAsync while one is open would throw).</summary>
@@ -71,7 +73,8 @@ public sealed class HistoryPage : PageBase
     /// <summary>The detail's progress line and bar while its file is under way, moved on in place as the file gets further.</summary>
     private (TextBlock Label, ProgressBar Bar)? _detailProgress;
 
-    public HistoryPage(SettingsWindow window, SessionController controller) : base(SettingsPage.History, scrolls: false)
+    public HistoryPage(SettingsWindow window, SessionController controller)
+        : base(SettingsPage.History, help: L("每次听写都会保存，失败的可以重试", "Every dictation is saved; failed ones can be retried"), scrolls: false, formWidth: false)
     {
         _window = window;
         _controller = controller;
@@ -88,20 +91,25 @@ public sealed class HistoryPage : PageBase
         _list.SelectionChanged += OnSelectionChanged;
         _noMatches.HorizontalAlignment = HorizontalAlignment.Center;
         _noMatches.VerticalAlignment = VerticalAlignment.Center;
+        var listPane = new Grid();
+        listPane.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        listPane.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        listPane.Children.Add(_search);
+        Grid.SetRow(_listHost, 1);
+        listPane.Children.Add(_listHost);
+        var divider = new Border { Background = Palette.Theme("DividerStrokeColorDefaultBrush") };
         _split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(270) });
+        _split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
         _split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        _split.Children.Add(_listCard);
-        Grid.SetColumn(_detailHost, 1);
+        _split.Children.Add(listPane);
+        Grid.SetColumn(divider, 1);
+        _split.Children.Add(divider);
+        Grid.SetColumn(_detailHost, 2);
         _split.Children.Add(_detailHost);
+        _splitCard.Child = _split;
 
-        // The toolbar is built once, so typing in the search box survives new dictations arriving.
-        var grid = new Grid { RowSpacing = 14 };
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grid.Children.Add(Toolbar());
-        Grid.SetRow(_content, 1);
-        grid.Children.Add(_content);
-        Body.Children.Add(grid);
+        Accessory = Toolbar();
+        Fill.Children.Add(_content);
         // A new search rebuilds the whole list, so a burst of typing does that once, when it pauses.
         _searchDelay = DispatcherQueue.GetForCurrentThread().CreateTimer();
         _searchDelay.Interval = TimeSpan.FromMilliseconds(150);
@@ -138,37 +146,8 @@ public sealed class HistoryPage : PageBase
 
     // MARK: Toolbar
 
-    private Grid Toolbar()
+    private StackPanel Toolbar()
     {
-        var options = HistoryRetentionExtensions.All;
-        var picker = new ComboBox { MinWidth = 140 };
-        foreach (var option in options) picker.Items.Add(option.Label());
-        picker.SelectedIndex = Math.Max(0, Array.IndexOf(options, _settings.HistoryRetention));
-        picker.SelectionChanged += (_, _) =>
-        {
-            if (picker.SelectedIndex < 0 || options[picker.SelectedIndex] == _settings.HistoryRetention) return;
-            _settings.HistoryRetention = options[picker.SelectedIndex];
-            _history.ApplyRetention();
-            RefreshStorage();
-        };
-        var storage = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
-            Children = { Ui.Icon(Glyphs.Folder, 12, Ui.Secondary), _storage },
-        };
-        ToolTipService.SetToolTip(storage, L("录音和转写占用的空间。每分钟录音约 1.9 MB；转写失败的录音会一直保留，方便重试。",
-                                             "Space used by recordings and transcripts. Recordings take about 1.9 MB per minute; failed dictations keep theirs so you can retry."));
-        var trailing = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center,
-            Children =
-            {
-                storage,
-                new TextBlock { Text = L("保留录音", "Keep recordings"), VerticalAlignment = VerticalAlignment.Center },
-                picker,
-                ExportButton(),
-            },
-        };
         var transcribe = new Button
         {
             Content = new StackPanel
@@ -176,23 +155,45 @@ public sealed class HistoryPage : PageBase
                 Orientation = Orientation.Horizontal, Spacing = 6,
                 Children = { Ui.Icon(Glyphs.OpenFile, 13), Ui.Text(L("转写文件…", "Transcribe File…"), 13) },
             },
-            VerticalAlignment = VerticalAlignment.Center,
         };
         ToolTipService.SetToolTip(transcribe, L("转写语音备忘录、会议录音或视频（也可以直接拖到这里）",
                                                 "Transcribe a voice memo, meeting recording or video (or drop it here)"));
         transcribe.Click += async (_, _) => await PickFiles();
-        var leadingTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { _search, transcribe } };
-        var toolbar = new Grid { ColumnSpacing = 12 };
-        // The search box gives way when the window is narrow or the labels are long, up to 260 wide otherwise (like the
-        // macOS toolbar), rather than pushing Export off the edge.
-        toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(4, GridUnitType.Star), MaxWidth = 260 });
-        toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        toolbar.Children.Add(leadingTools);
-        Grid.SetColumn(trailing, 2);
-        toolbar.Children.Add(trailing);
         RefreshStorage();
-        return toolbar;
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { StorageButton(), ExportButton(), transcribe } };
+    }
+
+    /// <summary>How much space History takes, opening how long recordings are kept.</summary>
+    private DropDownButton StorageButton()
+    {
+        var button = new DropDownButton
+        {
+            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { Ui.Icon(Glyphs.Drive, 14), _storage } },
+        };
+        Ui.Label(button, L("录音和转写占用的空间。每分钟录音约 1.9 MB；转写失败的录音会一直保留，方便重试。",
+                           "Space used by recordings and transcripts. Recordings take about 1.9 MB per minute; failed dictations keep theirs so you can retry."));
+        var flyout = new MenuFlyout();
+        // Filled as it opens, with the setting as it is then.
+        flyout.Opening += (_, _) =>
+        {
+            flyout.Items.Clear();
+            flyout.Items.Add(new MenuFlyoutItem { Text = L("保留录音", "Keep recordings"), IsEnabled = false });
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            foreach (var option in HistoryRetentionExtensions.All)
+            {
+                var item = new ToggleMenuFlyoutItem { Text = option.Label(), IsChecked = option == _settings.HistoryRetention };
+                item.Click += (_, _) =>
+                {
+                    if (option == _settings.HistoryRetention) return;
+                    _settings.HistoryRetention = option;
+                    _history.ApplyRetention();
+                    RefreshStorage();
+                };
+                flyout.Items.Add(item);
+            }
+        };
+        button.Flyout = flyout;
+        return button;
     }
 
     /// <summary>Exports what the list shows: everything, or what the search found.</summary>
@@ -309,26 +310,26 @@ public sealed class HistoryPage : PageBase
             return;
         }
         var records = Filtered;
-        _listCard.Child = records.Count == 0 ? _noMatches : (UIElement)_list;
+        _listHost.Child = records.Count == 0 ? _noMatches : (UIElement)_list;
         _export.IsEnabled = records.Count > 0 && !_exporting;
         _syncing = true;
         _entries = new ObservableCollection<Entry>(Entries(records));
         _list.ItemsSource = _entries;
         _syncing = false;
-        _content.Content = _split;
+        _content.Content = _splitCard;
         SelectAndShow(records);
     }
 
     /// <summary>Brings the list up to date after a change to the history, changing only the entries that differ.</summary>
     private void Update()
     {
-        if (_history.Records.Count == 0 || !ReferenceEquals(_content.Content, _split))
+        if (_history.Records.Count == 0 || !ReferenceEquals(_content.Content, _splitCard))
         {
             Render();
             return;
         }
         var records = Filtered;
-        _listCard.Child = records.Count == 0 ? _noMatches : (UIElement)_list;
+        _listHost.Child = records.Count == 0 ? _noMatches : (UIElement)_list;
         _export.IsEnabled = records.Count > 0 && !_exporting;
         _syncing = true;
         Sync(_entries, Entries(records));
@@ -401,7 +402,7 @@ public sealed class HistoryPage : PageBase
         }
         _shownDetail = shown;
         _detailProgress = null;
-        _detailHost.Content = record == null ? Card.Make() : Detail(record);
+        _detailHost.Content = record == null ? null : Detail(record);
     }
 
     /// <summary>An item in the list: a day's header, or a dictation under it.</summary>
@@ -622,9 +623,12 @@ public sealed class HistoryPage : PageBase
                 Ui.Text(string.Join(" · ", details), 11.5, foreground: Ui.Secondary),
             },
         });
-        var pill = new StatusPill(record.Status.Label(), record.Status.Tint()) { VerticalAlignment = VerticalAlignment.Top };
-        Grid.SetColumn(pill, 1);
-        header.Children.Add(pill);
+        var trailing = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Top };
+        // Where the wait after releasing the key went.
+        if (record.Timing?.Summary is { } timing) trailing.Children.Add(new HelpTip(timing));
+        if (record.Status != DictationStatus.Done) trailing.Children.Add(new StatusPill(record.Status.Label(), record.Status.Tint()));
+        Grid.SetColumn(trailing, 1);
+        header.Children.Add(trailing);
 
         var body = new StackPanel { Spacing = 14, Padding = new Thickness(16) };
         if (record.Status == DictationStatus.Cancelled)
@@ -667,17 +671,6 @@ public sealed class HistoryPage : PageBase
             // What was said, before snippets replaced their triggers.
             if (record.InsertedText != null) body.Children.Add(Disclosure(L("快捷短语替换前", "Before snippets"), record.FinalText));
             if (record.PolishedText != null && record.RawText.Length > 0) body.Children.Add(Disclosure(L("原始转写", "Raw transcript"), record.RawText));
-        }
-        if (record.Timing?.Summary is { } timing)
-        {
-            // Where the wait after releasing the key went.
-            var line = Ui.Text(timing, 11, foreground: Ui.Tertiary, wrap: true);
-            line.IsTextSelectionEnabled = true;
-            body.Children.Add(new StackPanel
-            {
-                Orientation = Orientation.Horizontal, Spacing = 6,
-                Children = { Ui.Icon(Glyphs.Stopwatch, 11, Ui.Tertiary), line },
-            });
         }
 
         var buttons = new Grid { ColumnSpacing = 8, Padding = new Thickness(16, 12, 16, 12) };
@@ -797,7 +790,7 @@ public sealed class HistoryPage : PageBase
         layout.Children.Add(bottomDivider);
         Grid.SetRow(buttons, 4);
         layout.Children.Add(buttons);
-        return Card.Make(layout);
+        return layout;
     }
 
     private static void RevealRecording(DictationRecord record) => Process.Start("explorer.exe", $"/select,\"{record.AudioPath}\"");
@@ -878,7 +871,7 @@ public sealed class HistoryPage : PageBase
             var durations = new Dictionary<string, TextBlock>();
             foreach (var path in media)
             {
-                if (list.Children.Count > 0) list.Children.Add(new CardDivider { Inset = 14 });
+                if (list.Children.Count > 0) list.Children.Add(new CardDivider());
                 var name = Ui.Text(System.IO.Path.GetFileName(path), 13);
                 name.TextTrimming = TextTrimming.CharacterEllipsis;
                 var length = Ui.Text("…", 12, foreground: Ui.Secondary);
@@ -910,7 +903,7 @@ public sealed class HistoryPage : PageBase
                     estimate,
                     Card.Make(new CardRow
                     {
-                        Glyph = Glyphs.Font, Tint = Tint.Green, Title = L("整理文字", "Clean up text"),
+                        Title = L("整理文字", "Clean up text"),
                         Subtitle = _settings.PolishEnabled
                             ? L("用整理模型分段整理转写结果，另行计费", "Runs the transcript through the clean-up model, in parts (billed on top)")
                             : L("文字整理已在设置里关闭", "Clean-up is turned off in Settings"),

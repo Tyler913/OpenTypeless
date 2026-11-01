@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Reflection;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -35,10 +34,10 @@ public sealed partial class SettingsWindow : Window
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.PreferredMinimumWidth = Scaled(820);
-            presenter.PreferredMinimumHeight = Scaled(520);
+            presenter.PreferredMinimumWidth = Scaled(860);
+            presenter.PreferredMinimumHeight = Scaled(540);
         }
-        AppWindow.Resize(new SizeInt32(Scaled(880), Scaled(640)));
+        AppWindow.Resize(new SizeInt32(Scaled(960), Scaled(660)));
         Center();
 
         // Closing only hides: the window, its page and its state are kept, like the macOS settings window.
@@ -48,9 +47,6 @@ public sealed partial class SettingsWindow : Window
             e.Cancel = true;
             Hide();
         };
-
-        var version = Assembly.GetExecutingAssembly().GetName().Version;
-        VersionText.Text = version != null ? $"v{version.Major}.{version.Minor}.{version.Build}" : "dev";
 
         _language = Localization.Resolved;
         _settings.PropertyChanged += OnSettingsChanged;
@@ -138,18 +134,9 @@ public sealed partial class SettingsWindow : Window
             var item = new NavigationViewItem
             {
                 Tag = page,
-                Content = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 10,
-                    Children =
-                    {
-                        new IconBadge { Glyph = page.Glyph(), Tint = page.Tint(), BadgeSize = 22 },
-                        new TextBlock { Text = page.Title(), VerticalAlignment = VerticalAlignment.Center },
-                    },
-                },
+                Content = page.Title(),
+                Icon = new FontIcon { Glyph = page.Glyph(), FontFamily = Palette.Symbols },
             };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(item, page.Title());
             Nav.MenuItems.Add(item);
         }
         UpdateReadyPill();
@@ -158,8 +145,9 @@ public sealed partial class SettingsWindow : Window
     private void UpdateReadyPill()
     {
         var ready = _settings.IsConfigured(_settings.SttProvider) && Permissions.MicrophoneGranted;
-        ReadyPill.Text = ready ? L("一切就绪", "Ready") : L("需要完成设置", "Setup needed");
-        ReadyPill.Tint = ready ? Tint.Green : Tint.Orange;
+        ReadyPill.Text = L("需要完成设置", "Setup needed");
+        ReadyPill.Tint = Tint.Orange;
+        ReadyPill.Visibility = ready ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)

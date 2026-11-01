@@ -20,22 +20,21 @@ public sealed class AppsPage : PageBase
 {
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly SettingsWindow _window;
-    private readonly StackPanel _content = new() { Spacing = 10 };
+    private readonly StackPanel _content = new() { Spacing = 8 };
     private readonly HashSet<string> _expanded = new();
     /// <summary>The running apps are being listed for the Add menu.</summary>
     private bool _listing;
 
-    public AppsPage(SettingsWindow window) : base(SettingsPage.Apps)
+    public AppsPage(SettingsWindow window) : base(SettingsPage.Apps, help:
+        L("给一个应用添加配置后，在它里面听写时就用这里的设置，比如在 Slack 里说完直接发送，在邮件里用更正式的语气。其他应用照常使用你平时的设置。",
+          "Add an app to give it its own settings: send messages right away in Slack, say, or a more formal tone in your email app. Everywhere else your usual settings apply.")
+        + "\n\n" + L("开始录音时在最前面的应用决定用哪个配置，松开按键前换到别的应用也不变。配置里设为「默认」的项目跟随你平时的设置。",
+                      "The app in front when you start recording decides which profile is used, even if you switch apps before you finish. Whatever a profile leaves on Default follows your usual settings."))
     {
         _window = window;
         // The snapshots show the first sample profile opened. Nothing about running apps is read until Add is clicked.
         if (UISnapshots.Active && _settings.AppProfiles.FirstOrDefault() is { } first) _expanded.Add(first.Id);
         Body.Children.Add(_content);
-        var footer = Ui.Text(L("开始录音时在最前面的应用决定用哪个配置，松开按键前换到别的应用也不变。配置里设为「默认」的项目跟随你平时的设置。",
-                               "The app in front when you start recording decides which profile is used, even if you switch apps before you finish. Whatever a profile leaves on Default follows your usual settings."),
-                             11.5, foreground: Ui.Secondary, wrap: true);
-        footer.Margin = new Thickness(4, 0, 4, 0);
-        Body.Children.Add(footer);
         Render();
     }
 
@@ -47,11 +46,9 @@ public sealed class AppsPage : PageBase
         {
             var title = Ui.Text(L("还没有应用配置", "No app profiles yet"), 14, FontWeights.SemiBold);
             title.HorizontalAlignment = HorizontalAlignment.Center;
-            var text = Ui.Text(L("给一个应用添加配置后，在它里面听写时就用这里的设置，比如在 Slack 里说完直接发送，在邮件里用更正式的语气。其他应用照常使用你平时的设置。",
-                                 "Add an app to give it its own settings: send messages right away in Slack, say, or a more formal tone in your email app. Everywhere else your usual settings apply."),
+            var text = Ui.Text(L("让某个应用用自己的设置，比如在 Slack 里说完直接发送", "Give an app its own settings, like sending right away in Slack"),
                                12.5, foreground: Ui.Secondary, wrap: true);
             text.TextAlignment = TextAlignment.Center;
-            text.MaxWidth = 440;
             var add = AddButton();
             add.HorizontalAlignment = HorizontalAlignment.Center;
             add.Margin = new Thickness(0, 4, 0, 0);
@@ -62,7 +59,7 @@ public sealed class AppsPage : PageBase
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Children =
                 {
-                    new IconBadge { Glyph = SettingsPage.Apps.Glyph(), Tint = SettingsPage.Apps.Tint(), BadgeSize = 40, HorizontalAlignment = HorizontalAlignment.Center },
+                    Ui.Icon(SettingsPage.Apps.Glyph(), 28, Ui.Tertiary),
                     title,
                     text,
                     add,
@@ -202,13 +199,12 @@ internal sealed class AppProfileCard : UserControl
 
         // Header (the whole row toggles the card).
         _summary.TextTrimming = TextTrimming.CharacterEllipsis;
-        var titles = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { Ui.Text(profile.Name, 14, FontWeights.SemiBold), _summary } };
+        var titles = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { Ui.Text(profile.Name, 13.5, FontWeights.Medium), _summary } };
         var header = new Grid
         {
             ColumnSpacing = 12,
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 new ColumnDefinition { Width = GridLength.Auto },
             },
@@ -216,18 +212,15 @@ internal sealed class AppProfileCard : UserControl
         _chevron.Foreground = Ui.Tertiary;
         _chevron.VerticalAlignment = VerticalAlignment.Center;
         _chevron.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
-        var badge = new IconBadge { Glyph = Glyphs.AppIcon, Tint = Tint.Teal, BadgeSize = 30 };
-        header.Children.Add(badge);
-        Grid.SetColumn(titles, 1);
         header.Children.Add(titles);
-        Grid.SetColumn(_chevron, 2);
+        Grid.SetColumn(_chevron, 1);
         header.Children.Add(_chevron);
         var toggle = new Button
         {
             Content = header,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Padding = new Thickness(14, 12, 14, 12),
+            Padding = new Thickness(14, 8, 14, 8),
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(8),
@@ -243,25 +236,30 @@ internal sealed class AppProfileCard : UserControl
         // A picker for each setting.
         _details.Children.Add(new CardRow
         {
-            Glyph = Glyphs.StarFill, Tint = Tint.Purple, Title = L("用 AI 整理文字", "Clean up with AI"),
+            Title = L("用 AI 整理文字", "Clean up with AI"),
             Trailing = OverrideBox(profile.Polish, _settings.PolishEnabled, value => Update(p => p with { Polish = value })),
         });
         _details.Children.Add(new CardDivider());
         _details.Children.Add(new CardRow
         {
-            Glyph = Glyphs.ReturnKey, Tint = Tint.Green, Title = L("插入后自动回车", "Press Enter after inserting"),
+            Title = L("插入后自动回车", "Press Enter after inserting"),
             Trailing = OverrideBox(profile.PressEnter, _settings.PressEnterAfterInsert, value => Update(p => p with { PressEnter = value })),
         });
         _details.Children.Add(new CardDivider());
         _details.Children.Add(new CardRow
         {
-            Glyph = Glyphs.Message, Tint = Tint.Teal, Title = L("说话语言", "Spoken language"),
+            Title = L("说话语言", "Spoken language"),
             Trailing = LanguageBox(),
         });
         _details.Children.Add(new CardDivider());
 
         // The app's own clean-up preferences.
-        var label = Ui.Text(L("这个应用的整理偏好", "Clean-up preferences for this app"), 12, FontWeights.Medium, Ui.Secondary);
+        var heading = L("这个应用的整理偏好", "Clean-up preferences for this app");
+        var label = new TitleLine(Ui.Text(heading, 13.5))
+        {
+            Help = L("加在「词汇与风格」里的整理偏好之后，只在这个应用里生效。例如：「语气正式一些」「不要使用列表」。",
+                     "Added after your clean-up preferences under Vocabulary & Style, in this app only. e.g. “Use a more formal tone”, “Never use bullet lists”."),
+        };
         _instructions = new TextBox
         {
             Text = profile.Instructions,
@@ -271,16 +269,13 @@ internal sealed class AppProfileCard : UserControl
             FontSize = 13.5,
         };
         ScrollViewer.SetVerticalScrollBarVisibility(_instructions, ScrollBarVisibility.Auto);
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_instructions, label.Text);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_instructions, heading);
         _instructions.TextChanged += (_, _) =>
         {
             var text = Normalize(_instructions.Text);
             Update(p => p with { Instructions = text });
         };
-        var caption = Ui.Text(L("加在「词汇与风格」里的整理偏好之后，只在这个应用里生效。例如：「语气正式一些」「不要使用列表」。",
-                                "Added after your clean-up preferences under Vocabulary & Style, in this app only. e.g. “Use a more formal tone”, “Never use bullet lists”."),
-                              11.5, foreground: Ui.Secondary, wrap: true);
-        _details.Children.Add(new StackPanel { Spacing = 6, Padding = new Thickness(14), Children = { label, _instructions, caption } });
+        _details.Children.Add(new StackPanel { Spacing = 6, Padding = new Thickness(14), Children = { label, _instructions } });
 
         // What it matches, and Remove.
         var executable = Ui.Text(profile.App, 11, foreground: Ui.Tertiary);

@@ -9,41 +9,16 @@ using TypelessCore;
 
 namespace OpenTypeless.UI;
 
-public static class ProviderStyle
-{
-    public static string Glyph(this ProviderId id) => id switch
-    {
-        ProviderId.OpenRouter => Glyphs.Link,
-        ProviderId.OpenAI => Glyphs.Star,
-        ProviderId.Groq => Glyphs.Lightning,
-        ProviderId.SiliconFlow => Glyphs.Cloud,
-        ProviderId.DeepSeek => Glyphs.Search,
-        _ => Glyphs.Code,
-    };
-
-    public static Tint Tint(this ProviderId id) => id switch
-    {
-        ProviderId.OpenRouter => UI.Tint.Indigo,
-        ProviderId.OpenAI => UI.Tint.Teal,
-        ProviderId.Groq => UI.Tint.Orange,
-        ProviderId.SiliconFlow => UI.Tint.Purple,
-        ProviderId.DeepSeek => UI.Tint.Blue,
-        _ => UI.Tint.Gray,
-    };
-
-    public static string Capabilities(this ProviderId id) =>
-        id.SupportsStt() ? L("语音转文字 · 文字整理", "Speech-to-text · Clean-up") : L("文字整理", "Clean-up");
-}
-
 public sealed class ProvidersPage : PageBase
 {
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly List<ProviderCard> _cards = new();
 
-    public ProvidersPage() : base(SettingsPage.Providers)
+    public ProvidersPage() : base(SettingsPage.Providers, help: L("填写 API Key。语音转文字和文字整理可以使用不同的服务商。",
+                                                                  "Add API keys. Speech-to-text and clean-up can use different providers."))
     {
         var expanded = new HashSet<ProviderId> { _settings.SttProvider, _settings.PolishProvider };
-        var stack = new StackPanel { Spacing = 10 };
+        var stack = new StackPanel { Spacing = 8 };
         foreach (var id in ProviderIdExtensions.All)
         {
             var card = new ProviderCard(id, expanded.Contains(id));
@@ -85,14 +60,16 @@ internal sealed class ProviderCard : UserControl
         _expanded = expanded;
 
         // Header (the whole row toggles the card).
-        var name = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { Ui.Text(id.DisplayName(), 14, FontWeights.SemiBold), _tags } };
-        var titles = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { name, Ui.Text(id.Capabilities(), 12, foreground: Ui.Secondary) } };
+        var name = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
+            Children = { Ui.Text(id.DisplayName(), 13.5, FontWeights.Medium), _tags },
+        };
         var header = new Grid
         {
             ColumnSpacing = 12,
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Auto },
@@ -101,16 +78,15 @@ internal sealed class ProviderCard : UserControl
         _chevron.Foreground = Ui.Tertiary;
         _chevron.VerticalAlignment = VerticalAlignment.Center;
         _chevron.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
-        AddTo(header, new IconBadge { Glyph = id.Glyph(), Tint = id.Tint(), BadgeSize = 30 }, 0);
-        AddTo(header, titles, 1);
-        AddTo(header, _status, 2);
-        AddTo(header, _chevron, 3);
+        AddTo(header, name, 0);
+        AddTo(header, _status, 1);
+        AddTo(header, _chevron, 2);
         var toggle = new Button
         {
             Content = header,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Padding = new Thickness(14, 12, 14, 12),
+            Padding = new Thickness(14, 10, 14, 10),
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(8),

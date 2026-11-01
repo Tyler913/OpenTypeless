@@ -28,6 +28,9 @@
   <ItemGroup>
     <Content Include="Assets\AppIcon.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Fluent UI System Icons, the ones the app uses (scripts/make-icon-font.py), with their MIT license. -->
+    <Content Include="Assets\Fonts\FluentIcons.ttf" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Fonts\FluentIcons-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

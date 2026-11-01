@@ -64,8 +64,6 @@ public enum OnboardingStep { Welcome, Provider, TryIt, Done }
 /// <summary>The guide's own window; closing it at any step ends the guide.</summary>
 public sealed class OnboardingWindow : Window
 {
-    private const string ArrowGlyph = "";
-
     private readonly SessionController _controller;
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly HistoryStore _history = HistoryStore.Shared;
@@ -363,7 +361,7 @@ public sealed class OnboardingWindow : Window
             Height = 56,
             CornerRadius = new CornerRadius(28),
             HorizontalAlignment = HorizontalAlignment.Center,
-            Content = Ui.Icon(ArrowGlyph, 18),
+            Content = Ui.Icon(Glyphs.ArrowRight, 20),
         };
         Ui.Label(next, L("继续", "Continue"));
         next.Click += (_, _) => Go(OnboardingStep.Provider);
@@ -489,9 +487,9 @@ public sealed class OnboardingWindow : Window
         {
             Children =
             {
-                ModelRow(Glyphs.Speech, Tint.Blue, L("语音转文字", "Speech-to-text"), stt),
+                ModelRow(Glyphs.Speech, L("语音转文字", "Speech-to-text"), stt),
                 new CardDivider { Inset = 50 },
-                ModelRow(Glyphs.Font, Tint.Purple, L("文字整理", "Clean-up"), chat),
+                ModelRow(Glyphs.Sparkle, L("文字整理", "Clean-up"), chat),
             },
         }));
         var note = Ui.Text(L("之后可以随时在「设置 → 模型」里更换。", "You can change them any time in Settings → Models."), 11.5, foreground: Ui.Secondary, wrap: true);
@@ -501,12 +499,12 @@ public sealed class OnboardingWindow : Window
         return panel;
     }
 
-    private static CardRow ModelRow(string glyph, Tint tint, string title, string model)
+    private static CardRow ModelRow(string glyph, string title, string model)
     {
         var text = Ui.Text(model, 12, foreground: Ui.Secondary);
         text.FontFamily = new FontFamily("Cascadia Mono,Consolas");
         text.IsTextSelectionEnabled = true;
-        return new CardRow { Glyph = glyph, Tint = tint, Title = title, Trailing = text };
+        return new CardRow { Glyph = glyph, Title = title, Trailing = text };
     }
 
     private void SaveKey()
@@ -535,7 +533,7 @@ public sealed class OnboardingWindow : Window
             grant.Click += (_, _) => Permissions.OpenMicrophoneSettings();
             panel.Children.Add(Card.Make(new CardRow
             {
-                Glyph = Glyphs.Microphone, Tint = Tint.Red, Title = L("麦克风", "Microphone"),
+                Glyph = Glyphs.Microphone, Title = L("麦克风", "Microphone"),
                 Subtitle = L("用来录下你的语音", "To record your voice"), Trailing = grant,
             }));
         }
@@ -658,19 +656,19 @@ public sealed class OnboardingWindow : Window
             {
                 new CardRow
                 {
-                    Glyph = Glyphs.Microphone, Tint = Tint.Blue, Title = L("按住说话", "Hold to talk"),
+                    Glyph = Glyphs.Microphone, Title = L("按住说话", "Hold to talk"),
                     Subtitle = L("按住快捷键说话，松开后自动整理并插入到光标处", "Hold the shortcut while you speak; release to clean up and insert"),
                 },
                 new CardDivider { Inset = 50 },
                 new CardRow
                 {
-                    Glyph = Glyphs.TouchPointer, Tint = Tint.Purple, Title = L("轻点一下：免手持", "Tap once: hands-free"),
+                    Glyph = Glyphs.TouchPointer, Title = L("轻点一下：免手持", "Tap once: hands-free"),
                     Subtitle = L("适合长段口述，说完再按一次结束", "For long dictation — press again when done"),
                 },
                 new CardDivider { Inset = 50 },
                 new CardRow
                 {
-                    Glyph = Glyphs.Cancel, Tint = Tint.Gray, Title = L("Esc 取消", "Esc to cancel"),
+                    Glyph = Glyphs.Cancel, Title = L("Esc 取消", "Esc to cancel"),
                     Subtitle = L("录音或处理过程中随时取消", "Cancel any time while recording or processing"),
                 },
             },

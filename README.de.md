@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/menu-bar.png" width="330" alt="Das Menüleisten-Panel: Hinweis zum Tastenkürzel und letzte Diktate">
+  <img src="docs/images/menu-bar.png" width="330" alt="Das Menüleisten-Panel: letzte Diktate, per Klick kopiert">
 </p>
 
 <p align="center">
@@ -65,7 +65,7 @@ Rohe Spracherkennung ist unordentlich: Füllwörter, Neuanfänge, „nein, warte
 - **Deine Worte, deine Sprachen.** Änderungen bleiben minimal: Wortwahl, Reihenfolge und Ton bleiben deine. Wenn du Chinesisch und Englisch mischst, bleibt jedes Wort in der Sprache, in der du es gesagt hast, auch Alltagswörter („shortcut“, „dark mode“), mit Leerzeichen zwischen CJK- und lateinischem Text.
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="Verlauf: Diktate nach Tagen gruppiert und durchsuchbar, mit bereinigtem Text, Zeiten und Kosten">
+  <img src="docs/images/history.png" width="720" alt="Verlauf: Diktate nach Tagen gruppiert und durchsuchbar, mit bereinigtem Text und Kosten">
 </p>
 
 Der Prompt ist auf Entwicklungs- und zurückgehaltenen Testsets abgestimmt (siehe [eval/](eval/)), darunter echte Diktate.
@@ -96,7 +96,7 @@ Der Prompt ist auf Entwicklungs- und zurückgehaltenen Testsets abgestimmt (sieh
 - **Verlauf** jedes Diktats, nach Tagen gruppiert und durchsuchbar, mit Roh- und bereinigtem Text, Zeiten, Kosten, Kopieren und Neu-Transkribieren. Du bestimmst, wie lange Aufnahmen behalten werden: gar nicht, einen Tag, eine Woche, einen Monat, ein Jahr oder für immer. Exportiere, was die Liste zeigt, als CSV (öffnet sich in Excel, auch mit chinesischen Zeichen), JSON oder Markdown, und sichere jede Aufnahme als WAV-Datei.
 - **Audio- und Videodateien transkribieren.** **Datei transkribieren…** im Verlauf, oder Dateien dort ablegen, macht aus einem Sprachmemo, einer Besprechungsaufnahme oder einem Video Text, mit deinem Spracherkennungsanbieter, an Pausen geteilt wie ein langes Diktat und auf Wunsch bereinigt. Vor dem Start siehst du die Länge jeder Datei und, wenn das Modell einen Minutenpreis hat, was es kosten sollte. Der Text bleibt im Verlauf (er wird nie eingefügt), Dateien zählen nicht zur Diktat-Statistik und halten nie ein Diktat auf: Eine Datei schickt weniger Anfragen gleichzeitig und wartet, während du diktierst.
 - **Neun UI-Sprachen**: English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch und Русский. Die App folgt der Systemsprache, oder du wählst eine unter **Einstellungen → Allgemein → Sprache**.
-- **Natives Design.** Liquid Glass ab macOS 26 mit einem Menüleisten-Panel; Mica und Acrylic unter Windows 11 mit einem Panel im Infobereich. Beide zeigen beim Sprechen eine kleine Aufnahme-Kapsel.
+- **Natives Design.** Liquid Glass ab macOS 26 mit einem Menüleisten-Panel; Mica und Acrylic unter Windows 11 mit einem Panel im Infobereich. Beide zeigen beim Sprechen eine kleine Aufnahme-Kapsel. Die Einstellungen bleiben kurz, Details stehen hinter einem **?**, auf das du zeigen oder klicken kannst.
 - **Start bei der Anmeldung.**
 - **Aktualisiert sich selbst.** Prüft einmal täglich GitHub Releases, lädt eine neue Version im Hintergrund und installiert sie, wenn du auf **Neu starten und aktualisieren** klickst, nie mitten in einem Diktat. Downloads werden vor jedem Austausch gegen GitHubs SHA-256 geprüft. Abschalten oder manuell prüfen kannst du unter **Einstellungen → Allgemein → Updates**.
 - **Klein und nativ.** Eine ca. 3 MB große Swift/SwiftUI-App auf macOS und eine eigenständige WinUI-3-App auf Windows. Kein Electron, kein Konto und kein eigener Server.
@@ -280,7 +280,7 @@ Nützliche Kommandozeilenmodi des gebauten Programms (aus `macos/`):
 
 # Einstellungsseiten, Menüleisten-Panel und HUD als PNG rendern (--live zeigt sie auf dem Bildschirm, mit echtem Liquid Glass).
 # Die README-Screenshots nutzen einen Beispielverlauf und --demo, das Berechtigungen als erteilt behandelt.
-OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --lang en
+OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --dark --lang en
 ```
 
 ### Windows

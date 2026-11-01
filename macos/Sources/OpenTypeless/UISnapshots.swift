@@ -51,7 +51,7 @@ enum UISnapshots {
                     try showAndCapture(window, to: url)
                 } else {
                     let view = SettingsDetailView(navigation: navigation, controller: controller)
-                    try save(NSHostingView(rootView: view), size: NSSize(width: 660, height: 620), to: url)
+                    try save(NSHostingView(rootView: view), size: NSSize(width: 740, height: 660), to: url)
                 }
             }
             for step in OnboardingStep.allCases {

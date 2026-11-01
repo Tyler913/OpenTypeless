@@ -18,7 +18,7 @@ public sealed class HomePage : PageBase
     private readonly UsageStore _usage = UsageStore.Shared;
     private readonly PriceStore _prices = PriceStore.Shared;
 
-    public HomePage(SettingsWindow window) : base(SettingsPage.Home)
+    public HomePage(SettingsWindow window) : base(SettingsPage.Home, formWidth: false)
     {
         _window = window;
         _usage.Changed += OnChanged;
@@ -53,51 +53,47 @@ public sealed class HomePage : PageBase
                   $"Hold {_settings.Hotkey.DisplayName} and talk. Your stats will show up here.")));
         }
 
-        // Four headline figures, two by two.
+        // Four headline figures in a strip across the page.
         var speed = all.SpeakingWordsPerMinute;
-        var tiles = new Grid { ColumnSpacing = 12, RowSpacing = 12 };
-        tiles.ColumnDefinitions.Add(new ColumnDefinition());
-        tiles.ColumnDefinitions.Add(new ColumnDefinition());
-        tiles.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        tiles.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        AddTile(tiles, 0, 0, Glyphs.Font, Tint.Indigo, L("总字数", "Words dictated"), UsageFormat.Count(all.Words),
-                L($"今天 {UsageFormat.Count(todayTotals.Words)} · 本月 {UsageFormat.Count(month.Words)}",
-                  $"Today {UsageFormat.Count(todayTotals.Words)} · This month {UsageFormat.Count(month.Words)}"));
-        AddTile(tiles, 0, 1, Glyphs.Stopwatch, Tint.Green, L("节省的时间", "Time saved"), UsageFormat.Duration(all.SavedSeconds(wpm)),
-                L($"和每分钟打 {wpm} 字相比", $"Compared with typing at {wpm} wpm"));
-        AddTile(tiles, 1, 0, Glyphs.Speech, Tint.Orange, L("说话速度", "Speaking speed"),
-                speed is { } s ? L($"{s:0} 字/分钟", $"{s:0} wpm") : "—",
+        var cells = new Grid();
+        for (var i = 0; i < 4; i++)
+        {
+            if (i > 0) cells.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
+            cells.ColumnDefinitions.Add(new ColumnDefinition());
+        }
+        AddCell(cells, 0, L("总字数", "Words dictated"), null, UsageFormat.Count(all.Words),
+                L($"今天 {UsageFormat.Count(todayTotals.Words)}", $"{UsageFormat.Count(todayTotals.Words)} today"),
+                L($"本月 {UsageFormat.Count(month.Words)}", $"{UsageFormat.Count(month.Words)} this month"));
+        AddCell(cells, 1, L("节省的时间", "Time saved"),
+                all.Words == 0 ? null : L(
+                    $"说这 {UsageFormat.Count(all.Words)} 个字用了 {UsageFormat.Duration(all.SpeakingSeconds)}；按每分钟 {wpm} 字打出来要 {UsageFormat.Duration(all.TypingSeconds(wpm))}。打字速度可以在「通用」里修改。",
+                    $"Saying these {UsageFormat.Count(all.Words)} words took {UsageFormat.Duration(all.SpeakingSeconds)}; typing them at {wpm} wpm would take {UsageFormat.Duration(all.TypingSeconds(wpm))}. Change the typing speed under General."),
+                UsageFormat.Duration(all.SavedSeconds(wpm)), L($"按每分钟打 {wpm} 字算", $"vs. typing at {wpm} wpm"));
+        AddCell(cells, 2, L("说话速度", "Speaking speed"), null, speed is { } s ? L($"{s:0} 字/分钟", $"{s:0} wpm") : "—",
                 speed is { } v ? L($"是打字的 {v / wpm:0.0} 倍", $"{v / wpm:0.0}× your typing speed") : L("说几句就能算出来", "Dictate a little to see it"));
-        AddTile(tiles, 1, 1, Glyphs.Calendar, Tint.Purple, L("听写次数", "Dictations"), UsageFormat.Count(all.Dictations),
-                streak > 0 ? L($"已连续 {streak} 天 · 最长 {longest} 天", $"{streak}-day streak · Longest {longest} days")
+        AddCell(cells, 3, L("听写次数", "Dictations"), null, UsageFormat.Count(all.Dictations),
+                streak > 0 ? L($"连续 {streak} 天 · 最长 {longest} 天", $"{streak}-day streak · Best {longest}")
                            : L($"最长连续 {longest} 天", $"Longest streak {longest} days"));
-        var explanation = Ui.Text(all.Words == 0 ? "" : L(
-            $"说这 {UsageFormat.Count(all.Words)} 个字用了 {UsageFormat.Duration(all.SpeakingSeconds)}；按每分钟 {wpm} 字打出来要 {UsageFormat.Duration(all.TypingSeconds(wpm))}。打字速度可以在「通用」里修改。",
-            $"Saying these {UsageFormat.Count(all.Words)} words took {UsageFormat.Duration(all.SpeakingSeconds)}; typing them at {wpm} wpm would take {UsageFormat.Duration(all.TypingSeconds(wpm))}. Change the typing speed under General."),
-            11.5, foreground: Ui.Secondary, wrap: true);
-        explanation.Margin = new Thickness(4, 0, 4, 0);
-        Body.Children.Add(new StackPanel { Spacing = 8, Children = { tiles, explanation } });
+        Body.Children.Add(Card.Make(cells));
 
         // Spend takes a third of the width, the activity grid the rest; both cards as tall as the taller one.
         var spend = new StackPanel();
         spend.Children.Add(SpendLine(L("今天", "Today"), todayTotals));
-        spend.Children.Add(new CardDivider { Inset = 14 });
+        spend.Children.Add(new CardDivider());
         spend.Children.Add(SpendLine(L("本月", "This month"), month));
-        spend.Children.Add(new CardDivider { Inset = 14 });
-        spend.Children.Add(SpendLine(L("累计", "All time"), all));
+        spend.Children.Add(new CardDivider());
+        spend.Children.Add(SpendLine(L("累计", "All time"), all, showsSplit: true));
         // A new heatmap on every render: XAML refuses (E_INVALIDARG) to put an element into a second card, and one
         // thrown from a dispatcher callback (a new price list, a finished dictation) ends the app with 0xC000027B.
         var heatmap = new ActivityHeatmap { Margin = new Thickness(14, 12, 14, 12), Ledger = ledger };
         var row = new Grid { ColumnSpacing = 14 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
-        row.Children.Add(TitledCard(L("花费", "Spend"), spend));
-        var activity = TitledCard(L("活跃度", "Activity"), heatmap);
+        row.Children.Add(TitledCard(L("花费", "Spend"), SpendHelp(), spend));
+        var activity = TitledCard(L("活跃度", "Activity"), null, heatmap);
         Grid.SetColumn(activity, 1);
         row.Children.Add(activity);
-        var footer = Ui.Text(SpendFooter(), 11.5, foreground: Ui.Secondary, wrap: true);
-        footer.Margin = new Thickness(4, 0, 4, 0);
-        Body.Children.Add(new StackPanel { Spacing = 8, Children = { row, footer } });
+        Body.Children.Add(row);
         if (all.Unpriced > 0)
         {
             var button = new Button { Content = L("设置价格", "Set prices") };
@@ -109,13 +105,12 @@ public sealed class HomePage : PageBase
     }
 
     /// A section title above a card that fills the rest of its grid cell.
-    private static Grid TitledCard(string title, UIElement content)
+    private static Grid TitledCard(string title, string? help, UIElement content)
     {
         var grid = new Grid { RowSpacing = 8 };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        var label = Ui.Text(title, 12, FontWeights.SemiBold, Ui.Secondary);
-        label.Margin = new Thickness(4, 0, 0, 0);
+        var label = new TitleLine(Ui.Text(title, 12, FontWeights.SemiBold, Ui.Secondary)) { Margin = new Thickness(4, 0, 0, 0), Help = help };
         grid.Children.Add(label);
         var card = Card.Make(content);
         card.VerticalAlignment = VerticalAlignment.Stretch;
@@ -124,48 +119,51 @@ public sealed class HomePage : PageBase
         return grid;
     }
 
-    private static void AddTile(Grid grid, int row, int column, string glyph, Tint tint, string title, string value, string caption)
+    /// <summary>One headline figure, and a hairline before it unless it's the first.</summary>
+    private static void AddCell(Grid grid, int index, string title, string? help, string value, string caption, string? tooltip = null)
     {
-        var header = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children =
-            {
-                new IconBadge { Glyph = glyph, Tint = tint, BadgeSize = 22 },
-                new TextBlock { Text = title, FontSize = 12.5, Foreground = Ui.Secondary, VerticalAlignment = VerticalAlignment.Center },
-            },
-        };
-        var valueText = Ui.Text(value, 28, FontWeights.SemiBold);
+        var valueText = Ui.Text(value, 24, FontWeights.SemiBold);
         valueText.TextTrimming = TextTrimming.CharacterEllipsis;
-        var tile = Card.Make(new StackPanel
+        var captionText = Ui.Text(caption, 12, foreground: Ui.Secondary);
+        captionText.TextTrimming = TextTrimming.CharacterEllipsis;
+        var cell = new StackPanel
         {
-            Spacing = 6,
-            Padding = new Thickness(16, 14, 16, 14),
-            Children = { header, valueText, Ui.Text(caption, 12, foreground: Ui.Secondary, wrap: true) },
-        });
-        Grid.SetRow(tile, row);
-        Grid.SetColumn(tile, column);
-        grid.Children.Add(tile);
+            Spacing = 3,
+            Padding = new Thickness(14, 12, 14, 12),
+            Children = { new TitleLine(Ui.Text(title, 12, foreground: Ui.Secondary)) { Help = help }, valueText, captionText },
+        };
+        if (tooltip != null) ToolTipService.SetToolTip(cell, tooltip);
+        Grid.SetColumn(cell, index * 2);
+        grid.Children.Add(cell);
+        if (index == 0) return;
+        var divider = new Border { Background = Palette.Theme("DividerStrokeColorDefaultBrush"), Margin = new Thickness(0, 12, 0, 12) };
+        Grid.SetColumn(divider, index * 2 - 1);
+        grid.Children.Add(divider);
     }
 
-    /// One spend figure in the narrow Spend column: label, amount, and the split between the two steps.
-    private static StackPanel SpendLine(string title, UsageTotals totals)
+    /// One line of the Spend card: label and amount, with the split between the two steps on a tooltip, or under it.
+    private static StackPanel SpendLine(string title, UsageTotals totals, bool showsSplit = false)
     {
-        var amount = Ui.Text(UsageFormat.Money(totals.Cost), 20, FontWeights.SemiBold);
+        var amount = Ui.Text(UsageFormat.Money(totals.Cost), 15, FontWeights.SemiBold);
         amount.TextTrimming = TextTrimming.CharacterEllipsis;
-        var line = new StackPanel { Spacing = 2, Padding = new Thickness(14, 10, 14, 10), Children = { Ui.Text(title, 11.5, foreground: Ui.Secondary), amount } };
-        if (totals.Cost > 0)
-        {
-            line.Children.Add(Ui.Text(
-                L($"转写 {UsageFormat.Money(totals.TranscriptionCost)} · 整理 {UsageFormat.Money(totals.CleanupCost)}",
-                  $"Speech {UsageFormat.Money(totals.TranscriptionCost)} · Clean-up {UsageFormat.Money(totals.CleanupCost)}"),
-                10.5, foreground: Ui.Tertiary, wrap: true));
-        }
+        Grid.SetColumn(amount, 1);
+        var label = Ui.Text(title, 12.5, foreground: Ui.Secondary);
+        label.VerticalAlignment = VerticalAlignment.Center;
+        var figures = new Grid { ColumnSpacing = 8 };
+        figures.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        figures.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        figures.Children.Add(label);
+        figures.Children.Add(amount);
+        var line = new StackPanel { Spacing = 2, Padding = new Thickness(14, 9, 14, 9), Children = { figures } };
+        if (totals.Cost <= 0) return line;
+        var split = L($"转写 {UsageFormat.Money(totals.TranscriptionCost)} · 整理 {UsageFormat.Money(totals.CleanupCost)}",
+                      $"Speech {UsageFormat.Money(totals.TranscriptionCost)} · Clean-up {UsageFormat.Money(totals.CleanupCost)}");
+        if (showsSplit) line.Children.Add(Ui.Text(split, 10.5, foreground: Ui.Tertiary, wrap: true));
+        else ToolTipService.SetToolTip(line, split);
         return line;
     }
 
-    private string SpendFooter()
+    private string SpendHelp()
     {
         var catalog = _prices.Catalog;
         var updated = catalog.IsEmpty ? L("还没有下载", "not downloaded yet") : Formatting.ShortStamp(catalog.FetchedAt);

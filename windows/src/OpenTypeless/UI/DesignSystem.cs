@@ -112,6 +112,8 @@ public static class Glyphs
     public const string Video = "\uE714";
     public const string Send = "\uE724";
     public const string LineBreak = "\uE8E4";
+    public const string Help = "\uE9CE";
+    public const string Drive = "\uEDA2";
 }
 
 public static class Ui
@@ -241,11 +243,103 @@ public static class Card
     };
 }
 
-/// <summary>Section title above a card, with an optional footer note below it.</summary>
+/// <summary>
+/// A "?" beside a title, holding what the page doesn't spell out. Pointing at it shows the text in a tooltip; clicking
+/// keeps it open in a flyout, for reading at leisure (and for the keyboard and Narrator).
+/// </summary>
+public sealed class HelpTip : UserControl
+{
+    private readonly TextBlock _body = Ui.Text("", 12.5, wrap: true);
+    private readonly Button _button;
+    private string? _topic;
+
+    public HelpTip()
+    {
+        _body.MaxWidth = 300;
+        _button = new Button
+        {
+            Content = Ui.Icon(Glyphs.Help, 13, Ui.Tertiary),
+            Padding = new Thickness(3),
+            MinWidth = 0,
+            MinHeight = 0,
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Flyout = new Flyout { Content = _body },
+        };
+        Content = _button;
+        UpdateName();
+    }
+
+    public HelpTip(string text, string? topic = null) : this()
+    {
+        Topic = topic;
+        Text = text;
+    }
+
+    public string Text
+    {
+        get => _body.Text;
+        set
+        {
+            _body.Text = value;
+            ToolTipService.SetToolTip(_button, value);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(_button, value);
+        }
+    }
+
+    /// <summary>What it explains, which Narrator says.</summary>
+    public string? Topic
+    {
+        get => _topic;
+        set
+        {
+            _topic = value;
+            UpdateName();
+        }
+    }
+
+    private void UpdateName() => Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(
+        _button, _topic is { } topic ? L($"关于「{topic}」", $"About {topic}") : L("说明", "More information"));
+}
+
+/// <summary>A title with its explanation behind a "?"; the "?" shows once there's something to say.</summary>
+internal sealed class TitleLine : UserControl
+{
+    public readonly TextBlock Label;
+    private readonly HelpTip _help = new() { Visibility = Visibility.Collapsed };
+
+    public TitleLine(TextBlock label)
+    {
+        Label = label;
+        label.VerticalAlignment = VerticalAlignment.Center;
+        label.TextTrimming = TextTrimming.CharacterEllipsis;
+        var line = new Grid { ColumnSpacing = 3 };
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        line.Children.Add(label);
+        Grid.SetColumn(_help, 1);
+        line.Children.Add(_help);
+        Content = line;
+    }
+
+    public string? Help
+    {
+        get => _help.Visibility == Visibility.Visible ? _help.Text : null;
+        set
+        {
+            _help.Topic = Label.Text;
+            _help.Text = value ?? "";
+            _help.Visibility = string.IsNullOrEmpty(value) ? Visibility.Collapsed : Visibility.Visible;
+        }
+    }
+}
+
+/// <summary>Section title above a card. <see cref="Help"/> explains the section; the footer is for what needs noticing now, such as a warning.</summary>
 [ContentProperty(Name = nameof(Body))]
 public sealed class CardSection : UserControl
 {
-    private readonly TextBlock _title = Ui.Text("", 12, FontWeights.SemiBold, Ui.Secondary);
+    private readonly TitleLine _title = new(Ui.Text("", 12, FontWeights.SemiBold, Ui.Secondary));
     private readonly TextBlock _footer = Ui.Text("", 11.5, foreground: Ui.Secondary, wrap: true);
     private readonly Border _card = Card.Make();
     private readonly StackPanel _stack = new();
@@ -259,7 +353,9 @@ public sealed class CardSection : UserControl
         Content = new StackPanel { Spacing = 8, Children = { _title, _card, _footer } };
     }
 
-    public string Title { get => _title.Text; set => _title.Text = value; }
+    public string Title { get => _title.Label.Text; set => _title.Label.Text = value; }
+
+    public string? Help { get => _title.Help; set => _title.Help = value; }
 
     public string? Footer
     {
@@ -275,12 +371,12 @@ public sealed class CardSection : UserControl
     public UIElementCollection Body => _stack.Children;
 }
 
-/// <summary>A settings row: icon badge, title, optional subtitle, and a control on the trailing edge.</summary>
+/// <summary>A settings row: title, optional subtitle, and a control on the trailing edge. Onboarding adds an icon badge.</summary>
 [ContentProperty(Name = nameof(Trailing))]
 public sealed class CardRow : UserControl
 {
     private readonly IconBadge _badge = new() { BadgeSize = 24, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock _title = Ui.Text("", 13.5);
+    private readonly TitleLine _title = new(Ui.Text("", 13.5));
     private readonly TextBlock _subtitle = Ui.Text("", 12, foreground: Ui.Secondary, wrap: true);
     private readonly ContentPresenter _trailing = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
     /// <summary>The accessible name this row gave its control, so a later title replaces it but a control's own name stays.</summary>
@@ -290,11 +386,11 @@ public sealed class CardRow : UserControl
     {
         _badge.Visibility = Visibility.Collapsed;
         _subtitle.Visibility = Visibility.Collapsed;
-        var text = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { _title, _subtitle } };
+        var text = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { _title, _subtitle } };
         var grid = new Grid
         {
-            Padding = new Thickness(14, 10, 14, 10),
-            MinHeight = 48,
+            Padding = new Thickness(14, 8, 14, 8),
+            MinHeight = 44,
             ColumnSpacing = 12,
             ColumnDefinitions =
             {
@@ -321,10 +417,10 @@ public sealed class CardRow : UserControl
 
     public string Title
     {
-        get => _title.Text;
+        get => _title.Label.Text;
         set
         {
-            _title.Text = value;
+            _title.Label.Text = value;
             NameControl();
         }
     }
@@ -338,6 +434,9 @@ public sealed class CardRow : UserControl
             _subtitle.Visibility = string.IsNullOrEmpty(value) ? Visibility.Collapsed : Visibility.Visible;
         }
     }
+
+    /// <summary>What the row's title doesn't say, behind a "?" beside it.</summary>
+    public string? Help { get => _title.Help; set => _title.Help = value; }
 
     public object? Trailing
     {
@@ -359,11 +458,11 @@ public sealed class CardRow : UserControl
         var control = Nameable(_trailing.Content)
             ? (Control)_trailing.Content!
             : (_trailing.Content as Panel)?.Children.OfType<Control>().FirstOrDefault(c => Nameable(c));
-        if (control == null || string.IsNullOrEmpty(_title.Text)) return;
+        if (control == null || string.IsNullOrEmpty(_title.Label.Text)) return;
         var name = Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(control);
         if (!string.IsNullOrEmpty(name) && name != _givenName) return;
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(control, _title.Text);
-        _givenName = _title.Text;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(control, _title.Label.Text);
+        _givenName = _title.Label.Text;
     }
 }
 
@@ -375,7 +474,7 @@ public sealed class CardDivider : UserControl
     {
         _line.Fill = Palette.Theme("DividerStrokeColorDefaultBrush");
         Content = _line;
-        Inset = 50;
+        Inset = 14;
     }
 
     public double Inset
@@ -401,17 +500,17 @@ public sealed class KeyCaps : UserControl
         {
             row.Children.Add(new Border
             {
-                MinWidth = _large ? 56 : 24,
-                MinHeight = _large ? 50 : 24,
-                Padding = new Thickness(_large ? 18 : 7, 0, _large ? 18 : 7, 0),
-                CornerRadius = new CornerRadius(_large ? 10 : 5),
+                MinWidth = _large ? 44 : 24,
+                MinHeight = _large ? 38 : 24,
+                Padding = new Thickness(_large ? 14 : 7, 0, _large ? 14 : 7, 0),
+                CornerRadius = new CornerRadius(_large ? 8 : 5),
                 Background = Palette.Theme("ControlFillColorDefaultBrush"),
                 BorderBrush = Palette.Theme("ControlElevationBorderBrush"),
                 BorderThickness = new Thickness(1),
                 Child = new TextBlock
                 {
                     Text = cap,
-                    FontSize = _large ? 21 : 12,
+                    FontSize = _large ? 17 : 12,
                     FontWeight = FontWeights.SemiBold,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,

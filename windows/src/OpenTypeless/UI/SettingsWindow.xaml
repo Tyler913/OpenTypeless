@@ -12,18 +12,12 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="40" />
+            <RowDefinition Height="32" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <!-- Custom title bar: the sidebar and pages extend up under it, like the macOS full-size content view. -->
-        <Grid x:Name="TitleBarArea" Grid.Row="0" Background="Transparent">
-            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center">
-                <Image Source="ms-appx:///Assets/AppIcon.png" Width="16" Height="16" />
-                <TextBlock Text="OpenTypeless" FontSize="12" VerticalAlignment="Center"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            </StackPanel>
-        </Grid>
+        <Grid x:Name="TitleBarArea" Grid.Row="0" Background="Transparent" />
 
         <NavigationView
             x:Name="Nav"
@@ -36,12 +30,9 @@
             SelectionChanged="OnSelectionChanged">
 
             <NavigationView.PaneHeader>
-                <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,4,16,14">
-                    <ui:AppTile TileSize="34" />
-                    <StackPanel VerticalAlignment="Center" Spacing="1">
-                        <TextBlock Text="OpenTypeless" FontSize="14" FontWeight="SemiBold" />
-                        <TextBlock x:Name="VersionText" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,16,12">
+                    <ui:AppTile TileSize="28" />
+                    <TextBlock Text="OpenTypeless" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
                 </StackPanel>
             </NavigationView.PaneHeader>
 

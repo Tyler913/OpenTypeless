@@ -20,16 +20,15 @@ struct GeneralPage: View {
     var body: some View {
         PageScaffold(page: .general) {
             CardSection(title: L("权限", "Permissions")) {
-                CardRow(icon: "mic.fill", iconColor: .red, title: L("麦克风", "Microphone"),
-                        subtitle: L("用来录下你的语音", "To record your voice")) {
+                CardRow(title: L("麦克风", "Microphone"), help: L("用来录下你的语音", "To record your voice")) {
                     PermissionControl(granted: permissions.microphoneGranted) {
                         Permissions.requestMicrophone { _ in permissions.refresh() }
                         if AVAuthorizationDenied.isDenied { Permissions.openMicrophoneSettings() }
                     }
                 }
-                CardDivider(inset: 50)
-                CardRow(icon: "accessibility", iconColor: .blue, title: L("辅助功能", "Accessibility"),
-                        subtitle: L("用来监听快捷键，并把文字粘贴到光标处", "To listen for the shortcut and paste text at the cursor")) {
+                CardDivider()
+                CardRow(title: L("辅助功能", "Accessibility"),
+                        help: L("用来监听快捷键，并把文字粘贴到光标处", "To listen for the shortcut and paste text at the cursor")) {
                     PermissionControl(granted: permissions.accessibilityGranted) {
                         Permissions.promptAccessibility()
                         Permissions.openAccessibilitySettings()
@@ -37,10 +36,54 @@ struct GeneralPage: View {
                 }
             }
 
+            CardSection(title: L("听写", "Dictation")) {
+                CardRow(title: L("恢复剪贴板", "Restore clipboard"),
+                        help: L("插入文字后，把剪贴板恢复成原来的内容", "Put your previous clipboard back after inserting"),
+                        isOn: $settings.restoreClipboard)
+                CardDivider()
+                CardRow(title: L("贴合前后文", "Fit to surrounding text"),
+                        subtitle: L("按光标前后的文字调整空格和大小写", "Adjusts spacing and capitals at the cursor"),
+                        help: L("插入到已有文字中间时，按光标前后的文字补上缺的空格、把句中的首字母改成小写、去掉会提前结束句子的句号。读不到光标附近的文字时（比如密码框），按原样插入。",
+                                "When you dictate into existing text, adds a missing space, lowercases a capital in mid-sentence and drops a full stop that would end the sentence early, going by the text around the cursor. Where that can't be read (a password field, some apps), the text goes in as it is."),
+                        isOn: $settings.fitToSurroundingText)
+                CardDivider()
+                CardRow(title: L("插入后自动回车", "Press Return after inserting"),
+                        help: L("文字粘贴进去后自动按一次回车，在聊天框或给 AI 写提示词时直接发送。文字只复制到剪贴板时不会按。",
+                                "Presses Return once the text is pasted, so a chat message or AI prompt is sent right away. Not pressed when the text only goes to the clipboard."),
+                        isOn: $settings.pressEnterAfterInsert)
+                CardDivider()
+                CardRow(title: L("说“换行”另起一行", "Say “new line” for a line break"),
+                        help: L("单独说“换行”或“新段落”（前后稍作停顿），会换成换行或空一行；其他语言的说法也可以，比如 new line、new paragraph。在一句话中间说到这些词时照原样保留；但在列举里单独说出（“空格，换行，制表符”）时也会变成换行。",
+                                "Say “new line” or “new paragraph” on its own, with a short pause before and after, for a line break or a blank line; 换行 / 新段落 and the other languages’ words work too. Said within a sentence, the words stay as they are; said on their own in a list (“spaces, new line, tabs”), they become a break too."),
+                        isOn: $settings.spokenLayoutCommands)
+                CardDivider()
+                CardRow(title: L("提示音", "Sounds"),
+                        subtitle: L("开始和结束录音时播放轻提示音", "Soft chime when recording starts and stops"),
+                        isOn: $settings.playSounds)
+                CardDivider()
+                CardRow(title: L("录音时静音", "Mute audio while recording"),
+                        help: L("录音期间把扬声器静音，音乐和视频不会打扰你说话，结束后自动恢复。",
+                                "Mutes your speakers while you're recording, so music or a video doesn't get in the way, and turns them back on when you stop."),
+                        isOn: $settings.muteWhileRecording)
+                CardDivider()
+                CardRow(title: L("实时预览（测试版）", "Live preview (beta)"),
+                        subtitle: L("说话时在录音条上方显示文字", "Shows your words above the capsule as you talk"),
+                        help: L("说话时在录音条上方显示识别到的文字，由这台 Mac 本地识别。只是预览：插入的文字仍然来自语音转文字服务商。第一次使用会下载对应语言的语音模型。",
+                                "Shows what you're saying above the capsule as you talk, recognised on this Mac. Only a preview: the inserted text still comes from your speech-to-text provider. The first time, macOS downloads a speech model for your language."),
+                        isOn: $settings.livePreview)
+                CardDivider()
+                CardRow(title: L("单次最长录音", "Maximum recording"),
+                        help: L("到时间会自动结束并处理", "Stops and processes automatically at the limit")) {
+                    Stepper(L("\(settings.maxRecordingMinutes) 分钟", "\(settings.maxRecordingMinutes) min"),
+                            value: $settings.maxRecordingMinutes, in: 1...60)
+                        .fixedSize()
+                }
+            }
+
             CardSection(title: L("麦克风", "Microphone"), footer: microphoneFooter) {
-                CardRow(icon: "mic.circle.fill", iconColor: .orange, title: L("输入设备", "Input device"),
-                        subtitle: L("有的电脑默认用的是虚拟麦克风，可以在这里选真正的麦克风",
-                                    "Some Macs default to a virtual device; pick your real microphone here")) {
+                CardRow(title: L("输入设备", "Input device"),
+                        help: L("有的电脑默认用的是虚拟麦克风，可以在这里选真正的麦克风",
+                                "Some Macs default to a virtual device; pick your real microphone here")) {
                     Picker(L("输入设备", "Input device"), selection: $settings.microphoneUID) {
                         Text(L("跟随系统", "System default") + (defaultMicrophone.map { L("（\($0.name)）", " (\($0.name))") } ?? "")).tag("")
                         ForEach(microphones) { Text($0.label).tag($0.uid) }
@@ -51,31 +94,30 @@ struct GeneralPage: View {
                     .labelsHidden()
                     .frame(maxWidth: 240)
                 }
-                CardDivider(inset: 50)
-                CardRow(icon: "waveform", iconColor: .pink, title: L("测试麦克风", "Test microphone"),
-                        subtitle: tester.isRunning
-                            ? L("说几句话，音量条应该随你的声音起伏", "Say something: the bar should rise and fall with your voice")
-                            : L("检查选中的设备能不能听到你", "Check that the chosen device can hear you")) {
+                CardDivider()
+                CardRow(title: L("测试麦克风", "Test microphone"),
+                        subtitle: tester.isRunning ? L("说几句话，音量条应该随你的声音起伏", "Say something: the bar should rise and fall with your voice") : nil) {
                     HStack(spacing: 10) {
-                        LevelMeter(level: tester.level, peak: tester.peak).frame(width: 130)
+                        if tester.isRunning { LevelMeter(level: tester.level, peak: tester.peak).frame(width: 130) }
                         Button(tester.isRunning ? L("停止", "Stop") : L("测试", "Test")) {
                             if tester.isRunning { tester.stop() } else { tester.start(deviceUID: selectedMicrophoneUID) }
                         }
                         .controlSize(.small)
                     }
                 }
-                CardDivider(inset: 50)
-                CardRow(icon: "bolt.fill", iconColor: .yellow, title: L("预热麦克风", "Keep microphone ready"),
-                        subtitle: L("按下快捷键立刻开始录音，并带上按键前的一小段，第一个字不会被吞掉（AirPods 这类耳机尤其明显）。麦克风会一直开着，蓝牙耳机会切到通话模式，音乐音质会下降。",
-                                    "Recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped (noticeable with AirPods). The microphone stays on, and Bluetooth headphones switch to call mode, which lowers music quality."),
+                CardDivider()
+                CardRow(title: L("预热麦克风", "Keep microphone ready"),
+                        subtitle: L("按下快捷键立刻开始录音", "Recording starts the instant you press the key"),
+                        help: L("按下快捷键立刻开始录音，并带上按键前的一小段，第一个字不会被吞掉（AirPods 这类耳机尤其明显）。麦克风会一直开着，蓝牙耳机会切到通话模式，音乐音质会下降。",
+                                "Recording starts the instant you press the key and includes the moment before it, so the first word isn't clipped (noticeable with AirPods). The microphone stays on, and Bluetooth headphones switch to call mode, which lowers music quality."),
                         isOn: $settings.keepMicrophoneWarm)
             }
             .onChange(of: settings.microphoneUID) {
                 if tester.isRunning { tester.start(deviceUID: selectedMicrophoneUID) }
             }
 
-            CardSection(title: L("外观", "Appearance")) {
-                CardRow(icon: "globe", iconColor: .teal, title: L("界面语言", "Language")) {
+            CardSection(title: L("偏好", "Preferences"), footer: launchFooter) {
+                CardRow(title: L("界面语言", "Language")) {
                     Picker(L("界面语言", "Language"), selection: $settings.appLanguage) {
                         Text(L("跟随系统", "System")).tag(AppLanguage.system)
                         ForEach(AppLanguage.supported) { language in
@@ -85,11 +127,9 @@ struct GeneralPage: View {
                     .labelsHidden()
                     .fixedSize()
                 }
-            }
-
-            CardSection(title: L("启动", "Startup"), footer: launchFooter) {
-                CardRow(icon: "power", iconColor: .green, title: L("登录时自动启动", "Open at login"),
-                        subtitle: L("开机后在菜单栏待命", "Waits in the menu bar after you log in"),
+                CardDivider()
+                CardRow(title: L("登录时自动启动", "Open at login"),
+                        help: L("开机后在菜单栏待命", "Waits in the menu bar after you log in"),
                         isOn: Binding(
                             get: { launchAtLogin },
                             set: { newValue in
@@ -102,68 +142,25 @@ struct GeneralPage: View {
                                 refreshLaunchState()
                             }
                         ))
-                CardDivider(inset: 50)
-                CardRow(icon: "house.fill", iconColor: .blue, title: L("自动启动时打开主页", "Show Home when opened at login"),
-                        subtitle: L("关闭时开机后只在菜单栏待命；手动打开应用总会显示主页",
+                if launchAtLogin {
+                    CardDivider()
+                    CardRow(title: L("自动启动时打开主页", "Show Home when opened at login"),
+                            help: L("关闭时开机后只在菜单栏待命；手动打开应用总会显示主页",
                                     "Off: it waits in the menu bar after you log in. Opening the app yourself always shows Home"),
-                        isOn: $settings.showHomeAtLogin)
-            }
-
-            UpdatesSection(settings: settings)
-
-            CardSection(title: L("听写", "Dictation")) {
-                CardRow(icon: "doc.on.clipboard.fill", iconColor: .brown, title: L("恢复剪贴板", "Restore clipboard"),
-                        subtitle: L("插入文字后，把剪贴板恢复成原来的内容", "Put your previous clipboard back after inserting"),
-                        isOn: $settings.restoreClipboard)
-                CardDivider(inset: 50)
-                CardRow(icon: "character.cursor.ibeam", iconColor: .blue,
-                        title: L("贴合前后文的空格和大小写", "Fit spacing and capitalisation to the surrounding text"),
-                        subtitle: L("插入到已有文字中间时，按光标前后的文字补上缺的空格、把句中的首字母改成小写、去掉会提前结束句子的句号。读不到光标附近的文字时（比如密码框），按原样插入。",
-                                    "When you dictate into existing text, adds a missing space, lowercases a capital in mid-sentence and drops a full stop that would end the sentence early, going by the text around the cursor. Where that can't be read (a password field, some apps), the text goes in as it is."),
-                        isOn: $settings.fitToSurroundingText)
-                CardDivider(inset: 50)
-                CardRow(icon: "return", iconColor: .green, title: L("插入后自动回车", "Press Return after inserting"),
-                        subtitle: L("文字粘贴进去后自动按一次回车，在聊天框或给 AI 写提示词时直接发送。文字只复制到剪贴板时不会按。",
-                                    "Presses Return once the text is pasted, so a chat message or AI prompt is sent right away. Not pressed when the text only goes to the clipboard."),
-                        isOn: $settings.pressEnterAfterInsert)
-                CardDivider(inset: 50)
-                CardRow(icon: "text.append", iconColor: .blue, title: L("说“换行”另起一行", "Say “new line” for a line break"),
-                        subtitle: L("单独说“换行”或“新段落”（前后稍作停顿），会换成换行或空一行；其他语言的说法也可以，比如 new line、new paragraph。在一句话中间说到这些词时照原样保留；但在列举里单独说出（“空格，换行，制表符”）时也会变成换行。",
-                                    "Say “new line” or “new paragraph” on its own, with a short pause before and after, for a line break or a blank line; 换行 / 新段落 and the other languages’ words work too. Said within a sentence, the words stay as they are; said on their own in a list (“spaces, new line, tabs”), they become a break too."),
-                        isOn: $settings.spokenLayoutCommands)
-                CardDivider(inset: 50)
-                CardRow(icon: "speaker.wave.2.fill", iconColor: .pink, title: L("提示音", "Sounds"),
-                        subtitle: L("开始和结束录音时播放轻提示音", "Soft chime when recording starts and stops"),
-                        isOn: $settings.playSounds)
-                CardDivider(inset: 50)
-                CardRow(icon: "speaker.slash.fill", iconColor: .indigo, title: L("录音时静音", "Mute audio while recording"),
-                        subtitle: L("录音期间把扬声器静音，音乐和视频不会打扰你说话，结束后自动恢复。",
-                                    "Mutes your speakers while you're recording, so music or a video doesn't get in the way, and turns them back on when you stop."),
-                        isOn: $settings.muteWhileRecording)
-                CardDivider(inset: 50)
-                CardRow(icon: "text.bubble.fill", iconColor: .teal, title: L("实时预览（测试版）", "Live preview (beta)"),
-                        subtitle: L("说话时在录音条上方显示识别到的文字，由这台 Mac 本地识别。只是预览：插入的文字仍然来自语音转文字服务商。第一次使用会下载对应语言的语音模型。",
-                                    "Shows what you're saying above the capsule as you talk, recognised on this Mac. Only a preview: the inserted text still comes from your speech-to-text provider. The first time, macOS downloads a speech model for your language."),
-                        isOn: $settings.livePreview)
-                CardDivider(inset: 50)
-                CardRow(icon: "timer", iconColor: .orange, title: L("单次最长录音", "Maximum recording"),
-                        subtitle: L("到时间会自动结束并处理", "Stops and processes automatically at the limit")) {
-                    Stepper(L("\(settings.maxRecordingMinutes) 分钟", "\(settings.maxRecordingMinutes) min"),
-                            value: $settings.maxRecordingMinutes, in: 1...60)
-                        .fixedSize()
+                            isOn: $settings.showHomeAtLogin)
                 }
-            }
-
-            CardSection(title: L("主页统计", "Home stats"),
-                        footer: L("「节省的时间」= 按这个速度打出同样的字所需的时间 − 实际说话的时间。",
-                                  "“Time saved” is how long typing the same words at this speed would take, minus the time you spent talking.")) {
-                CardRow(icon: "keyboard.fill", iconColor: .indigo, title: L("你的打字速度", "Your typing speed"),
-                        subtitle: L("用来计算节省的时间（默认每分钟 100 字）", "Used to work out the time saved (100 wpm by default)")) {
+                CardDivider()
+                CardRow(title: L("你的打字速度", "Your typing speed"),
+                        help: L("用来计算节省的时间（默认每分钟 100 字）", "Used to work out the time saved (100 wpm by default)") + "\n\n"
+                            + L("「节省的时间」= 按这个速度打出同样的字所需的时间 − 实际说话的时间。",
+                                "“Time saved” is how long typing the same words at this speed would take, minus the time you spent talking.")) {
                     Stepper(L("\(settings.typingWordsPerMinute) 字/分钟", "\(settings.typingWordsPerMinute) wpm"),
                             value: $settings.typingWordsPerMinute, in: 10...300, step: 5)
                         .fixedSize()
                 }
             }
+
+            UpdatesSection(settings: settings)
         }
         .onReceive(timer) { _ in
             refreshLaunchState()
@@ -215,13 +212,12 @@ private struct UpdatesSection: View {
 
     var body: some View {
         CardSection(title: L("更新", "Updates"), footer: updater.manualReason) {
-            CardRow(icon: "arrow.down.circle.fill", iconColor: .indigo,
-                    title: "OpenTypeless \(updater.currentVersionText)", subtitle: status) {
+            CardRow(title: "OpenTypeless \(updater.currentVersionText)", subtitle: status) {
                 action
             }
             if let update = updater.update {
-                CardDivider(inset: 50)
-                CardRow(icon: "sparkles", iconColor: .purple, title: L("\(update.version) 更新内容", "What’s new in \(update.version)"),
+                CardDivider()
+                CardRow(title: L("\(update.version) 更新内容", "What’s new in \(update.version)"),
                         subtitle: update.notes.isEmpty ? nil : String(update.notes.prefix(280))) {
                     HStack(spacing: 8) {
                         if updater.canSkip {
@@ -231,9 +227,9 @@ private struct UpdatesSection: View {
                     }
                 }
             }
-            CardDivider(inset: 50)
-            CardRow(icon: "clock.arrow.circlepath", iconColor: .gray, title: L("自动检查更新", "Check automatically"),
-                    subtitle: L("每天一次，在后台下载，由你决定何时安装", "Once a day. Downloads in the background; installs when you choose"),
+            CardDivider()
+            CardRow(title: L("自动检查更新", "Check automatically"),
+                    help: L("每天一次，在后台下载，由你决定何时安装", "Once a day. Downloads in the background; installs when you choose"),
                     isOn: $settings.autoCheckUpdates)
         }
     }
@@ -407,111 +403,97 @@ struct ShortcutPage: View {
     @StateObject private var actionRecorder = HotkeyRecorder()
     @State private var recordingAction: ShortcutAction?
 
-    /// When it goes, and a warning when the dictation hotkey takes the send key's presses (see `SendKey.isTaken`).
-    private var sendKeyFooter: String {
-        let footer = L("只在文字粘贴进录音时所在的应用后才按；文字只复制到剪贴板、按了 Esc 或锁屏时不会发送。",
-                       "Only pressed once the text is pasted into the app you were dictating in: not when it only goes to the clipboard, after Esc, or once the screen locks.")
+    /// A warning when the dictation hotkey takes the send key's presses (see `SendKey.isTaken`).
+    private var sendKeyWarning: String? {
         let hotkey = settings.hotkey
         guard settings.sendKey.isTaken(byHotkeyKey: hotkey.keyCode, isModifierOnly: hotkey.isModifierOnly, codes: SendKey.codes) else {
-            return footer
+            return nil
         }
-        return footer + "\n" + L("听写快捷键也用到了这个键，录音时会先被当作听写快捷键，发送键就不起作用了。请换一个发送键或快捷键。",
-                                 "Your dictation shortcut uses this key too, and while recording it's read as the shortcut first, so the send key won't work. Pick another send key or shortcut.")
+        return L("听写快捷键也用到了这个键，录音时会先被当作听写快捷键，发送键就不起作用了。请换一个发送键或快捷键。",
+                 "Your dictation shortcut uses this key too, and while recording it's read as the shortcut first, so the send key won't work. Pick another send key or shortcut.")
+    }
+
+    /// How the shortcut works, and what it can be.
+    private var hotkeyHelp: String {
+        [L("按住快捷键说话，松开后自动整理并插入到光标处", "Hold the shortcut while you speak; release to clean up and insert"),
+         L("轻点一下：免手持", "Tap once: hands-free") + "\n" + L("适合长段口述，说完再按一次结束", "For long dictation — press again when done"),
+         L("Esc 取消", "Esc to cancel") + "\n" + L("录音或处理过程中随时取消", "Cancel any time while recording or processing"),
+         L("可以是单个修饰键（如 Fn、右 ⌘），也可以是组合键（如 ⌥ Space、F5）", "A single modifier (Fn, right ⌘…) or a combination (⌥ Space, F5…)")]
+            .joined(separator: "\n\n")
     }
 
     var body: some View {
         let hotkey = settings.hotkey
         PageScaffold(page: .shortcut) {
-            Card {
-                VStack(spacing: 16) {
-                    Text(recorder.isRecording ? L("请按下新的快捷键…", "Press the new shortcut…") : L("当前快捷键", "Current shortcut"))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
+            CardSection(title: L("听写快捷键", "Dictation shortcut"), help: hotkeyHelp) {
+                HStack(spacing: 14) {
                     if recorder.isRecording {
                         RecordingPlaceholder()
                     } else {
                         KeyCaps(caps: hotkey.keyCaps, large: true)
                     }
-                    HStack(spacing: 10) {
-                        if recorder.isRecording {
-                            Button(L("取消", "Cancel")) { recorder.stop() }
-                        } else {
-                            Button {
-                                actionRecorder.stop()
-                                recorder.onRecorded = { recorded in
-                                    // An action's keys would start a dictation instead, and the action would never fire.
-                                    if !recorded.isModifierOnly,
-                                       let taken = settings.shortcutMap.action(keyCode: recorded.chord.keyCode,
-                                                                               modifiers: recorded.chord.modifiers) {
-                                        recorder.message = ShortcutConflict.action(taken).message
-                                    } else {
-                                        settings.hotkey = recorded
-                                    }
-                                }
-                                recorder.start()
-                            } label: {
-                                Label(L("录制快捷键", "Record shortcut"), systemImage: "record.circle")
-                            }
-                            .buttonStyle(.glassProminent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(recorder.isRecording ? L("请按下新的快捷键…", "Press the new shortcut…") : L("按住说话", "Hold to talk"))
+                            .font(.system(size: 13))
+                        if !recorder.isRecording {
+                            Text(L("轻点一下进入免手持 · Esc 取消", "Tap once for hands-free · Esc to cancel"))
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    if let message = recorder.message {
-                        Text(message).font(.system(size: 11.5)).foregroundStyle(.orange).multilineTextAlignment(.center)
+                    Spacer(minLength: 8)
+                    if recorder.isRecording {
+                        Button(L("取消", "Cancel")) { recorder.stop() }.controlSize(.small)
                     } else {
-                        Text(L("可以是单个修饰键（如 Fn、右 ⌘），也可以是组合键（如 ⌥ Space、F5）",
-                               "A single modifier (Fn, right ⌘…) or a combination (⌥ Space, F5…)"))
-                            .font(.system(size: 11.5)).foregroundStyle(.secondary)
+                        Button(L("录制快捷键", "Record shortcut")) {
+                            actionRecorder.stop()
+                            recorder.onRecorded = { recorded in
+                                // An action's keys would start a dictation instead, and the action would never fire.
+                                if !recorded.isModifierOnly,
+                                   let taken = settings.shortcutMap.action(keyCode: recorded.chord.keyCode,
+                                                                           modifiers: recorded.chord.modifiers) {
+                                    recorder.message = ShortcutConflict.action(taken).message
+                                } else {
+                                    settings.hotkey = recorded
+                                }
+                            }
+                            recorder.start()
+                        }
+                        .controlSize(.small)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 26)
-            }
-
-            CardSection(title: L("常用", "Presets")) {
-                GlassEffectContainer(spacing: 10) {
-                HStack(spacing: 10) {
-                    ForEach(Hotkey.presets, id: \.keyCode) { preset in
-                        PresetChip(hotkey: preset, selected: hotkey == preset) {
-                            recorder.stop()
-                            settings.hotkey = preset
+                .padding(14)
+                if let message = recorder.message {
+                    Text(message)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 10)
+                }
+                CardDivider()
+                GlassEffectContainer(spacing: 8) {
+                    HStack(spacing: 8) {
+                        ForEach(Hotkey.presets, id: \.keyCode) { preset in
+                            PresetChip(hotkey: preset, selected: hotkey == preset) {
+                                recorder.stop()
+                                settings.hotkey = preset
+                            }
                         }
                     }
                 }
-                }
-                .padding(12)
-            }
-
-            CardSection(title: L("使用方法", "How it works")) {
-                CardRow(icon: "hand.point.down.fill", iconColor: .blue, title: L("按住说话", "Hold to talk"),
-                        subtitle: L("按住快捷键说话，松开后自动整理并插入到光标处",
-                                    "Hold the shortcut while you speak; release to clean up and insert")) { EmptyView() }
-                CardDivider(inset: 50)
-                CardRow(icon: "hand.tap.fill", iconColor: .purple, title: L("轻点一下：免手持", "Tap once: hands-free"),
-                        subtitle: L("适合长段口述，说完再按一次结束", "For long dictation — press again when done")) { EmptyView() }
-                CardDivider(inset: 50)
-                CardRow(icon: "escape", iconColor: .gray, title: L("Esc 取消", "Esc to cancel"),
-                        subtitle: L("录音或处理过程中随时取消", "Cancel any time while recording or processing")) { EmptyView() }
-                if let target = settings.translationTarget {
-                    let key = settings.translationChord.keyCap
-                    CardDivider(inset: 50)
-                    CardRow(icon: "character.bubble.fill", iconColor: .indigo, title: L("按住 + \(key)：翻译", "Hold + \(key): translate"),
-                            subtitle: L("插入时翻译成：\(target.displayName)（在「词汇与风格」里设置）",
-                                        "Inserted translated into \(target.displayName) (set up under Vocabulary & Style)")) { EmptyView() }
-                }
-                if settings.commandModeEnabled, !settings.commandChordClashes {
-                    let key = settings.commandChord.keyCap
-                    CardDivider(inset: 50)
-                    CardRow(icon: "wand.and.stars", iconColor: .pink, title: L("按住 + \(key)：编辑选中的文字", "Hold + \(key): edit the selection"),
-                            subtitle: L("说出怎么改，选中的文字会被替换", "Say how to change it, and the selection is replaced")) { EmptyView() }
-                }
+                .padding(10)
             }
 
             CommandModeSection(settings: settings)
 
-            CardSection(title: L("说完即发送", "Finish and send"), footer: sendKeyFooter) {
-                CardRow(icon: "paperplane.fill", iconColor: .green, title: L("发送键", "Send key"),
-                        subtitle: L("录音时按下它会结束听写，文字插入后再在同一个应用里按一次这个键把它发出去。免手持时可以一步说完并发送。",
-                                    "Press it while recording to end the dictation; once the text is in, the same key is pressed in that app to send it. Hands-free, that ends and sends in one go.")) {
+            CardSection(title: L("说完即发送", "Finish and send"), footer: sendKeyWarning) {
+                CardRow(title: L("发送键", "Send key"),
+                        subtitle: L("结束听写，文字插入后自动发送", "Ends the dictation, then sends the text"),
+                        help: L("录音时按下它会结束听写，文字插入后再在同一个应用里按一次这个键把它发出去。免手持时可以一步说完并发送。",
+                                "Press it while recording to end the dictation; once the text is in, the same key is pressed in that app to send it. Hands-free, that ends and sends in one go.")
+                            + "\n\n" + L("只在文字粘贴进录音时所在的应用后才按；文字只复制到剪贴板、按了 Esc 或锁屏时不会发送。",
+                                          "Only pressed once the text is pasted into the app you were dictating in: not when it only goes to the clipboard, after Esc, or once the screen locks.")) {
                     Picker(L("发送键", "Send key"), selection: $settings.sendKey) {
                         ForEach(SendKey.allCases, id: \.self) { key in
                             Text(key.title).tag(key)
@@ -523,10 +505,10 @@ struct ShortcutPage: View {
             }
 
             CardSection(title: L("更多快捷键", "More shortcuts"),
-                        footer: L("在两次听写之间按下时生效。可以是 ⌃ ⌥ ⇧ ⌘ 组合键（如 ⌃⌘V），也可以是 F1–F20。",
-                                  "They work between dictations. Use a combination with ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) or F1–F20.")) {
+                        help: L("在两次听写之间按下时生效。可以是 ⌃ ⌥ ⇧ ⌘ 组合键（如 ⌃⌘V），也可以是 F1–F20。",
+                                "They work between dictations. Use a combination with ⌃ ⌥ ⇧ ⌘ (⌃⌘V…) or F1–F20.")) {
                 ForEach(Array(ShortcutAction.allCases.enumerated()), id: \.element) { index, action in
-                    if index > 0 { CardDivider(inset: 50) }
+                    if index > 0 { CardDivider() }
                     actionRow(action)
                 }
             }
@@ -535,10 +517,12 @@ struct ShortcutPage: View {
             }
 
             if hotkey == .fn {
-                Banner(symbol: "globe", color: .blue,
-                       text: L("建议把「系统设置 → 键盘 → 按下 🌐 键时」设为「不执行任何操作」，避免轻点 Fn 时弹出表情面板。",
-                               "Set System Settings → Keyboard → “Press 🌐 key to” → “Do Nothing”, so tapping Fn doesn’t open the emoji picker.")) {
-                    Button(L("打开键盘设置", "Keyboard Settings")) { Permissions.openKeyboardSettings() }.controlSize(.small)
+                Banner(symbol: "globe", color: .blue, text: L("轻点 Fn 可能会弹出表情面板", "Tapping Fn may open the emoji picker")) {
+                    HStack(spacing: 8) {
+                        HelpTip(text: L("建议把「系统设置 → 键盘 → 按下 🌐 键时」设为「不执行任何操作」，避免轻点 Fn 时弹出表情面板。",
+                                        "Set System Settings → Keyboard → “Press 🌐 key to” → “Do Nothing”, so tapping Fn doesn’t open the emoji picker."))
+                        Button(L("打开键盘设置", "Keyboard Settings")) { Permissions.openKeyboardSettings() }.controlSize(.small)
+                    }
                 }
             }
             if hotkey.shadowsCommonShortcut
@@ -557,7 +541,7 @@ struct ShortcutPage: View {
 
     /// An action, its shortcut, and buttons to record or clear it.
     private func actionRow(_ action: ShortcutAction) -> some View {
-        CardRow(icon: action.symbol, iconColor: .teal, title: action.title, subtitle: action.subtitle) {
+        CardRow(title: action.title, help: action.subtitle) {
             HStack(spacing: 8) {
                 if actionRecorder.isRecording, recordingAction == action {
                     Text(L("请按下新的快捷键…", "Press the new shortcut…")).font(.system(size: 12)).foregroundStyle(.secondary)
@@ -602,18 +586,17 @@ private struct CommandModeSection: View {
     var body: some View {
         let chord = settings.commandChord
         CardSection(title: L("用语音编辑选中的文字", "Edit selected text by voice"),
-                    footer: L("选中任意应用里的文字，按住听写快捷键时再按一下 \(chord.label)，说出怎么改（“正式一点”“翻译成英文”“修正语法”），松开后选中的文字就会被替换，可以用撤销恢复。问关于它的问题（“这是什么意思”），答案会显示并复制。没有选中文字时什么都不会改；密码框和终端不会被读取。",
-                              "Select text in any app, hold the dictation shortcut and press \(chord.label) too, and say how to change it (“more formal”, “translate to English”, “fix the grammar”): when you let go, the selection is replaced, and Undo brings it back. Ask about it (“what does this mean”) and the answer is shown and copied. Nothing changes when no text is selected; password fields and terminals are never read.")) {
-            CardRow(icon: "wand.and.stars", iconColor: .pink, title: L("编辑模式", "Command mode"),
+                    help: L("选中任意应用里的文字，按住听写快捷键时再按一下 \(chord.label)，说出怎么改（“正式一点”“翻译成英文”“修正语法”），松开后选中的文字就会被替换，可以用撤销恢复。问关于它的问题（“这是什么意思”），答案会显示并复制。没有选中文字时什么都不会改；密码框和终端不会被读取。",
+                            "Select text in any app, hold the dictation shortcut and press \(chord.label) too, and say how to change it (“more formal”, “translate to English”, “fix the grammar”): when you let go, the selection is replaced, and Undo brings it back. Ask about it (“what does this mean”) and the answer is shown and copied. Nothing changes when no text is selected; password fields and terminals are never read.")) {
+            CardRow(title: L("编辑模式", "Command mode"),
                     subtitle: L("按住听写快捷键时再按一下 \(chord.label)，这次说的话会用来修改选中的文字",
                                 "Hold the dictation shortcut and press \(chord.label) too: what you say edits the selected text"),
                     isOn: $settings.commandModeEnabled)
             if settings.commandModeEnabled {
-                CardDivider(inset: 50)
-                CardRow(icon: "keyboard", iconColor: .blue, title: L("切换键", "Switch key"),
-                        subtitle: settings.commandChordClashes
-                            ? L("和翻译模式的切换键相同，请换一个", "Translation mode uses this key too — pick another")
-                            : L("按住听写快捷键时按下它（左右两边都可以）", "Pressed while you hold the dictation shortcut (either side)")) {
+                CardDivider()
+                CardRow(title: L("切换键", "Switch key"),
+                        subtitle: settings.commandChordClashes ? L("和翻译模式的切换键相同，请换一个", "Translation mode uses this key too — pick another") : nil,
+                        help: L("按住听写快捷键时按下它（左右两边都可以）", "Pressed while you hold the dictation shortcut (either side)")) {
                     Picker(L("切换键", "Switch key"), selection: $settings.commandChord) {
                         ForEach(TranslationChord.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
@@ -631,7 +614,7 @@ private struct RecordingPlaceholder: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
             .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
-            .frame(width: 180, height: 48)
+            .frame(width: 96, height: 38)
             .overlay(Circle().fill(.red).frame(width: 10, height: 10).opacity(pulse ? 1 : 0.3))
             .onAppear { withAnimation(.easeInOut(duration: 0.7).repeatForever()) { pulse = true } }
     }
@@ -644,17 +627,13 @@ private struct PresetChip: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                Text(hotkey.displayName).font(.system(size: 13, weight: .semibold, design: .rounded))
-                Text(hotkey == .fn ? L("默认", "Default") : " ")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(selected ? .white.opacity(0.85) : .secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            Text(hotkey.displayName)
+                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 3)
         }
         .buttonStyle(selected ? AnyPrimitiveButtonStyle(.glassProminent) : AnyPrimitiveButtonStyle(.glass))
-        .buttonBorderShape(.roundedRectangle(radius: 14))
+        .buttonBorderShape(.roundedRectangle(radius: 10))
     }
 }
 
@@ -671,41 +650,15 @@ struct AnyPrimitiveButtonStyle: PrimitiveButtonStyle {
 
 // MARK: - Providers
 
-extension ProviderID {
-    var symbol: String {
-        switch self {
-        case .openrouter: return "arrow.triangle.branch"
-        case .openai: return "sparkle"
-        case .groq: return "bolt.fill"
-        case .siliconflow: return "drop.fill"
-        case .deepseek: return "fish.fill"
-        case .custom: return "server.rack"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .openrouter: return .indigo
-        case .openai: return .teal
-        case .groq: return .orange
-        case .siliconflow: return .purple
-        case .deepseek: return .blue
-        case .custom: return .gray
-        }
-    }
-
-    var capabilities: String {
-        supportsSTT ? L("语音转文字 · 文字整理", "Speech-to-text · Clean-up") : L("文字整理", "Clean-up")
-    }
-}
-
 struct ProvidersPage: View {
     @ObservedObject var settings: AppSettings
     @State private var expanded: Set<ProviderID> = []
 
     var body: some View {
-        PageScaffold(page: .providers) {
-            VStack(spacing: 10) {
+        PageScaffold(page: .providers,
+                     help: L("填写 API Key。语音转文字和文字整理可以使用不同的服务商。",
+                             "Add API keys. Speech-to-text and clean-up can use different providers.")) {
+            VStack(spacing: 8) {
                 ForEach(ProviderID.allCases) { id in
                     ProviderCard(settings: settings, id: id, expanded: Binding(
                         get: { expanded.contains(id) },
@@ -731,19 +684,15 @@ private struct ProviderCard: View {
         Card {
             Button { withAnimation(.easeOut(duration: 0.18)) { expanded.toggle() } } label: {
                 HStack(spacing: 12) {
-                    IconBadge(symbol: id.symbol, color: id.color, size: 30)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(id.displayName).font(.system(size: 13.5, weight: .semibold))
-                            ForEach(usageTags, id: \.self) { tag in
-                                Text(tag)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .padding(.horizontal, 6).padding(.vertical, 1.5)
-                                    .background(Capsule().fill(Color.accentColor.opacity(0.14)))
-                                    .foregroundStyle(Color.accentColor)
-                            }
+                    HStack(spacing: 6) {
+                        Text(id.displayName).font(.system(size: 13, weight: .medium))
+                        ForEach(usageTags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.system(size: 10, weight: .medium))
+                                .padding(.horizontal, 6).padding(.vertical, 1.5)
+                                .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                                .foregroundStyle(Color.accentColor)
                         }
-                        Text(id.capabilities).font(.system(size: 11.5)).foregroundStyle(.secondary)
                     }
                     Spacer()
                     if settings.isConfigured(id) {
@@ -757,7 +706,7 @@ private struct ProviderCard: View {
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                 }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.vertical, 11)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -881,15 +830,15 @@ struct ModelsPage: View {
     var body: some View {
         PageScaffold(page: .models) {
             CardSection(title: L("语音转文字", "Speech to text"),
-                        footer: L("长语音会在停顿处自动切成 ≤28 秒的片段，边录边转，每片失败会自动重试。",
-                                  "Long recordings are split at pauses into ≤28 s segments that are transcribed while you talk, each retried on failure.")) {
-                CardRow(icon: "building.2.fill", iconColor: .indigo, title: L("服务商", "Provider")) {
+                        help: L("长语音会在停顿处自动切成 ≤28 秒的片段，边录边转，每片失败会自动重试。",
+                                "Long recordings are split at pauses into ≤28 s segments that are transcribed while you talk, each retried on failure.")) {
+                CardRow(title: L("服务商", "Provider")) {
                     ProviderPicker(selection: settings.sttProvider, options: ProviderID.allCases.filter(\.supportsSTT),
                                    settings: settings) { settings.selectSTTProvider($0) }
                 }
-                CardDivider(inset: 50)
-                CardRow(icon: "waveform", iconColor: .blue, title: L("模型", "Model"),
-                        subtitle: VocabularyHints.style(provider: settings.sttProvider, model: settings.sttModel) != nil
+                CardDivider()
+                CardRow(title: L("模型", "Model"),
+                        help: VocabularyHints.style(provider: settings.sttProvider, model: settings.sttModel) != nil
                             ? L("你的词汇表会作为拼写提示一起发给这个模型", "Your vocabulary is sent to this model as spelling hints")
                             : L("这个模型不接收词汇提示，词汇表只用于文字整理", "This model takes no vocabulary hints; your vocabulary is used in clean-up only")) {
                     ModelField(text: $settings.sttModel, models: sttModels)
@@ -897,11 +846,11 @@ struct ModelsPage: View {
                 if settings.sttProvider == .openrouter {
                     SpeechHostRow(settings: settings, model: settings.sttModel)
                 }
-                CardDivider(inset: 50)
+                CardDivider()
                 PriceRow(settings: settings, provider: settings.sttProvider, model: settings.sttModel, speech: true)
-                CardDivider(inset: 50)
-                CardRow(icon: "character.bubble.fill", iconColor: .teal, title: L("说话语言", "Spoken language"),
-                        subtitle: L("固定语言可以提高准确率；中英混说请选自动", "Fixing it can help accuracy; use Auto for mixed speech")) {
+                CardDivider()
+                CardRow(title: L("说话语言", "Spoken language"),
+                        help: L("固定语言可以提高准确率；中英混说请选自动", "Fixing it can help accuracy; use Auto for mixed speech")) {
                     Picker(L("说话语言", "Spoken language"), selection: $settings.sttLanguage) {
                         Text(L("自动检测", "Auto-detect")).tag("")
                         ForEach(AppLanguage.supported) { language in
@@ -911,23 +860,24 @@ struct ModelsPage: View {
                     .labelsHidden()
                     .fixedSize()
                 }
-                CardDivider(inset: 50)
-                CardRow(icon: "arrow.triangle.branch", iconColor: .orange, title: L("备用语音转文字", "Backup speech-to-text"),
-                        subtitle: L("某一段比平时慢很多（按音频长度和最近的速度估算）或者失败时，同时请求备用服务商，用先返回的那个",
-                                    "If a segment takes much longer than usual (judged by its length and recent speed) or fails, the backup is asked too and the first answer wins"),
+                CardDivider()
+                CardRow(title: L("备用语音转文字", "Backup speech-to-text"),
+                        subtitle: L("太慢或失败时同时请求备用，用先返回的", "Asked too when a request is slow or fails"),
+                        help: L("某一段比平时慢很多（按音频长度和最近的速度估算）或者失败时，同时请求备用服务商，用先返回的那个",
+                                "If a segment takes much longer than usual (judged by its length and recent speed) or fails, the backup is asked too and the first answer wins"),
                         isOn: $settings.sttBackupEnabled)
                 if settings.sttBackupEnabled {
-                    CardDivider(inset: 50)
-                    CardRow(icon: "building.2", iconColor: .indigo, title: L("备用服务商", "Backup provider")) {
+                    CardDivider()
+                    CardRow(title: L("备用服务商", "Backup provider")) {
                         ProviderPicker(selection: settings.sttBackupProvider, options: ProviderID.allCases.filter(\.supportsSTT),
                                        settings: settings) { settings.selectSTTBackupProvider($0) }
                     }
-                    CardDivider(inset: 50)
-                    CardRow(icon: "waveform", iconColor: .teal, title: L("备用模型 ID", "Backup model ID"),
-                            subtitle: L("选一个不同厂商的模型，两边不容易同时变慢", "Pick a model from another vendor so both are rarely slow at once")) {
+                    CardDivider()
+                    CardRow(title: L("备用模型 ID", "Backup model ID"),
+                            help: L("选一个不同厂商的模型，两边不容易同时变慢", "Pick a model from another vendor so both are rarely slow at once")) {
                         ModelField(text: $settings.sttBackupModel, models: backupSTTModels)
                     }
-                    CardDivider(inset: 50)
+                    CardDivider()
                     PriceRow(settings: settings, provider: settings.sttBackupProvider, model: settings.sttBackupModel, speech: true)
                 }
             }
@@ -938,46 +888,47 @@ struct ModelsPage: View {
             }
 
             CardSection(title: L("文字整理", "Clean-up")) {
-                CardRow(icon: "wand.and.stars", iconColor: .purple, title: L("用 AI 整理文字", "Clean up with AI"),
+                CardRow(title: L("用 AI 整理文字", "Clean up with AI"),
                         subtitle: L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists"),
                         isOn: $settings.polishEnabled)
                 if settings.polishEnabled {
-                    CardDivider(inset: 50)
-                    CardRow(icon: "building.2.fill", iconColor: .indigo, title: L("服务商", "Provider")) {
+                    CardDivider()
+                    CardRow(title: L("服务商", "Provider")) {
                         ProviderPicker(selection: settings.polishProvider, options: ProviderID.allCases,
                                        settings: settings) { settings.selectPolishProvider($0) }
                     }
-                    CardDivider(inset: 50)
-                    CardRow(icon: "cpu.fill", iconColor: .pink, title: L("模型", "Model"),
-                            subtitle: settings.polishProvider == .openrouter
+                    CardDivider()
+                    CardRow(title: L("模型", "Model"),
+                            help: settings.polishProvider == .openrouter
                                 ? L("推理会自动关闭或降到最低，以减少延迟", "Reasoning is turned off or minimised for speed") : nil) {
                         ModelField(text: $settings.polishModel, models: chatModels)
                     }
                     if settings.polishProvider == .openrouter {
                         HostRow(settings: settings, model: settings.polishModel)
                     }
-                    CardDivider(inset: 50)
+                    CardDivider()
                     PriceRow(settings: settings, provider: settings.polishProvider, model: settings.polishModel, speech: false)
-                    CardDivider(inset: 50)
-                    CardRow(icon: "arrow.triangle.branch", iconColor: .orange, title: L("备用模型", "Backup model"),
-                            subtitle: L("首选模型 \(hedgeDelayLabel) 内还没开始输出、或请求失败时，同时请求备用模型，用先出字的那个",
-                                        "If the main model hasn't started answering within \(hedgeDelayLabel), or fails, the backup is asked too and the first to answer wins"),
+                    CardDivider()
+                    CardRow(title: L("备用模型", "Backup model"),
+                            subtitle: L("太慢或失败时同时请求备用，用先返回的", "Asked too when a request is slow or fails"),
+                            help: L("首选模型 \(hedgeDelayLabel) 内还没开始输出、或请求失败时，同时请求备用模型，用先出字的那个",
+                                    "If the main model hasn't started answering within \(hedgeDelayLabel), or fails, the backup is asked too and the first to answer wins"),
                             isOn: $settings.polishBackupEnabled)
                     if settings.polishBackupEnabled {
-                        CardDivider(inset: 50)
-                        CardRow(icon: "building.2", iconColor: .indigo, title: L("备用服务商", "Backup provider")) {
+                        CardDivider()
+                        CardRow(title: L("备用服务商", "Backup provider")) {
                             ProviderPicker(selection: settings.polishBackupProvider, options: ProviderID.allCases,
                                            settings: settings) { settings.selectPolishBackupProvider($0) }
                         }
-                        CardDivider(inset: 50)
-                        CardRow(icon: "cpu", iconColor: .pink, title: L("备用模型 ID", "Backup model ID"),
-                                subtitle: L("选一个不同厂商的快速模型，两边不容易同时变慢", "Pick a fast model from another vendor so both are rarely slow at once")) {
+                        CardDivider()
+                        CardRow(title: L("备用模型 ID", "Backup model ID"),
+                                help: L("选一个不同厂商的快速模型，两边不容易同时变慢", "Pick a fast model from another vendor so both are rarely slow at once")) {
                             ModelField(text: $settings.polishBackupModel, models: backupChatModels)
                         }
                         if settings.polishBackupProvider == .openrouter {
                             HostRow(settings: settings, model: settings.polishBackupModel)
                         }
-                        CardDivider(inset: 50)
+                        CardDivider()
                         PriceRow(settings: settings, provider: settings.polishBackupProvider, model: settings.polishBackupModel, speech: false)
                     }
                 }
@@ -1067,8 +1018,8 @@ private struct HostRow: View {
         // A stack rather than a Group: an empty Group is no view at all, so its task would never run.
         VStack(spacing: 0) {
             if hosts.count > 1 || chosen != nil {
-                CardDivider(inset: 50)
-                CardRow(icon: "server.rack", iconColor: .gray, title: L("托管方", "Host"), subtitle: subtitle) {
+                CardDivider()
+                CardRow(title: L("托管方", "Host"), help: subtitle) {
                     Menu {
                         Button {
                             settings.setOpenRouterHost(nil, for: model)
@@ -1138,8 +1089,8 @@ private struct SpeechHostRow: View {
         // A stack rather than a Group: an empty Group is no view at all, so its task would never run.
         VStack(spacing: 0) {
             if hosts.count > 1 {
-                CardDivider(inset: 50)
-                CardRow(icon: "server.rack", iconColor: .gray, title: L("托管方", "Host"), subtitle: subtitle) {
+                CardDivider()
+                CardRow(title: L("托管方", "Host"), help: subtitle) {
                     Text(L("自动（按价格）", "Automatic (by price)")).font(.system(size: 12)).foregroundStyle(.secondary)
                 }
             }
@@ -1172,7 +1123,7 @@ private struct PriceRow: View {
     let speech: Bool
 
     var body: some View {
-        CardRow(icon: "dollarsign", iconColor: .green, title: L("价格", "Price"), subtitle: subtitle) {
+        CardRow(title: L("价格", "Price"), help: subtitle) {
             if provider == .openrouter {
                 Text(openRouterPrice).font(.system(size: 12)).foregroundStyle(.secondary)
             } else if speech {
@@ -1279,6 +1230,9 @@ struct StylePage: View {
     @State private var pendingImport: VocabularyImport?
     @State private var notice: Notice?
     @State private var exported = false
+    @State private var showAllLearned = false
+    /// How many learned terms show before "Show all": the newest ones.
+    private static let learnedShown = 5
 
     private struct VocabularyImport {
         let terms: [String]
@@ -1293,47 +1247,49 @@ struct StylePage: View {
     var body: some View {
         PageScaffold(page: .style) {
             CardSection(title: L("专有名词 / 词汇表", "Vocabulary"),
-                        footer: L("用逗号或换行分隔，比如人名、产品名、项目名。支持的语音模型会把它们当作拼写提示，整理时也会按这里的写法纠正识别错误。",
-                                  "Comma- or line-separated: names, products, projects. Speech-to-text models that take them get these as spelling hints, and clean-up uses these spellings to fix recognition errors.")) {
-                TextEditor(text: $settings.vocabulary)
-                    .font(.system(size: 13))
-                    .scrollContentBackground(.hidden)
-                    .padding(10)
-                    .frame(height: 110)
+                        help: L("用逗号或换行分隔，比如人名、产品名、项目名。支持的语音模型会把它们当作拼写提示，整理时也会按这里的写法纠正识别错误。",
+                                "Comma- or line-separated: names, products, projects. Speech-to-text models that take them get these as spelling hints, and clean-up uses these spellings to fix recognition errors.")) {
+                NoteEditor(text: $settings.vocabulary, placeholder: L("人名、产品名、项目名，用逗号或换行分隔", "Names, products, projects, separated by commas or lines"), height: 88)
                 CardDivider(inset: 0)
                 transferButtons
             }
-            CardSection(title: L("自动学习", "Learning"),
-                        footer: L("粘贴后如果你改了某个识别错的词（比如把 TypeList 改成 Typeless），离开输入框或发送后会自动把它加进词汇表。能读取的输入框直接比较前后内容；读不到的（微信、Firefox、Electron 应用等）会跟随你粘贴后的按键，但用中文、日文、韩文输入法打的字跟随不了。只学发音相近的改动，不学改写、改数字和普通词替换。一切都在本机完成。",
-                                  "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Where the field can be read, its text is compared; where it can't (WeChat, Firefox, Electron apps…), the keys you press after the paste are followed, though not text typed with a Chinese, Japanese or Korean input method. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. All of it stays on this Mac.")) {
-                CardRow(icon: "character.book.closed.fill", iconColor: .orange, title: L("从我的修改中学习", "Learn from my corrections"),
+            CardSection(title: L("拼写", "Spelling")) {
+                CardRow(title: L("参考光标附近的文字拼写名字", "Use text around the cursor to spell names"),
+                        help: L("开始录音时，读取你正在输入的文本框里光标前后最多 1500 个字符，连同转写一起发给文字整理模型，只用来把你说到的名字和术语拼成那里的写法，不会把其中的内容抄进你的文字。密码框永远不会读取，这些文字也不会保存在历史记录里。",
+                                "When recording starts, up to 1,500 characters around your cursor in the field you're dictating into are read and sent with the transcript to your clean-up models, only so that the names and terms you say are spelled the way they appear there. Nothing from it is copied into your text. Password fields are never read, and the text isn't kept in History."),
+                        isOn: $settings.useCursorContext)
+                CardDivider()
+                CardRow(title: L("从我的修改中学习", "Learn from my corrections"),
+                        help: L("粘贴后如果你改了某个识别错的词（比如把 TypeList 改成 Typeless），离开输入框或发送后会自动把它加进词汇表。能读取的输入框直接比较前后内容；读不到的（微信、Firefox、Electron 应用等）会跟随你粘贴后的按键，但用中文、日文、韩文输入法打的字跟随不了。只学发音相近的改动，不学改写、改数字和普通词替换。一切都在本机完成。",
+                                "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Where the field can be read, its text is compared; where it can't (WeChat, Firefox, Electron apps…), the keys you press after the paste are followed, though not text typed with a Chinese, Japanese or Korean input method. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. All of it stays on this Mac."),
                         isOn: $settings.learnFromEdits)
-                if !settings.learnedTerms.isEmpty {
-                    ForEach(settings.learnedTerms.reversed()) { learned in
-                        CardDivider(inset: 14)
-                        LearnedTermRow(learned: learned) { settings.forget(learned) }
+                let learned = Array(settings.learnedTerms.reversed())
+                ForEach(showAllLearned ? learned : Array(learned.prefix(Self.learnedShown))) { term in
+                    CardDivider()
+                    LearnedTermRow(learned: term) { settings.forget(term) }
+                }
+                if !showAllLearned, learned.count > Self.learnedShown {
+                    CardDivider()
+                    Button { showAllLearned = true } label: {
+                        Text(L("显示全部 \(learned.count) 个", "Show all \(learned.count)"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
                     }
+                    .buttonStyle(HoverButtonStyle(cornerRadius: Theme.cardRadius))
                 }
             }
-            CardSection(title: L("光标附近的文字", "Text around the cursor"),
-                        footer: L("开始录音时，读取你正在输入的文本框里光标前后最多 1500 个字符，连同转写一起发给文字整理模型，只用来把你说到的名字和术语拼成那里的写法，不会把其中的内容抄进你的文字。密码框永远不会读取，这些文字也不会保存在历史记录里。",
-                                  "When recording starts, up to 1,500 characters around your cursor in the field you're dictating into are read and sent with the transcript to your clean-up models, only so that the names and terms you say are spelled the way they appear there. Nothing from it is copied into your text. Password fields are never read, and the text isn't kept in History.")) {
-                CardRow(icon: "text.magnifyingglass", iconColor: .blue,
-                        title: L("参考光标附近的文字拼写名字", "Use text around the cursor to spell names"),
-                        isOn: $settings.useCursorContext)
-            }
-            CardSection(title: L("整理偏好（可选）", "Clean-up preferences (optional)"),
-                        footer: L("例如：「不要使用列表」「保留我的口语语气」「英文术语保持小写」。",
-                                  "e.g. “Never use bullet lists”, “Keep my casual tone”, “Keep technical terms lowercase”.")) {
-                TextEditor(text: $settings.extraInstructions)
-                    .font(.system(size: 13))
-                    .scrollContentBackground(.hidden)
-                    .padding(10)
-                    .frame(height: 150)
+            CardSection(title: L("整理偏好（可选）", "Clean-up preferences (optional)")) {
+                NoteEditor(text: $settings.extraInstructions,
+                           placeholder: L("例如：「不要使用列表」「保留我的口语语气」「英文术语保持小写」。",
+                                          "e.g. “Never use bullet lists”, “Keep my casual tone”, “Keep technical terms lowercase”."),
+                           height: 88)
             }
             CardSection(title: L("快捷短语", "Snippets"),
-                        footer: L("说出触发词，插入时会换成你写好的内容，一字不改，句子中间说也行。触发词会作为词汇提示交给语音识别和整理，让它原样保留。最好选一个平时不会说的说法，免得误替换。",
-                                  "Say a trigger and the text you wrote goes in instead, word for word, even mid-sentence. Triggers go to speech-to-text and clean-up as vocabulary, so they come through intact. Pick a phrase you wouldn't otherwise say, so it isn't replaced by accident.")) {
+                        help: L("说出触发词，插入时会换成你写好的内容，一字不改，句子中间说也行。触发词会作为词汇提示交给语音识别和整理，让它原样保留。最好选一个平时不会说的说法，免得误替换。",
+                                "Say a trigger and the text you wrote goes in instead, word for word, even mid-sentence. Triggers go to speech-to-text and clean-up as vocabulary, so they come through intact. Pick a phrase you wouldn't otherwise say, so it isn't replaced by accident.")) {
                 SnippetList(settings: settings)
             }
             TranslationSection(settings: settings)
@@ -1465,15 +1421,15 @@ private struct TranslationSection: View {
     var body: some View {
         let chord = settings.translationChord
         CardSection(title: L("翻译", "Translation"),
-                    footer: L("说什么语言都可以，插入的是翻译。只需一次模型请求，和整理一样快；翻译不可用时，会改为插入整理后的原文。",
-                              "Speak in any language; what goes in is the translation. It takes one model request, as quick as a clean-up. When the translation can't be used, the cleaned-up original goes in instead.")) {
-            CardRow(icon: "character.bubble.fill", iconColor: .indigo, title: L("翻译模式", "Translation mode"),
+                    help: L("说什么语言都可以，插入的是翻译。只需一次模型请求，和整理一样快；翻译不可用时，会改为插入整理后的原文。",
+                            "Speak in any language; what goes in is the translation. It takes one model request, as quick as a clean-up. When the translation can't be used, the cleaned-up original goes in instead.")) {
+            CardRow(title: L("翻译模式", "Translation mode"),
                     subtitle: L("按住听写快捷键时再按一下 \(chord.label)，这次听写会翻译后再插入",
                                 "Hold the dictation shortcut and press \(chord.label) too: that dictation goes in translated"),
                     isOn: $settings.translationEnabled)
             if settings.translationEnabled {
-                CardDivider(inset: 50)
-                CardRow(icon: "globe", iconColor: .teal, title: L("翻译成", "Translate into")) {
+                CardDivider()
+                CardRow(title: L("翻译成", "Translate into")) {
                     Picker(L("翻译成", "Translate into"), selection: $settings.translationLanguage) {
                         ForEach(TranslationLanguage.allCases, id: \.self) { Text($0.nativeName).tag($0.rawValue) }
                         Text(L("其他…", "Other…")).tag(AppSettings.otherTranslationLanguage)
@@ -1482,19 +1438,19 @@ private struct TranslationSection: View {
                     .fixedSize()
                 }
                 if settings.translationLanguage == AppSettings.otherTranslationLanguage {
-                    CardDivider(inset: 50)
-                    CardRow(icon: "character.cursor.ibeam", iconColor: .gray, title: L("语言", "Language"),
-                            subtitle: L("用它的名字，比如 Italiano、繁體中文、Tiếng Việt",
-                                        "By its name: Italiano, 繁體中文, Tiếng Việt…")) {
+                    CardDivider()
+                    CardRow(title: L("语言", "Language"),
+                            help: L("用它的名字，比如 Italiano、繁體中文、Tiếng Việt",
+                                    "By its name: Italiano, 繁體中文, Tiếng Việt…")) {
                         TextField(L("语言", "Language"), text: $settings.translationOtherLanguage)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 180)
                     }
                 }
-                CardDivider(inset: 50)
-                CardRow(icon: "keyboard", iconColor: .blue, title: L("切换键", "Switch key"),
-                        subtitle: L("按住听写快捷键时按下它（左右两边都可以）",
-                                    "Pressed while you hold the dictation shortcut (either side)")) {
+                CardDivider()
+                CardRow(title: L("切换键", "Switch key"),
+                        help: L("按住听写快捷键时按下它（左右两边都可以）",
+                                "Pressed while you hold the dictation shortcut (either side)")) {
                     Picker(L("切换键", "Switch key"), selection: $settings.translationChord) {
                         ForEach(TranslationChord.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
@@ -1506,6 +1462,31 @@ private struct TranslationSection: View {
     }
 }
 
+/// A multi-line field filling its card, with a hint inside it while it's empty.
+struct NoteEditor: View {
+    @Binding var text: String
+    let placeholder: String
+    let height: CGFloat
+
+    var body: some View {
+        TextEditor(text: $text)
+            .font(.system(size: 13))
+            .scrollContentBackground(.hidden)
+            .padding(10)
+            .frame(height: height)
+            .overlay(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text(placeholder)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 15)
+                        .padding(.vertical, 10)
+                        .allowsHitTesting(false)
+                }
+            }
+    }
+}
+
 /// The snippets, each opening into an editor in place, and a new one added at the end.
 private struct SnippetList: View {
     @ObservedObject var settings: AppSettings
@@ -1514,13 +1495,13 @@ private struct SnippetList: View {
 
     var body: some View {
         if settings.snippets.isEmpty && editing == nil {
-            CardRow(icon: "text.bubble.fill", iconColor: .teal, title: L("还没有快捷短语", "No snippets yet"),
+            CardRow(title: L("还没有快捷短语", "No snippets yet"),
                     subtitle: L("例如：说「我的邮箱」，插入 name@example.com", "For example, say “my email” to insert name@example.com")) {
                 Button(L("添加快捷短语", "Add Snippet")) { editing = Snippet(trigger: "", expansion: "") }
             }
         } else {
             ForEach(Array(settings.snippets.enumerated()), id: \.element.id) { index, snippet in
-                if index > 0 { CardDivider(inset: 14) }
+                if index > 0 { CardDivider() }
                 if editing?.id == snippet.id {
                     SnippetEditor(settings: settings, snippet: snippet) { editing = nil }
                 } else {
@@ -1531,10 +1512,10 @@ private struct SnippetList: View {
                 }
             }
             if let editing, !settings.snippets.contains(where: { $0.id == editing.id }) {
-                if !settings.snippets.isEmpty { CardDivider(inset: 14) }
+                if !settings.snippets.isEmpty { CardDivider() }
                 SnippetEditor(settings: settings, snippet: editing) { self.editing = nil }
             } else {
-                CardDivider(inset: 14)
+                CardDivider()
                 Button { editing = Snippet(trigger: "", expansion: "") } label: {
                     Label(L("添加快捷短语", "Add Snippet"), systemImage: "plus")
                         .frame(maxWidth: .infinity, alignment: .leading)

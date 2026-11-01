@@ -17,71 +17,58 @@ struct HomePage: View {
         let wpm = min(300, max(10, settings.typingWordsPerMinute))
         let streaks = ledger.streaks(today: today)
 
-        PageScaffold(page: .home) {
+        PageScaffold(page: .home, maxWidth: nil) {
             if ledger.isEmpty {
                 Banner(symbol: "info.circle.fill", color: .blue,
                        text: L("按住 \(settings.hotkey.displayName) 说话，你的统计就会出现在这里。",
                                "Hold \(settings.hotkey.displayName) and talk. Your stats will show up here.")) { EmptyView() }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Grid(horizontalSpacing: 12, verticalSpacing: 12) {
-                    GridRow {
-                        StatTile(symbol: "textformat", color: .indigo, title: L("总字数", "Words dictated"),
-                                 value: UsageFormat.count(all.words),
-                                 caption: L("今天 \(UsageFormat.count(todayTotals.words)) · 本月 \(UsageFormat.count(month.words))",
-                                            "Today \(UsageFormat.count(todayTotals.words)) · This month \(UsageFormat.count(month.words))"))
-                        StatTile(symbol: "stopwatch.fill", color: .green, title: L("节省的时间", "Time saved"),
-                                 value: UsageFormat.duration(all.savedSeconds(wordsPerMinute: Double(wpm))),
-                                 caption: L("和每分钟打 \(wpm) 字相比", "Compared with typing at \(wpm) wpm"))
-                    }
-                    GridRow {
-                        let speed = all.speakingWordsPerMinute
-                        StatTile(symbol: "waveform", color: .orange, title: L("说话速度", "Speaking speed"),
-                                 value: speed.map { L("\(Int($0.rounded())) 字/分钟", "\(Int($0.rounded())) wpm") } ?? "—",
-                                 caption: speed.map {
-                                     let ratio = String(format: "%.1f", $0 / Double(wpm))
-                                     return L("是打字的 \(ratio) 倍", "\(ratio)× your typing speed")
-                                 } ?? L("说几句就能算出来", "Dictate a little to see it"))
-                        StatTile(symbol: "calendar", color: .purple, title: L("听写次数", "Dictations"),
-                                 value: UsageFormat.count(all.dictations),
-                                 caption: streaks.current > 0
-                                     ? L("已连续 \(streaks.current) 天 · 最长 \(streaks.longest) 天",
-                                         "\(streaks.current)-day streak · Longest \(streaks.longest) days")
-                                     : L("最长连续 \(streaks.longest) 天", "Longest streak \(streaks.longest) days"))
-                    }
+            let speed = all.speakingWordsPerMinute
+            Card {
+                HStack(spacing: 0) {
+                    StatCell(title: L("总字数", "Words dictated"), value: UsageFormat.count(all.words),
+                             caption: L("今天 \(UsageFormat.count(todayTotals.words))", "\(UsageFormat.count(todayTotals.words)) today"))
+                        .help(L("本月 \(UsageFormat.count(month.words))", "\(UsageFormat.count(month.words)) this month"))
+                    StatDivider()
+                    StatCell(title: L("节省的时间", "Time saved"),
+                             help: all.words > 0
+                                 ? L("说这 \(UsageFormat.count(all.words)) 个字用了 \(UsageFormat.duration(all.speakingSeconds))；按每分钟 \(wpm) 字打出来要 \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm))))。打字速度可以在「通用」里修改。",
+                                     "Saying these \(UsageFormat.count(all.words)) words took \(UsageFormat.duration(all.speakingSeconds)); typing them at \(wpm) wpm would take \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm)))). Change the typing speed under General.")
+                                 : nil,
+                             value: UsageFormat.duration(all.savedSeconds(wordsPerMinute: Double(wpm))),
+                             caption: L("按每分钟打 \(wpm) 字算", "vs. typing at \(wpm) wpm"))
+                    StatDivider()
+                    StatCell(title: L("说话速度", "Speaking speed"),
+                             value: speed.map { L("\(Int($0.rounded())) 字/分钟", "\(Int($0.rounded())) wpm") } ?? "—",
+                             caption: speed.map {
+                                 let ratio = String(format: "%.1f", $0 / Double(wpm))
+                                 return L("是打字的 \(ratio) 倍", "\(ratio)× your typing speed")
+                             } ?? L("说几句就能算出来", "Dictate a little to see it"))
+                    StatDivider()
+                    StatCell(title: L("听写次数", "Dictations"), value: UsageFormat.count(all.dictations),
+                             caption: streaks.current > 0
+                                 ? L("连续 \(streaks.current) 天 · 最长 \(streaks.longest) 天",
+                                     "\(streaks.current)-day streak · Best \(streaks.longest)")
+                                 : L("最长连续 \(streaks.longest) 天", "Longest streak \(streaks.longest) days"))
                 }
-                if all.words > 0 {
-                    Text(L("说这 \(UsageFormat.count(all.words)) 个字用了 \(UsageFormat.duration(all.speakingSeconds))；按每分钟 \(wpm) 字打出来要 \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm))))。打字速度可以在「通用」里修改。",
-                           "Saying these \(UsageFormat.count(all.words)) words took \(UsageFormat.duration(all.speakingSeconds)); typing them at \(wpm) wpm would take \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm)))). Change the typing speed under General."))
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 4)
-                }
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             // Spend takes a third of the width, the activity grid the rest.
-            VStack(alignment: .leading, spacing: 8) {
-                ProportionalRow(ratios: [1, 2], spacing: 14) {
-                    TitledCard(title: L("花费", "Spend")) {
-                        SpendLine(title: L("今天", "Today"), totals: todayTotals)
-                        CardDivider(inset: 14)
-                        SpendLine(title: L("本月", "This month"), totals: month)
-                        CardDivider(inset: 14)
-                        SpendLine(title: L("累计", "All time"), totals: all)
-                    }
-                    TitledCard(title: L("活跃度", "Activity")) {
-                        ActivityHeatmap(ledger: ledger, today: today)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
-                    }
+            ProportionalRow(ratios: [1, 2], spacing: 14) {
+                TitledCard(title: L("花费", "Spend"), help: spendHelp) {
+                    SpendLine(title: L("今天", "Today"), totals: todayTotals)
+                    CardDivider()
+                    SpendLine(title: L("本月", "This month"), totals: month)
+                    CardDivider()
+                    SpendLine(title: L("累计", "All time"), totals: all, showsSplit: true)
                 }
-                Text(spendFooter)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 4)
+                TitledCard(title: L("活跃度", "Activity")) {
+                    ActivityHeatmap(ledger: ledger, today: today)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                }
             }
             if all.unpriced > 0 {
                 Banner(symbol: "exclamationmark.triangle.fill", color: .orange,
@@ -94,7 +81,7 @@ struct HomePage: View {
         .task { prices.refreshIfStale(maxAge: 60 * 60) }
     }
 
-    private var spendFooter: String {
+    private var spendHelp: String {
         let catalog = prices.catalog
         let updated = catalog.isEmpty ? L("还没有下载", "not downloaded yet") : catalog.fetchedAt.shortStamp
         return L("OpenRouter 按每次请求实际扣费计算（价格表更新于 \(updated)）。其他服务商按你在「模型」里填写的价格计算。",
@@ -102,76 +89,87 @@ struct HomePage: View {
     }
 }
 
-/// One headline figure: an icon and label, the number, and a line of context.
-private struct StatTile: View {
-    let symbol: String
-    let color: Color
+/// One headline figure in the strip across the page: its label, the number, and a line of context.
+private struct StatCell: View {
     let title: String
+    var help: String? = nil
     let value: String
     let caption: String
 
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    IconBadge(symbol: symbol, color: color, size: 22)
-                    Text(title).font(.system(size: 12.5)).foregroundStyle(.secondary)
-                }
-                Text(value)
-                    .font(.system(size: 28, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                Text(caption)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                Text(title).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                if let help { HelpTip(text: help, topic: title) }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-}
-
-/// One spend figure in the narrow Spend column: label, amount, and the split between the two steps.
-private struct SpendLine: View {
-    let title: String
-    let totals: UsageTotals
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.system(size: 11.5)).foregroundStyle(.secondary)
-            Text(UsageFormat.money(totals.cost))
-                .font(.system(size: 20, weight: .semibold, design: .rounded))
+            Text(value)
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-            if totals.cost > 0 {
-                Text(L("转写 \(UsageFormat.money(totals.transcriptionCost)) · 整理 \(UsageFormat.money(totals.cleanupCost))",
-                       "Speech \(UsageFormat.money(totals.transcriptionCost)) · Clean-up \(UsageFormat.money(totals.cleanupCost))"))
+            Text(caption)
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct StatDivider: View {
+    var body: some View {
+        Rectangle().fill(Color.primary.opacity(0.07)).frame(width: 1).padding(.vertical, 12)
+    }
+}
+
+/// One line of the Spend card: label and amount, with the split between the two steps on a tooltip, or under it.
+private struct SpendLine: View {
+    let title: String
+    let totals: UsageTotals
+    var showsSplit = false
+
+    private var split: String {
+        L("转写 \(UsageFormat.money(totals.transcriptionCost)) · 整理 \(UsageFormat.money(totals.cleanupCost))",
+          "Speech \(UsageFormat.money(totals.transcriptionCost)) · Clean-up \(UsageFormat.money(totals.cleanupCost))")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).font(.system(size: 12)).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Text(UsageFormat.money(totals.cost))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            if showsSplit, totals.cost > 0 {
+                Text(split)
                     .font(.system(size: 10.5))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .help(totals.cost > 0 ? split : "")
     }
 }
 
 /// A section title above a card that stretches to the height its row gives it (see `ProportionalRow`).
 private struct TitledCard<Content: View>: View {
     let title: String
+    var help: String? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.leading, 4)
+            SectionTitle(title: title, help: help)
             Card {
                 VStack(alignment: .leading, spacing: 0) { content }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

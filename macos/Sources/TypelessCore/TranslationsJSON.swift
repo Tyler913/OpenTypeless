@@ -293,15 +293,6 @@ extension Translations {
     "fr": "Mots dictés",
     "de": "Diktierte Wörter"
   },
-  "Today {0} · This month {1}": {
-    "ja": "今日 {0} · 今月 {1}",
-    "ko": "오늘 {0} · 이번 달 {1}",
-    "es": "Hoy {0} · Este mes {1}",
-    "pt": "Hoje {0} · Este mês {1}",
-    "ru": "Сегодня {0} · В этом месяце {1}",
-    "fr": "Aujourd’hui {0} · Ce mois-ci {1}",
-    "de": "Heute {0} · Diesen Monat {1}"
-  },
   "Time saved": {
     "ja": "節約できた時間",
     "ko": "절약한 시간",
@@ -310,15 +301,6 @@ extension Translations {
     "ru": "Сэкономлено времени",
     "fr": "Temps gagné",
     "de": "Gesparte Zeit"
-  },
-  "Compared with typing at {0} wpm": {
-    "ja": "毎分 {0} 字のタイピングと比べて",
-    "ko": "분당 {0}단어 타이핑과 비교",
-    "es": "Frente a teclear a {0} ppm",
-    "pt": "Comparado a digitar a {0} ppm",
-    "ru": "По сравнению с набором {0} сл/мин",
-    "fr": "Par rapport à une frappe à {0} mots/min",
-    "de": "Verglichen mit Tippen mit {0} Wörtern/Min."
   },
   "Speaking speed": {
     "ja": "話す速さ",
@@ -364,15 +346,6 @@ extension Translations {
     "ru": "Диктовки",
     "fr": "Dictées",
     "de": "Diktate"
-  },
-  "{0}-day streak · Longest {1} days": {
-    "ja": "{0} 日連続 · 最長 {1} 日",
-    "ko": "{0}일 연속 · 최장 {1}일",
-    "es": "Racha de {0} días · Máxima {1} días",
-    "pt": "Sequência de {0} dias · Maior {1} dias",
-    "ru": "Серия: {0} дн. · Рекорд: {1} дн.",
-    "fr": "{0} jours d’affilée · Record {1} jours",
-    "de": "{0} Tage in Folge · Rekord {1} Tage"
   },
   "Longest streak {0} days": {
     "ja": "最長 {0} 日連続",
@@ -869,15 +842,6 @@ extension Translations {
     "fr": "Pour détecter le raccourci et coller le texte au curseur",
     "de": "Um das Tastenkürzel zu erkennen und Text am Cursor einzufügen"
   },
-  "Appearance": {
-    "ja": "外観",
-    "ko": "모양",
-    "es": "Apariencia",
-    "pt": "Aparência",
-    "ru": "Оформление",
-    "fr": "Apparence",
-    "de": "Darstellung"
-  },
   "Language": {
     "ja": "言語",
     "ko": "언어",
@@ -895,15 +859,6 @@ extension Translations {
     "ru": "Как в системе",
     "fr": "Système",
     "de": "System"
-  },
-  "Startup": {
-    "ja": "起動",
-    "ko": "시동",
-    "es": "Arranque",
-    "pt": "Inicialização",
-    "ru": "Запуск",
-    "fr": "Démarrage",
-    "de": "Start"
   },
   "Open at login": {
     "ja": "ログイン時に開く",
@@ -967,15 +922,6 @@ extension Translations {
     "ru": "Возвращать прежнее содержимое буфера после вставки",
     "fr": "Remet le contenu précédent du presse-papiers après l’insertion",
     "de": "Stellt nach dem Einfügen den vorherigen Inhalt der Zwischenablage wieder her"
-  },
-  "Fit spacing and capitalisation to the surrounding text": {
-    "ja": "前後の文章に合わせてスペースと大文字小文字を整える",
-    "ko": "앞뒤 문장에 맞춰 띄어쓰기와 대소문자 맞추기",
-    "es": "Ajustar espacios y mayúsculas al texto de alrededor",
-    "pt": "Ajustar espaços e maiúsculas ao texto ao redor",
-    "ru": "Подгонять пробелы и регистр под окружающий текст",
-    "fr": "Adapter les espaces et les majuscules au texte autour",
-    "de": "Leerzeichen und Großschreibung an den umgebenden Text anpassen"
   },
   "When you dictate into existing text, adds a missing space, lowercases a capital in mid-sentence and drops a full stop that would end the sentence early, going by the text around the cursor. Where that can't be read (a password field, some apps), the text goes in as it is.": {
     "ja": "既存の文章の途中に音声入力すると、カーソル前後の文章を見て、足りないスペースを補い、文の途中の大文字を小文字にし、文を途中で終わらせてしまう句点を取り除きます。カーソル付近の文章を読み取れないとき（パスワード欄や一部のアプリ）は、そのまま挿入します。",
@@ -1084,15 +1030,6 @@ extension Translations {
     "ru": "{0} мин",
     "fr": "{0} min",
     "de": "{0} Min."
-  },
-  "Home stats": {
-    "ja": "ホームの統計",
-    "ko": "홈 통계",
-    "es": "Estadísticas de Inicio",
-    "pt": "Estatísticas do Início",
-    "ru": "Статистика на главной",
-    "fr": "Statistiques de l’accueil",
-    "de": "Statistik auf der Startseite"
   },
   "“Time saved” is how long typing the same words at this speed would take, minus the time you spent talking.": {
     "ja": "「節約できた時間」は、同じ文字数をこの速さでタイピングした場合の時間から、実際に話した時間を引いたものです。",
@@ -1328,15 +1265,6 @@ extension Translations {
     "fr": "Appuyez sur le nouveau raccourci…",
     "de": "Neues Tastenkürzel drücken …"
   },
-  "Current shortcut": {
-    "ja": "現在のショートカット",
-    "ko": "현재 단축키",
-    "es": "Atajo actual",
-    "pt": "Atalho atual",
-    "ru": "Текущее сочетание",
-    "fr": "Raccourci actuel",
-    "de": "Aktuelles Tastenkürzel"
-  },
   "Cancel": {
     "ja": "キャンセル",
     "ko": "취소",
@@ -1363,24 +1291,6 @@ extension Translations {
     "ru": "Одна клавиша-модификатор (Fn, правая ⌘…) или сочетание (⌥ Пробел, F5…)",
     "fr": "Un seul modificateur (Fn, ⌘ droite…) ou une combinaison (⌥ Espace, F5…)",
     "de": "Eine einzelne Sondertaste (Fn, rechte ⌘ …) oder eine Kombination (⌥ Leertaste, F5 …)"
-  },
-  "Presets": {
-    "ja": "プリセット",
-    "ko": "프리셋",
-    "es": "Predefinidos",
-    "pt": "Predefinições",
-    "ru": "Готовые варианты",
-    "fr": "Préréglages",
-    "de": "Vorlagen"
-  },
-  "How it works": {
-    "ja": "使い方",
-    "ko": "사용 방법",
-    "es": "Cómo funciona",
-    "pt": "Como funciona",
-    "ru": "Как это работает",
-    "fr": "Fonctionnement",
-    "de": "So funktioniert’s"
   },
   "Hold to talk": {
     "ja": "押したまま話す",
@@ -1462,24 +1372,6 @@ extension Translations {
     "ru": "Это сочетание перекрывает такое же сочетание во всех приложениях.",
     "fr": "Cette combinaison remplace le même raccourci dans toutes les apps.",
     "de": "Diese Kombination überschreibt dasselbe Kürzel in allen Apps."
-  },
-  "Default": {
-    "ja": "デフォルト",
-    "ko": "기본값",
-    "es": "Predeterminado",
-    "pt": "Padrão",
-    "ru": "По умолчанию",
-    "fr": "Par défaut",
-    "de": "Standard"
-  },
-  "Speech-to-text · Clean-up": {
-    "ja": "文字起こし · 整形",
-    "ko": "음성 인식 · 다듬기",
-    "es": "Voz a texto · Limpieza",
-    "pt": "Voz para texto · Limpeza",
-    "ru": "Распознавание · Очистка",
-    "fr": "Transcription · Nettoyage",
-    "de": "Spracherkennung · Bereinigung"
   },
   "Clean-up": {
     "ja": "整形",
@@ -1868,15 +1760,6 @@ extension Translations {
     "fr": "Vocabulaire",
     "de": "Vokabular"
   },
-  "Learning": {
-    "ja": "学習",
-    "ko": "학습",
-    "es": "Aprendizaje",
-    "pt": "Aprendizado",
-    "ru": "Обучение",
-    "fr": "Apprentissage",
-    "de": "Lernen"
-  },
   "Learn from my corrections": {
     "ja": "自分の修正から学習",
     "ko": "내 수정 내용에서 학습",
@@ -2075,33 +1958,6 @@ extension Translations {
     "fr": "Vocabulaire et style",
     "de": "Vokabular & Stil"
   },
-  "What you've dictated, the time it saved and what it cost": {
-    "ja": "音声入力した量、節約できた時間、かかった費用",
-    "ko": "받아쓴 양, 절약한 시간, 든 비용",
-    "es": "Lo que has dictado, el tiempo ahorrado y lo que ha costado",
-    "pt": "O que você ditou, o tempo economizado e quanto custou",
-    "ru": "Сколько вы надиктовали, сколько времени сэкономили и сколько это стоило",
-    "fr": "Ce que vous avez dicté, le temps gagné et ce que ça a coûté",
-    "de": "Was du diktiert hast, wie viel Zeit es gespart und was es gekostet hat"
-  },
-  "Language, startup and system permissions": {
-    "ja": "言語、起動、システムの権限",
-    "ko": "언어, 시동 및 시스템 권한",
-    "es": "Idioma, arranque y permisos del sistema",
-    "pt": "Idioma, inicialização e permissões do sistema",
-    "ru": "Язык, запуск и системные разрешения",
-    "fr": "Langue, démarrage et autorisations système",
-    "de": "Sprache, Start und Systemberechtigungen"
-  },
-  "Choose the key that starts dictation": {
-    "ja": "音声入力を開始するキーを選択",
-    "ko": "받아쓰기를 시작할 키 선택",
-    "es": "Elige la tecla que inicia el dictado",
-    "pt": "Escolha a tecla que inicia o ditado",
-    "ru": "Выберите клавишу для начала диктовки",
-    "fr": "Choisissez la touche qui lance la dictée",
-    "de": "Wähle die Taste, die das Diktat startet"
-  },
   "Add API keys. Speech-to-text and clean-up can use different providers.": {
     "ja": "API キーを追加します。文字起こしと整形には別々のプロバイダを使えます。",
     "ko": "API 키를 추가하세요. 음성 인식과 다듬기에 서로 다른 제공업체를 쓸 수 있습니다.",
@@ -2110,24 +1966,6 @@ extension Translations {
     "ru": "Добавьте API-ключи. Для распознавания и очистки можно использовать разных провайдеров.",
     "fr": "Ajoutez des clés API. La transcription et le nettoyage peuvent utiliser des fournisseurs différents.",
     "de": "API-Schlüssel hinzufügen. Spracherkennung und Bereinigung können verschiedene Anbieter nutzen."
-  },
-  "Pick a model for each step": {
-    "ja": "各ステップのモデルを選択",
-    "ko": "단계별 모델 선택",
-    "es": "Elige un modelo para cada paso",
-    "pt": "Escolha um modelo para cada etapa",
-    "ru": "Выберите модель для каждого шага",
-    "fr": "Choisissez un modèle pour chaque étape",
-    "de": "Wähle ein Modell für jeden Schritt"
-  },
-  "Teach the clean-up your terms and preferences": {
-    "ja": "整形に用語や好みを教えます",
-    "ko": "다듬기에 용어와 선호를 알려 주세요",
-    "es": "Enseña a la limpieza tus términos y preferencias",
-    "pt": "Ensine à limpeza seus termos e preferências",
-    "ru": "Научите очистку вашим терминам и предпочтениям",
-    "fr": "Apprenez au nettoyage vos termes et préférences",
-    "de": "Bring der Bereinigung deine Begriffe und Vorlieben bei"
   },
   "Every dictation is saved; failed ones can be retried": {
     "ja": "すべての音声入力が保存され、失敗したものは再試行できます",
@@ -2803,15 +2641,6 @@ extension Translations {
     "ru": "Скажите что-нибудь: полоска должна двигаться в такт голосу",
     "fr": "Dites quelque chose : la barre doit monter et descendre avec votre voix",
     "de": "Sag etwas: Der Balken sollte mit deiner Stimme steigen und fallen"
-  },
-  "Check that the chosen device can hear you": {
-    "ja": "選んだデバイスに声が届いているか確認します",
-    "ko": "선택한 장치가 목소리를 듣는지 확인합니다",
-    "es": "Comprueba que el dispositivo elegido te oye",
-    "pt": "Verifique se o dispositivo escolhido ouve você",
-    "ru": "Проверьте, слышит ли вас выбранное устройство",
-    "fr": "Vérifiez que le périphérique choisi vous entend",
-    "de": "Prüfe, ob das gewählte Gerät dich hört"
   },
   "Stop": {
     "ja": "停止",
@@ -4046,15 +3875,6 @@ extension Translations {
     "fr": "Choisissez un dossier sur ce PC.",
     "de": "Wählen Sie einen Ordner auf diesem PC."
   },
-  "Text around the cursor": {
-    "ja": "カーソル周辺のテキスト",
-    "ko": "커서 주변 텍스트",
-    "es": "Texto alrededor del cursor",
-    "pt": "Texto ao redor do cursor",
-    "ru": "Текст вокруг курсора",
-    "fr": "Texte autour du curseur",
-    "de": "Text um den Cursor"
-  },
   "Use text around the cursor to spell names": {
     "ja": "カーソル周辺のテキストで名前の表記を合わせる",
     "ko": "커서 주변 텍스트로 이름 철자 맞추기",
@@ -4406,24 +4226,6 @@ extension Translations {
     "fr": "Parlez dans n’importe quelle langue : c’est la traduction qui est insérée. Une seule requête au modèle suffit, aussi rapide qu’un nettoyage. Si la traduction est inutilisable, c’est l’original nettoyé qui est inséré.",
     "de": "Sprich in jeder beliebigen Sprache – eingefügt wird die Übersetzung. Sie braucht nur eine Modellanfrage und ist so schnell wie eine Bereinigung. Ist die Übersetzung unbrauchbar, wird stattdessen das bereinigte Original eingefügt."
   },
-  "Hold + {0}: translate": {
-    "ja": "押したまま + {0}：翻訳",
-    "ko": "누른 채 + {0}: 번역",
-    "es": "Mantén + {0}: traducir",
-    "pt": "Segure + {0}: traduzir",
-    "ru": "Удерживать + {0}: перевод",
-    "fr": "Maintenir + {0} : traduire",
-    "de": "Halten + {0}: übersetzen"
-  },
-  "Inserted translated into {0} (set up under Vocabulary & Style)": {
-    "ja": "{0} に翻訳して挿入（「語彙とスタイル」で設定）",
-    "ko": "{0}(으)로 번역해 삽입(「어휘 및 스타일」에서 설정)",
-    "es": "Se inserta traducido al {0} (se configura en Vocabulario y estilo)",
-    "pt": "Inserido traduzido para {0} (configure em Vocabulário e estilo)",
-    "ru": "Вставляется в переводе на {0} (настраивается в разделе «Словарь и стиль»)",
-    "fr": "Inséré traduit en {0} (à régler dans Vocabulaire et style)",
-    "de": "Wird übersetzt in {0} eingefügt (einzurichten unter Vokabular & Stil)"
-  },
   "Translation → {0}": {
     "ja": "翻訳 → {0}",
     "ko": "번역 → {0}",
@@ -4604,15 +4406,6 @@ extension Translations {
     "fr": "Modification d'une sélection ({0} caractères)",
     "de": "Auswahl bearbeitet ({0} Zeichen)"
   },
-  "Hold + {0}: edit the selection": {
-    "ja": "押したまま + {0}：選択範囲を編集",
-    "ko": "누른 채 + {0}: 선택 영역 편집",
-    "es": "Mantén + {0}: editar la selección",
-    "pt": "Segure + {0}: editar a seleção",
-    "ru": "Удерживать + {0}: правка выделения",
-    "fr": "Maintenir + {0} : modifier la sélection",
-    "de": "Halten + {0}: Auswahl bearbeiten"
-  },
   "Hold the dictation shortcut and press {0} too: what you say edits the selected text": {
     "ja": "音声入力のショートカットを押したまま {0} も押すと、話した内容で選択したテキストを編集します",
     "ko": "받아쓰기 단축키를 누른 채 {0}도 누르면 말한 내용으로 선택한 텍스트를 편집합니다",
@@ -4648,15 +4441,6 @@ extension Translations {
     "ru": "Поля паролей нельзя править голосом",
     "fr": "Les champs de mot de passe ne peuvent pas être modifiés à la voix",
     "de": "Passwortfelder können nicht per Sprache bearbeitet werden"
-  },
-  "Say how to change it, and the selection is replaced": {
-    "ja": "どう変えるかを話すと、選択範囲が置き換えられます",
-    "ko": "어떻게 바꿀지 말하면 선택 영역이 바뀝니다",
-    "es": "Di cómo cambiarlo y la selección se reemplaza",
-    "pt": "Diga como alterá-lo e a seleção é substituída",
-    "ru": "Скажите, как изменить, — и выделение будет заменено",
-    "fr": "Dites comment le modifier, et la sélection est remplacée",
-    "de": "Sag, wie er sich ändern soll, und die Auswahl wird ersetzt"
   },
   "Screen locked — the edited text is on the clipboard": {
     "ja": "画面がロックされました — 編集後のテキストはクリップボードにあります",
@@ -4774,15 +4558,6 @@ extension Translations {
     "ru": "Приложения",
     "fr": "Apps",
     "de": "Apps"
-  },
-  "Settings used when you dictate into a particular app": {
-    "ja": "特定のアプリで音声入力するときに使う設定",
-    "ko": "특정 앱에서 받아쓸 때 사용하는 설정",
-    "es": "Ajustes que se usan al dictar en una app concreta",
-    "pt": "Configurações usadas ao ditar em um app específico",
-    "ru": "Настройки для диктовки в конкретном приложении",
-    "fr": "Réglages utilisés quand vous dictez dans une app précise",
-    "de": "Einstellungen fürs Diktieren in einer bestimmten App"
   },
   "No app profiles yet": {
     "ja": "アプリ別の設定はまだありません",
@@ -5062,6 +4837,177 @@ extension Translations {
     "ru": "Выбрать программу…",
     "fr": "Choisir un programme…",
     "de": "Programm auswählen …"
+  },
+  "About {0}": {
+    "ja": "{0} について",
+    "ko": "{0} 정보",
+    "es": "Acerca de {0}",
+    "pt": "Sobre {0}",
+    "ru": "Подробнее: {0}",
+    "fr": "À propos de {0}",
+    "de": "Über {0}"
+  },
+  "More information": {
+    "ja": "詳しい説明",
+    "ko": "자세한 설명",
+    "es": "Más información",
+    "pt": "Mais informações",
+    "ru": "Подробнее",
+    "fr": "Plus d’informations",
+    "de": "Weitere Informationen"
+  },
+  "Adjusts spacing and capitals at the cursor": {
+    "ja": "カーソル前後に合わせて空白と大文字を調整します",
+    "ko": "커서 주변에 맞춰 띄어쓰기와 대소문자를 조정합니다",
+    "es": "Ajusta espacios y mayúsculas junto al cursor",
+    "pt": "Ajusta espaços e maiúsculas junto ao cursor",
+    "ru": "Подгоняет пробелы и регистр у курсора",
+    "fr": "Ajuste les espaces et les majuscules au curseur",
+    "de": "Passt Leerzeichen und Großschreibung am Cursor an"
+  },
+  "Asked too when a request is slow or fails": {
+    "ja": "遅いときや失敗したときに同時に問い合わせます",
+    "ko": "느리거나 실패하면 함께 요청합니다",
+    "es": "También se consulta si una petición tarda o falla",
+    "pt": "Também é consultado se um pedido demorar ou falhar",
+    "ru": "Подключается, если запрос тормозит или не удался",
+    "fr": "Aussi sollicité si une requête traîne ou échoue",
+    "de": "Wird mitgefragt, wenn eine Anfrage hängt oder fehlschlägt"
+  },
+  "Dictation shortcut": {
+    "ja": "音声入力のショートカット",
+    "ko": "받아쓰기 단축키",
+    "es": "Atajo de dictado",
+    "pt": "Atalho de ditado",
+    "ru": "Сочетание для диктовки",
+    "fr": "Raccourci de dictée",
+    "de": "Diktat-Tastenkürzel"
+  },
+  "Ends the dictation, then sends the text": {
+    "ja": "音声入力を終えて、テキストを送信します",
+    "ko": "받아쓰기를 끝내고 텍스트를 보냅니다",
+    "es": "Termina el dictado y envía el texto",
+    "pt": "Termina o ditado e envia o texto",
+    "ru": "Завершает диктовку и отправляет текст",
+    "fr": "Termine la dictée et envoie le texte",
+    "de": "Beendet das Diktat und sendet den Text"
+  },
+  "Fit to surrounding text": {
+    "ja": "前後の文に合わせる",
+    "ko": "주변 텍스트에 맞추기",
+    "es": "Adaptar al texto de alrededor",
+    "pt": "Ajustar ao texto ao redor",
+    "ru": "Подгонять под окружающий текст",
+    "fr": "S’adapter au texte environnant",
+    "de": "An umgebenden Text anpassen"
+  },
+  "Give an app its own settings, like sending right away in Slack": {
+    "ja": "アプリごとの設定を使えます（例：Slack ではすぐ送信）",
+    "ko": "앱별 설정을 쓸 수 있습니다. 예: Slack에서는 바로 보내기",
+    "es": "Da a una app sus propios ajustes, como enviar al momento en Slack",
+    "pt": "Dê a um app configurações próprias, como enviar na hora no Slack",
+    "ru": "Отдельные настройки для приложения, например мгновенная отправка в Slack",
+    "fr": "Donnez à une app ses propres réglages, comme l’envoi immédiat dans Slack",
+    "de": "Eigene Einstellungen für eine App, etwa sofort senden in Slack"
+  },
+  "Names, products, projects, separated by commas or lines": {
+    "ja": "人名、製品名、プロジェクト名をカンマか改行で区切って入力",
+    "ko": "이름, 제품, 프로젝트를 쉼표나 줄바꿈으로 구분해 입력",
+    "es": "Nombres, productos y proyectos, separados por comas o líneas",
+    "pt": "Nomes, produtos e projetos, separados por vírgulas ou linhas",
+    "ru": "Имена, продукты, проекты через запятую или с новой строки",
+    "fr": "Noms, produits, projets, séparés par des virgules ou des lignes",
+    "de": "Namen, Produkte, Projekte, durch Kommas oder Zeilen getrennt"
+  },
+  "Preferences": {
+    "ja": "環境設定",
+    "ko": "환경설정",
+    "es": "Preferencias",
+    "pt": "Preferências",
+    "ru": "Параметры",
+    "fr": "Préférences",
+    "de": "Einstellungen"
+  },
+  "Recording starts the instant you press the key": {
+    "ja": "キーを押した瞬間に録音を開始します",
+    "ko": "키를 누르는 즉시 녹음을 시작합니다",
+    "es": "La grabación empieza en cuanto pulsas la tecla",
+    "pt": "A gravação começa assim que você pressiona a tecla",
+    "ru": "Запись начинается в момент нажатия",
+    "fr": "L’enregistrement démarre dès que vous appuyez",
+    "de": "Die Aufnahme startet sofort beim Tastendruck"
+  },
+  "Show all {0}": {
+    "ja": "{0} 件すべて表示",
+    "ko": "{0}개 모두 보기",
+    "es": "Mostrar los {0}",
+    "pt": "Mostrar todos os {0}",
+    "ru": "Показать все ({0})",
+    "fr": "Tout afficher ({0})",
+    "de": "Alle {0} anzeigen"
+  },
+  "Shows your words above the capsule as you talk": {
+    "ja": "話している間、カプセルの上に文字を表示します",
+    "ko": "말하는 동안 캡슐 위에 글자를 표시합니다",
+    "es": "Muestra tus palabras sobre la cápsula mientras hablas",
+    "pt": "Mostra suas palavras acima da cápsula enquanto você fala",
+    "ru": "Показывает ваши слова над капсулой, пока вы говорите",
+    "fr": "Affiche vos mots au-dessus de la capsule pendant que vous parlez",
+    "de": "Zeigt beim Sprechen deine Worte über der Kapsel"
+  },
+  "Spelling": {
+    "ja": "表記",
+    "ko": "철자",
+    "es": "Ortografía",
+    "pt": "Ortografia",
+    "ru": "Написание",
+    "fr": "Orthographe",
+    "de": "Schreibweise"
+  },
+  "Tapping Fn may open the emoji picker": {
+    "ja": "Fn をタップすると絵文字ピッカーが開くことがあります",
+    "ko": "Fn을 탭하면 이모티콘 선택기가 열릴 수 있습니다",
+    "es": "Al tocar Fn puede abrirse el selector de emojis",
+    "pt": "Tocar em Fn pode abrir o seletor de emojis",
+    "ru": "Нажатие Fn может открыть панель эмодзи",
+    "fr": "Fn peut ouvrir le sélecteur d’emoji",
+    "de": "Fn kann die Emoji-Auswahl öffnen"
+  },
+  "vs. typing at {0} wpm": {
+    "ja": "毎分 {0} 字のタイピング比",
+    "ko": "분당 {0}단어 타이핑 대비",
+    "es": "frente a teclear a {0} ppm",
+    "pt": "comparado a digitar a {0} ppm",
+    "ru": "против набора {0} сл/мин",
+    "fr": "contre {0} mots/min au clavier",
+    "de": "ggü. Tippen mit {0} Wörtern/Min."
+  },
+  "{0} this month": {
+    "ja": "今月 {0}",
+    "ko": "이번 달 {0}",
+    "es": "{0} este mes",
+    "pt": "{0} este mês",
+    "ru": "{0} в этом месяце",
+    "fr": "{0} ce mois-ci",
+    "de": "{0} diesen Monat"
+  },
+  "{0} today": {
+    "ja": "今日 {0}",
+    "ko": "오늘 {0}",
+    "es": "{0} hoy",
+    "pt": "{0} hoje",
+    "ru": "{0} сегодня",
+    "fr": "{0} aujourd’hui",
+    "de": "{0} heute"
+  },
+  "{0}-day streak · Best {1}": {
+    "ja": "{0} 日連続 · 最長 {1}",
+    "ko": "{0}일 연속 · 최장 {1}",
+    "es": "Racha de {0} días · Máx. {1}",
+    "pt": "Sequência de {0} dias · Maior {1}",
+    "ru": "Серия: {0} дн. · Рекорд: {1}",
+    "fr": "{0} jours d’affilée · Record {1}",
+    "de": "{0} Tage in Folge · Rekord {1}"
   }
 }
 

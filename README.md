@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/menu-bar.png" width="330" alt="The menu-bar panel: shortcut hint and recent dictations">
+  <img src="docs/images/menu-bar.png" width="330" alt="The menu-bar panel: recent dictations, one click to copy">
 </p>
 
 <p align="center">
@@ -65,7 +65,7 @@ Raw speech-to-text is messy: fillers, restarts, "no wait, I mean…", thinking o
 - **Your words, your languages.** Edits are kept to a minimum: wording, order and tone stay yours. When you mix Chinese and English, every word stays in the language you said it in, everyday words too ("shortcut", "dark mode"), with spacing between CJK and Latin text.
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="History: dictations grouped by day and searchable, with the cleaned-up text, timing and cost">
+  <img src="docs/images/history.png" width="720" alt="History: dictations grouped by day and searchable, with the cleaned-up text and its cost">
 </p>
 
 The prompt is tuned against development and held-out test sets (see [eval/](eval/)), including real dictations.
@@ -98,7 +98,7 @@ The prompt is tuned against development and held-out test sets (see [eval/](eval
 - **History** of every dictation, grouped by day and searchable, with raw and cleaned text, timing, cost, copy and re-transcribe. Choose how long recordings are kept: not at all, a day, a week, a month, a year, or forever. Export what the list shows as CSV (opens in Excel, Chinese included), JSON or Markdown, and save any recording as a WAV file.
 - **Transcribe audio and video files.** **Transcribe File…** in History, or drop files on it, turns a voice memo, a meeting recording or a video into text with your speech-to-text provider, cut at pauses like a long dictation and optionally cleaned up. Before it starts you see each file's length and, when the model has a per-minute price, what it should cost. The text is kept in History (never pasted), files are left out of the dictation totals, and they never hold up dictating: a file sends fewer requests at once and waits while you dictate.
 - **Nine UI languages**: English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch and Русский. The app follows the system language, or pick one under **Settings → General → Language**.
-- **Native design.** Liquid Glass on macOS 26+ with a menu-bar panel; Mica and Acrylic on Windows 11 with a tray panel. Both show a small recording capsule while you talk.
+- **Native design.** Liquid Glass on macOS 26+ with a menu-bar panel; Mica and Acrylic on Windows 11 with a tray panel. Both show a small recording capsule while you talk. Settings stay short, with the details behind a **?** you can point at or click.
 - **Launch at login.**
 - **Updates itself.** Checks GitHub Releases once a day, downloads a new version in the background and installs it when you click **Restart to update**, never in the middle of a dictation. Downloads are checked against GitHub's SHA-256 before anything is replaced. Turn it off, or check by hand, under **Settings → General → Updates**.
 - **Small and native.** A ~3 MB Swift/SwiftUI app on macOS and a self-contained WinUI 3 app on Windows. No Electron, no account and no server of its own.
@@ -303,7 +303,7 @@ Useful command-line modes of the built binary (from `macos/`):
 
 # Render the settings pages, menu-bar panel and HUD to PNGs (--live shows them on screen for real Liquid Glass).
 # The README screenshots use sample history and --demo, which treats permissions as granted.
-OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --lang en
+OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --dark --lang en
 ```
 
 ### Windows

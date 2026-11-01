@@ -17,17 +17,15 @@ public sealed class StylePage : PageBase
     private readonly DropDownButton _export = new();
     private readonly TextBlock _exportLabel = Ui.Text(L("导出", "Export"), 13);
     private readonly FontIcon _exportIcon = Ui.Icon(Glyphs.Export, 13);
-    private readonly CardSection _learning = new()
-    {
-        Title = L("自动学习", "Learning"),
-        Footer = L("粘贴后如果你改了某个识别错的词（比如把 TypeList 改成 Typeless），离开输入框或发送后会自动把它加进词汇表。能读取的输入框直接比较前后内容；读不到的会跟随你粘贴后的按键，但用中文、日文、韩文输入法打的字跟随不了。只学发音相近的改动，不学改写、改数字和普通词替换。一切都在本机完成。",
-                   "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Where the field can be read, its text is compared; where it can't, the keys you press after the paste are followed, though not text typed with a Chinese, Japanese or Korean input method. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. All of it stays on this PC."),
-    };
+    private readonly CardSection _spelling = new() { Title = L("拼写", "Spelling") };
+    private bool _showAllLearned;
+    /// <summary>How many learned terms show before "Show all": the newest ones.</summary>
+    private const int LearnedShown = 5;
     private readonly CardSection _snippets = new()
     {
         Title = L("快捷短语", "Snippets"),
-        Footer = L("说出触发词，插入时会换成你写好的内容，一字不改，句子中间说也行。触发词会作为词汇提示交给语音识别和整理，让它原样保留。最好选一个平时不会说的说法，免得误替换。",
-                   "Say a trigger and the text you wrote goes in instead, word for word, even mid-sentence. Triggers go to speech-to-text and clean-up as vocabulary, so they come through intact. Pick a phrase you wouldn't otherwise say, so it isn't replaced by accident."),
+        Help = L("说出触发词，插入时会换成你写好的内容，一字不改，句子中间说也行。触发词会作为词汇提示交给语音识别和整理，让它原样保留。最好选一个平时不会说的说法，免得误替换。",
+                 "Say a trigger and the text you wrote goes in instead, word for word, even mid-sentence. Triggers go to speech-to-text and clean-up as vocabulary, so they come through intact. Pick a phrase you wouldn't otherwise say, so it isn't replaced by accident."),
     };
     /// <summary>The snippet open in the editor; a new one isn't in the list until it's saved.</summary>
     private Snippet? _editing;
@@ -41,8 +39,8 @@ public sealed class StylePage : PageBase
     private readonly CardSection _translation = new()
     {
         Title = L("翻译", "Translation"),
-        Footer = L("说什么语言都可以，插入的是翻译。只需一次模型请求，和整理一样快；翻译不可用时，会改为插入整理后的原文。",
-                   "Speak in any language; what goes in is the translation. It takes one model request, as quick as a clean-up. When the translation can't be used, the cleaned-up original goes in instead."),
+        Help = L("说什么语言都可以，插入的是翻译。只需一次模型请求，和整理一样快；翻译不可用时，会改为插入整理后的原文。",
+                 "Speak in any language; what goes in is the translation. It takes one model request, as quick as a clean-up. When the translation can't be used, the cleaned-up original goes in instead."),
     };
     private readonly CardRow _translationMode;
     private readonly List<UIElement> _translationDetails = [];
@@ -54,40 +52,24 @@ public sealed class StylePage : PageBase
         var vocabulary = new CardSection
         {
             Title = L("专有名词 / 词汇表", "Vocabulary"),
-            Footer = L("用逗号或换行分隔，比如人名、产品名、项目名。支持的语音模型会把它们当作拼写提示，整理时也会按这里的写法纠正识别错误。",
-                       "Comma- or line-separated: names, products, projects. Speech-to-text models that take them get these as spelling hints, and clean-up uses these spellings to fix recognition errors."),
+            Help = L("用逗号或换行分隔，比如人名、产品名、项目名。支持的语音模型会把它们当作拼写提示，整理时也会按这里的写法纠正识别错误。",
+                     "Comma- or line-separated: names, products, projects. Speech-to-text models that take them get these as spelling hints, and clean-up uses these spellings to fix recognition errors."),
         };
-        _vocabulary = Editor(_settings.Vocabulary, 110, text => _settings.Vocabulary = text);
+        _vocabulary = Editor(_settings.Vocabulary, 88, L("人名、产品名、项目名，用逗号或换行分隔", "Names, products, projects, separated by commas or lines"),
+                             text => _settings.Vocabulary = text);
         vocabulary.Body.Add(_vocabulary);
         vocabulary.Body.Add(new CardDivider { Inset = 0 });
         vocabulary.Body.Add(TransferButtons());
         Body.Children.Add(vocabulary);
 
         RenderLearning();
-        Body.Children.Add(_learning);
+        Body.Children.Add(_spelling);
 
-        var context = new CardSection
-        {
-            Title = L("光标附近的文字", "Text around the cursor"),
-            Footer = L("开始录音时，读取你正在输入的文本框里光标前后最多 1500 个字符，连同转写一起发给文字整理模型，只用来把你说到的名字和术语拼成那里的写法，不会把其中的内容抄进你的文字。密码框永远不会读取，这些文字也不会保存在历史记录里。",
-                       "When recording starts, up to 1,500 characters around your cursor in the field you're dictating into are read and sent with the transcript to your clean-up models, only so that the names and terms you say are spelled the way they appear there. Nothing from it is copied into your text. Password fields are never read, and the text isn't kept in History."),
-        };
-        var contextToggle = new ToggleSwitch { IsOn = _settings.UseCursorContext, OnContent = "", OffContent = "", MinWidth = 0 };
-        contextToggle.Toggled += (_, _) => _settings.UseCursorContext = contextToggle.IsOn;
-        context.Body.Add(new CardRow
-        {
-            Glyph = Glyphs.Search, Tint = Tint.Blue, Title = L("参考光标附近的文字拼写名字", "Use text around the cursor to spell names"),
-            Trailing = contextToggle,
-        });
-        Body.Children.Add(context);
-
-        var preferences = new CardSection
-        {
-            Title = L("整理偏好（可选）", "Clean-up preferences (optional)"),
-            Footer = L("例如：「不要使用列表」「保留我的口语语气」「英文术语保持小写」。",
-                       "e.g. “Never use bullet lists”, “Keep my casual tone”, “Keep technical terms lowercase”."),
-        };
-        preferences.Body.Add(Editor(_settings.ExtraInstructions, 150, text => _settings.ExtraInstructions = text));
+        var preferences = new CardSection { Title = L("整理偏好（可选）", "Clean-up preferences (optional)") };
+        preferences.Body.Add(Editor(_settings.ExtraInstructions, 88,
+                                    L("例如：「不要使用列表」「保留我的口语语气」「英文术语保持小写」。",
+                                      "e.g. “Never use bullet lists”, “Keep my casual tone”, “Keep technical terms lowercase”."),
+                                    text => _settings.ExtraInstructions = text));
         Body.Children.Add(preferences);
 
         RenderSnippets();
@@ -96,7 +78,7 @@ public sealed class StylePage : PageBase
         // Translation: the rows past the switch show while it's on, the language's name only for another language.
         var enabled = new ToggleSwitch { IsOn = _settings.TranslationEnabled, OnContent = "", OffContent = "", MinWidth = 0 };
         enabled.Toggled += (_, _) => _settings.TranslationEnabled = enabled.IsOn;
-        _translationMode = new CardRow { Glyph = Glyphs.Speech, Tint = Tint.Indigo, Title = L("翻译模式", "Translation mode"), Trailing = enabled };
+        _translationMode = new CardRow { Title = L("翻译模式", "Translation mode"), Trailing = enabled };
         _translation.Body.Add(_translationMode);
 
         string[] codes = [.. TranslationLanguages.All.Select(l => l.Code()), AppSettings.OtherTranslationLanguage];
@@ -106,15 +88,15 @@ public sealed class StylePage : PageBase
         language.SelectedIndex = Math.Max(0, Array.IndexOf(codes, _settings.TranslationLanguage));
         language.SelectionChanged += (_, _) => _settings.TranslationLanguage = codes[Math.Max(0, language.SelectedIndex)];
         AddTranslationDetail(new CardDivider());
-        AddTranslationDetail(new CardRow { Glyph = Glyphs.Globe, Tint = Tint.Teal, Title = L("翻译成", "Translate into"), Trailing = language });
+        AddTranslationDetail(new CardRow { Title = L("翻译成", "Translate into"), Trailing = language });
 
         var otherName = new TextBox { Text = _settings.TranslationOtherLanguage, Width = 180, PlaceholderText = L("语言", "Language") };
         otherName.TextChanged += (_, _) => _settings.TranslationOtherLanguage = otherName.Text;
         _otherLanguage.Add(new CardDivider());
         _otherLanguage.Add(new CardRow
         {
-            Glyph = Glyphs.Font, Tint = Tint.Gray, Title = L("语言", "Language"),
-            Subtitle = L("用它的名字，比如 Italiano、繁體中文、Tiếng Việt", "By its name: Italiano, 繁體中文, Tiếng Việt…"),
+            Title = L("语言", "Language"),
+            Help = L("用它的名字，比如 Italiano、繁體中文、Tiếng Việt", "By its name: Italiano, 繁體中文, Tiếng Việt…"),
             Trailing = otherName,
         });
         foreach (var element in _otherLanguage) _translation.Body.Add(element);
@@ -127,8 +109,8 @@ public sealed class StylePage : PageBase
         AddTranslationDetail(new CardDivider());
         AddTranslationDetail(new CardRow
         {
-            Glyph = Glyphs.Keyboard, Tint = Tint.Blue, Title = L("切换键", "Switch key"),
-            Subtitle = L("按住听写快捷键时按下它（左右两边都可以）", "Pressed while you hold the dictation shortcut (either side)"),
+            Title = L("切换键", "Switch key"),
+            Help = L("按住听写快捷键时按下它（左右两边都可以）", "Pressed while you hold the dictation shortcut (either side)"),
             Trailing = chord,
         });
         UpdateTranslation();
@@ -292,21 +274,52 @@ public sealed class StylePage : PageBase
         _exportIcon.Glyph = Glyphs.Export;
     }
 
+    /// <summary>The two ways spelling is picked up, and the terms learned so far, newest first.</summary>
     private void RenderLearning()
     {
-        _learning.Body.Clear();
+        _spelling.Body.Clear();
+        var context = new ToggleSwitch { IsOn = _settings.UseCursorContext, OnContent = "", OffContent = "", MinWidth = 0 };
+        context.Toggled += (_, _) => _settings.UseCursorContext = context.IsOn;
+        _spelling.Body.Add(new CardRow
+        {
+            Title = L("参考光标附近的文字拼写名字", "Use text around the cursor to spell names"),
+            Help = L("开始录音时，读取你正在输入的文本框里光标前后最多 1500 个字符，连同转写一起发给文字整理模型，只用来把你说到的名字和术语拼成那里的写法，不会把其中的内容抄进你的文字。密码框永远不会读取，这些文字也不会保存在历史记录里。",
+                     "When recording starts, up to 1,500 characters around your cursor in the field you're dictating into are read and sent with the transcript to your clean-up models, only so that the names and terms you say are spelled the way they appear there. Nothing from it is copied into your text. Password fields are never read, and the text isn't kept in History."),
+            Trailing = context,
+        });
+        _spelling.Body.Add(new CardDivider());
         var toggle = new ToggleSwitch { IsOn = _settings.LearnFromEdits, OnContent = "", OffContent = "", MinWidth = 0 };
         toggle.Toggled += (_, _) => _settings.LearnFromEdits = toggle.IsOn;
-        _learning.Body.Add(new CardRow
+        _spelling.Body.Add(new CardRow
         {
-            Glyph = Glyphs.Dictionary, Tint = Tint.Orange, Title = L("从我的修改中学习", "Learn from my corrections"),
+            Title = L("从我的修改中学习", "Learn from my corrections"),
+            Help = L("粘贴后如果你改了某个识别错的词（比如把 TypeList 改成 Typeless），离开输入框或发送后会自动把它加进词汇表。能读取的输入框直接比较前后内容；读不到的会跟随你粘贴后的按键，但用中文、日文、韩文输入法打的字跟随不了。只学发音相近的改动，不学改写、改数字和普通词替换。一切都在本机完成。",
+                     "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Where the field can be read, its text is compared; where it can't, the keys you press after the paste are followed, though not text typed with a Chinese, Japanese or Korean input method. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. All of it stays on this PC."),
             Trailing = toggle,
         });
-        foreach (var learned in Enumerable.Reverse(_settings.LearnedTerms))
+        var learned = Enumerable.Reverse(_settings.LearnedTerms).ToList();
+        foreach (var term in _showAllLearned ? learned : learned.Take(LearnedShown))
         {
-            _learning.Body.Add(new CardDivider { Inset = 14 });
-            _learning.Body.Add(LearnedRow(learned));
+            _spelling.Body.Add(new CardDivider());
+            _spelling.Body.Add(LearnedRow(term));
         }
+        if (_showAllLearned || learned.Count <= LearnedShown) return;
+        _spelling.Body.Add(new CardDivider());
+        var all = new Button
+        {
+            Content = Ui.Text(L($"显示全部 {learned.Count} 个", $"Show all {learned.Count}"), 12.5, foreground: Ui.Secondary),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(14, 8, 14, 8),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+        };
+        all.Click += (_, _) =>
+        {
+            _showAllLearned = true;
+            RenderLearning();
+        };
+        _spelling.Body.Add(all);
     }
 
     private FrameworkElement LearnedRow(LearnedTerm learned)
@@ -356,7 +369,7 @@ public sealed class StylePage : PageBase
             first.Click += (_, _) => Edit(new Snippet());
             _snippets.Body.Add(new CardRow
             {
-                Glyph = Glyphs.Message, Tint = Tint.Teal, Title = L("还没有快捷短语", "No snippets yet"),
+                Title = L("还没有快捷短语", "No snippets yet"),
                 Subtitle = L("例如：说「我的邮箱」，插入 name@example.com", "For example, say “my email” to insert name@example.com"),
                 Trailing = first,
             });
@@ -364,16 +377,16 @@ public sealed class StylePage : PageBase
         }
         for (var i = 0; i < snippets.Count; i++)
         {
-            if (i > 0) _snippets.Body.Add(new CardDivider { Inset = 14 });
+            if (i > 0) _snippets.Body.Add(new CardDivider());
             _snippets.Body.Add(_editing?.Id == snippets[i].Id ? SnippetEditor(snippets[i], snippets) : SnippetRow(snippets[i]));
         }
         if (_editing is { } editing && snippets.All(s => s.Id != editing.Id))
         {
-            if (snippets.Count > 0) _snippets.Body.Add(new CardDivider { Inset = 14 });
+            if (snippets.Count > 0) _snippets.Body.Add(new CardDivider());
             _snippets.Body.Add(SnippetEditor(editing, snippets));
             return;
         }
-        _snippets.Body.Add(new CardDivider { Inset = 14 });
+        _snippets.Body.Add(new CardDivider());
         var add = new Button
         {
             Content = new StackPanel
@@ -513,11 +526,12 @@ public sealed class StylePage : PageBase
 
     private static string Normalize(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n');
 
-    private static TextBox Editor(string text, double height, Action<string> save)
+    private static TextBox Editor(string text, double height, string placeholder, Action<string> save)
     {
         var editor = new TextBox
         {
             Text = text,
+            PlaceholderText = placeholder,
             Height = height,
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,

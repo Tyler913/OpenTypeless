@@ -16,27 +16,29 @@ struct AppsPage: View {
     }
 
     var body: some View {
-        PageScaffold(page: .apps) {
+        PageScaffold(page: .apps,
+                     help: L("给一个应用添加配置后，在它里面听写时就用这里的设置，比如在 Slack 里说完直接发送，在邮件里用更正式的语气。其他应用照常使用你平时的设置。",
+                             "Add an app to give it its own settings: send messages right away in Slack, say, or a more formal tone in your email app. Everywhere else your usual settings apply.")
+                         + "\n\n" + L("开始录音时在最前面的应用决定用哪个配置，松开按键前换到别的应用也不变。配置里设为「默认」的项目跟随你平时的设置。",
+                                       "The app in front when you start recording decides which profile is used, even if you switch apps before you finish. Whatever a profile leaves on Default follows your usual settings.")) {
             if settings.appProfiles.isEmpty {
                 Card {
-                    VStack(spacing: 10) {
-                        IconBadge(symbol: SettingsPage.apps.symbol, color: SettingsPage.apps.color, size: 40)
+                    VStack(spacing: 8) {
+                        Image(systemName: SettingsPage.apps.symbol).font(.system(size: 28)).foregroundStyle(.tertiary)
                         Text(L("还没有应用配置", "No app profiles yet")).font(.system(size: 14, weight: .semibold))
-                        Text(L("给一个应用添加配置后，在它里面听写时就用这里的设置，比如在 Slack 里说完直接发送，在邮件里用更正式的语气。其他应用照常使用你平时的设置。",
-                               "Add an app to give it its own settings: send messages right away in Slack, say, or a more formal tone in your email app. Everywhere else your usual settings apply."))
+                        Text(L("让某个应用用自己的设置，比如在 Slack 里说完直接发送", "Give an app its own settings, like sending right away in Slack"))
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: 440)
-                        addButton.padding(.top, 4)
+                        addButton.padding(.top, 6)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)
                     .padding(.horizontal, 16)
                 }
             } else {
-                VStack(spacing: 10) {
+                VStack(spacing: 8) {
                     ForEach(settings.appProfiles) { profile in
                         AppProfileCard(settings: settings, profile: profile, expanded: Binding(
                             get: { expanded.contains(profile.id) },
@@ -49,12 +51,6 @@ struct AppsPage: View {
                     Spacer()
                 }
             }
-            Text(L("开始录音时在最前面的应用决定用哪个配置，松开按键前换到别的应用也不变。配置里设为「默认」的项目跟随你平时的设置。",
-                   "The app in front when you start recording decides which profile is used, even if you switch apps before you finish. Whatever a profile leaves on Default follows your usual settings."))
-                .font(.system(size: 11.5))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 4)
         }
     }
 
@@ -195,12 +191,12 @@ private struct AppProfileCard: View {
             Button { withAnimation(.easeOut(duration: 0.18)) { expanded.toggle() } } label: {
                 HStack(spacing: 12) {
                     if let icon {
-                        Image(nsImage: icon).resizable().frame(width: 30, height: 30)
+                        Image(nsImage: icon).resizable().frame(width: 28, height: 28)
                     } else {
-                        IconBadge(symbol: "app.fill", color: .gray, size: 30)
+                        Image(systemName: "app.fill").font(.system(size: 24)).foregroundStyle(.tertiary).frame(width: 28, height: 28)
                     }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(profile.name).font(.system(size: 13.5, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(profile.name).font(.system(size: 13, weight: .medium))
                         Text(summary).font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer()
@@ -210,23 +206,23 @@ private struct AppProfileCard: View {
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                 }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.vertical, 9)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             if expanded {
                 CardDivider(inset: 0)
-                CardRow(icon: "wand.and.stars", iconColor: .purple, title: L("用 AI 整理文字", "Clean up with AI")) {
+                CardRow(title: L("用 AI 整理文字", "Clean up with AI")) {
                     OverridePicker(title: L("用 AI 整理文字", "Clean up with AI"), value: binding(\.polish), global: settings.polishEnabled)
                 }
-                CardDivider(inset: 50)
-                CardRow(icon: "return", iconColor: .green, title: L("插入后自动回车", "Press Return after inserting")) {
+                CardDivider()
+                CardRow(title: L("插入后自动回车", "Press Return after inserting")) {
                     OverridePicker(title: L("插入后自动回车", "Press Return after inserting"), value: binding(\.pressEnter),
                                    global: settings.pressEnterAfterInsert)
                 }
-                CardDivider(inset: 50)
-                CardRow(icon: "character.bubble.fill", iconColor: .teal, title: L("说话语言", "Spoken language")) {
+                CardDivider()
+                CardRow(title: L("说话语言", "Spoken language")) {
                     Picker(L("说话语言", "Spoken language"), selection: binding(\.language)) {
                         Text(L("默认（\(AppProfileCard.languageName(settings.sttLanguage))）",
                                "Default (\(AppProfileCard.languageName(settings.sttLanguage)))")).tag(String?.none)
@@ -243,11 +239,14 @@ private struct AppProfileCard: View {
                     .labelsHidden()
                     .fixedSize()
                 }
-                CardDivider(inset: 50)
+                CardDivider()
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(L("这个应用的整理偏好", "Clean-up preferences for this app"))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 5) {
+                        Text(L("这个应用的整理偏好", "Clean-up preferences for this app")).font(.system(size: 13))
+                        HelpTip(text: L("加在「词汇与风格」里的整理偏好之后，只在这个应用里生效。例如：「语气正式一些」「不要使用列表」。",
+                                        "Added after your clean-up preferences under Vocabulary & Style, in this app only. e.g. “Use a more formal tone”, “Never use bullet lists”."),
+                                topic: L("这个应用的整理偏好", "Clean-up preferences for this app"))
+                    }
                     TextEditor(text: binding(\.instructions))
                         .font(.system(size: 13))
                         .scrollContentBackground(.hidden)
@@ -255,11 +254,6 @@ private struct AppProfileCard: View {
                         .frame(height: 76)
                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.04)))
                         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
-                    Text(L("加在「词汇与风格」里的整理偏好之后，只在这个应用里生效。例如：「语气正式一些」「不要使用列表」。",
-                           "Added after your clean-up preferences under Vocabulary & Style, in this app only. e.g. “Use a more formal tone”, “Never use bullet lists”."))
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(14)
                 // Only used while the text is cleaned up.

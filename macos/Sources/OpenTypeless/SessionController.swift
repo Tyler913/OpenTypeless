@@ -186,6 +186,9 @@ final class SessionController: ObservableObject {
                 self.hud.show(.learned(added.joined(separator: L("、", ", "))), autoHideAfter: 2.5)
             }
         }
+        // The capsule's buttons: ✕ (and ■ while processing) is Esc, ↑ is letting go of the key.
+        hud.model.onCancel = { [weak self] in self?.escapePressed() }
+        hud.model.onFinish = { [weak self] in self?.finishPressed() }
         recorder.onFailure = { [weak self] error in
             Task { @MainActor in
                 self?.abort(message: L("录音中断：", "Recording interrupted: ") + error.localizedDescription)
@@ -294,6 +297,13 @@ final class SessionController: ObservableObject {
         } else {
             finishRecording()
         }
+    }
+
+    /// The capsule's ↑ was clicked: the recording ends as letting go of the key (or the second tap, hands-free) would.
+    func finishPressed() {
+        guard state == .recording else { return }
+        note("stop (capsule button)")
+        finishRecording()
     }
 
     /// Another key went down while the hotkey was held: a registered chord switches the recording's mode; otherwise
@@ -626,7 +636,6 @@ final class SessionController: ObservableObject {
         state = .recording
         lastError = nil
         hud.model.resetLevels()
-        hud.model.startedAt = Date()
         hud.model.badge = nil
         hud.show(.recording)
         playSound("Tink")

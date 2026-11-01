@@ -111,6 +111,7 @@ public static class Glyphs
     public const string Page = "\uE7C3";
     public const string Video = "\uE714";
     public const string Send = "\uE724";
+    public const string ArrowUp = "\uE74A";
     public const string LineBreak = "\uE8E4";
 }
 

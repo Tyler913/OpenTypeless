@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/menu-bar.png" width="330" alt="메뉴 막대 패널: 단축키 안내와 최근 받아쓰기">
+  <img src="docs/images/menu-bar.png" width="330" alt="메뉴 막대 패널: 최근 받아쓰기, 클릭하면 복사">
 </p>
 
 <p align="center">
@@ -65,7 +65,7 @@ OpenTypeless는 바로 이 문제를 중심으로 만들어졌습니다.
 - **여러분의 말, 여러분의 언어.** 수정은 최소한으로 하며 표현, 순서, 말투는 그대로 둡니다. 중국어와 영어를 섞어 말하면 일상 단어("shortcut", "dark mode")까지 모든 단어가 말한 언어 그대로 남고, CJK 문자와 라틴 문자 사이에는 공백이 들어갑니다.
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="기록: 날짜별로 묶이고 검색 가능하며, 다듬은 텍스트와 소요 시간, 비용 표시">
+  <img src="docs/images/history.png" width="720" alt="기록: 날짜별로 묶이고 검색 가능하며, 다듬은 텍스트와 비용 표시">
 </p>
 
 프롬프트는 개발용 세트와 홀드아웃 테스트 세트([eval/](eval/) 참고)로 조정했으며, 실제 받아쓰기도 포함되어 있습니다.
@@ -96,7 +96,7 @@ OpenTypeless는 바로 이 문제를 중심으로 만들어졌습니다.
 - **기록**에는 모든 받아쓰기가 날짜별로 묶여 남고 검색할 수 있으며, 원본과 다듬은 텍스트, 소요 시간, 비용과 함께 복사와 다시 변환이 가능합니다. 녹음 보관 기간은 보관 안 함, 1일, 1주, 1개월, 1년, 영구 중에서 고릅니다. 목록에 보이는 기록은 CSV(Excel에서 바로 열리며 한글도 깨지지 않음), JSON, Markdown으로 내보낼 수 있고, 녹음은 WAV 파일로 저장할 수 있습니다.
 - **오디오·동영상 파일 변환.** 기록에서 **파일 변환…**을 누르거나 파일을 끌어다 놓으면 음성 메모, 회의 녹음, 동영상을 내 음성 인식 제공업체로 텍스트로 바꿉니다. 긴 받아쓰기처럼 쉬는 지점에서 나누고, 다듬기도 할 수 있습니다. 시작하기 전에 각 파일의 길이와, 모델에 분당 가격이 있으면 예상 비용을 보여 줍니다. 텍스트는 기록에 남고(붙여 넣지 않음) 받아쓰기 통계에는 포함되지 않으며, 받아쓰기를 방해하지도 않습니다. 파일은 동시에 보내는 요청이 더 적고, 받아쓰는 동안에는 기다립니다.
 - **9개 UI 언어**: English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch, Русский. 시스템 언어를 따르거나 **설정 → 일반 → 언어**에서 고를 수 있습니다.
-- **네이티브 디자인.** macOS 26 이상에서는 Liquid Glass와 메뉴 막대 패널, Windows 11에서는 Mica와 Acrylic, 트레이 패널. 말하는 동안 두 플랫폼 모두 작은 녹음 캡슐을 보여 줍니다.
+- **네이티브 디자인.** macOS 26 이상에서는 Liquid Glass와 메뉴 막대 패널, Windows 11에서는 Mica와 Acrylic, 트레이 패널. 말하는 동안 두 플랫폼 모두 작은 녹음 캡슐을 보여 줍니다. 설정 설명은 짧게 두었고, 자세한 내용은 **?** 에 마우스를 올리거나 클릭하면 볼 수 있습니다.
 - **로그인 시 실행.**
 - **자동 업데이트.** 하루에 한 번 GitHub Releases를 확인하고, 새 버전을 백그라운드에서 다운로드한 뒤 **재시작하여 업데이트**를 클릭할 때 설치합니다. 받아쓰기 도중에는 절대 설치하지 않습니다. 파일을 교체하기 전에 다운로드를 GitHub의 SHA-256과 대조합니다. **설정 → 일반 → 업데이트**에서 끄거나 직접 확인할 수 있습니다.
 - **작고 네이티브.** macOS에서는 약 3MB의 Swift/SwiftUI 앱, Windows에서는 자체 포함형 WinUI 3 앱입니다. Electron도, 계정도, 자체 서버도 없습니다.
@@ -280,7 +280,7 @@ scripts/perf.sh                  # 릴리스 빌드에서의 성능 예산(오�
 
 # 설정 페이지, 메뉴 막대 패널, HUD를 PNG로 렌더링(--live는 화면에 표시해 실제 Liquid Glass로 촬영).
 # README 스크린샷은 샘플 기록과, 권한을 허용된 것으로 취급하는 --demo를 사용합니다.
-OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --lang en
+OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --dark --lang en
 ```
 
 ### Windows

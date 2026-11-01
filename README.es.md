@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/menu-bar.png" width="330" alt="El panel de la barra de menús: aviso del atajo y dictados recientes">
+  <img src="docs/images/menu-bar.png" width="330" alt="El panel de la barra de menús: dictados recientes, a un clic de copiar">
 </p>
 
 <p align="center">
@@ -65,7 +65,7 @@ La transcripción en bruto es desordenada: muletillas, frases que se reinician, 
 - **Tus palabras, tus idiomas.** Los cambios son mínimos: la redacción, el orden y el tono siguen siendo tuyos. Si mezclas chino e inglés, cada palabra se queda en el idioma en que la dijiste, también las cotidianas («shortcut», «dark mode»), con espacio entre el texto CJK y el latino.
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="Historial: dictados agrupados por día y con búsqueda, con el texto limpio, los tiempos y el coste">
+  <img src="docs/images/history.png" width="720" alt="Historial: dictados agrupados por día y con búsqueda, con el texto limpio y su coste">
 </p>
 
 El prompt está ajustado con conjuntos de desarrollo y de prueba reservados (ver [eval/](eval/)), que incluyen dictados reales.
@@ -96,7 +96,7 @@ El prompt está ajustado con conjuntos de desarrollo y de prueba reservados (ver
 - **Historial** de cada dictado, agrupado por día y con búsqueda, con el texto original y el limpio, tiempos, coste, copiar y volver a transcribir. Elige cuánto tiempo se guardan las grabaciones: nada, un día, una semana, un mes, un año o para siempre. Exporta lo que muestra la lista a CSV (se abre en Excel, también con caracteres chinos), JSON o Markdown, y guarda cualquier grabación como archivo WAV.
 - **Transcribe archivos de audio y vídeo.** **Transcribir archivo…** en el historial, o soltar archivos en él, convierte una nota de voz, la grabación de una reunión o un vídeo en texto con tu proveedor de voz a texto, cortado en las pausas como un dictado largo y, si quieres, limpio. Antes de empezar ves la duración de cada archivo y, si el modelo tiene precio por minuto, lo que debería costar. El texto se guarda en el historial (nunca se pega), los archivos no cuentan en las estadísticas de dictado y nunca retrasan un dictado: un archivo envía menos solicitudes a la vez y espera mientras dictas.
 - **Nueve idiomas de interfaz**: English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch y Русский. La app sigue el idioma del sistema, o elige uno en **Ajustes → General → Idioma**.
-- **Diseño nativo.** Liquid Glass en macOS 26+ con un panel en la barra de menús; Mica y Acrylic en Windows 11 con un panel en la bandeja. Ambas muestran una pequeña cápsula de grabación mientras hablas.
+- **Diseño nativo.** Liquid Glass en macOS 26+ con un panel en la barra de menús; Mica y Acrylic en Windows 11 con un panel en la bandeja. Ambas muestran una pequeña cápsula de grabación mientras hablas. Los ajustes son breves y los detalles están tras un **?** que puedes señalar o pulsar.
 - **Se abre al iniciar sesión.**
 - **Se actualiza sola.** Busca en GitHub Releases una vez al día, descarga la nueva versión en segundo plano y la instala cuando pulsas **Reiniciar para actualizar**, nunca en mitad de un dictado. Las descargas se comprueban con el SHA-256 de GitHub antes de reemplazar nada. Desactívalo, o búscalas a mano, en **Ajustes → General → Actualizaciones**.
 - **Pequeña y nativa.** Una app Swift/SwiftUI de ~3 MB en macOS y una app WinUI 3 autónoma en Windows. Sin Electron, sin cuenta y sin servidor propio.
@@ -280,7 +280,7 @@ Modos de línea de comandos útiles del binario compilado (desde `macos/`):
 
 # Renderiza las páginas de ajustes, el panel de la barra de menús y el HUD a PNG (--live los muestra en pantalla con Liquid Glass real).
 # Las capturas del README usan un historial de ejemplo y --demo, que da los permisos por concedidos.
-OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --lang en
+OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --dark --lang en
 ```
 
 ### Windows

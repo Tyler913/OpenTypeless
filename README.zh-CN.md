@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/menu-bar.png" width="330" alt="菜单栏面板：快捷键提示和最近的听写">
+  <img src="docs/images/menu-bar.png" width="330" alt="菜单栏面板：最近的听写，点一下就能复制">
 </p>
 
 <p align="center">
@@ -65,7 +65,7 @@ OpenTypeless 就是围绕这个问题做的。
 - **你的用词、你的语言。** 改动尽量少：措辞、顺序和语气都保持原样。中英混说时，每个词都保留你说出它时的语言，日常词也一样（“shortcut”、“dark mode”），中文和英文之间加空格。
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="历史：按天分组、可以搜索，显示整理后的文字、耗时和花费">
+  <img src="docs/images/history.png" width="720" alt="历史：按天分组、可以搜索，显示整理后的文字和花费">
 </p>
 
 提示词在开发集和留出测试集上调优（见 [eval/](eval/)），其中包括真实的口述。
@@ -98,7 +98,7 @@ OpenTypeless 就是围绕这个问题做的。
 - **历史**记录每一次听写，按天分组、可以搜索，包括原始文字和整理后的文字、耗时、花费、复制和重新转写。录音保存多久由你决定：不保存、一天、一周、一个月、一年或永久。列表里显示的记录可以导出为 CSV（Excel 直接打开，中文不乱码）、JSON 或 Markdown，录音也可以另存为 WAV 文件。
 - **转写音频和视频文件。** 在历史页点 **转写文件…** 或把文件拖进去，就能用你的语音转文字服务商把语音备忘录、会议录音或视频转成文字，像长听写一样在停顿处切段，还可以顺便整理。开始前会显示每个文件的长度，模型有按分钟的价格时还会显示预计花费。文字保存在历史里（不会粘贴），不计入听写统计，也不会耽误听写：转写文件时同时发出的请求更少，你听写时它会先等着。
 - **九种界面语言**：English、简体中文、日本語、한국어、Español、Português、Français、Deutsch 和 Русский。默认跟随系统语言，也可以在 **设置 → 通用 → 界面语言** 里选择。
-- **原生设计。** macOS 26+ 上是 Liquid Glass 和菜单栏面板；Windows 11 上是 Mica 和 Acrylic，以及托盘面板。说话时两边都会显示一个小小的录音胶囊。
+- **原生设计。** macOS 26+ 上是 Liquid Glass 和菜单栏面板；Windows 11 上是 Mica 和 Acrylic，以及托盘面板。说话时两边都会显示一个小小的录音胶囊。设置页只留简短说明，详细内容放在 **?** 里，鼠标移上去或点一下就能看。
 - **登录时自动启动。**
 - **自动更新。** 每天检查一次 GitHub Releases，在后台下载新版本，你点 **重启更新** 时才安装，绝不会在听写中途进行。替换任何文件之前都会用 GitHub 的 SHA-256 校验下载内容。可以在 **设置 → 通用 → 更新** 里关闭或手动检查。
 - **小巧、原生。** macOS 上是约 3 MB 的 Swift/SwiftUI 应用，Windows 上是自包含的 WinUI 3 应用。没有 Electron，不需要账号，也没有自己的服务器。
@@ -299,7 +299,7 @@ scripts/perf.sh                  # 发布版构建下的性能预算（音频处
 
 # 把设置页面、菜单栏面板和 HUD 渲染成 PNG（--live 在屏幕上显示，得到真正的 Liquid Glass）。
 # README 截图使用示例历史和 --demo（把权限视为已授予）。
-OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --lang en
+OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --dark --lang en
 ```
 
 ### Windows

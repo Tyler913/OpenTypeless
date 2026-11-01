@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/menu-bar.png" width="330" alt="Le panneau de la barre des menus : rappel du raccourci et dictées récentes">
+  <img src="docs/images/menu-bar.png" width="330" alt="Le panneau de la barre des menus : dictées récentes, à un clic de la copie">
 </p>
 
 <p align="center">
@@ -65,7 +65,7 @@ La transcription brute est brouillonne : tics de langage, reprises, « non atten
 - **Vos mots, vos langues.** Les modifications sont minimales : formulation, ordre et ton restent les vôtres. Quand vous mélangez chinois et anglais, chaque mot reste dans la langue où vous l’avez dit, y compris les mots courants (« shortcut », « dark mode »), avec une espace entre texte CJK et texte latin.
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="Historique : les dictées regroupées par jour et consultables par recherche, avec le texte nettoyé, les durées et le coût">
+  <img src="docs/images/history.png" width="720" alt="Historique : les dictées regroupées par jour et consultables par recherche, avec le texte nettoyé et son coût">
 </p>
 
 Le prompt est ajusté sur des jeux de développement et de test réservés (voir [eval/](eval/)), qui incluent de vraies dictées.
@@ -96,7 +96,7 @@ Le prompt est ajusté sur des jeux de développement et de test réservés (voir
 - **Historique** de chaque dictée, regroupé par jour et consultable par recherche, avec le texte brut et nettoyé, les durées, le coût, la copie et la retranscription. Choisissez combien de temps les enregistrements sont conservés : pas du tout, un jour, une semaine, un mois, un an ou pour toujours. Exportez ce qu’affiche la liste en CSV (s’ouvre dans Excel, caractères chinois compris), JSON ou Markdown, et sauvegardez l’audio de n’importe quelle dictée en fichier WAV.
 - **Transcription de fichiers audio et vidéo.** **Transcrire un fichier…** dans l’historique, ou y déposer des fichiers, transforme un mémo vocal, l’enregistrement d’une réunion ou une vidéo en texte avec votre fournisseur de transcription, découpé aux pauses comme une longue dictée et nettoyé si vous le souhaitez. Avant de commencer, vous voyez la durée de chaque fichier et, quand le modèle a un prix à la minute, ce que cela devrait coûter. Le texte est conservé dans l’historique (jamais collé), les fichiers ne comptent pas dans les statistiques de dictée et ne retardent jamais une dictée : un fichier envoie moins de requêtes à la fois et attend pendant que vous dictez.
 - **Neuf langues d’interface** : English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch et Русский. L’app suit la langue du système, ou choisissez-en une dans **Réglages → Général → Langue**.
-- **Design natif.** Liquid Glass sur macOS 26+ avec un panneau dans la barre des menus ; Mica et Acrylic sur Windows 11 avec un panneau dans la zone de notification. Les deux affichent une petite capsule d’enregistrement pendant que vous parlez.
+- **Design natif.** Liquid Glass sur macOS 26+ avec un panneau dans la barre des menus ; Mica et Acrylic sur Windows 11 avec un panneau dans la zone de notification. Les deux affichent une petite capsule d’enregistrement pendant que vous parlez. Les réglages restent courts, avec les détails derrière un **?** à survoler ou à cliquer.
 - **Ouverture à la connexion.**
 - **Se met à jour toute seule.** Vérifie GitHub Releases une fois par jour, télécharge la nouvelle version en arrière-plan et l’installe quand vous cliquez sur **Redémarrer pour mettre à jour**, jamais au milieu d’une dictée. Les téléchargements sont vérifiés avec le SHA-256 de GitHub avant tout remplacement. Désactivez-la, ou vérifiez manuellement, dans **Réglages → Général → Mises à jour**.
 - **Légère et native.** Une app Swift/SwiftUI d’environ 3 Mo sur macOS et une app WinUI 3 autonome sur Windows. Pas d’Electron, pas de compte et pas de serveur à elle.
@@ -280,7 +280,7 @@ Modes en ligne de commande utiles du binaire compilé (depuis `macos/`) :
 
 # Rend les pages de réglages, le panneau de la barre des menus et le HUD en PNG (--live les affiche à l’écran, avec un vrai Liquid Glass).
 # Les captures du README utilisent un historique d’exemple et --demo, qui considère les autorisations comme accordées.
-OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --lang en
+OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --dark --lang en
 ```
 
 ### Windows

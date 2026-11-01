@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/menu-bar.png" width="330" alt="O painel da barra de menus: dica do atalho e ditados recentes">
+  <img src="docs/images/menu-bar.png" width="330" alt="O painel da barra de menus: ditados recentes, a um clique de copiar">
 </p>
 
 <p align="center">
@@ -65,7 +65,7 @@ A transcrição bruta é bagunçada: vícios de linguagem, recomeços, "não, es
 - **Suas palavras, seus idiomas.** As edições são mínimas: palavras, ordem e tom continuam seus. Quando você mistura chinês e inglês, cada palavra fica no idioma em que foi dita, inclusive as do dia a dia ("shortcut", "dark mode"), com espaço entre o texto CJK e o latino.
 
 <p align="center">
-  <img src="docs/images/history.png" width="720" alt="Histórico: ditados agrupados por dia e pesquisáveis, com o texto limpo, os tempos e o custo">
+  <img src="docs/images/history.png" width="720" alt="Histórico: ditados agrupados por dia e pesquisáveis, com o texto limpo e o custo">
 </p>
 
 O prompt é ajustado com conjuntos de desenvolvimento e de teste reservados (veja [eval/](eval/)), incluindo ditados reais.
@@ -96,7 +96,7 @@ O prompt é ajustado com conjuntos de desenvolvimento e de teste reservados (vej
 - **Histórico** de todos os ditados, agrupado por dia e pesquisável, com texto bruto e limpo, tempos, custo, copiar e transcrever de novo. Escolha por quanto tempo as gravações ficam guardadas: nada, um dia, uma semana, um mês, um ano ou para sempre. Exporte o que a lista mostra para CSV (abre no Excel, inclusive com caracteres chineses), JSON ou Markdown, e salve qualquer gravação como arquivo WAV.
 - **Transcreva arquivos de áudio e vídeo.** **Transcrever arquivo…** no histórico, ou soltar arquivos nele, transforma uma nota de voz, a gravação de uma reunião ou um vídeo em texto com seu provedor de voz para texto, cortado nas pausas como um ditado longo e, se quiser, limpo. Antes de começar você vê a duração de cada arquivo e, quando o modelo tem preço por minuto, quanto deve custar. O texto fica no histórico (nunca é colado), os arquivos ficam fora das estatísticas de ditado e nunca atrasam um ditado: um arquivo envia menos requisições ao mesmo tempo e espera enquanto você dita.
 - **Nove idiomas de interface**: English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch e Русский. O app segue o idioma do sistema, ou escolha um em **Configurações → Geral → Idioma**.
-- **Design nativo.** Liquid Glass no macOS 26+ com um painel na barra de menus; Mica e Acrylic no Windows 11 com um painel na bandeja. Ambos mostram uma pequena cápsula de gravação enquanto você fala.
+- **Design nativo.** Liquid Glass no macOS 26+ com um painel na barra de menus; Mica e Acrylic no Windows 11 com um painel na bandeja. Ambos mostram uma pequena cápsula de gravação enquanto você fala. As configurações são curtas, com os detalhes em um **?** que você pode apontar ou clicar.
 - **Abre ao iniciar sessão.**
 - **Atualiza sozinho.** Verifica o GitHub Releases uma vez por dia, baixa a nova versão em segundo plano e instala quando você clica em **Reiniciar para atualizar**, nunca no meio de um ditado. Os downloads são conferidos com o SHA-256 do GitHub antes de qualquer substituição. Desative, ou verifique manualmente, em **Configurações → Geral → Atualizações**.
 - **Pequeno e nativo.** Um app Swift/SwiftUI de ~3 MB no macOS e um app WinUI 3 independente no Windows. Sem Electron, sem conta e sem servidor próprio.
@@ -280,7 +280,7 @@ Modos úteis de linha de comando do binário compilado (a partir de `macos/`):
 
 # Renderiza as páginas de configurações, o painel da barra de menus e o HUD em PNG (--live mostra na tela, com Liquid Glass de verdade).
 # As capturas do README usam um histórico de exemplo e --demo, que trata as permissões como concedidas.
-OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --lang en
+OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --dark --lang en
 ```
 
 ### Windows

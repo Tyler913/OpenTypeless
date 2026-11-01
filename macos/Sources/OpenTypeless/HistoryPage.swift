@@ -3,9 +3,9 @@ import SwiftUI
 import TypelessCore
 import UniformTypeIdentifiers
 
-/// Every dictation, newest first and grouped by day, with search; the selected one's text, details and actions
-/// on the right. How long recordings are kept, and exporting what the list shows, sit in the toolbar, next to
-/// transcribing a file (also by dropping one on the page).
+/// Every dictation, newest first and grouped by day, under a search field; the selected one's text, details and actions
+/// on the right, in one card. How much the recordings take and how long they're kept, exporting what the list shows, and
+/// transcribing a file (also by dropping one on the page) sit at the end of the title.
 struct HistoryPage: View {
     @ObservedObject var history: HistoryStore
     @ObservedObject var settings: AppSettings
@@ -21,10 +21,13 @@ struct HistoryPage: View {
     @State private var dropTargeted = false
 
     var body: some View {
-        PageScaffold(page: .history, scrolls: false) {
-            // Filtered once per update: every row needs the selection, and searching compares every record's text.
-            let records = filtered
+        // Filtered once per update: every row needs the selection, and searching compares every record's text.
+        let records = filtered
+        PageScaffold(page: .history,
+                     help: L("每次听写都会保存，失败的可以重试", "Every dictation is saved; failed ones can be retried"),
+                     scrolls: false, maxWidth: nil) {
             toolbar(records)
+        } content: {
             if history.records.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "waveform.badge.mic").font(.system(size: 36)).foregroundStyle(.tertiary)
@@ -38,13 +41,20 @@ struct HistoryPage: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let selected = selectedID(in: records)
-                HStack(alignment: .top, spacing: 14) {
-                    list(records, selected: selected).frame(width: 260)
-                    if let record = records.first(where: { $0.id == selected }) {
-                        HistoryDetail(record: record, controller: controller, history: history, files: files)
-                            .id(record.id)
-                    } else {
-                        Card { Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity) }
+                Card {
+                    HStack(spacing: 0) {
+                        VStack(spacing: 0) {
+                            searchField
+                            list(records, selected: selected)
+                        }
+                        .frame(width: 270)
+                        Rectangle().fill(Color.primary.opacity(0.07)).frame(width: 1)
+                        if let record = records.first(where: { $0.id == selected }) {
+                            HistoryDetail(record: record, controller: controller, history: history, files: files)
+                                .id(record.id)
+                        } else {
+                            Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
                     }
                 }
                 .frame(maxHeight: .infinity)
@@ -92,44 +102,52 @@ struct HistoryPage: View {
     // MARK: Toolbar
 
     private func toolbar(_ records: [DictationRecord]) -> some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField(L("搜索听写内容", "Search dictations"), text: $query)
-                    .textFieldStyle(.plain)
-                if !query.isEmpty {
-                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .font(.system(size: 13))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(Color.primary.opacity(0.06)))
-            .frame(maxWidth: 260)
-
+        HStack(spacing: 8) {
+            storageMenu
+            exportMenu(records)
             Button { picking = true } label: {
-                Label(L("转写文件…", "Transcribe File…"), systemImage: "doc.badge.plus")
+                Label(L("转写文件…", "Transcribe File…"), systemImage: "doc.badge.plus").lineLimit(1)
             }
+            .fixedSize()
             .help(L("转写语音备忘录、会议录音或视频（也可以直接拖到这里）",
                     "Transcribe a voice memo, meeting recording or video (or drop it here)"))
+        }
+    }
 
-            Spacer(minLength: 8)
-
-            if let storageBytes {
-                Label(ByteCountFormatter.string(fromByteCount: storageBytes, countStyle: .file), systemImage: "externaldrive")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .help(L("录音和转写占用的空间。每分钟录音约 1.9 MB；转写失败的录音会一直保留，方便重试。",
-                            "Space used by recordings and transcripts. Recordings take about 1.9 MB per minute; failed dictations keep theirs so you can retry."))
-            }
+    /// How much space History takes, opening how long recordings are kept.
+    private var storageMenu: some View {
+        Menu {
             Picker(L("保留录音", "Keep recordings"), selection: $settings.historyRetention) {
                 ForEach(HistoryRetention.allCases) { Text($0.label).tag($0) }
             }
-            .fixedSize()
-            exportMenu(records)
+            .pickerStyle(.inline)
+        } label: {
+            Label(storageBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "…", systemImage: "externaldrive")
+                .lineLimit(1)
         }
+        .fixedSize()
+        .help(L("录音和转写占用的空间。每分钟录音约 1.9 MB；转写失败的录音会一直保留，方便重试。",
+                "Space used by recordings and transcripts. Recordings take about 1.9 MB per minute; failed dictations keep theirs so you can retry."))
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField(L("搜索听写内容", "Search dictations"), text: $query)
+                .textFieldStyle(.plain)
+            if !query.isEmpty {
+                Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .font(.system(size: 13))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(Color.primary.opacity(0.06)))
+        .padding(.horizontal, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
     }
 
     /// Exports what the list shows: everything, or what the search found.
@@ -141,9 +159,11 @@ struct HistoryPage: View {
                 Button { export(records, as: .markdown) } label: { Text(verbatim: "Markdown…") }
             }
         } label: {
-            Label(exported ? L("已导出", "Exported") : L("导出", "Export"), systemImage: exported ? "checkmark" : "square.and.arrow.up")
+            Image(systemName: exported ? "checkmark" : "square.and.arrow.up")
         }
         .fixedSize()
+        .help(exported ? L("已导出", "Exported") : L("导出", "Export"))
+        .accessibilityLabel(L("导出", "Export"))
         .disabled(records.isEmpty || exporting)
     }
 
@@ -224,40 +244,37 @@ struct HistoryPage: View {
             : day.formatted(.dateTime.year().month(.abbreviated).day().locale(locale))
     }
 
-    private func list(_ records: [DictationRecord], selected: DictationRecord.ID?) -> some View {
-        Card {
-            let sections = Self.sections(of: records)
-            if sections.isEmpty {
-                Text(L("没有匹配的听写", "No matching dictations"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2, pinnedViews: [.sectionHeaders]) {
-                        ForEach(sections) { section in
-                            Section {
-                                ForEach(section.records) { record in
-                                    HistoryRow(record: record, progress: files.progress[record.id],
-                                               selected: record.id == selected) { selection = record.id }
-                                }
-                            } header: {
-                                Text(section.title)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.top, 8)
-                                    .padding(.bottom, 4)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color(nsColor: .controlBackgroundColor))
+    @ViewBuilder private func list(_ records: [DictationRecord], selected: DictationRecord.ID?) -> some View {
+        let sections = Self.sections(of: records)
+        if sections.isEmpty {
+            Text(L("没有匹配的听写", "No matching dictations"))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2, pinnedViews: [.sectionHeaders]) {
+                    ForEach(sections) { section in
+                        Section {
+                            ForEach(section.records) { record in
+                                HistoryRow(record: record, progress: files.progress[record.id],
+                                           selected: record.id == selected) { selection = record.id }
                             }
+                        } header: {
+                            Text(section.title)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.top, 8)
+                                .padding(.bottom, 4)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color(nsColor: .controlBackgroundColor))
                         }
                     }
-                    .padding(6)
                 }
+                .padding(6)
             }
         }
-        .frame(maxHeight: .infinity)
     }
 }
 
@@ -342,151 +359,147 @@ private struct HistoryDetail: View {
     @State private var saveFailure: String?
 
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(record.date.appFormatted(date: .abbreviated, time: .shortened))
-                            .font(.system(size: 14, weight: .semibold))
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(record.date.appFormatted(date: .abbreviated, time: .shortened))
+                        .font(.system(size: 14, weight: .semibold))
+                    HStack(spacing: 5) {
                         Text(details)
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
+                        // Where the wait after letting go of the key went.
+                        if let timing = record.timing?.summary { HelpTip(text: timing) }
                     }
-                    Spacer(minLength: 8)
-                    StatusPill(text: record.status.label, color: record.status.color)
+                }
+                Spacer(minLength: 8)
+                if record.status != .done { StatusPill(text: record.status.label, color: record.status.color) }
+            }
+            .padding(16)
+
+            CardDivider(inset: 0)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if record.status == .cancelled {
+                        Banner(symbol: "xmark.circle.fill", color: .gray,
+                               text: L("已取消，没有插入。这条会保留到 \(CancelPolicy.expiry(of: record.date).shortStamp)，之前可以复制或重新转写。",
+                                       "Cancelled, so nothing was inserted. It's kept until \(CancelPolicy.expiry(of: record.date).shortStamp) to copy or re-transcribe.")) { EmptyView() }
+                    }
+                    if let name = record.sourceName, record.isFile {
+                        Label(name, systemImage: "doc")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                    if let error = record.error {
+                        Banner(symbol: "exclamationmark.triangle.fill", color: .orange, text: error) { EmptyView() }
+                    }
+                    if let progress = files.progress[record.id] {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(progress.label).foregroundStyle(.secondary).monospacedDigit()
+                            FileProgressBar(progress: progress)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 120)
+                    } else if record.outputText.isEmpty && (record.status == .recording || record.status == .processing) {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text(record.status == .recording ? L("正在录音…", "Recording…") : L("正在处理…", "Processing…"))
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 120)
+                    } else {
+                        Text(record.outputText.isEmpty ? L("（没有文字）", "(no text)") : record.outputText)
+                            .font(.system(size: 14))
+                            .lineSpacing(3)
+                            .foregroundStyle(record.outputText.isEmpty ? .secondary : .primary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        // What was said, before snippets replaced their triggers.
+                        if record.insertedText != nil {
+                            disclosure(L("快捷短语替换前", "Before snippets"), text: record.finalText, isExpanded: $showSpoken)
+                        }
+                        if record.polishedText != nil, !record.rawText.isEmpty {
+                            disclosure(L("原始转写", "Raw transcript"), text: record.rawText, isExpanded: $showRaw)
+                        }
+                    }
                 }
                 .padding(16)
-
-                CardDivider(inset: 0)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        if record.status == .cancelled {
-                            Banner(symbol: "xmark.circle.fill", color: .gray,
-                                   text: L("已取消，没有插入。这条会保留到 \(CancelPolicy.expiry(of: record.date).shortStamp)，之前可以复制或重新转写。",
-                                           "Cancelled, so nothing was inserted. It's kept until \(CancelPolicy.expiry(of: record.date).shortStamp) to copy or re-transcribe.")) { EmptyView() }
-                        }
-                        if let name = record.sourceName, record.isFile {
-                            Label(name, systemImage: "doc")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                        }
-                        if let error = record.error {
-                            Banner(symbol: "exclamationmark.triangle.fill", color: .orange, text: error) { EmptyView() }
-                        }
-                        if let progress = files.progress[record.id] {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(progress.label).foregroundStyle(.secondary).monospacedDigit()
-                                FileProgressBar(progress: progress)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 120)
-                        } else if record.outputText.isEmpty && (record.status == .recording || record.status == .processing) {
-                            HStack(spacing: 8) {
-                                ProgressView().controlSize(.small)
-                                Text(record.status == .recording ? L("正在录音…", "Recording…") : L("正在处理…", "Processing…"))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 120)
-                        } else {
-                            Text(record.outputText.isEmpty ? L("（没有文字）", "(no text)") : record.outputText)
-                                .font(.system(size: 14))
-                                .lineSpacing(3)
-                                .foregroundStyle(record.outputText.isEmpty ? .secondary : .primary)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            // What was said, before snippets replaced their triggers.
-                            if record.insertedText != nil {
-                                disclosure(L("快捷短语替换前", "Before snippets"), text: record.finalText, isExpanded: $showSpoken)
-                            }
-                            if record.polishedText != nil, !record.rawText.isEmpty {
-                                disclosure(L("原始转写", "Raw transcript"), text: record.rawText, isExpanded: $showRaw)
-                            }
-                        }
-                        if let timing = record.timing?.summary {
-                            Label(timing, systemImage: "timer")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.tertiary)
-                                .textSelection(.enabled)
-                        }
-                    }
-                    .padding(16)
-                }
-
-                CardDivider(inset: 0)
-
-                HStack(spacing: 8) {
-                    Button {
-                        TextInserter.copyToClipboard(record.outputText)
-                        copied = true
-                        Task {
-                            try? await Task.sleep(nanoseconds: 1_500_000_000)
-                            copied = false
-                        }
-                    } label: {
-                        Label(copied ? L("已复制", "Copied") : L("复制", "Copy"), systemImage: copied ? "checkmark" : "doc.on.doc")
-                    }
-                    .disabled(record.outputText.isEmpty)
-                    if files.isActive(record.id) {
-                        Button { files.cancel(record.id) } label: {
-                            Label(L("取消", "Cancel"), systemImage: "xmark.circle")
-                        }
-                    } else if record.hasAudio, record.isFile {
-                        // A file goes back through the file queue: a long one mustn't hold up dictating.
-                        Button { files.retry(record) } label: {
-                            Label(L("重新转写", "Re-transcribe"), systemImage: "arrow.clockwise")
-                        }
-                        .help(L("用保存的音频重新转写", "Transcribes the saved audio again"))
-                    } else if record.hasAudio, !record.isCommand {
-                        // An edit of a selection can't be run again without its selection, which isn't kept.
-                        Button { controller.retry(record, paste: false) } label: {
-                            Label(L("重新转写", "Re-transcribe"), systemImage: "arrow.clockwise")
-                        }
-                        .help(L("完成后复制到剪贴板", "Copies the result to the clipboard"))
-                    }
-                    if record.hasAudio {
-                        // Showing it in Finder on a click, saving a copy from the arrow: a button of its own would
-                        // squeeze Re-transcribe at the window's usual width.
-                        Menu {
-                            Button(L("在访达中显示录音", "Show recording in Finder")) { revealRecording() }
-                            Button(L("将录音另存为…", "Save recording…")) { saveRecording() }
-                                // Still being written while it records; a copy then would stop part way.
-                                .disabled(savingRecording || record.status == .recording || record.status == .processing)
-                        } label: {
-                            Image(systemName: savedRecording ? "checkmark" : "folder")
-                        } primaryAction: {
-                            revealRecording()
-                        }
-                        .fixedSize()
-                        .help(L("在访达中显示录音", "Show recording in Finder"))
-                        .accessibilityLabel(L("在访达中显示录音", "Show recording in Finder"))
-                    }
-                    Spacer()
-                    Button(role: .destructive) {
-                        // Text alone goes straight away; a recording can't be got back, so that asks first.
-                        if record.hasAudio { confirmingDelete = true } else { history.delete(record) }
-                    } label: { Image(systemName: "trash") }
-                        .disabled(files.isActive(record.id))
-                        .help(L("删除", "Delete"))
-                        .accessibilityLabel(L("删除", "Delete"))
-                        .confirmationDialog(L("删除这条听写？", "Delete this dictation?"), isPresented: $confirmingDelete) {
-                            Button(L("删除", "Delete"), role: .destructive) { history.delete(record) }
-                            Button(L("取消", "Cancel"), role: .cancel) {}
-                        } message: {
-                            Text(record.status == .failed
-                                 ? L("这次听写还没转写成功，删除后录音也会删掉，无法再重试。",
-                                     "It was never transcribed. Its recording is deleted too, so it can't be retried.")
-                                 : L("录音也会一起删除，之后无法重新转写。",
-                                     "Its recording is deleted too, so it can't be re-transcribed."))
-                        }
-                }
-                .controlSize(.small)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
             }
+
+            CardDivider(inset: 0)
+
+            HStack(spacing: 8) {
+                Button {
+                    TextInserter.copyToClipboard(record.outputText)
+                    copied = true
+                    Task {
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        copied = false
+                    }
+                } label: {
+                    Label(copied ? L("已复制", "Copied") : L("复制", "Copy"), systemImage: copied ? "checkmark" : "doc.on.doc")
+                }
+                .disabled(record.outputText.isEmpty)
+                if files.isActive(record.id) {
+                    Button { files.cancel(record.id) } label: {
+                        Label(L("取消", "Cancel"), systemImage: "xmark.circle")
+                    }
+                } else if record.hasAudio, record.isFile {
+                    // A file goes back through the file queue: a long one mustn't hold up dictating.
+                    Button { files.retry(record) } label: {
+                        Label(L("重新转写", "Re-transcribe"), systemImage: "arrow.clockwise")
+                    }
+                    .help(L("用保存的音频重新转写", "Transcribes the saved audio again"))
+                } else if record.hasAudio, !record.isCommand {
+                    // An edit of a selection can't be run again without its selection, which isn't kept.
+                    Button { controller.retry(record, paste: false) } label: {
+                        Label(L("重新转写", "Re-transcribe"), systemImage: "arrow.clockwise")
+                    }
+                    .help(L("完成后复制到剪贴板", "Copies the result to the clipboard"))
+                }
+                if record.hasAudio {
+                    // Showing it in Finder on a click, saving a copy from the arrow: a button of its own would
+                    // squeeze Re-transcribe at the window's usual width.
+                    Menu {
+                        Button(L("在访达中显示录音", "Show recording in Finder")) { revealRecording() }
+                        Button(L("将录音另存为…", "Save recording…")) { saveRecording() }
+                            // Still being written while it records; a copy then would stop part way.
+                            .disabled(savingRecording || record.status == .recording || record.status == .processing)
+                    } label: {
+                        Image(systemName: savedRecording ? "checkmark" : "folder")
+                    } primaryAction: {
+                        revealRecording()
+                    }
+                    .fixedSize()
+                    .help(L("在访达中显示录音", "Show recording in Finder"))
+                    .accessibilityLabel(L("在访达中显示录音", "Show recording in Finder"))
+                }
+                Spacer()
+                Button(role: .destructive) {
+                    // Text alone goes straight away; a recording can't be got back, so that asks first.
+                    if record.hasAudio { confirmingDelete = true } else { history.delete(record) }
+                } label: { Image(systemName: "trash") }
+                    .disabled(files.isActive(record.id))
+                    .help(L("删除", "Delete"))
+                    .accessibilityLabel(L("删除", "Delete"))
+                    .confirmationDialog(L("删除这条听写？", "Delete this dictation?"), isPresented: $confirmingDelete) {
+                        Button(L("删除", "Delete"), role: .destructive) { history.delete(record) }
+                        Button(L("取消", "Cancel"), role: .cancel) {}
+                    } message: {
+                        Text(record.status == .failed
+                             ? L("这次听写还没转写成功，删除后录音也会删掉，无法再重试。",
+                                 "It was never transcribed. Its recording is deleted too, so it can't be retried.")
+                             : L("录音也会一起删除，之后无法重新转写。",
+                                 "Its recording is deleted too, so it can't be re-transcribed."))
+                    }
+            }
+            .controlSize(.small)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .frame(maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .alert(L("无法保存录音", "Couldn't save the recording"), isPresented: Binding(get: { saveFailure != nil }, set: { if !$0 { saveFailure = nil } })) {
             Button(L("好", "OK")) {}
         } message: {

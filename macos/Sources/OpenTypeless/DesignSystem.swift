@@ -9,7 +9,9 @@ enum Theme {
         startPoint: .topLeading, endPoint: .bottomTrailing
     )
     /// macOS 26 grouped-content radius.
-    static let cardRadius: CGFloat = 16
+    static let cardRadius: CGFloat = 14
+    /// How wide a page of settings gets: past this, rows only put more space between a title and its control.
+    static let formWidth: CGFloat = 720
 }
 
 /// The app's gradient tile with the waveform glyph.
@@ -61,21 +63,96 @@ struct Card<Content: View>: View {
                 RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.08))
             )
-            .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
     }
 }
 
+/// A "?" beside a title, holding what the page doesn't spell out. Pointing at it shows the text; clicking keeps it open
+/// until the next click, for reading at leisure (and for the keyboard and VoiceOver, which can't hover).
+struct HelpTip: View {
+    let text: String
+    /// What it explains, which VoiceOver says.
+    var topic: String? = nil
+    @State private var hovering = false
+    @State private var pinned = false
+    /// The change of `hovering` under way: passing over a "?" on the way elsewhere doesn't open it, and the pointer
+    /// crossing the gap between the "?" and the text doesn't close it.
+    @State private var settling: Task<Void, Never>?
+    /// When the popover last went away by itself, and whether it was pinned. A click outside a popover closes it as the
+    /// button goes down and then still reaches what's under it, and that may be this "?".
+    @State private var dismissed: (at: Date, wasPinned: Bool)?
+
+    var body: some View {
+        Button(action: click) {
+            Image(systemName: "questionmark.circle")
+                .font(.system(size: 12))
+                .foregroundStyle(hovering || pinned ? .secondary : .tertiary)
+                .contentShape(Rectangle().inset(by: -3))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(topic.map { L("关于「\($0)」", "About \($0)") } ?? L("说明", "More information"))
+        .accessibilityHint(text)
+        .onHover(perform: setHovering)
+        .popover(isPresented: Binding(get: { hovering || pinned }, set: { if !$0 { dismiss() } }), arrowEdge: .top) {
+            Text(text)
+                .font(.system(size: 12))
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: 280, alignment: .leading)
+                .padding(12)
+                .onHover(perform: setHovering)
+        }
+    }
+
+    private func setHovering(_ inside: Bool) {
+        settling?.cancel()
+        settling = Task {
+            try? await Task.sleep(nanoseconds: inside ? 120_000_000 : 150_000_000)
+            if !Task.isCancelled { hovering = inside }
+        }
+    }
+
+    private func dismiss() {
+        dismissed = (Date(), pinned)
+        hovering = false
+        pinned = false
+    }
+
+    private func click() {
+        if let dismissed, Date().timeIntervalSince(dismissed.at) < 0.5 {
+            pinned = !dismissed.wasPinned
+        } else {
+            pinned.toggle()
+        }
+        dismissed = nil
+    }
+}
+
+/// A section's title, with its explanation behind a "?".
+struct SectionTitle: View {
+    let title: String
+    var help: String? = nil
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+            if let help { HelpTip(text: help, topic: title) }
+        }
+        .padding(.leading, 4)
+    }
+}
+
+/// `help` explains the section; `footer` is for what needs noticing now, such as a warning.
 struct CardSection<Content: View>: View {
     let title: String
+    var help: String? = nil
     var footer: String? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.leading, 4)
+            SectionTitle(title: title, help: help)
             Card { content }
             if let footer {
                 Text(footer)
@@ -93,13 +170,17 @@ struct CardRow<Trailing: View>: View {
     var iconColor: Color = .accentColor
     let title: String
     var subtitle: String? = nil
+    var help: String? = nil
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
         HStack(spacing: 12) {
             if let icon { IconBadge(symbol: icon, color: iconColor, size: 24) }
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 13))
+                HStack(spacing: 5) {
+                    Text(title).font(.system(size: 13))
+                    if let help { HelpTip(text: help, topic: title) }
+                }
                 if let subtitle {
                     Text(subtitle)
                         .font(.system(size: 11.5))
@@ -111,15 +192,15 @@ struct CardRow<Trailing: View>: View {
             trailing
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(minHeight: 44)
+        .padding(.vertical, 9)
+        .frame(minHeight: 42)
     }
 }
 
 extension CardRow where Trailing == RowSwitch {
     /// A row ending in an on/off switch.
-    init(icon: String? = nil, iconColor: Color = .accentColor, title: String, subtitle: String? = nil, isOn: Binding<Bool>) {
-        self.init(icon: icon, iconColor: iconColor, title: title, subtitle: subtitle) { RowSwitch(title: title, isOn: isOn) }
+    init(icon: String? = nil, iconColor: Color = .accentColor, title: String, subtitle: String? = nil, help: String? = nil, isOn: Binding<Bool>) {
+        self.init(icon: icon, iconColor: iconColor, title: title, subtitle: subtitle, help: help) { RowSwitch(title: title, isOn: isOn) }
     }
 }
 
@@ -149,10 +230,10 @@ struct KeyCap: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: large ? 22 : 12, weight: .semibold, design: .rounded))
-            .padding(.horizontal, large ? 18 : 7)
-            .frame(minWidth: large ? 56 : 22, minHeight: large ? 50 : 22)
-            .glassEffect(.regular, in: .rect(cornerRadius: large ? 14 : 6))
+            .font(.system(size: large ? 17 : 12, weight: .semibold, design: .rounded))
+            .padding(.horizontal, large ? 14 : 7)
+            .frame(minWidth: large ? 44 : 22, minHeight: large ? 38 : 22)
+            .glassEffect(.regular, in: .rect(cornerRadius: large ? 11 : 6))
     }
 }
 

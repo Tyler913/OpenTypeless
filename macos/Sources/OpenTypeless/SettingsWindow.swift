@@ -20,20 +20,6 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         }
     }
 
-    var subtitle: String {
-        switch self {
-        case .home: return L("你用语音写了多少、省了多少时间、花了多少钱", "What you've dictated, the time it saved and what it cost")
-        case .general: return L("界面语言、开机启动与系统权限", "Language, startup and system permissions")
-        case .shortcut: return L("选择用来开始听写的按键", "Choose the key that starts dictation")
-        case .providers: return L("填写 API Key。语音转文字和文字整理可以使用不同的服务商。",
-                                  "Add API keys. Speech-to-text and clean-up can use different providers.")
-        case .models: return L("为语音转文字和文字整理分别选择模型", "Pick a model for each step")
-        case .style: return L("让整理结果更符合你的用词和习惯", "Teach the clean-up your terms and preferences")
-        case .apps: return L("在特定应用里听写时使用的设置", "Settings used when you dictate into a particular app")
-        case .history: return L("每次听写都会保存，失败的可以重试", "Every dictation is saved; failed ones can be retried")
-        }
-    }
-
     var symbol: String {
         switch self {
         case .home: return "house.fill"
@@ -44,19 +30,6 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .style: return "textformat"
         case .apps: return "square.grid.2x2.fill"
         case .history: return "clock.fill"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .home: return .blue
-        case .general: return .gray
-        case .shortcut: return .blue
-        case .providers: return .orange
-        case .models: return .purple
-        case .style: return .green
-        case .apps: return .teal
-        case .history: return .indigo
         }
     }
 }
@@ -112,10 +85,6 @@ struct SettingsSidebar: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var permissions = PermissionsMonitor.shared
 
-    private var version: String {
-        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String).map { "v\($0)" } ?? "dev"
-    }
-
     private var ready: Bool {
         settings.isConfigured(settings.sttProvider) && permissions.microphoneGranted && permissions.accessibilityGranted
     }
@@ -126,24 +95,15 @@ struct SettingsSidebar: View {
             set: { if let page = $0 { navigation.page = page } }
         )) {
             ForEach(SettingsPage.allCases) { page in
-                Label {
-                    Text(page.title)
-                } icon: {
-                    IconBadge(symbol: page.symbol, color: page.color, size: 22)
-                }
-                .padding(.vertical, 2)
-                .tag(page)
+                Label(page.title, systemImage: page.symbol).tag(page)
             }
         }
         .listStyle(.sidebar)
         .id(settings.appLanguage)
         .safeAreaInset(edge: .top, spacing: 0) {
             HStack(spacing: 10) {
-                AppTile(size: 34)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("OpenTypeless").font(.system(size: 14, weight: .semibold))
-                    Text(version).font(.system(size: 11)).foregroundStyle(.secondary)
-                }
+                AppTile(size: 28)
+                Text("OpenTypeless").font(.system(size: 14, weight: .semibold))
                 Spacer()
             }
             .padding(.horizontal, 16)
@@ -151,40 +111,55 @@ struct SettingsSidebar: View {
             .padding(.bottom, 12)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack {
-                StatusPill(text: ready ? L("一切就绪", "Ready") : L("需要完成设置", "Setup needed"),
-                           color: ready ? .green : .orange)
-                Spacer()
+            if !ready {
+                HStack {
+                    StatusPill(text: L("需要完成设置", "Setup needed"), color: .orange)
+                    Spacer()
+                }
+                .padding(16)
             }
-            .padding(16)
         }
     }
 }
 
-/// Title + subtitle + scrolling content, shared by every page.
-struct PageScaffold<Content: View>: View {
+/// The page's title, with an explanation behind a "?" and controls for the whole page at its end, above the content.
+/// Shared by every page.
+struct PageScaffold<Accessory: View, Content: View>: View {
     let page: SettingsPage
+    var help: String? = nil
     var scrolls = true
+    /// How wide the content gets; nil lets it fill the window, for pages that have use for the room.
+    var maxWidth: CGFloat? = Theme.formWidth
+    @ViewBuilder var accessory: Accessory
     @ViewBuilder var content: Content
 
     var body: some View {
-        let stack = VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(page.title).font(.system(size: 24, weight: .bold))
-                Text(page.subtitle).font(.system(size: 13)).foregroundStyle(.secondary)
+        let stack = VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 8) {
+                Text(page.title).font(.system(size: 22, weight: .bold))
+                if let help { HelpTip(text: help, topic: page.title) }
+                Spacer(minLength: 12)
+                accessory
             }
             content
         }
         .padding(.horizontal, 30)
-        .padding(.top, 12)
+        .padding(.top, 8)
         .padding(.bottom, 28)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: maxWidth.map { $0 + 60 } ?? .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
 
         if scrolls {
             ScrollView { stack }.scrollIndicators(.automatic)
         } else {
             stack.frame(maxHeight: .infinity, alignment: .top)
         }
+    }
+}
+
+extension PageScaffold where Accessory == EmptyView {
+    init(page: SettingsPage, help: String? = nil, scrolls: Bool = true, maxWidth: CGFloat? = Theme.formWidth, @ViewBuilder content: () -> Content) {
+        self.init(page: page, help: help, scrolls: scrolls, maxWidth: maxWidth, accessory: { EmptyView() }, content: content)
     }
 }
 
@@ -230,12 +205,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         sidebar.canCollapse = false
         let detail = NSSplitViewItem(viewController: NSHostingController(
             rootView: SettingsDetailView(navigation: navigation, controller: controller)))
-        detail.minimumThickness = 600
+        detail.minimumThickness = 640
         split.addSplitViewItem(sidebar)
         split.addSplitViewItem(detail)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 880, height: 620),
+            contentRect: NSRect(x: 0, y: 0, width: 960, height: 660),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -244,10 +219,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.title = "OpenTypeless"
         window.toolbar = NSToolbar(identifier: "settings")
-        window.toolbarStyle = .unified
+        window.toolbarStyle = .unifiedCompact
         window.contentViewController = split
-        window.setContentSize(NSSize(width: 880, height: 620))
-        window.contentMinSize = NSSize(width: 820, height: 520)
+        window.setContentSize(NSSize(width: 960, height: 660))
+        window.contentMinSize = NSSize(width: 860, height: 540)
         window.isReleasedWhenClosed = false
         return window
     }

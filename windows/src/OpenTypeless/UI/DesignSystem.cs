@@ -104,12 +104,31 @@ public static class Ui
     public static Brush Primary => Palette.Theme("TextFillColorPrimaryBrush");
 }
 
-/// <summary>The app's gradient tile with the waveform glyph (the same artwork as the app icon).</summary>
+/// <summary>
+/// The app's mark: three voice bars running into a text caret, so what you say becomes text at your cursor. The same
+/// geometry and colours as the app icon (scripts/make_icon.py draws that), in tile units (0…1, y down); the bars and
+/// the caret are all <see cref="Stroke"/> wide and centred on y = 0.5. The tray glyphs draw it too.
+/// </summary>
+public static class Logo
+{
+    /// <summary>Centre x and height of each voice bar.</summary>
+    public static readonly (double X, double Height)[] Bars = [(0.245, 0.26), (0.395, 0.50), (0.545, 0.34)];
+    public static readonly (double X, double Height) Caret = (0.725, 0.62);
+    public const double Stroke = 0.104;
+
+    /// <summary>Two colours, one per part: amber for the voice, crimson for the caret.</summary>
+    public static readonly Color VoiceColor = Color.FromArgb(255, 0xFF, 0xA0, 0x00);
+    public static readonly Color CaretColor = Color.FromArgb(255, 0xE8, 0x17, 0x3F);
+    public static readonly Color TileTop = Color.FromArgb(255, 0xFF, 0xFF, 0xFF);
+    public static readonly Color TileBottom = Color.FromArgb(255, 0xEE, 0xEE, 0xF2);
+
+    /// <summary>Horizontal centre of the whole mark, bars and caret.</summary>
+    public static double CenterX => (Bars[0].X - Stroke / 2 + Caret.X + Stroke / 2) / 2;
+}
+
+/// <summary>The app's tile: the mark on a white tile, the same artwork as the macOS app icon.</summary>
 public sealed class AppTile : UserControl
 {
-    /// <summary>Relative bar heights of the waveform, shared with the icon and tray glyphs.</summary>
-    public static readonly double[] Bars = [0.26, 0.6, 1.0, 0.55, 0.82, 0.33];
-
     private double _tileSize = 32;
     public double TileSize
     {
@@ -125,27 +144,44 @@ public sealed class AppTile : UserControl
     private void Render()
     {
         var size = _tileSize;
-        var glyph = size * 0.5;
-        var pitch = glyph / (Bars.Length - 0.35);
-        var barWidth = Math.Max(1.5, pitch * 0.5);
         var canvas = new Canvas { Width = size, Height = size };
-        var x0 = size / 2 - pitch * (Bars.Length - 1) / 2;
-        for (var i = 0; i < Bars.Length; i++)
+        foreach (var bar in Logo.Bars)
         {
-            var h = Math.Max(barWidth, glyph * Bars[i]);
-            var bar = new Rectangle { Width = barWidth, Height = h, RadiusX = barWidth / 2, RadiusY = barWidth / 2, Fill = new SolidColorBrush(Colors.White) };
-            Canvas.SetLeft(bar, x0 + i * pitch - barWidth / 2);
-            Canvas.SetTop(bar, size / 2 - h / 2);
-            canvas.Children.Add(bar);
+            canvas.Children.Add(Capsule(bar, size, Logo.VoiceColor));
         }
+        canvas.Children.Add(Capsule(Logo.Caret, size, Logo.CaretColor));
         Content = new Border
         {
             Width = size,
             Height = size,
             CornerRadius = new CornerRadius(size * 0.26),
-            Background = Palette.Brand(),
+            // A black hairline inside the edge, so the white tile holds on a white background.
+            BorderThickness = new Thickness(Math.Max(0.5, size * 0.006)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(18, 0, 0, 0)),
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0, 0),
+                EndPoint = new Windows.Foundation.Point(0, 1),
+                GradientStops = { new GradientStop { Color = Logo.TileTop, Offset = 0 }, new GradientStop { Color = Logo.TileBottom, Offset = 1 } },
+            },
             Child = canvas,
         };
+    }
+
+    private static Rectangle Capsule((double X, double Height) item, double size, Color color)
+    {
+        var width = Logo.Stroke * size;
+        var capsule = new Rectangle
+        {
+            Width = width,
+            Height = item.Height * size,
+            RadiusX = width / 2,
+            RadiusY = width / 2,
+            Fill = new SolidColorBrush(color),
+        };
+        Canvas.SetLeft(capsule, (item.X - Logo.Stroke / 2) * size);
+        Canvas.SetTop(capsule, (0.5 - item.Height / 2) * size);
+        return capsule;
     }
 }
 

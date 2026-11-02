@@ -1208,21 +1208,6 @@ private struct ModelField: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            TextField(L("模型 ID", "Model ID")))
-        .labelsHidden()
-        .textFieldStyle(.roundedBorder)
-        .multilineTextAlignment(.trailing)
-        .frame(width: 80)
-    }
-}
-
-/// Free-text model ID with a browse menu of the provider's models (grouped by vendor when long).
-private struct ModelField: View {
-    @Binding var text: String
-    let models: [APIClient.ModelInfo]
-
-    var body: some View {
-        HStack(spacing: 6) {
             TextField(L("模型 ID", "Model ID"), text: $text, prompt: Text(L("模型 ID", "Model ID")))
                 .labelsHidden()
                 .multilineTextAlignment(.leading)

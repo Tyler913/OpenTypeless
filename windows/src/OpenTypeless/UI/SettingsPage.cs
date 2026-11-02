@@ -52,7 +52,7 @@ public abstract class PageBase : UserControl
     private const double FormWidth = 784;
 
     /// <summary>The content of a page that scrolls.</summary>
-    protected readonly StackPanel Body = new() { Spacing = 20 };
+    protected readonly StackPanel Body = new() { Spacing = 28 };
     /// <summary>The content of a page that doesn't: it's given the height left under the title (a stack would let it grow without end).</summary>
     protected readonly Grid Fill = new();
     private readonly ContentPresenter _accessory = new() { VerticalAlignment = VerticalAlignment.Center };
@@ -66,7 +66,8 @@ public abstract class PageBase : UserControl
         var title = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6,
-            Children = { Ui.Text(page.Title(), 24, FontWeights.SemiBold) },
+            // Windows' TitleTextBlockStyle, as Settings' page titles.
+            Children = { Ui.Text(page.Title(), 28, FontWeights.SemiBold) },
         };
         if (help != null) title.Children.Add(new HelpTip(help, page.Title()));
         var header = new Grid { ColumnSpacing = 12 };
@@ -77,14 +78,14 @@ public abstract class PageBase : UserControl
         header.Children.Add(_accessory);
         if (scrolls)
         {
-            var stack = new StackPanel { Spacing = 20, Padding = new Thickness(32, 4, 32, 28), Children = { header, Body } };
+            var stack = new StackPanel { Spacing = 24, Padding = new Thickness(36, 6, 36, 36), Children = { header, Body } };
             if (formWidth) stack.MaxWidth = FormWidth;
             // In a grid so that the width limit centres it.
             Content = new ScrollViewer { Content = new Grid { Children = { stack } }, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         }
         else
         {
-            var grid = new Grid { Padding = new Thickness(32, 4, 32, 28), RowSpacing = 20 };
+            var grid = new Grid { Padding = new Thickness(36, 6, 36, 28), RowSpacing = 20 };
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             Grid.SetRow(Fill, 1);

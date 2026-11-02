@@ -4,6 +4,7 @@ using Microsoft.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
@@ -188,12 +189,15 @@ public sealed class AppTile : UserControl
 /// <summary>A grouped container with a hairline border (Windows 11 card).</summary>
 public static class Card
 {
+    /// <summary>The corner radius of Windows 11's settings cards (ControlCornerRadius).</summary>
+    public static CornerRadius Radius => Palette.Resource("ControlCornerRadius", new CornerRadius(4));
+
     public static Border Make(UIElement? child = null) => new()
     {
         Background = Palette.Theme("CardBackgroundFillColorDefaultBrush"),
         BorderBrush = Palette.Theme("CardStrokeColorDefaultBrush"),
         BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(8),
+        CornerRadius = Radius,
         Child = child,
     };
 }
@@ -290,22 +294,23 @@ internal sealed class TitleLine : UserControl
     }
 }
 
-/// <summary>Section title above a card. <see cref="Help"/> explains the section; the footer is for what needs noticing now, such as a warning.</summary>
-[ContentProperty(Name = nameof(Body))]
+/// <summary>
+/// A group of settings under a title, as in Windows 11 Settings: each row is a card of its own, 4 px from the next.
+/// <see cref="Help"/> explains the section; the footer is for what needs noticing now, such as a warning.
+/// </summary>
 public sealed class CardSection : UserControl
 {
-    private readonly TitleLine _title = new(Ui.Text("", 12, FontWeights.SemiBold, Ui.Secondary));
-    private readonly TextBlock _footer = Ui.Text("", 11.5, foreground: Ui.Secondary, wrap: true);
-    private readonly Border _card = Card.Make();
-    private readonly StackPanel _stack = new();
+    private readonly TitleLine _title = new(Ui.Text("", 14, FontWeights.SemiBold));
+    private readonly TextBlock _footer = Ui.Text("", 12, foreground: Ui.Secondary, wrap: true);
+    private readonly StackPanel _stack = new() { Spacing = 4 };
 
     public CardSection()
     {
-        _title.Margin = new Thickness(4, 0, 0, 0);
-        _footer.Margin = new Thickness(4, 0, 4, 0);
+        _title.Margin = new Thickness(1, 0, 0, 4);
+        _footer.Margin = new Thickness(1, 2, 4, 0);
         _footer.Visibility = Visibility.Collapsed;
-        _card.Child = _stack;
-        Content = new StackPanel { Spacing = 8, Children = { _title, _card, _footer } };
+        Body = new SectionBody(_stack);
+        Content = new StackPanel { Spacing = 4, Children = { _title, _stack, _footer } };
     }
 
     public string Title { get => _title.Label.Text; set => _title.Label.Text = value; }
@@ -322,35 +327,81 @@ public sealed class CardSection : UserControl
         }
     }
 
-    /// <summary>The rows inside the card.</summary>
-    public UIElementCollection Body => _stack.Children;
+    /// <summary>The rows, each put on a card of its own.</summary>
+    public SectionBody Body { get; }
 }
 
-/// <summary>A settings row: title, optional subtitle, and a control on the trailing edge. Onboarding adds an icon, as in Windows Settings.</summary>
+/// <summary>
+/// A section's rows. Each one added goes on its own card, which follows the row's visibility; a <see cref="CardDivider"/>
+/// has no card to divide and is left out.
+/// </summary>
+public sealed class SectionBody
+{
+    private readonly StackPanel _stack;
+
+    internal SectionBody(StackPanel stack) => _stack = stack;
+
+    /// <summary>How many have been added since the last <see cref="Clear"/>, dividers included.</summary>
+    public int Count { get; private set; }
+
+    public void Add(UIElement element)
+    {
+        Count++;
+        if (element is CardDivider) return;
+        var card = Card.Make(element);
+        card.Visibility = element.Visibility;
+        element.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, (sender, _) => card.Visibility = ((UIElement)sender).Visibility);
+        _stack.Children.Add(card);
+    }
+
+    public void Remove(UIElement element)
+    {
+        if (element is CardDivider)
+        {
+            Count = Math.Max(0, Count - 1);
+            return;
+        }
+        if (_stack.Children.OfType<Border>().FirstOrDefault(card => card.Child == element) is not { } holder) return;
+        holder.Child = null;
+        _stack.Children.Remove(holder);
+        Count = Math.Max(0, Count - 1);
+    }
+
+    public void Clear()
+    {
+        // Rows are added again after a rebuild, and a row can only have one parent.
+        foreach (var card in _stack.Children.OfType<Border>()) card.Child = null;
+        _stack.Children.Clear();
+        Count = 0;
+    }
+}
+
+/// <summary>A settings row: an icon, a title, an optional subtitle, and a control on the trailing edge, as in Windows Settings.</summary>
 [ContentProperty(Name = nameof(Trailing))]
 public sealed class CardRow : UserControl
 {
     /// <summary>20 px with 2 px either side, so rows line up with dividers inset by 50.</summary>
     private readonly FontIcon _icon = Ui.Icon("", 20);
     private string _glyph = "";
-    private readonly TitleLine _title = new(Ui.Text("", 13.5));
+    private readonly TitleLine _title = new(Ui.Text("", 14));
     private readonly TextBlock _subtitle = Ui.Text("", 12, foreground: Ui.Secondary, wrap: true);
-    private readonly ContentPresenter _trailing = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+    private readonly ContentPresenter _trailing = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0) };
     /// <summary>The accessible name this row gave its control, so a later title replaces it but a control's own name stays.</summary>
     private string? _givenName;
 
     public CardRow()
     {
-        _icon.Margin = new Thickness(2, 0, 2, 0);
+        // As a Windows 11 settings card: a 20 px icon, then the title 16 px on.
+        _icon.Margin = new Thickness(0, 0, 16, 0);
         _icon.VerticalAlignment = VerticalAlignment.Center;
         _icon.Visibility = Visibility.Collapsed;
         _subtitle.Visibility = Visibility.Collapsed;
         var text = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { _title, _subtitle } };
         var grid = new Grid
         {
-            Padding = new Thickness(14, 8, 14, 8),
-            MinHeight = 44,
-            ColumnSpacing = 12,
+            Padding = new Thickness(16, 10, 16, 10),
+            MinHeight = 62,
+            ColumnSpacing = 0,
             ColumnDefinitions =
             {
                 new ColumnDefinition { Width = GridLength.Auto },
@@ -522,7 +573,7 @@ public sealed class StatusPill : UserControl
     }
 }
 
-/// <summary>Tinted inline banner for warnings and hints, with the filled icon, like an InfoBar's.</summary>
+/// <summary>Tinted inline banner for warnings and hints, with the filled icon, like an InfoBar's (the tray panel's).</summary>
 [ContentProperty(Name = nameof(Trailing))]
 public sealed class Banner : UserControl
 {
@@ -584,6 +635,80 @@ public sealed class Banner : UserControl
         _icon.Foreground = Palette.Brush(_tint);
         _border.Background = Palette.Brush(_tint, 0.1);
         _border.BorderBrush = Palette.Brush(_tint, 0.3);
+    }
+}
+
+/// <summary>
+/// A message for what needs noticing now: the system's InfoBar, its severity from the tint (orange a warning, red an
+/// error, green a success, anything else information), with the app's icon where it says more than the severity's own.
+/// A button at the end becomes the InfoBar's action.
+/// </summary>
+public sealed class NoticeBar : UserControl
+{
+    private readonly InfoBar _bar = new() { IsOpen = true, IsClosable = false };
+    private string _glyph = "";
+    private Tint _tint = Tint.Orange;
+
+    public NoticeBar()
+    {
+        Content = _bar;
+        Update();
+    }
+
+    public NoticeBar(string glyph, Tint tint, string text, UIElement? trailing = null) : this()
+    {
+        Glyph = glyph;
+        Tint = tint;
+        Text = text;
+        Trailing = trailing;
+    }
+
+    public string Glyph
+    {
+        get => _glyph;
+        set
+        {
+            _glyph = value;
+            Update();
+        }
+    }
+
+    public string Text { get => _bar.Message; set => _bar.Message = value; }
+    public Tint Tint { get => _tint; set { _tint = value; Update(); } }
+
+    public object? Trailing
+    {
+        get => (object?)_bar.ActionButton ?? _bar.Content;
+        set
+        {
+            if (value is ButtonBase button)
+            {
+                _bar.ActionButton = button;
+                _bar.Content = null;
+            }
+            else
+            {
+                _bar.ActionButton = null;
+                _bar.Content = value;
+            }
+        }
+    }
+
+    private void Update()
+    {
+        _bar.Severity = _tint switch
+        {
+            Tint.Orange => InfoBarSeverity.Warning,
+            Tint.Red => InfoBarSeverity.Error,
+            Tint.Green => InfoBarSeverity.Success,
+            _ => InfoBarSeverity.Informational,
+        };
+        // The severity's own icon for the usual cases; the app's for a key, a download, a retry…
+        var ownIcon = !string.IsNullOrEmpty(_glyph)
+            && _glyph != Glyphs.Warning && _glyph != Glyphs.Info && _glyph != Glyphs.ErrorBadge && _glyph != Glyphs.Completed;
+        _bar.IconSource = ownIcon
+            ? new FontIconSource { Glyph = Icons.Glyph(_glyph, 16, filled: true), FontFamily = Icons.Font, FontSize = 16 }
+            : null;
     }
 }
 

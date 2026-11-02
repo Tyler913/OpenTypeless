@@ -74,9 +74,8 @@ struct GeneralPage: View {
                 CardDivider()
                 CardRow(title: L("单次最长录音", "Maximum recording"),
                         help: L("到时间会自动结束并处理", "Stops and processes automatically at the limit")) {
-                    Stepper(L("\(settings.maxRecordingMinutes) 分钟", "\(settings.maxRecordingMinutes) min"),
-                            value: $settings.maxRecordingMinutes, in: 1...60)
-                        .fixedSize()
+                    ValueStepper(text: L("\(settings.maxRecordingMinutes) 分钟", "\(settings.maxRecordingMinutes) min"),
+                                 value: $settings.maxRecordingMinutes, range: 1...60)
                 }
             }
 
@@ -154,9 +153,8 @@ struct GeneralPage: View {
                         help: L("用来计算节省的时间（默认每分钟 100 字）", "Used to work out the time saved (100 wpm by default)") + "\n\n"
                             + L("「节省的时间」= 按这个速度打出同样的字所需的时间 − 实际说话的时间。",
                                 "“Time saved” is how long typing the same words at this speed would take, minus the time you spent talking.")) {
-                    Stepper(L("\(settings.typingWordsPerMinute) 字/分钟", "\(settings.typingWordsPerMinute) wpm"),
-                            value: $settings.typingWordsPerMinute, in: 10...300, step: 5)
-                        .fixedSize()
+                    ValueStepper(text: L("\(settings.typingWordsPerMinute) 字/分钟", "\(settings.typingWordsPerMinute) wpm"),
+                                 value: $settings.typingWordsPerMinute, range: 10...300, step: 5)
                 }
             }
 
@@ -271,6 +269,22 @@ private struct UpdatesSection: View {
                 Button(L("检查更新", "Check now")) { updater.checkNow() }.controlSize(.small)
             }
         }
+    }
+}
+
+/// A number and the stepper that changes it, side by side (a form would otherwise put the number at the row's start).
+private struct ValueStepper: View {
+    let text: String
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    var step = 1
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(text).monospacedDigit()
+            Stepper(text, value: $value, in: range, step: step).labelsHidden()
+        }
+        .fixedSize()
     }
 }
 
@@ -462,27 +476,32 @@ struct ShortcutPage: View {
                         .controlSize(.small)
                     }
                 }
-                .padding(14)
+                .rowPadding(.all, 14)
                 if let message = recorder.message {
                     Text(message)
                         .font(.system(size: 11.5))
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 10)
+                        .rowPadding(.horizontal, 14)
+                        .rowPadding(.bottom, 10)
                 }
                 CardDivider()
-                GlassEffectContainer(spacing: 8) {
-                    HStack(spacing: 8) {
-                        ForEach(Hotkey.presets, id: \.keyCode) { preset in
-                            PresetChip(hotkey: preset, selected: hotkey == preset) {
-                                recorder.stop()
-                                settings.hotkey = preset
-                            }
-                        }
+                // The common choices, one click each; a recorded shortcut selects none of them.
+                Picker(L("听写快捷键", "Dictation shortcut"), selection: Binding<Int>(
+                    get: { Hotkey.presets.firstIndex(of: hotkey) ?? -1 },
+                    set: { index in
+                        guard Hotkey.presets.indices.contains(index) else { return }
+                        recorder.stop()
+                        settings.hotkey = Hotkey.presets[index]
+                    }
+                )) {
+                    ForEach(Hotkey.presets.indices, id: \.self) { index in
+                        Text(Hotkey.presets[index].displayName).tag(index)
                     }
                 }
-                .padding(10)
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .rowPadding(.all, 10)
             }
 
             CommandModeSection(settings: settings)
@@ -620,23 +639,6 @@ private struct RecordingPlaceholder: View {
     }
 }
 
-private struct PresetChip: View {
-    let hotkey: Hotkey
-    let selected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(hotkey.displayName)
-                .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 3)
-        }
-        .buttonStyle(selected ? AnyPrimitiveButtonStyle(.glassProminent) : AnyPrimitiveButtonStyle(.glass))
-        .buttonBorderShape(.roundedRectangle(radius: 10))
-    }
-}
-
 /// Lets a view switch between two button styles at runtime.
 struct AnyPrimitiveButtonStyle: PrimitiveButtonStyle {
     private let make: (Configuration) -> AnyView
@@ -658,13 +660,11 @@ struct ProvidersPage: View {
         PageScaffold(page: .providers,
                      help: L("填写 API Key。语音转文字和文字整理可以使用不同的服务商。",
                              "Add API keys. Speech-to-text and clean-up can use different providers.")) {
-            VStack(spacing: 8) {
-                ForEach(ProviderID.allCases) { id in
-                    ProviderCard(settings: settings, id: id, expanded: Binding(
-                        get: { expanded.contains(id) },
-                        set: { if $0 { expanded.insert(id) } else { expanded.remove(id) } }
-                    ))
-                }
+            ForEach(ProviderID.allCases) { id in
+                ProviderCard(settings: settings, id: id, expanded: Binding(
+                    get: { expanded.contains(id) },
+                    set: { if $0 { expanded.insert(id) } else { expanded.remove(id) } }
+                ))
             }
         }
         .onAppear {
@@ -705,8 +705,8 @@ private struct ProviderCard: View {
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
+                .rowPadding(.horizontal, 14)
+                .rowPadding(.vertical, 11)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -718,7 +718,9 @@ private struct ProviderCard: View {
                         SecureField(id.keyPlaceholder, text: Binding(
                             get: { settings.savedAPIKey(for: id) },
                             set: { settings.setAPIKey($0, for: id) }
-                        ))
+                        ), prompt: Text(id.keyPlaceholder))
+                        .labelsHidden()
+                        .multilineTextAlignment(.leading)
                         .textFieldStyle(.roundedBorder)
                         Button(L("粘贴", "Paste")) {
                             if let text = NSPasteboard.general.string(forType: .string) { settings.setAPIKey(text, for: id) }
@@ -735,7 +737,9 @@ private struct ProviderCard: View {
                         TextField(id == .custom ? "http://localhost:8000/v1" : id.defaultBaseURL, text: Binding(
                             get: { settings.baseURL(for: id) },
                             set: { settings.setBaseURL($0, for: id) }
-                        ))
+                        ), prompt: Text(id == .custom ? "http://localhost:8000/v1" : id.defaultBaseURL))
+                        .labelsHidden()
+                        .multilineTextAlignment(.leading)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 12, design: .monospaced))
                         if id != .custom, settings.baseURL(for: id) != id.defaultBaseURL {
@@ -766,7 +770,7 @@ private struct ProviderCard: View {
                             .disabled(testing || settings.endpoint(for: id) == nil)
                     }
                 }
-                .padding(14)
+                .rowPadding(.all, 14)
             }
         }
     }
@@ -953,6 +957,15 @@ struct ModelsPage: View {
             backupChatModels = await loadModels(settings.polishBackupProvider, speech: false)
         }
         .task { PriceStore.shared.refreshIfStale() }
+        .task(id: settings.sttProvider == .openrouter ? settings.sttModel : "") {
+            if settings.sttProvider == .openrouter { await OpenRouterHosts.shared.load(settings.sttModel, settings: settings) }
+        }
+        .task(id: settings.polishProvider == .openrouter ? settings.polishModel : "") {
+            if settings.polishProvider == .openrouter { await OpenRouterHosts.shared.load(settings.polishModel, settings: settings) }
+        }
+        .task(id: settings.polishBackupProvider == .openrouter ? settings.polishBackupModel : "") {
+            if settings.polishBackupProvider == .openrouter { await OpenRouterHosts.shared.load(settings.polishBackupModel, settings: settings) }
+        }
         .onChange(of: settings.polishModel) { controller.refreshModelInfo() }
         .onChange(of: settings.polishProvider) { controller.refreshModelInfo() }
         .onChange(of: settings.polishBackupProvider) { controller.refreshModelInfo() }
@@ -1007,16 +1020,29 @@ private struct ProviderPicker: View {
     }
 }
 
+/// The hosts OpenRouter serves each model from, looked up by the Models page as its models change.
+@MainActor
+final class OpenRouterHosts: ObservableObject {
+    static let shared = OpenRouterHosts()
+    @Published private(set) var hosts: [String: [APIClient.ModelHost]] = [:]
+
+    func load(_ model: String, settings: AppSettings) async {
+        guard let endpoint = settings.endpoint(for: .openrouter) else { return }
+        hosts[model] = (try? await APIClient(endpoint: endpoint).listHosts(model: model)) ?? []
+    }
+}
+
 /// Which company serves an OpenRouter clean-up model: whichever answers fastest, or one the user picks. Shown only when
 /// the model has more than one host (or one was picked before).
 private struct HostRow: View {
     @ObservedObject var settings: AppSettings
     let model: String
-    @State private var hosts: [APIClient.ModelHost] = []
+    @ObservedObject private var cache = OpenRouterHosts.shared
+    private var hosts: [APIClient.ModelHost] { cache.hosts[model] ?? [] }
 
     var body: some View {
-        // A stack rather than a Group: an empty Group is no view at all, so its task would never run.
-        VStack(spacing: 0) {
+        // Nothing at all without a choice to show, so a settings form has no empty row for it. The page loads the hosts.
+        Group {
             if hosts.count > 1 || chosen != nil {
                 CardDivider()
                 CardRow(title: L("托管方", "Host"), help: subtitle) {
@@ -1043,11 +1069,6 @@ private struct HostRow: View {
                     .fixedSize()
                 }
             }
-        }
-        .task(id: model) {
-            hosts = []
-            guard let endpoint = settings.endpoint(for: .openrouter) else { return }
-            hosts = (try? await APIClient(endpoint: endpoint).listHosts(model: model)) ?? []
         }
     }
 
@@ -1083,22 +1104,18 @@ private struct HostRow: View {
 private struct SpeechHostRow: View {
     @ObservedObject var settings: AppSettings
     let model: String
-    @State private var hosts: [APIClient.ModelHost] = []
+    @ObservedObject private var cache = OpenRouterHosts.shared
+    private var hosts: [APIClient.ModelHost] { cache.hosts[model] ?? [] }
 
     var body: some View {
-        // A stack rather than a Group: an empty Group is no view at all, so its task would never run.
-        VStack(spacing: 0) {
+        // Nothing at all without a choice to show, so a settings form has no empty row for it. The page loads the hosts.
+        Group {
             if hosts.count > 1 {
                 CardDivider()
                 CardRow(title: L("托管方", "Host"), help: subtitle) {
                     Text(L("自动（按价格）", "Automatic (by price)")).font(.system(size: 12)).foregroundStyle(.secondary)
                 }
             }
-        }
-        .task(id: model) {
-            hosts = []
-            guard let endpoint = settings.endpoint(for: .openrouter) else { return }
-            hosts = (try? await APIClient(endpoint: endpoint).listHosts(model: model)) ?? []
         }
     }
 
@@ -1176,7 +1193,8 @@ private struct PriceRow: View {
                 price[keyPath: keyPath] = value.map { max(0, $0) }
                 settings.setCustomPrice(provider, model, price)
             }
-        ), format: .number.precision(.fractionLength(0...6)))
+        ), format: .number.precision(.fractionLength(0...6)), prompt: Text(verbatim: "$"))
+        .labelsHidden()
         .textFieldStyle(.roundedBorder)
         .multilineTextAlignment(.trailing)
         .frame(width: 80)
@@ -1190,7 +1208,9 @@ private struct ModelField: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            TextField(L("模型 ID", "Model ID"), text: $text)
+            TextField(L("模型 ID", "Model ID"), text: $text, prompt: Text(L("模型 ID", "Model ID")))
+                .labelsHidden()
+                .multilineTextAlignment(.leading)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12, design: .monospaced))
                 .frame(width: 270)
@@ -1275,8 +1295,8 @@ struct StylePage: View {
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
+                            .rowPadding(.horizontal, 14)
+                            .rowPadding(.vertical, 9)
                     }
                     .buttonStyle(HoverButtonStyle(cornerRadius: Theme.cardRadius))
                 }
@@ -1324,8 +1344,8 @@ struct StylePage: View {
             Spacer()
         }
         .controlSize(.small)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .rowPadding(.horizontal, 12)
+        .rowPadding(.vertical, 8)
         // On the row rather than the page, which already has the import confirmation: one alert per view.
         .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } }), presenting: notice) { _ in
             Button(L("好", "OK")) {}
@@ -1442,7 +1462,9 @@ private struct TranslationSection: View {
                     CardRow(title: L("语言", "Language"),
                             help: L("用它的名字，比如 Italiano、繁體中文、Tiếng Việt",
                                     "By its name: Italiano, 繁體中文, Tiếng Việt…")) {
-                        TextField(L("语言", "Language"), text: $settings.translationOtherLanguage)
+                        TextField(L("语言", "Language"), text: $settings.translationOtherLanguage, prompt: Text(L("语言", "Language")))
+                            .labelsHidden()
+                            .multilineTextAlignment(.leading)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 180)
                     }
@@ -1472,15 +1494,16 @@ struct NoteEditor: View {
         TextEditor(text: $text)
             .font(.system(size: 13))
             .scrollContentBackground(.hidden)
-            .padding(10)
+            .rowPadding(.all, 10)
             .frame(height: height)
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     Text(placeholder)
                         .font(.system(size: 13))
                         .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 15)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 5)
+                        .rowPadding(.horizontal, 10)
+                        .rowPadding(.vertical, 10)
                         .allowsHitTesting(false)
                 }
             }
@@ -1519,8 +1542,8 @@ private struct SnippetList: View {
                 Button { editing = Snippet(trigger: "", expansion: "") } label: {
                     Label(L("添加快捷短语", "Add Snippet"), systemImage: "plus")
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .rowPadding(.horizontal, 14)
+                        .rowPadding(.vertical, 10)
                 }
                 .buttonStyle(HoverButtonStyle(cornerRadius: Theme.cardRadius))
             }
@@ -1554,8 +1577,8 @@ private struct SnippetRow: View {
                 .help(L("删除", "Delete"))
                 .accessibilityLabel(L("删除", "Delete"))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .rowPadding(.horizontal, 14)
+        .rowPadding(.vertical, 8)
     }
 }
 
@@ -1587,7 +1610,9 @@ private struct SnippetEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField(L("触发词，比如：我的邮箱", "Trigger, e.g. my email"), text: $trigger)
+            TextField(L("触发词，比如：我的邮箱", "Trigger, e.g. my email"), text: $trigger, prompt: Text(L("触发词，比如：我的邮箱", "Trigger, e.g. my email")))
+                .labelsHidden()
+                .multilineTextAlignment(.leading)
                 .textFieldStyle(.roundedBorder)
                 .onChange(of: trigger) {
                     if trigger.count > SnippetExpander.maxTriggerLength { trigger = String(trigger.prefix(SnippetExpander.maxTriggerLength)) }
@@ -1628,8 +1653,8 @@ private struct SnippetEditor: View {
             }
             .controlSize(.small)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .rowPadding(.horizontal, 14)
+        .rowPadding(.vertical, 10)
     }
 }
 
@@ -1648,8 +1673,8 @@ private struct LearnedTermRow: View {
                 .buttonStyle(.borderless).foregroundStyle(.secondary)
                 .help(L("从词汇表删除，以后不再自动学习", "Remove from the vocabulary and never learn it again"))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .rowPadding(.horizontal, 14)
+        .rowPadding(.vertical, 8)
     }
 }
 

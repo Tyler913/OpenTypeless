@@ -78,7 +78,7 @@ public sealed class StylePage : PageBase
         // Translation: the rows past the switch show while it's on, the language's name only for another language.
         var enabled = new ToggleSwitch { IsOn = _settings.TranslationEnabled, OnContent = "", OffContent = "", MinWidth = 0 };
         enabled.Toggled += (_, _) => _settings.TranslationEnabled = enabled.IsOn;
-        _translationMode = new CardRow { Title = L("翻译模式", "Translation mode"), Trailing = enabled };
+        _translationMode = new CardRow { Glyph = Glyphs.Translate, Title = L("翻译模式", "Translation mode"), Trailing = enabled };
         _translation.Body.Add(_translationMode);
 
         string[] codes = [.. TranslationLanguages.All.Select(l => l.Code()), AppSettings.OtherTranslationLanguage];
@@ -88,14 +88,14 @@ public sealed class StylePage : PageBase
         language.SelectedIndex = Math.Max(0, Array.IndexOf(codes, _settings.TranslationLanguage));
         language.SelectionChanged += (_, _) => _settings.TranslationLanguage = codes[Math.Max(0, language.SelectedIndex)];
         AddTranslationDetail(new CardDivider());
-        AddTranslationDetail(new CardRow { Title = L("翻译成", "Translate into"), Trailing = language });
+        AddTranslationDetail(new CardRow { Glyph = Glyphs.Translate, Title = L("翻译成", "Translate into"), Trailing = language });
 
         var otherName = new TextBox { Text = _settings.TranslationOtherLanguage, Width = 180, PlaceholderText = L("语言", "Language") };
         otherName.TextChanged += (_, _) => _settings.TranslationOtherLanguage = otherName.Text;
         _otherLanguage.Add(new CardDivider());
         _otherLanguage.Add(new CardRow
         {
-            Title = L("语言", "Language"),
+            Glyph = Glyphs.Language, Title = L("语言", "Language"),
             Help = L("用它的名字，比如 Italiano、繁體中文、Tiếng Việt", "By its name: Italiano, 繁體中文, Tiếng Việt…"),
             Trailing = otherName,
         });
@@ -109,7 +109,7 @@ public sealed class StylePage : PageBase
         AddTranslationDetail(new CardDivider());
         AddTranslationDetail(new CardRow
         {
-            Title = L("切换键", "Switch key"),
+            Glyph = Glyphs.Shift, Title = L("切换键", "Switch key"),
             Help = L("按住听写快捷键时按下它（左右两边都可以）", "Pressed while you hold the dictation shortcut (either side)"),
             Trailing = chord,
         });
@@ -282,7 +282,7 @@ public sealed class StylePage : PageBase
         context.Toggled += (_, _) => _settings.UseCursorContext = context.IsOn;
         _spelling.Body.Add(new CardRow
         {
-            Title = L("参考光标附近的文字拼写名字", "Use text around the cursor to spell names"),
+            Glyph = Glyphs.ScanText, Title = L("参考光标附近的文字拼写名字", "Use text around the cursor to spell names"),
             Help = L("开始录音时，读取你正在输入的文本框里光标前后最多 1500 个字符，连同转写一起发给文字整理模型，只用来把你说到的名字和术语拼成那里的写法，不会把其中的内容抄进你的文字。密码框永远不会读取，这些文字也不会保存在历史记录里。",
                      "When recording starts, up to 1,500 characters around your cursor in the field you're dictating into are read and sent with the transcript to your clean-up models, only so that the names and terms you say are spelled the way they appear there. Nothing from it is copied into your text. Password fields are never read, and the text isn't kept in History."),
             Trailing = context,
@@ -292,7 +292,7 @@ public sealed class StylePage : PageBase
         toggle.Toggled += (_, _) => _settings.LearnFromEdits = toggle.IsOn;
         _spelling.Body.Add(new CardRow
         {
-            Title = L("从我的修改中学习", "Learn from my corrections"),
+            Glyph = Glyphs.Lightbulb, Title = L("从我的修改中学习", "Learn from my corrections"),
             Help = L("粘贴后如果你改了某个识别错的词（比如把 TypeList 改成 Typeless），离开输入框或发送后会自动把它加进词汇表。能读取的输入框直接比较前后内容；读不到的会跟随你粘贴后的按键，但用中文、日文、韩文输入法打的字跟随不了。只学发音相近的改动，不学改写、改数字和普通词替换。一切都在本机完成。",
                      "If you fix a misrecognised word after pasting (say TypeList → Typeless), it's added to the vocabulary once you leave the field or send. Where the field can be read, its text is compared; where it can't, the keys you press after the paste are followed, though not text typed with a Chinese, Japanese or Korean input method. Only sound-alike fixes are learned, never rewrites, changed numbers or ordinary word swaps. All of it stays on this PC."),
             Trailing = toggle,
@@ -369,7 +369,7 @@ public sealed class StylePage : PageBase
             first.Click += (_, _) => Edit(new Snippet());
             _snippets.Body.Add(new CardRow
             {
-                Title = L("还没有快捷短语", "No snippets yet"),
+                Glyph = Glyphs.TextExpand, Title = L("还没有快捷短语", "No snippets yet"),
                 Subtitle = L("例如：说「我的邮箱」，插入 name@example.com", "For example, say “my email” to insert name@example.com"),
                 Trailing = first,
             });

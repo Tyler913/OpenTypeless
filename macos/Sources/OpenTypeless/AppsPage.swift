@@ -21,6 +21,8 @@ struct AppsPage: View {
                              "Add an app to give it its own settings: send messages right away in Slack, say, or a more formal tone in your email app. Everywhere else your usual settings apply.")
                          + "\n\n" + L("开始录音时在最前面的应用决定用哪个配置，松开按键前换到别的应用也不变。配置里设为「默认」的项目跟随你平时的设置。",
                                        "The app in front when you start recording decides which profile is used, even if you switch apps before you finish. Whatever a profile leaves on Default follows your usual settings.")) {
+            if !settings.appProfiles.isEmpty { addButton }
+        } content: {
             if settings.appProfiles.isEmpty {
                 Card {
                     VStack(spacing: 8) {
@@ -38,17 +40,11 @@ struct AppsPage: View {
                     .padding(.horizontal, 16)
                 }
             } else {
-                VStack(spacing: 8) {
-                    ForEach(settings.appProfiles) { profile in
-                        AppProfileCard(settings: settings, profile: profile, expanded: Binding(
-                            get: { expanded.contains(profile.id) },
-                            set: { if $0 { expanded.insert(profile.id) } else { expanded.remove(profile.id) } }
-                        ))
-                    }
-                }
-                HStack {
-                    addButton
-                    Spacer()
+                ForEach(settings.appProfiles) { profile in
+                    AppProfileCard(settings: settings, profile: profile, expanded: Binding(
+                        get: { expanded.contains(profile.id) },
+                        set: { if $0 { expanded.insert(profile.id) } else { expanded.remove(profile.id) } }
+                    ))
                 }
             }
         }
@@ -205,8 +201,8 @@ private struct AppProfileCard: View {
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
+                .rowPadding(.horizontal, 14)
+                .rowPadding(.vertical, 9)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -255,7 +251,7 @@ private struct AppProfileCard: View {
                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.04)))
                         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
                 }
-                .padding(14)
+                .rowPadding(.all, 14)
                 // Only used while the text is cleaned up.
                 .disabled(!(profile.polish ?? settings.polishEnabled))
                 .opacity(profile.polish ?? settings.polishEnabled ? 1 : 0.5)
@@ -270,8 +266,8 @@ private struct AppProfileCard: View {
                     }
                     .controlSize(.small)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .rowPadding(.horizontal, 14)
+                .rowPadding(.vertical, 10)
             }
         }
         .task(id: profile.app) { icon = await AppIcons.icon(for: profile.app) }

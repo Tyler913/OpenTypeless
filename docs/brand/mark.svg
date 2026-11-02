@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1110" height="1168" viewBox="0 0 1109.68 1167.74">
   <title>OpenTypeless</title>
-  <rect x="83.871" y="374.194" width="167.742" height="419.355" rx="83.871" fill="#FFB000"/>
-  <rect x="325.806" y="180.645" width="167.742" height="806.452" rx="83.871" fill="#FF8A00"/>
-  <rect x="567.742" y="309.677" width="167.742" height="548.387" rx="83.871" fill="#FF5A1F"/>
-  <rect x="858.065" y="83.871" width="167.742" height="1000" rx="83.871" fill="#EE1B45"/>
+  <rect x="83.871" y="374.194" width="167.742" height="419.355" rx="83.871" fill="#FFA000"/>
+  <rect x="325.806" y="180.645" width="167.742" height="806.452" rx="83.871" fill="#FFA000"/>
+  <rect x="567.742" y="309.677" width="167.742" height="548.387" rx="83.871" fill="#FFA000"/>
+  <rect x="858.065" y="83.871" width="167.742" height="1000" rx="83.871" fill="#E8173F"/>
 </svg>

@@ -6,12 +6,11 @@
   <img src="app-icon.svg" width="140" alt="OpenTypeless app icon">
 </p>
 
-**Voice → caret.** Three voice bars run into a text caret: what you say becomes text at your cursor. The bars step
-from amber through tangerine to vermilion as the voice warms up; the caret, the tallest stroke and set a little apart,
-is crimson. It is four round-ended strokes of one width and nothing else, so it reads the same from a 16 px tray icon
-to a 1024 px Dock icon.
+**Voice → caret.** Three voice bars run into a text caret: what you say becomes text at your cursor. Two colours, one
+per part: the voice is amber, the caret (the tallest stroke, set a little apart) is crimson. It is four round-ended
+strokes of one width and nothing else, so it reads the same from a 16 px tray icon to a 1024 px Dock icon.
 
-The mark stands on its own, with no tile: every colour holds on white and on black. The macOS icon puts it on a white
+The mark stands on its own, with no tile: both colours hold on white and on black. The macOS icon puts it on a white
 tile, like text on a page; Windows uses the bare mark, since Windows icons carry their own silhouette rather than sit
 on a plate.
 
@@ -31,15 +30,13 @@ colours. Change the artwork there, run `python3 scripts/make_icon.py`, and updat
 
 ## Colours
 
-| | Hex |
-|---|---|
-| Amber (bar 1) | `#FFB000` |
-| Tangerine (bar 2) | `#FF8A00` |
-| Vermilion (bar 3) | `#FF5A1F` |
-| Crimson (caret) | `#EE1B45` |
-| Tile | `#FFFFFF` to `#EEEEF2`, top to bottom, with a 7 % black hairline inside the edge |
+| | Hex | |
+|---|---|---|
+| Amber | `#FFA000` | The voice: all three bars |
+| Crimson | `#E8173F` | The caret |
+| Tile | `#FFFFFF` to `#EEEEF2` | Top to bottom, with a 7 % black hairline inside the edge |
 
-Each stroke is one flat colour; there are no gradients inside the mark.
+Two flat colours and no gradients inside the mark: one colour for the voice, one for the caret.
 
 ## Geometry
 
@@ -59,6 +56,7 @@ canvas (Apple's icon grid) with a soft drop shadow. In the bare Windows icon the
 ## Use
 
 - Keep clear space around the mark of at least one bar pitch (0.150 of the tile).
-- Keep the colours in order, amber to crimson, left to right; keep the caret the tallest stroke.
+- Keep the voice amber and the caret crimson, and the caret the tallest stroke; don't give the bars colours of their
+  own.
 - Don't put the coloured mark on orange or red backgrounds; use the one-colour version in white there.
 - Don't add a microphone, a speech bubble or an outline, and don't stretch, rotate or re-space the strokes.

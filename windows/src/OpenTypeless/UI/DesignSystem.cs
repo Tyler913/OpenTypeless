@@ -156,14 +156,9 @@ public static class Logo
     public static readonly (double X, double Height) Caret = (0.725, 0.62);
     public const double Stroke = 0.104;
 
-    /// <summary>Amber, tangerine and vermilion, left to right, as the voice warms up.</summary>
-    public static readonly Color[] BarColors =
-    [
-        Color.FromArgb(255, 0xFF, 0xB0, 0x00),
-        Color.FromArgb(255, 0xFF, 0x8A, 0x00),
-        Color.FromArgb(255, 0xFF, 0x5A, 0x1F),
-    ];
-    public static readonly Color CaretColor = Color.FromArgb(255, 0xEE, 0x1B, 0x45);
+    /// <summary>Two colours, one per part: amber for the voice, crimson for the caret.</summary>
+    public static readonly Color VoiceColor = Color.FromArgb(255, 0xFF, 0xA0, 0x00);
+    public static readonly Color CaretColor = Color.FromArgb(255, 0xE8, 0x17, 0x3F);
     public static readonly Color TileTop = Color.FromArgb(255, 0xFF, 0xFF, 0xFF);
     public static readonly Color TileBottom = Color.FromArgb(255, 0xEE, 0xEE, 0xF2);
 
@@ -190,9 +185,9 @@ public sealed class AppTile : UserControl
     {
         var size = _tileSize;
         var canvas = new Canvas { Width = size, Height = size };
-        for (var i = 0; i < Logo.Bars.Length; i++)
+        foreach (var bar in Logo.Bars)
         {
-            canvas.Children.Add(Capsule(Logo.Bars[i], size, Logo.BarColors[i]));
+            canvas.Children.Add(Capsule(bar, size, Logo.VoiceColor));
         }
         canvas.Children.Add(Capsule(Logo.Caret, size, Logo.CaretColor));
         Content = new Border

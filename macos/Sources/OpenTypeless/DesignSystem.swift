@@ -20,9 +20,9 @@ enum Logo {
     static let caret: (x: CGFloat, height: CGFloat) = (0.725, 0.62)
     static let stroke: CGFloat = 0.104
 
-    /// Amber, tangerine and vermilion, left to right, as the voice warms up.
-    static let barColors = [rgb(0xFFB000), rgb(0xFF8A00), rgb(0xFF5A1F)]
-    static let caretColor = rgb(0xEE1B45)
+    /// Two colours, one per part: amber for the voice, crimson for the caret.
+    static let voiceColor = rgb(0xFFA000)
+    static let caretColor = rgb(0xE8173F)
     static let tile = LinearGradient(colors: [rgb(0xFFFFFF), rgb(0xEEEEF2)], startPoint: .top, endPoint: .bottom)
 
     private static func rgb(_ hex: Int) -> Color {
@@ -97,7 +97,7 @@ struct AppTile: View {
             tile.fill(Logo.tile)
             tile.strokeBorder(Color.black.opacity(0.07), lineWidth: max(0.5, size * 0.006))
             ForEach(Logo.bars.indices, id: \.self) { i in
-                LogoStroke(item: Logo.bars[i]).fill(Logo.barColors[i])
+                LogoStroke(item: Logo.bars[i]).fill(Logo.voiceColor)
             }
             LogoStroke(item: Logo.caret).fill(Logo.caretColor)
         }

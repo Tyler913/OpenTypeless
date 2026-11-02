@@ -3,10 +3,10 @@
 
     python3 scripts/make_icon.py        (from anywhere; standard library only)
 
-The mark is three voice bars running into a text caret: what you say becomes text at your cursor. The bars step from
-amber through tangerine to vermilion as the voice warms up, and the caret, the tallest stroke, is crimson. The mark
-works on its own, with no tile, on light and dark backgrounds alike; the macOS icon and the in-app tiles put it on a
-white tile, like text on a page.
+The mark is three voice bars running into a text caret: what you say becomes text at your cursor. It has two colours,
+one per part: the voice bars are amber, the caret (the tallest stroke) is crimson. The mark works on its own, with no
+tile, on light and dark backgrounds alike; the macOS icon and the in-app tiles put it on a white tile, like text on a
+page.
 
 This file is the one source of the artwork: the in-app tiles (macos/.../DesignSystem.swift, windows/.../UI/
 DesignSystem.cs), the macOS menu-bar icon and the Windows tray icon draw the same geometry with the same numbers.
@@ -34,8 +34,8 @@ BARS = ((0.245, 0.26), (0.395, 0.50), (0.545, 0.34))  # (centre x, height) of th
 CARET = (0.725, 0.62)                             # the text caret: the tallest stroke, set a little apart
 TILE_RADIUS = 0.225                               # corner radius of the tile
 
-BAR_COLORS = ((0xFF, 0xB0, 0x00), (0xFF, 0x8A, 0x00), (0xFF, 0x5A, 0x1F))  # amber, tangerine, vermilion
-CARET_COLOR = (0xEE, 0x1B, 0x45)                  # crimson
+VOICE_COLOR = (0xFF, 0xA0, 0x00)                  # amber: every voice bar
+CARET_COLOR = (0xE8, 0x17, 0x3F)                  # crimson: the caret
 TILE_TOP = (0xFF, 0xFF, 0xFF)                     # tile gradient, top to bottom
 TILE_BOTTOM = (0xEE, 0xEE, 0xF2)
 EDGE_WIDTH, EDGE_ALPHA = 0.004, 0.07              # black hairline inside the tile's edge, so it holds on white
@@ -101,7 +101,7 @@ def mark_layout(t, cx, cy):
     offsets = [i * pitch for i in range(len(BARS))] + [(len(BARS) - 1) * pitch + gap]
     left = round(cx - (offsets[-1] + w) / 2)
     heights = [h for _, h in BARS] + [CARET[1]]
-    colors = list(BAR_COLORS) + [CARET_COLOR]
+    colors = [VOICE_COLOR] * len(BARS) + [CARET_COLOR]
     strokes = []
     for o, h, color in zip(offsets, heights, colors):
         hp = max(w, round(h * t))
@@ -222,7 +222,7 @@ def hexcolor(rgb):
 
 def svg_strokes(s, ox=0.0, oy=0.0, fills=None, bar_extra=""):
     """The four strokes in an `s`-unit tile whose top-left corner is at (ox, oy)."""
-    fills = fills or [hexcolor(c) for c in BAR_COLORS] + [hexcolor(CARET_COLOR)]
+    fills = fills or [hexcolor(VOICE_COLOR)] * len(BARS) + [hexcolor(CARET_COLOR)]
     out = []
     for i, ((x, h), fill) in enumerate(zip(list(BARS) + [CARET], fills)):
         extra = bar_extra if i < len(BARS) else ""

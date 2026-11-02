@@ -122,17 +122,15 @@ public sealed class HomePage : PageBase
         valueText.TextTrimming = TextTrimming.CharacterEllipsis;
         var captionText = Ui.Text(caption, 12, foreground: Ui.Secondary);
         captionText.TextTrimming = TextTrimming.CharacterEllipsis;
-        var label = new TitleLine(Ui.Text(title, 12.5, foreground: Ui.Secondary)) { Help = help, VerticalAlignment = VerticalAlignment.Center };
-        var heading = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 8,
-            Children = { IconTile(glyph, tint), label },
-        };
+        var label = new TitleLine(Ui.Text(title, 12.5, foreground: Ui.Secondary)) { Help = help };
+        var icon = IconTile(glyph, tint);
+        icon.HorizontalAlignment = HorizontalAlignment.Left;
+        icon.Margin = new Thickness(0, 0, 0, 10);
         var cell = new StackPanel
         {
             Spacing = 2,
             Padding = new Thickness(16, 14, 16, 14),
-            Children = { heading, new Border { Height = 8 }, valueText, captionText },
+            Children = { icon, label, valueText, captionText },
         };
         if (tooltip != null) ToolTipService.SetToolTip(cell, tooltip);
         var card = Card.Make(cell);

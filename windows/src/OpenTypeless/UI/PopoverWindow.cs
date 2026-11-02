@@ -173,8 +173,9 @@ public sealed class PopoverWindow : Window
     {
         var stack = new StackPanel { Spacing = 14, Padding = new Thickness(16, 16, 16, 12), Width = WidthDips };
         stack.Children.Add(Header());
+        stack.Children.Add(StatusModule());
         if (Warnings() is { } warnings) stack.Children.Add(warnings);
-        stack.Children.Add(Recent());
+        if (Recent() is { } recent) stack.Children.Add(recent);
         // The scroll viewer takes the initial focus, so no row opens with a keyboard focus ring.
         var scroll = new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, IsTabStop = true };
         scroll.Loaded += (_, _) => scroll.Focus(FocusState.Programmatic);
@@ -216,6 +217,63 @@ public sealed class PopoverWindow : Window
         Grid.SetColumn(pill, 2);
         grid.Children.Add(pill);
         return grid;
+    }
+
+    /// <summary>
+    /// What the app is doing, on a card like a Quick Settings tile: a glyph in a circle coloured by the state, and how to
+    /// dictate.
+    /// </summary>
+    private FrameworkElement StatusModule()
+    {
+        var (glyph, brush) = _controller.State switch
+        {
+            SessionController.SessionState.Recording => (Glyphs.Speech, Palette.Brush(Tint.Red)),
+            SessionController.SessionState.Processing => (Glyphs.Sparkle, Palette.Brush(Tint.Blue)),
+            _ => (Glyphs.Microphone, Palette.Brush(Tint.Accent)),
+        };
+        var circle = new Border
+        {
+            Width = 36,
+            Height = 36,
+            CornerRadius = new CornerRadius(18),
+            Background = brush,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new FontIcon
+            {
+                Glyph = Icons.Glyph(glyph, 18, filled: true),
+                FontFamily = Icons.Font,
+                FontSize = 18,
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        FrameworkElement title = _controller.State switch
+        {
+            SessionController.SessionState.Recording => Ui.Text(L("录音中", "Recording"), 14, FontWeights.SemiBold),
+            SessionController.SessionState.Processing => Ui.Text(L("处理中", "Processing"), 14, FontWeights.SemiBold),
+            _ => new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children =
+                {
+                    Centered(Ui.Text(L("按住", "Hold"), 14, FontWeights.SemiBold)),
+                    new KeyCaps { Caps = _settings.Hotkey.KeyCaps, VerticalAlignment = VerticalAlignment.Center },
+                    Centered(Ui.Text(L("说话", "and speak"), 14, FontWeights.SemiBold)),
+                },
+            },
+        };
+        var tip = Ui.Text(L("轻点一下进入免手持 · Esc 取消", "Tap once for hands-free · Esc to cancel"), 12, foreground: Ui.Secondary);
+        tip.TextTrimming = TextTrimming.CharacterEllipsis;
+        var text = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { title, tip } };
+        var grid = new Grid { ColumnSpacing = 12, Padding = new Thickness(12) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.Children.Add(circle);
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+        return Card.Make(grid);
     }
 
     private static TextBlock Centered(TextBlock text)
@@ -300,9 +358,10 @@ public sealed class PopoverWindow : Window
         return last is { Status: DictationStatus.Failed, HasAudio: true, IsFile: false, IsCommand: false } ? last : null;
     }
 
-    private FrameworkElement Recent()
+    private FrameworkElement? Recent()
     {
         var records = _history.Records.Where(r => r.OutputText.Length > 0).Take(5).ToList();
+        if (records.Count == 0) return null;
         var stack = new StackPanel { Spacing = 6 };
         var header = new Grid { Padding = new Thickness(4, 0, 4, 0) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -316,18 +375,6 @@ public sealed class PopoverWindow : Window
         }
         stack.Children.Add(header);
 
-        if (records.Count == 0)
-        {
-            // Nothing to show yet: how to make the first one.
-            var hold = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
-            hold.Children.Add(Centered(Ui.Text(L("按住", "Hold"), 12.5, foreground: Ui.Secondary)));
-            hold.Children.Add(new KeyCaps { Caps = _settings.Hotkey.KeyCaps, VerticalAlignment = VerticalAlignment.Center });
-            hold.Children.Add(Centered(Ui.Text(L("说话", "and speak"), 12.5, foreground: Ui.Secondary)));
-            var tip = Ui.Text(L("轻点一下进入免手持 · Esc 取消", "Tap once for hands-free · Esc to cancel"), 11, foreground: Ui.Tertiary);
-            tip.HorizontalAlignment = HorizontalAlignment.Center;
-            stack.Children.Add(new StackPanel { Spacing = 8, Margin = new Thickness(0, 14, 0, 14), Children = { hold, tip } });
-            return stack;
-        }
         var list = new StackPanel { Spacing = 1 };
         foreach (var record in records) list.Children.Add(RecentRow(record));
         stack.Children.Add(list);

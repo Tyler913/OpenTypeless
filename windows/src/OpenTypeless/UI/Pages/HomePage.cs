@@ -120,7 +120,8 @@ public sealed class HomePage : PageBase
     {
         var valueText = Ui.Text(value, 26, FontWeights.SemiBold);
         valueText.TextTrimming = TextTrimming.CharacterEllipsis;
-        var captionText = Ui.Text(caption, 12, foreground: Ui.Secondary);
+        var captionText = Ui.Text(caption, 12, foreground: Ui.Secondary, wrap: true);
+        captionText.MaxLines = 2;
         captionText.TextTrimming = TextTrimming.CharacterEllipsis;
         var label = new TitleLine(Ui.Text(title, 12.5, foreground: Ui.Secondary)) { Help = help };
         var icon = IconTile(glyph, tint);

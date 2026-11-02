@@ -327,7 +327,10 @@ struct HUDView: View {
     }
 
     private var capsule: some View {
-        content
+        // In a ZStack, so the modifiers below belong to one view whichever phase it shows. On `content` itself, a
+        // `switch`, each branch had its own: moving between them (hidden, controls, a notice) made a new glow, which
+        // bloomed again for the last recording, and the outgoing hidden branch bloomed round its 1 pt sliver.
+        ZStack { content }
             .frame(minHeight: Self.height)
             .glassEffect(Self.glass, in: .rect(cornerRadius: Self.height / 2))
             .glassEffectID("hud", in: glass)

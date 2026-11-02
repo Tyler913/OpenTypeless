@@ -530,7 +530,7 @@ public sealed class OnboardingWindow : Window
         {
             var add = new Button { Content = L("填写 API Key", "Add a key") };
             add.Click += (_, _) => Go(OnboardingStep.Provider);
-            panel.Children.Add(new Banner(Glyphs.Key, Tint.Orange, L("还没有填写 API Key，听写暂时用不了。", "There's no API key yet, so dictation can't work."), add));
+            panel.Children.Add(new NoticeBar(Glyphs.Key, Tint.Orange, L("还没有填写 API Key，听写暂时用不了。", "There's no API key yet, so dictation can't work."), add));
         }
 
         _tryBox = new TextBox

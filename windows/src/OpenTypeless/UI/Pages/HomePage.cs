@@ -48,7 +48,7 @@ public sealed class HomePage : PageBase
 
         if (ledger.IsEmpty)
         {
-            Body.Children.Add(new Banner(Glyphs.Info, Tint.Blue,
+            Body.Children.Add(new NoticeBar(Glyphs.Info, Tint.Blue,
                 L($"按住 {_settings.Hotkey.DisplayName} 说话，你的统计就会出现在这里。",
                   $"Hold {_settings.Hotkey.DisplayName} and talk. Your stats will show up here.")));
         }
@@ -94,7 +94,7 @@ public sealed class HomePage : PageBase
         {
             var button = new Button { Content = L("设置价格", "Set prices") };
             button.Click += (_, _) => _window.Navigate(SettingsPage.Models);
-            Body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange,
+            Body.Children.Add(new NoticeBar(Glyphs.Warning, Tint.Orange,
                 L($"有 {all.Unpriced} 次请求的模型没有价格，没有计入花费。", $"{all.Unpriced} requests used a model with no price, so they aren't in the spend."),
                 button));
         }

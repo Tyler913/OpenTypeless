@@ -573,24 +573,89 @@ public sealed class StatusPill : UserControl
     }
 }
 
+/// <summary>Tinted inline banner for warnings and hints, with the filled icon, like an InfoBar's (the tray panel's).</summary>
+[ContentProperty(Name = nameof(Trailing))]
+public sealed class Banner : UserControl
+{
+    private readonly FontIcon _icon = Ui.Icon("", 16);
+    private string _glyph = "";
+    private readonly TextBlock _text = Ui.Text("", 12.5, wrap: true);
+    private readonly ContentPresenter _trailing = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly Border _border = new() { CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 9, 12, 9), BorderThickness = new Thickness(1) };
+    private Tint _tint = Tint.Orange;
+
+    public Banner()
+    {
+        _icon.VerticalAlignment = VerticalAlignment.Center;
+        _text.VerticalAlignment = VerticalAlignment.Center;
+        var grid = new Grid
+        {
+            ColumnSpacing = 10,
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = GridLength.Auto },
+            },
+        };
+        Grid.SetColumn(_text, 1);
+        Grid.SetColumn(_trailing, 2);
+        grid.Children.Add(_icon);
+        grid.Children.Add(_text);
+        grid.Children.Add(_trailing);
+        _border.Child = grid;
+        Content = _border;
+        Update();
+    }
+
+    public Banner(string glyph, Tint tint, string text, UIElement? trailing = null) : this()
+    {
+        Glyph = glyph;
+        Tint = tint;
+        Text = text;
+        Trailing = trailing;
+    }
+
+    public string Glyph
+    {
+        get => _glyph;
+        set
+        {
+            _glyph = value;
+            Ui.SetGlyph(_icon, value, filled: true);
+        }
+    }
+
+    public string Text { get => _text.Text; set => _text.Text = value; }
+    public Tint Tint { get => _tint; set { _tint = value; Update(); } }
+    public object? Trailing { get => _trailing.Content; set => _trailing.Content = value; }
+
+    private void Update()
+    {
+        _icon.Foreground = Palette.Brush(_tint);
+        _border.Background = Palette.Brush(_tint, 0.1);
+        _border.BorderBrush = Palette.Brush(_tint, 0.3);
+    }
+}
+
 /// <summary>
 /// A message for what needs noticing now: the system's InfoBar, its severity from the tint (orange a warning, red an
 /// error, green a success, anything else information), with the app's icon where it says more than the severity's own.
 /// A button at the end becomes the InfoBar's action.
 /// </summary>
-public sealed class Banner : UserControl
+public sealed class NoticeBar : UserControl
 {
     private readonly InfoBar _bar = new() { IsOpen = true, IsClosable = false };
     private string _glyph = "";
     private Tint _tint = Tint.Orange;
 
-    public Banner()
+    public NoticeBar()
     {
         Content = _bar;
         Update();
     }
 
-    public Banner(string glyph, Tint tint, string text, UIElement? trailing = null) : this()
+    public NoticeBar(string glyph, Tint tint, string text, UIElement? trailing = null) : this()
     {
         Glyph = glyph;
         Tint = tint;

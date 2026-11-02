@@ -634,12 +634,12 @@ public sealed class HistoryPage : PageBase
         if (record.Status == DictationStatus.Cancelled)
         {
             var until = Formatting.ShortStamp(CancelPolicy.Expiry(record.Date));
-            body.Children.Add(new Banner(Glyphs.ErrorBadge, Tint.Gray,
+            body.Children.Add(new NoticeBar(Glyphs.ErrorBadge, Tint.Gray,
                 L($"已取消，没有插入。这条会保留到 {until}，之前可以复制或重新转写。",
                   $"Cancelled, so nothing was inserted. It's kept until {until} to copy or re-transcribe.")));
         }
         if (record.IsFile && record.SourceName is { } name) body.Children.Add(FileName(name, 12));
-        if (record.Error is { } error) body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, error));
+        if (record.Error is { } error) body.Children.Add(new NoticeBar(Glyphs.Warning, Tint.Orange, error));
         if (_files.Progress(record.Id) is { } progress)
         {
             var label = Ui.Text(progress.Label, 13, foreground: Ui.Secondary);
@@ -914,7 +914,7 @@ public sealed class HistoryPage : PageBase
             if (!configured)
             {
                 var name = _settings.SttProvider.DisplayName();
-                content.Children.Add(new Banner(Glyphs.Warning, Tint.Orange,
+                content.Children.Add(new NoticeBar(Glyphs.Warning, Tint.Orange,
                     L($"请先在设置里配置语音转文字服务商（{name}）", $"Set up the speech-to-text provider ({name}) in Settings first")));
             }
             content.Children.Add(Ui.Text(L("结果保存在历史记录里，不会粘贴。", "The text is kept in History; nothing is pasted."), 11.5,

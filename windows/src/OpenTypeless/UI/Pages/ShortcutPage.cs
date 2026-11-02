@@ -222,24 +222,24 @@ public sealed class ShortcutPage : PageBase
             actions.Body.Add(new CardRow { Glyph = Glyphs.Keyboard, Title = action.Title(), Help = action.Subtitle(), Trailing = ActionControls(action) });
         }
         Body.Children.Add(actions);
-        if (_actionRecorder.Message is { } actionMessage) Body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, actionMessage));
+        if (_actionRecorder.Message is { } actionMessage) Body.Children.Add(new NoticeBar(Glyphs.Warning, Tint.Orange, actionMessage));
         var actionShortcuts = ShortcutActions.All.Select(_settings.Shortcut).OfType<Hotkey>().ToList();
 
         if (hotkey.IsModifierOnly && hotkey.KeyCode == Hotkey.VK_RMENU)
         {
-            Body.Children.Add(new Banner(Glyphs.Info, Tint.Blue,
+            Body.Children.Add(new NoticeBar(Glyphs.Info, Tint.Blue,
                 L("在德语、法语等键盘布局里，右 Alt 是 AltGr，用来输入 @、€ 等字符。如果你要用它打字，请换一个快捷键。",
                   "On keyboard layouts such as German or French, Right Alt is AltGr and types characters like @ and €. If you use it for typing, pick another shortcut.")));
         }
         if (actionShortcuts.Any(shortcut => shortcut.BlocksAltGr))
         {
-            Body.Children.Add(new Banner(Glyphs.Info, Tint.Blue,
+            Body.Children.Add(new NoticeBar(Glyphs.Info, Tint.Blue,
                 L("在德语、法语等键盘布局里，Ctrl + Alt 加字母就是 AltGr，用来输入 @、€ 等字符，这个快捷键会挡住它们。如果你要用它们打字，请换一个快捷键。",
                   "On keyboard layouts such as German or French, Ctrl + Alt with a letter is AltGr, which types characters like @ and €, so this shortcut would block them. If you type those, pick another shortcut.")));
         }
         if (hotkey.ShadowsCommonShortcut || actionShortcuts.Any(shortcut => shortcut.ShadowsCommonShortcut))
         {
-            Body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange,
+            Body.Children.Add(new NoticeBar(Glyphs.Warning, Tint.Orange,
                 L("这个组合会在所有应用里覆盖同名的快捷键。", "This combination overrides the same shortcut in every app.")));
         }
     }

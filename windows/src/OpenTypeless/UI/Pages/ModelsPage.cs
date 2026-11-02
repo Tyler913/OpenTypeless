@@ -285,11 +285,11 @@ public sealed class ModelsPage : PageBase
         LoadModelsIfNeeded();
     }
 
-    private Banner SetupBanner(ProviderId id)
+    private NoticeBar SetupBanner(ProviderId id)
     {
         var button = new Button { Content = L("去填写", "Add key") };
         button.Click += (_, _) => _window.Navigate(SettingsPage.Providers);
-        return new Banner(Glyphs.Warning, Tint.Orange, L($"{id.DisplayName()} 还没有配置 API Key", $"{id.DisplayName()} has no API key yet"), button);
+        return new NoticeBar(Glyphs.Warning, Tint.Orange, L($"{id.DisplayName()} 还没有配置 API Key", $"{id.DisplayName()} has no API key yet"), button);
     }
 
     private DropDownButton ProviderPicker(ProviderId selection, IEnumerable<ProviderId> options, Action<ProviderId> onSelect)

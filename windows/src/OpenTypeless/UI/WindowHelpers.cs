@@ -8,12 +8,14 @@ using OpenTypeless.Native;
 namespace OpenTypeless.UI;
 
 /// <summary>
-/// Desktop Acrylic that stays "active" even when the window never takes focus. The stock backdrop falls back to
-/// a flat colour whenever its window is inactive, which a non-activating HUD always is.
+/// Mica that stays "active" even when the window never takes focus: the stock backdrop falls back to a flat colour
+/// whenever its window is inactive, which a non-activating HUD always is. Where Mica isn't supported (Windows 10) it's
+/// Desktop Acrylic instead, kept active the same way.
 /// </summary>
-public sealed class ActiveAcrylicBackdrop : SystemBackdrop
+public sealed class ActiveMicaBackdrop : SystemBackdrop
 {
-    private DesktopAcrylicController? _controller;
+    private MicaController? _mica;
+    private DesktopAcrylicController? _acrylic;
     private SystemBackdropConfiguration? _configuration;
     private ElementTheme? _theme;
 
@@ -35,17 +37,29 @@ public sealed class ActiveAcrylicBackdrop : SystemBackdrop
             IsInputActive = true,
             Theme = BackdropTheme(_theme ?? (xamlRoot.Content as FrameworkElement)?.ActualTheme ?? ElementTheme.Default),
         };
-        _controller = new DesktopAcrylicController { Kind = DesktopAcrylicKind.Thin };
-        _controller.AddSystemBackdropTarget(target);
-        _controller.SetSystemBackdropConfiguration(_configuration);
+        if (MicaController.IsSupported())
+        {
+            _mica = new MicaController { Kind = MicaKind.Base };
+            _mica.AddSystemBackdropTarget(target);
+            _mica.SetSystemBackdropConfiguration(_configuration);
+        }
+        else
+        {
+            _acrylic = new DesktopAcrylicController { Kind = DesktopAcrylicKind.Thin };
+            _acrylic.AddSystemBackdropTarget(target);
+            _acrylic.SetSystemBackdropConfiguration(_configuration);
+        }
     }
 
     protected override void OnTargetDisconnected(ICompositionSupportsSystemBackdrop target)
     {
         base.OnTargetDisconnected(target);
-        _controller?.RemoveSystemBackdropTarget(target);
-        _controller?.Dispose();
-        _controller = null;
+        _mica?.RemoveSystemBackdropTarget(target);
+        _mica?.Dispose();
+        _mica = null;
+        _acrylic?.RemoveSystemBackdropTarget(target);
+        _acrylic?.Dispose();
+        _acrylic = null;
         _configuration = null;
     }
 

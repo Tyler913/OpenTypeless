@@ -3,10 +3,11 @@ using System.Numerics;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
@@ -66,14 +67,14 @@ public sealed class HudController
         c is (>= 0x1100 and <= 0x115F) or (>= 0x2E80 and <= 0xA4CF) or (>= 0xAC00 and <= 0xD7A3) or (>= 0xF900 and <= 0xFAFF)
             or (>= 0xFE30 and <= 0xFE4F) or (>= 0xFF00 and <= 0xFF60) or (>= 0xFFE0 and <= 0xFFE6);
 
-    /// <summary>Transcribing and cleaning up, with the bar starting from empty.</summary>
+    /// <summary>Transcribing and cleaning up, with the ring round the ■ button starting from empty.</summary>
     public void ShowWorking(bool polishes)
     {
         Model.StartProgress(polishes);
         Show(new HudPhase.Working());
     }
 
-    /// <summary>The text went in: the bar runs to the end, then the capsule goes.</summary>
+    /// <summary>The text went in: the ring runs to the end, then the capsule goes.</summary>
     public void FinishWorking()
     {
         if (Model.Phase is not HudPhase.Working)
@@ -103,13 +104,14 @@ public sealed class HudController
 }
 
 /// <summary>
-/// Small Acrylic capsule near the bottom of the screen. Never takes focus or mouse clicks, so the target text
-/// field stays focused for the paste.
+/// Small Mica capsule near the bottom of the screen: ✕, a waveform and ↑. Never takes focus, so the
+/// target text field stays focused for the paste. Clicks go through to what's below, except on the capsule while it
+/// shows its ✕ and ↑ / ■ buttons.
 /// </summary>
 public sealed class HudWindow : Window
 {
     private const double HeightDips = 44;
-    /// <summary>Extra height for the live preview line above the level bars.</summary>
+    /// <summary>Extra height for the live preview line above the waveform.</summary>
     private const double PreviewDips = 26;
     private const double BottomMarginDips = 28;
     /// <summary>Space above and below a notice that wraps onto more lines.</summary>
@@ -117,25 +119,36 @@ public sealed class HudWindow : Window
     /// <summary>A notice's text: up to three lines this wide, so the end of an error (often what to do) still shows.</summary>
     private const double NoticeWidthDips = 340;
     private const int NoticeLines = 3;
+    /// <summary>
+    /// The window is cut to a capsule at the usual height, and to a rounded rectangle with the same corners when a
+    /// notice wraps or the preview shows (Windows itself would only round its corners by 8 pixels).
+    /// </summary>
+    private const double CornerDips = HeightDips / 2;
+    /// <summary>The ✕ and ↑ / ■ circles, their inset from the ends, the room either side of the waveform, and its width.</summary>
+    private const double ButtonDips = 26, ButtonInsetDips = 9, GapDips = 14, WaveDips = 64;
 
     private readonly HudModel _model;
-    private readonly ActiveAcrylicBackdrop _backdrop = new();
-    /// <summary>The processing bar behind <see cref="_root"/>, which holds the capsule's content.</summary>
+    private readonly ActiveMicaBackdrop _backdrop = new();
+    /// <summary>Holds <see cref="_root"/>, the capsule's content.</summary>
     private readonly Grid _frame = new();
-    private readonly Grid _root = new() { Padding = new Thickness(16, 0, 16, 0) };
-    private readonly Border _fill;
-    private readonly ScaleTransform _fillScale = new() { ScaleX = 0 };
+    private readonly Grid _root = new();
+    /// <summary>The glow round the capsule as a recording starts, in a window of its own behind this one.</summary>
+    private readonly HudGlow _glow = new();
+    /// <summary>A recording has started: the glow blooms once the capsule is placed and showing.</summary>
+    private bool _bloomPending;
     private readonly Stopwatch _frameClock = new();
     private TimeSpan _lastFrame;
     private bool _animating;
     private readonly LevelBars _bars;
-    private readonly TextBlock _elapsed = new() { FontSize = 13, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center };
+    /// <summary>The ring round the ■ button while working (a new one each time it's drawn).</summary>
+    private ProgressArc? _ring;
+    /// <summary>The phase drawn last, to see a recording start (and let the glow bloom).</summary>
+    private HudPhase? _rendered;
     private readonly TextBlock _preview = new()
     {
         FontSize = 13, MaxWidth = 380, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis,
-        HorizontalAlignment = HorizontalAlignment.Center,
+        HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(8, 0, 8, 0),
     };
-    private readonly DispatcherQueueTimer _clock;
     private readonly Win32.SUBCLASSPROC _subclass; // kept alive for the window's lifetime
     private bool _visible;
     private int _centerX = int.MinValue;
@@ -148,29 +161,20 @@ public sealed class HudWindow : Window
         Title = "OpenTypeless HUD";
         Hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         WindowHelpers.MakeFloating(this);
+        // No frame at all: the window region cuts the capsule out, and Windows would otherwise still draw its thin border
+        // (a white ring round the capsule).
+        if (AppWindow.Presenter is OverlappedPresenter presenter) presenter.SetBorderAndTitleBar(false, false);
+        var noBorder = Win32.DWMWA_COLOR_NONE;
+        Win32.DwmSetWindowAttribute(Hwnd, Win32.DWMWA_BORDER_COLOR, ref noBorder, sizeof(uint)); // Windows 11 only
         WindowHelpers.AddExtendedStyle(Hwnd, Win32.WS_EX_NOACTIVATE | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST);
         _subclass = Subclass;
         Win32.SetWindowSubclass(Hwnd, _subclass, 1, 0);
         SystemBackdrop = _backdrop;
 
         _bars = new LevelBars();
-        // Same-width digits, like the macOS timer's monospacedDigit(): the row doesn't shift every second.
-        Typography.SetNumeralAlignment(_elapsed, FontNumeralAlignment.Tabular);
         _root.VerticalAlignment = VerticalAlignment.Stretch;
-        _fill = new Border
-        {
-            RenderTransform = _fillScale,
-            RenderTransformOrigin = new Windows.Foundation.Point(0, 0.5),
-            IsHitTestVisible = false,
-            Visibility = Visibility.Collapsed,
-        };
-        _frame.Children.Add(_fill);
         _frame.Children.Add(_root);
         Content = _frame;
-
-        _clock = DispatcherQueue.CreateTimer();
-        _clock.Interval = TimeSpan.FromSeconds(0.5);
-        _clock.Tick += (_, _) => UpdateElapsed();
 
         _model.PhaseChanged += Render;
         _model.LevelsChanged += UpdateLevels;
@@ -182,8 +186,8 @@ public sealed class HudWindow : Window
     }
 
     /// <summary>
-    /// Windows switched between light and dark while the capsule exists: the acrylic follows, and the brushes picked
-    /// up in code (which don't change by themselves) are fetched again by redrawing.
+    /// Windows switched between light and dark while the capsule exists: the Mica follows, and the brushes picked up
+    /// in code (which don't change by themselves) are fetched again by redrawing.
     /// </summary>
     private void OnThemeChanged()
     {
@@ -204,72 +208,44 @@ public sealed class HudWindow : Window
             Win32.ShowWindow(Hwnd, Win32.SW_SHOWNOACTIVATE);
             Win32.SetWindowPos(Hwnd, Win32.HWND_TOPMOST, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
         }
+        if (_bloomPending)
+        {
+            _bloomPending = false;
+            _glow.Bloom(_placed, WindowHelpers.Scale(Hwnd), Hwnd);
+        }
     }
 
     public void HideHud()
     {
         _visible = false;
-        _clock.Stop();
+        _bloomPending = false;
+        _glow.Stop();
         SetAnimating(false);
         Win32.ShowWindow(Hwnd, Win32.SW_HIDE);
     }
 
+    /// <summary>Whether the capsule shows its ✕ and ↑ / ■ buttons (and so takes clicks on itself).</summary>
+    private bool HasButtons => _model.Phase is HudPhase.Recording or HudPhase.Working;
+
     private void Render()
     {
-        // The level bars, timer and preview line are reused: release them from the previous layout before rebuilding.
-        foreach (var old in _root.Children.OfType<Panel>())
+        // The waveform and preview line are reused: release them from the previous layout before rebuilding.
+        Release(_root);
+        var phase = _model.Phase;
+        var bloom = phase is HudPhase.Recording && _rendered is not HudPhase.Recording;
+        _rendered = phase;
+        var working = phase is HudPhase.Working;
+        _ring = null;
+        FrameworkElement row;
+        if (HasButtons)
         {
-            foreach (var inner in old.Children.OfType<Panel>()) inner.Children.Clear();
-            old.Children.Clear();
+            _root.Padding = new Thickness(ButtonInsetDips, 0, ButtonInsetDips, 0);
+            row = Controls(working);
         }
-        _root.Children.Clear();
-        _clock.Stop();
-        var working = _model.Phase is HudPhase.Working;
-        _fill.Visibility = working ? Visibility.Visible : Visibility.Collapsed;
-        SetAnimating(working);
-        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        switch (_model.Phase)
+        else
         {
-            case HudPhase.Recording:
-                row.Spacing = 10;
-                row.Children.Add(new Ellipse { Width = 7, Height = 7, Fill = Palette.Brush(Tint.Red), VerticalAlignment = VerticalAlignment.Center });
-                _bars.SetColor(Ui.Primary is SolidColorBrush primary ? primary.Color : _root.ActualTheme == ElementTheme.Light ? Colors.Black : Colors.White);
-                _bars.SetScale(WindowHelpers.Scale(Hwnd));
-                // A new recording starts from its own levels, not from the end of the previous one.
-                _bars.SetLevels(_model.Levels, animated: false);
-                row.Children.Add(_bars.Element);
-                row.Children.Add(_elapsed);
-                if (_model.Badge is { } recordingBadge) row.Children.Add(ModeBadge(recordingBadge));
-                UpdateElapsed();
-                _clock.Start();
-                break;
-            case HudPhase.Working:
-                row.Spacing = 10;
-                // About as wide as the recording row, so the capsule keeps its size when the key is released.
-                row.Children.Add(new Grid { Width = 128, Children = { HoppingDots() } });
-                if (_model.Badge is { } workingBadge) row.Children.Add(ModeBadge(workingBadge));
-                break;
-            case HudPhase.Copied:
-                row.Spacing = 8;
-                row.Children.Add(Ui.Icon(Glyphs.Paste, 14, Ui.Secondary));
-                row.Children.Add(Label(L("已复制到剪贴板", "Copied to clipboard")));
-                break;
-            case HudPhase.Learned:
-                row.Spacing = 8;
-                row.Children.Add(Ui.Icon(Glyphs.Dictionary, 14, Palette.Theme("AccentTextFillColorPrimaryBrush")));
-                row.Children.Add(Notice(HudController.Message(_model.Phase) ?? ""));
-                break;
-            case HudPhase.Answer:
-                // The start of it; the whole answer is on the clipboard.
-                row.Spacing = 8;
-                row.Children.Add(Ui.Icon(Glyphs.Message, 14, Palette.Theme("AccentTextFillColorPrimaryBrush")));
-                row.Children.Add(Notice(HudController.Message(_model.Phase) ?? ""));
-                break;
-            case HudPhase.Error error:
-                row.Spacing = 8;
-                row.Children.Add(Ui.Icon(Glyphs.Warning, 14, Palette.Brush(Tint.Orange)));
-                row.Children.Add(Notice(error.Message));
-                break;
+            _root.Padding = new Thickness(16, 0, 16, 0);
+            row = NoticeRow(phase);
         }
         if (ShowsPreview)
         {
@@ -280,7 +256,134 @@ public sealed class HudWindow : Window
         {
             _root.Children.Add(row);
         }
+        SetAnimating(working);
+        if (bloom) _bloomPending = true;
         if (_visible) Resize(position: false);
+    }
+
+    private static void Release(Panel panel)
+    {
+        foreach (var inner in panel.Children.OfType<Panel>()) Release(inner);
+        panel.Children.Clear();
+    }
+
+    /// <summary>
+    /// ✕, the waveform (dots riding a wave once the key is let go) and ↑ (■ while the text is on its way).
+    /// Recording and working are the same size, so the capsule doesn't move when the key is released; the
+    /// buttons stay at the ends when the preview line makes the capsule wider.
+    /// </summary>
+    private Grid Controls(bool working)
+    {
+        var row = new Grid { Height = HeightDips, VerticalAlignment = VerticalAlignment.Center };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        // A solid black circle (white in dark mode).
+        row.Children.Add(CircleButton(L("取消", "Cancel"), Ui.Primary,
+                                      Ui.Icon(Glyphs.Cancel, 10, Palette.Theme("TextOnAccentFillColorPrimaryBrush")), _model.RequestCancel));
+
+        var wave = new Grid { Width = WaveDips, Height = 20, VerticalAlignment = VerticalAlignment.Center };
+        if (working)
+        {
+            wave.Children.Add(WaveDots());
+        }
+        else
+        {
+            _bars.SetColor(Ui.Primary is SolidColorBrush primary ? primary.Color : _root.ActualTheme == ElementTheme.Light ? Colors.Black : Colors.White);
+            _bars.SetScale(WindowHelpers.Scale(Hwnd));
+            // A new recording starts from its own levels, not from the end of the previous one.
+            _bars.SetLevels(HudModel.Waveform(_model.Levels), animated: false);
+            wave.Children.Add(_bars.Element);
+        }
+        var middle = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(GapDips, 0, GapDips, 0),
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Children = { wave },
+        };
+        if (_model.Badge is { } badge) middle.Children.Add(ModeBadge(badge));
+        Grid.SetColumn(middle, 1);
+        row.Children.Add(middle);
+
+        Grid send;
+        if (working)
+        {
+            // ■, with a ring filling round it as the text comes back.
+            _ring = new ProgressArc(ButtonDips, Palette.Of(Tint.Accent));
+            var stop = new Grid { Width = ButtonDips, Height = ButtonDips };
+            stop.Children.Add(_ring.Element);
+            stop.Children.Add(new Rectangle
+            {
+                Width = 9, Height = 9, RadiusX = 2, RadiusY = 2, Stroke = Ui.Primary, StrokeThickness = 1.5,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            });
+            send = CircleButton(L("停止", "Stop"), Palette.Brush(Tint.Accent, 0.3), stop, _model.RequestCancel);
+        }
+        else
+        {
+            send = CircleButton(L("完成", "Done"), Palette.Brush(Tint.Accent, 0.3), Ui.Icon(Glyphs.ArrowUp, 12, Ui.Primary), _model.RequestFinish);
+        }
+        Grid.SetColumn(send, 2);
+        row.Children.Add(send);
+        return row;
+    }
+
+    /// <summary>A round button: dims while pressed, and acts on a click without activating the capsule.</summary>
+    private static Grid CircleButton(string label, Brush fill, FrameworkElement icon, Action action)
+    {
+        icon.HorizontalAlignment = HorizontalAlignment.Center;
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        var button = new Grid
+        {
+            Width = ButtonDips, Height = ButtonDips, VerticalAlignment = VerticalAlignment.Center,
+            // Transparent rather than none, so the corners outside the circle take the click too.
+            Background = new SolidColorBrush(Colors.Transparent),
+            // A click never moves keyboard focus here (nor shows a focus rectangle).
+            AllowFocusOnInteraction = false,
+            Children = { new Ellipse { Width = ButtonDips, Height = ButtonDips, Fill = fill }, icon },
+        };
+        AutomationProperties.SetName(button, label);
+        button.PointerPressed += (_, _) => button.Opacity = 0.7;
+        button.PointerReleased += (_, _) => button.Opacity = 1;
+        button.PointerExited += (_, _) => button.Opacity = 1;
+        button.PointerCaptureLost += (_, _) => button.Opacity = 1;
+        button.Tapped += (_, args) =>
+        {
+            args.Handled = true;
+            action();
+        };
+        return button;
+    }
+
+    private StackPanel NoticeRow(HudPhase phase)
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        switch (phase)
+        {
+            case HudPhase.Copied:
+                row.Children.Add(Ui.Icon(Glyphs.Paste, 14, Ui.Secondary));
+                row.Children.Add(Label(L("已复制到剪贴板", "Copied to clipboard")));
+                break;
+            case HudPhase.Learned:
+                row.Children.Add(Ui.Icon(Glyphs.Dictionary, 14, Palette.Theme("AccentTextFillColorPrimaryBrush"), filled: true));
+                row.Children.Add(Notice(HudController.Message(phase) ?? ""));
+                break;
+            case HudPhase.Answer:
+                // The start of it; the whole answer is on the clipboard.
+                row.Children.Add(Ui.Icon(Glyphs.Message, 14, Palette.Theme("AccentTextFillColorPrimaryBrush"), filled: true));
+                row.Children.Add(Notice(HudController.Message(phase) ?? ""));
+                break;
+            case HudPhase.Error error:
+                row.Children.Add(Ui.Icon(Glyphs.Warning, 14, Palette.Brush(Tint.Orange), filled: true));
+                row.Children.Add(Notice(error.Message));
+                break;
+        }
+        return row;
     }
 
     private bool ShowsPreview => _model.Phase is HudPhase.Recording && _model.Preview.Length > 0;
@@ -297,26 +400,15 @@ public sealed class HudWindow : Window
         }
     }
 
-    /// <summary>Starts or stops advancing the processing bar on every frame.</summary>
+    /// <summary>Starts or stops advancing the ring round the ■ button on every frame.</summary>
     private void SetAnimating(bool on)
     {
+        // Drawn again (a badge, the theme): the new ring picks up where the old one was.
+        _ring?.SetProgress(_model.Progress.Shown);
         if (on == _animating) return;
         _animating = on;
         if (on)
         {
-            // The accent colour may have changed since the last dictation.
-            var accent = Palette.Of(Tint.Accent);
-            _fill.Background = new LinearGradientBrush
-            {
-                StartPoint = new Windows.Foundation.Point(0, 0.5),
-                EndPoint = new Windows.Foundation.Point(1, 0.5),
-                GradientStops =
-                {
-                    new GradientStop { Color = Color.FromArgb(31, accent.R, accent.G, accent.B), Offset = 0 },
-                    new GradientStop { Color = Color.FromArgb(77, accent.R, accent.G, accent.B), Offset = 1 },
-                },
-            };
-            _fillScale.ScaleX = _model.Progress.Shown;
             _frameClock.Restart();
             _lastFrame = TimeSpan.Zero;
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnFrame;
@@ -330,54 +422,50 @@ public sealed class HudWindow : Window
     private void OnFrame(object? sender, object args)
     {
         var now = _frameClock.Elapsed;
-        _fillScale.ScaleX = _model.Progress.Tick((now - _lastFrame).TotalSeconds);
+        var shown = _model.Progress.Tick((now - _lastFrame).TotalSeconds);
         _lastFrame = now;
+        _ring?.SetProgress(shown);
     }
 
     /// <summary>
-    /// Three dots hopping in turn, like a voice still talking, while the text is on its way. The compositor runs the
-    /// hops, with the same rhythm as the macOS dots: each one hops for 0.36 s, 0.14 s after the one before, every 1.1 s.
+    /// Three dots riding a wave from left to right while the text is on its way. The compositor runs the
+    /// wave, the same as the macOS dots: 1.15 s long, each dot a fifth of it behind the one before.
     /// </summary>
-    private static StackPanel HoppingDots()
+    private static StackPanel WaveDots()
     {
         var dots = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 5, Height = 18,
+            Orientation = Orientation.Horizontal, Spacing = 3.5, Height = 20,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
         for (var i = 0; i < 3; i++)
         {
-            var dot = new Ellipse { Width = 6, Height = 6, Fill = Ui.Primary, Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center };
-            var delay = TimeSpan.FromSeconds(0.14 * i);
-            dot.Loaded += (_, _) => Hop(dot, delay);
+            var dot = new Ellipse { Width = 4, Height = 4, Fill = Ui.Primary, Opacity = 0.9, VerticalAlignment = VerticalAlignment.Center };
+            var index = i;
+            dot.Loaded += (_, _) => Wave(dot, index);
             dots.Children.Add(dot);
         }
         return dots;
     }
 
-    private static void Hop(UIElement dot, TimeSpan delay)
+    private static void Wave(UIElement dot, int index)
     {
-        const float period = 1.1f, top = 0.18f / period, landed = 0.36f / period;
+        const float period = 1.15f, lag = 0.2f, amplitude = 4.5f;
+        const int samples = 24;
         ElementCompositionPreview.SetIsTranslationEnabled(dot, true);
         var visual = ElementCompositionPreview.GetElementVisual(dot);
         var compositor = visual.Compositor;
-        var up = compositor.CreateCubicBezierEasingFunction(new Vector2(0.33f, 0), new Vector2(0.67f, 1));
-
-        ScalarKeyFrameAnimation Cycle(float rest, float peak)
+        var linear = compositor.CreateLinearEasingFunction();
+        var animation = compositor.CreateScalarKeyFrameAnimation();
+        // One wave, sampled finely enough to look smooth.
+        for (var k = 0; k <= samples; k++)
         {
-            var animation = compositor.CreateScalarKeyFrameAnimation();
-            animation.InsertKeyFrame(0, rest);
-            animation.InsertKeyFrame(top, peak, up);
-            animation.InsertKeyFrame(landed, rest, up);
-            animation.InsertKeyFrame(1, rest);
-            animation.Duration = TimeSpan.FromSeconds(period);
-            animation.DelayTime = delay;
-            animation.IterationBehavior = AnimationIterationBehavior.Forever;
-            return animation;
+            var t = (float)k / samples;
+            animation.InsertKeyFrame(t, -amplitude * MathF.Sin(2 * MathF.PI * (t - index * lag)), linear);
         }
-
-        visual.StartAnimation("Translation.Y", Cycle(0, -4.5f));
-        visual.StartAnimation("Opacity", Cycle(0.6f, 0.9f));
+        animation.Duration = TimeSpan.FromSeconds(period);
+        animation.IterationBehavior = AnimationIterationBehavior.Forever;
+        visual.StartAnimation("Translation.Y", animation);
     }
 
     private static TextBlock Label(string text) => new() { Text = text, FontSize = 13, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center };
@@ -407,13 +495,7 @@ public sealed class HudWindow : Window
         return block;
     }
 
-    private void UpdateLevels() => _bars.SetLevels(_model.Levels, animated: true);
-
-    private void UpdateElapsed()
-    {
-        var seconds = Math.Max(0, (int)(DateTimeOffset.Now - _model.StartedAt).TotalSeconds);
-        _elapsed.Text = $"{seconds / 60}:{seconds % 60:00}";
-    }
+    private void UpdateLevels() => _bars.SetLevels(HudModel.Waveform(_model.Levels), animated: true);
 
     /// <summary>Sizes the capsule to its content, bottom-centre of the screen under the mouse.</summary>
     private void Resize(bool position)
@@ -429,7 +511,8 @@ public sealed class HudWindow : Window
             contentWidth = EstimatedWidth();
             contentHeight = EstimatedHeight();
         }
-        var widthDips = Math.Clamp(contentWidth + 4, 120, 420);
+        // The buttons sit exactly at the ends; a notice gets a little slack.
+        var widthDips = HasButtons ? Math.Clamp(Math.Ceiling(contentWidth), 120, 420) : Math.Clamp(contentWidth + 4, 120, 420);
         // One line keeps the usual height; more lines grow the capsule upwards from its bottom edge.
         if (HudController.Message(_model.Phase) != null) heightDips = Math.Max(heightDips, Math.Ceiling(contentHeight) + 2 * NoticePaddingDips);
 
@@ -442,6 +525,8 @@ public sealed class HudWindow : Window
             _bottom = work.Bottom - (int)Math.Round(BottomMarginDips * scale);
             _placed = new RectInt32(_centerX - width / 2, _bottom - height, width, height);
             WindowHelpers.PlaceClient(this, _placed);
+            Shape(width, height, scale);
+            _glow.Follow(_placed, scale);
         }
         else
         {
@@ -454,16 +539,39 @@ public sealed class HudWindow : Window
             if (rect.Equals(_placed)) return;
             _placed = rect;
             WindowHelpers.PlaceClient(this, rect);
+            Shape(width, height, scale);
+            _glow.Follow(_placed, scale);
         }
     }
 
     private int _bottom;
     private RectInt32 _placed;
+    private (int Width, int Height, int Diameter) _shape;
+
+    /// <summary>
+    /// Cuts the window to the capsule: its client area (<paramref name="width"/> × <paramref name="height"/> physical
+    /// pixels) with corners of <see cref="CornerDips"/>.
+    /// </summary>
+    private void Shape(int width, int height, double scale)
+    {
+        var diameter = Math.Min(height, (int)Math.Round(2 * CornerDips * scale));
+        if (_shape == (width, height, diameter)) return;
+        _shape = (width, height, diameter);
+        // A window region is in window coordinates, which start at the frame, not the client area.
+        Win32.GetWindowRect(Hwnd, out var window);
+        var client = new Win32.POINT();
+        Win32.ClientToScreen(Hwnd, ref client);
+        var x = client.X - window.Left;
+        var y = client.Y - window.Top;
+        var region = Win32.CreateRoundRectRgn(x, y, x + width + 1, y + height + 1, diameter, diameter);
+        // Once set, the region belongs to the window (which frees the one it had); only a refused one is ours to free.
+        if (region != 0 && Win32.SetWindowRgn(Hwnd, region, true) == 0) Win32.DeleteObject(region);
+    }
 
     private double EstimatedWidth() => _model.Phase switch
     {
-        HudPhase.Recording => 160,
-        HudPhase.Working => 160,
+        HudPhase.Recording or HudPhase.Working =>
+            2 * (ButtonInsetDips + ButtonDips + GapDips) + WaveDips + (_model.Badge is { } badge ? 24 + badge.Length * 7 : 0),
         HudPhase.Copied => 170,
         HudPhase.Learned l => Math.Min(372, 150 + l.Terms.Length * 9),
         HudPhase.Answer a => Math.Min(372, 150 + a.Text.Length * 13),
@@ -476,27 +584,79 @@ public sealed class HudWindow : Window
         ? Math.Min(NoticeLines, Math.Ceiling(message.Length * 13 / NoticeWidthDips)) * 18
         : 0;
 
-    /// <summary>Clicks never activate the capsule (the text field keeps focus) and fall through to what's below.</summary>
+    /// <summary>
+    /// Clicks never activate the capsule (the text field keeps focus). They fall through to what's below, except while
+    /// the capsule shows its buttons.
+    /// </summary>
     private nint Subclass(nint hwnd, uint msg, nint wParam, nint lParam, nuint id, nuint data)
     {
         if (msg == Win32.WM_MOUSEACTIVATE) return Win32.MA_NOACTIVATE;
-        if (msg == Win32.WM_NCHITTEST) return Win32.HTTRANSPARENT;
+        if (msg == Win32.WM_NCHITTEST && !HasButtons) return Win32.HTTRANSPARENT;
         return Win32.DefSubclassProc(hwnd, msg, wParam, lParam);
     }
 }
 
 /// <summary>
-/// The capsule's 18 level bars, drawn and animated by the compositor instead of XAML layout. A new level only
-/// starts short linear animations of each bar's rounded rectangle, which the compositor interpolates at the
-/// display's refresh rate on its own thread, like the macOS bars' <c>.animation(.linear(duration: 0.08))</c>.
+/// The ring round the capsule's ■ button, drawn by the compositor: an arc in the accent colour from the top, as far as
+/// the work has got (see <see cref="ProcessingProgress"/>).
+/// </summary>
+internal sealed class ProgressArc
+{
+    private const float StrokeWidth = 2;
+
+    /// <summary>Placeholder in the XAML tree that the ring is drawn on.</summary>
+    public FrameworkElement Element { get; }
+
+    private readonly CompositionEllipseGeometry _geometry;
+    private readonly CompositionSpriteShape _shape;
+
+    public ProgressArc(double size, Color color)
+    {
+        var host = new Border { Width = size, Height = size, IsHitTestVisible = false };
+        Element = host;
+        var compositor = ElementCompositionPreview.GetElementVisual(host).Compositor;
+        var center = new Vector2((float)size / 2);
+        _geometry = compositor.CreateEllipseGeometry();
+        _geometry.Center = center;
+        _geometry.Radius = center - new Vector2(StrokeWidth / 2 + 0.5f);
+        _geometry.TrimEnd = 0;
+        _shape = compositor.CreateSpriteShape(_geometry);
+        _shape.StrokeBrush = compositor.CreateColorBrush(color);
+        _shape.StrokeThickness = 0;
+        _shape.StrokeStartCap = CompositionStrokeCap.Round;
+        _shape.StrokeEndCap = CompositionStrokeCap.Round;
+        // The ellipse starts at three o'clock: turned a quarter back, it starts at the top.
+        _shape.CenterPoint = center;
+        _shape.RotationAngleInDegrees = -90;
+        var visual = compositor.CreateShapeVisual();
+        visual.Size = new Vector2((float)size);
+        visual.Shapes.Add(_shape);
+        ElementCompositionPreview.SetElementChildVisual(host, visual);
+    }
+
+    public void SetProgress(double value)
+    {
+        var progress = double.IsFinite(value) ? (float)Math.Clamp(value, 0, 1) : 0;
+        _geometry.TrimEnd = progress;
+        // Nothing at all until it has started (a round cap would draw a dot).
+        _shape.StrokeThickness = progress > 0.001f ? StrokeWidth : 0;
+    }
+}
+
+/// <summary>
+/// The capsule's 9 waveform bars (see <see cref="HudModel.Waveform"/>), dots while it's quiet, drawn and animated by
+/// the compositor instead of XAML layout. A new level only starts short linear animations of each bar's rounded
+/// rectangle, which the compositor interpolates at the display's refresh rate on its own thread, like the macOS bars'
+/// <c>.animation(.easeOut(duration: 0.1))</c>.
 /// (Resizing XAML shapes on every 40 ms level re-ran layout and re-rasterised each bar on the UI thread, and the
 /// bars jumped in uneven steps.) Resting positions are snapped to physical pixels, as XAML layout rounding did.
 /// </summary>
 internal sealed class LevelBars
 {
-    private const int Count = 18;
-    private const double BarWidth = 2.5, Spacing = 2, MaxHeight = 18, MinHeight = 3;
-    private static readonly TimeSpan AnimationDuration = TimeSpan.FromMilliseconds(80);
+    private const int Count = 9;
+    /// <summary>A bar at its shortest is as tall as it is wide: a dot.</summary>
+    private const double BarWidth = 2.5, Spacing = 4, MaxHeight = 20, MinHeight = BarWidth;
+    private static readonly TimeSpan AnimationDuration = TimeSpan.FromMilliseconds(100);
 
     /// <summary>Placeholder in the XAML row that the bars are drawn on.</summary>
     public FrameworkElement Element { get; }

@@ -76,7 +76,6 @@ public static class UISnapshots
 
             var hud = controller.Hud;
             hud.Model.SetLevels(Enumerable.Range(0, 18).Select(i => (float)Math.Abs(Math.Sin(i * 0.7)) * 0.8f + 0.1f).ToArray());
-            hud.Model.StartedAt = DateTimeOffset.Now.AddSeconds(-83);
             (string Name, HudPhase Phase)[] phases =
             [
                 ("hud-recording", new HudPhase.Recording()),

@@ -231,7 +231,7 @@ macos/                      macOS アプリ（Swift Package）
   Sources/TypelessCore/       UI を含まない処理ロジック：分割、WAV、プロバイダクライアント、再試行、整形プロンプト
   Sources/OpenTypeless/       アプリ本体：ショートカット、録音、HUD、設定、履歴、ペースト、CLI ツール
   Tests/                      swift-testing のテスト
-  scripts/                    ビルド、署名、アイコン、テストのスクリプト
+  scripts/                    ビルド、署名、テストのスクリプト
 windows/                    Windows アプリ（.NET ソリューション）
   src/TypelessCore/           同じ処理ロジックを 1 行ずつ移植
   src/OpenTypeless/           WinUI アプリ：キーボードフック、WASAPI 録音、HUD、トレイ、設定、履歴、ペースト
@@ -243,6 +243,8 @@ i18n/                       UI の翻訳（中国語と英語以外、両アプ�
 docs/DESIGN.md              アーキテクチャと設計判断
 docs/WINDOWS-PORT.md        macOS の各ファイルとシステム API の Windows での対応
 docs/images/                README のスクリーンショット
+docs/brand/                 ロゴ：ベクター原版と使い方
+scripts/make_icon.py        ロゴを描画し、すべてのアプリアイコンを書き出す
 ```
 
 整形プロンプト（`Prompts.swift` / `Prompts.cs`）は両アプリでバイト単位まで同一です。変更するときは両方を一緒に変え、[eval/](eval/) で結果を確認してください。

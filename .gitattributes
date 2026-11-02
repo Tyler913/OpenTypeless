@@ -4,5 +4,8 @@
 * text=auto eol=lf
 *.png binary
 *.ico binary
+*.ttf binary
 # Generated from i18n/strings.json by i18n/swift_table.py: collapsed in GitHub diffs.
 macos/Sources/TypelessCore/TranslationsJSON.swift linguist-generated
+# Generated with its font by windows/scripts/make-icon-font.py.
+windows/src/OpenTypeless/UI/Glyphs.cs linguist-generated

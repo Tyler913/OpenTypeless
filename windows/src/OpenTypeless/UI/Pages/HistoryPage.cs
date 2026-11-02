@@ -37,7 +37,7 @@ public sealed class HistoryPage : PageBase
     private readonly AutoSuggestBox _search = new()
     {
         PlaceholderText = L("搜索听写内容", "Search dictations"),
-        QueryIcon = new SymbolIcon(Symbol.Find),
+        QueryIcon = Ui.Icon(Glyphs.Search, 12),
         Margin = new Thickness(10, 10, 10, 4),
     };
     private readonly TextBlock _storage = Ui.Text("…", 13);
@@ -261,9 +261,9 @@ public sealed class HistoryPage : PageBase
             _export.IsEnabled = Filtered.Count > 0;
         }
         if (!saved) return;
-        _exportIcon.Glyph = Glyphs.CheckMark;
+        Ui.SetGlyph(_exportIcon, Glyphs.CheckMark);
         await Task.Delay(1500);
-        _exportIcon.Glyph = Glyphs.Export;
+        Ui.SetGlyph(_exportIcon, Glyphs.Export);
     }
 
     /// <summary>Recomputes the space history takes (off the UI thread).</summary>
@@ -634,7 +634,7 @@ public sealed class HistoryPage : PageBase
         if (record.Status == DictationStatus.Cancelled)
         {
             var until = Formatting.ShortStamp(CancelPolicy.Expiry(record.Date));
-            body.Children.Add(new Banner(Glyphs.Cancel, Tint.Gray,
+            body.Children.Add(new Banner(Glyphs.ErrorBadge, Tint.Gray,
                 L($"已取消，没有插入。这条会保留到 {until}，之前可以复制或重新转写。",
                   $"Cancelled, so nothing was inserted. It's kept until {until} to copy or re-transcribe.")));
         }
@@ -689,10 +689,10 @@ public sealed class HistoryPage : PageBase
         {
             TextInserter.CopyToClipboard(record.OutputText);
             copyLabel.Text = L("已复制", "Copied");
-            copyIcon.Glyph = Glyphs.CheckMark;
+            Ui.SetGlyph(copyIcon, Glyphs.CheckMark);
             await Task.Delay(1500);
             copyLabel.Text = L("复制", "Copy");
-            copyIcon.Glyph = Glyphs.Copy;
+            Ui.SetGlyph(copyIcon, Glyphs.Copy);
         };
         leading.Children.Add(copy);
         var active = _files.IsActive(record.Id);
@@ -801,9 +801,9 @@ public sealed class HistoryPage : PageBase
         var saved = await Exports.Copy(this, _window.Hwnd, Exports.FileName("OpenTypeless", record.Date, time: true), "WAV", "wav",
                                        record.AudioPath, L("无法保存录音", "Couldn't save the recording"));
         if (!saved) return;
-        icon.Glyph = Glyphs.CheckMark;
+        Ui.SetGlyph(icon, Glyphs.CheckMark);
         await Task.Delay(1500);
-        icon.Glyph = Glyphs.Folder;
+        Ui.SetGlyph(icon, Glyphs.Folder);
     }
 
     // MARK: Transcribing files

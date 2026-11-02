@@ -109,6 +109,7 @@ public sealed partial class SettingsWindow : Window
             _page = page;
             ShowPage(page);
         }
+        UpdateNavigationIcons();
     }
 
     private void ShowPage(SettingsPage page)
@@ -135,11 +136,23 @@ public sealed partial class SettingsWindow : Window
             {
                 Tag = page,
                 Content = page.Title(),
-                Icon = new FontIcon { Glyph = page.Glyph(), FontFamily = Palette.Symbols },
+                // The icon box is 16 px: the 16 px drawing, unscaled.
+                Icon = Ui.Icon(page.Glyph(), 16),
             };
             Nav.MenuItems.Add(item);
         }
+        UpdateNavigationIcons();
         UpdateReadyPill();
+    }
+
+    /// <summary>The selected page's icon is filled and the others regular, as in Fluent apps.</summary>
+    private void UpdateNavigationIcons()
+    {
+        foreach (var item in Nav.MenuItems.OfType<NavigationViewItem>())
+        {
+            if (item is { Tag: SettingsPage page, Icon: FontIcon icon })
+                Ui.SetGlyph(icon, page.Glyph(), filled: ReferenceEquals(item, Nav.SelectedItem));
+        }
     }
 
     private void UpdateReadyPill()

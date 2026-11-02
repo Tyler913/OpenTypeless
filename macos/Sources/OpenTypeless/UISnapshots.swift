@@ -73,7 +73,6 @@ enum UISnapshots {
 
         let model = HUDModel()
         model.levels.values = (0..<18).map { i in Float(abs(sin(Double(i) * 0.7))) * 0.8 + 0.1 }
-        model.startedAt = Date().addingTimeInterval(-83)
         model.bar.show(0.55)
         let phases: [(String, HUDModel.Phase)] = [
             ("hud-recording", .recording),
@@ -90,7 +89,7 @@ enum UISnapshots {
             let hud = HUDView(model: model)
             let view = live ? AnyView(hud) : AnyView(hud.background(
                 LinearGradient(colors: [.orange, .pink, .blue], startPoint: .leading, endPoint: .trailing)))
-            try save(NSHostingView(rootView: view), size: NSSize(width: 420, height: 100), to: dir.appendingPathComponent("\(name).png"))
+            try save(NSHostingView(rootView: view), size: NSSize(width: 420, height: 110), to: dir.appendingPathComponent("\(name).png"))
         }
         if live { try checkPopover(controller: controller, dir: dir) }
         print("✓ snapshots in \(dir.path)")
@@ -99,7 +98,7 @@ enum UISnapshots {
     /// Opens the real popover from a real status item and checks it sits under the icon, on screen.
     private static func checkPopover(controller: SessionController, dir: URL) throws {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil)
+        item.button?.image = Logo.menuBarImage(recording: false)
         let popover = StatusPopover(rootView: MenuPopoverView(controller: controller, openSettings: { _ in }, close: {}))
         RunLoop.main.run(until: Date().addingTimeInterval(0.5))
         guard let button = item.button, let buttonWindow = button.window else {

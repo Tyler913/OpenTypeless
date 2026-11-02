@@ -235,6 +235,9 @@ public sealed class SessionController
         {
             if (_sink.IsRecording) _dispatcher.TryEnqueue(() => hudModel.Push(level));
         };
+        // The capsule's buttons: ✕ (and ■ while processing) is Esc, ↑ is letting go of the key.
+        hudModel.CancelRequested += EscapePressed;
+        hudModel.FinishRequested += FinishPressed;
     }
 
     private string? ChosenDeviceId => _settings.MicrophoneId.Length == 0 ? null : _settings.MicrophoneId;
@@ -312,6 +315,14 @@ public sealed class SessionController
         Note(tap ? $"tap ({held:0.00}s) → hands-free" : $"released after {held:0.00}s → stop");
         if (tap) _handsFree = true;
         else FinishRecording();
+    }
+
+    /// <summary>The capsule's ↑ was clicked: the recording ends as letting go of the key (or the second tap, hands-free) would.</summary>
+    public void FinishPressed()
+    {
+        if (State != SessionState.Recording) return;
+        Note("stop (capsule button)");
+        FinishRecording();
     }
 
     /// <summary>
@@ -669,7 +680,6 @@ public sealed class SessionController
         State = SessionState.Recording;
         LastError = null;
         Hud.Model.ResetLevels();
-        Hud.Model.StartedAt = DateTimeOffset.Now;
         Hud.Model.Badge = null;
         Hud.Show(new HudPhase.Recording());
         PlaySound(Sounds.Kind.Start);

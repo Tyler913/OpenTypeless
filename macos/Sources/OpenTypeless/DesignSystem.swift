@@ -14,20 +14,97 @@ enum Theme {
     static let formWidth: CGFloat = 720
 }
 
-/// The app's gradient tile with the waveform glyph.
+/// The app's mark: three voice bars running into a text caret, so what you say becomes text at your cursor. The same
+/// geometry and colours as the app icon (`scripts/make_icon.py` draws that), in tile units (0…1, y down).
+enum Logo {
+    /// Centre x and height of each voice bar; the bars and the caret are all `stroke` wide and centred on y = 0.5.
+    static let bars: [(x: CGFloat, height: CGFloat)] = [(0.245, 0.26), (0.395, 0.50), (0.545, 0.34)]
+    static let caret: (x: CGFloat, height: CGFloat) = (0.725, 0.62)
+    static let stroke: CGFloat = 0.104
+
+    /// Two colours, one per part: amber for the voice, crimson for the caret.
+    static let voiceColor = rgb(0xFFA000)
+    static let caretColor = rgb(0xE8173F)
+    static let tile = LinearGradient(colors: [rgb(0xFFFFFF), rgb(0xEEEEF2)], startPoint: .top, endPoint: .bottom)
+
+    private static func rgb(_ hex: Int) -> Color {
+        Color(red: Double(hex >> 16 & 0xFF) / 255, green: Double(hex >> 8 & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+    }
+
+    /// The bars (or the caret) laid out in `rect`, the tile's frame.
+    static func capsules(_ items: [(x: CGFloat, height: CGFloat)], in rect: CGRect) -> [CGRect] {
+        items.map { item in
+            CGRect(x: rect.minX + (item.x - stroke / 2) * rect.width, y: rect.minY + (0.5 - item.height / 2) * rect.height,
+                   width: stroke * rect.width, height: item.height * rect.height)
+        }
+    }
+
+    /// The menu-bar icon, a template image: the voice bars at half strength and the caret solid; while recording, the
+    /// whole mark is cut out of a filled disc.
+    static func menuBarImage(recording: Bool) -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { rect in
+            if recording {
+                let path = NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5))
+                for r in Logo.capsules(Logo.bars + [Logo.caret], in: Logo.frame(centredIn: rect, caretHeight: 9.5)) {
+                    path.appendRoundedRect(r, xRadius: r.width / 2, yRadius: r.width / 2)
+                }
+                path.windingRule = .evenOdd // the capsules don't overlap, so each one is a hole
+                NSColor.black.setFill()
+                path.fill()
+            } else {
+                let tile = Logo.frame(centredIn: rect, caretHeight: 13.5)
+                let layers: [(items: [(x: CGFloat, height: CGFloat)], alpha: CGFloat)] = [(Logo.bars, 0.5), ([Logo.caret], 1)]
+                for layer in layers {
+                    NSColor.black.withAlphaComponent(layer.alpha).setFill()
+                    for r in Logo.capsules(layer.items, in: tile) {
+                        NSBezierPath(roundedRect: r, xRadius: r.width / 2, yRadius: r.width / 2).fill()
+                    }
+                }
+            }
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "OpenTypeless"
+        return image
+    }
+
+    /// The tile frame that centres the mark in `rect` with the caret `caretHeight` points tall.
+    private static func frame(centredIn rect: CGRect, caretHeight: CGFloat) -> CGRect {
+        let side = caretHeight / caret.height
+        let markCentre = (bars[0].x - stroke / 2 + caret.x + stroke / 2) / 2
+        return CGRect(x: rect.midX - markCentre * side, y: rect.midY - side / 2, width: side, height: side)
+    }
+}
+
+/// One stroke of the mark (a voice bar or the caret) drawn across the tile's frame.
+struct LogoStroke: Shape {
+    let item: (x: CGFloat, height: CGFloat)
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        for r in Logo.capsules([item], in: rect) {
+            path.addRoundedRect(in: r, cornerSize: CGSize(width: r.width / 2, height: r.width / 2), style: .circular)
+        }
+        return path
+    }
+}
+
+/// The app's tile: the mark on a white tile, the same artwork as the macOS app icon.
 struct AppTile: View {
     var size: CGFloat = 32
 
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
-            .fill(Theme.brand)
-            .frame(width: size, height: size)
-            .overlay(
-                Image(systemName: "waveform")
-                    .font(.system(size: size * 0.5, weight: .semibold))
-                    .foregroundStyle(.white)
-            )
-            .shadow(color: Color(red: 0.3, green: 0.4, blue: 0.95).opacity(0.35), radius: size * 0.12, y: size * 0.05)
+        let tile = RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
+        ZStack {
+            tile.fill(Logo.tile)
+            tile.strokeBorder(Color.black.opacity(0.07), lineWidth: max(0.5, size * 0.006))
+            ForEach(Logo.bars.indices, id: \.self) { i in
+                LogoStroke(item: Logo.bars[i]).fill(Logo.voiceColor)
+            }
+            LogoStroke(item: Logo.caret).fill(Logo.caretColor)
+        }
+        .frame(width: size, height: size)
+        .shadow(color: .black.opacity(0.18), radius: size * 0.1, y: size * 0.04)
     }
 }
 

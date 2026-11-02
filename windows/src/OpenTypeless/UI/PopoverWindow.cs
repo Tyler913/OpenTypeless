@@ -331,7 +331,7 @@ public sealed class PopoverWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.Children.Add(new StackPanel { Spacing = 3, Children = { text, meta } });
-        var icon = Ui.Icon(copied ? Glyphs.Completed : Glyphs.Copy, 12, copied ? Palette.Brush(Tint.Green) : Ui.Tertiary);
+        var icon = Ui.Icon(copied ? Glyphs.Completed : Glyphs.Copy, 12, copied ? Palette.Brush(Tint.Green) : Ui.Tertiary, filled: copied);
         icon.VerticalAlignment = VerticalAlignment.Top;
         icon.Margin = new Thickness(0, 3, 0, 0);
         Grid.SetColumn(icon, 1);

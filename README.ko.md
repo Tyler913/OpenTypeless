@@ -231,7 +231,7 @@ macos/                      macOS 앱(Swift Package)
   Sources/TypelessCore/       UI 없는 처리 로직: 분할기, WAV, 제공업체 클라이언트, 재시도, 다듬기 프롬프트
   Sources/OpenTypeless/       앱: 단축키, 녹음기, HUD, 설정, 기록, 붙여넣기, CLI 도구
   Tests/                      swift-testing 테스트
-  scripts/                    빌드, 서명, 아이콘, 테스트 스크립트
+  scripts/                    빌드, 서명, 테스트 스크립트
 windows/                    Windows 앱(.NET 솔루션)
   src/TypelessCore/           같은 처리 로직을 한 줄씩 이식
   src/OpenTypeless/           WinUI 앱: 키보드 훅, WASAPI 녹음기, HUD, 트레이, 설정, 기록, 붙여넣기
@@ -243,6 +243,8 @@ i18n/                       UI 번역(중국어·영어 외, 두 앱 공용)
 docs/DESIGN.md              아키텍처와 설계 결정
 docs/WINDOWS-PORT.md        macOS의 각 파일과 시스템 API가 Windows에서 대응되는 방식
 docs/images/                README 스크린샷
+docs/brand/                 로고: 벡터 원본과 사용법
+scripts/make_icon.py        로고를 그리고 모든 앱 아이콘을 생성
 ```
 
 다듬기 프롬프트(`Prompts.swift` / `Prompts.cs`)는 두 앱에서 바이트 단위까지 같습니다. 바꿀 때는 둘을 함께 바꾸고 [eval/](eval/)로 결과를 확인하세요.

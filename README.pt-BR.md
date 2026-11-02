@@ -231,7 +231,7 @@ macos/                      O app para macOS (Swift Package)
   Sources/TypelessCore/       Lógica do processo, sem interface: divisão, WAV, cliente de provedores, novas tentativas, prompt de limpeza
   Sources/OpenTypeless/       O app: atalho, gravação, HUD, configurações, histórico, colagem, ferramentas CLI
   Tests/                      Testes com swift-testing
-  scripts/                    Scripts de compilação, assinatura, ícone e testes
+  scripts/                    Scripts de compilação, assinatura e testes
 windows/                    O app para Windows (solução .NET)
   src/TypelessCore/           A mesma lógica do processo, portada linha a linha
   src/OpenTypeless/           O app WinUI: hook de teclado, gravação WASAPI, HUD, bandeja, configurações, histórico, colagem
@@ -243,6 +243,8 @@ i18n/                       Traduções da interface (exceto chinês e inglês),
 docs/DESIGN.md              Arquitetura e decisões de design
 docs/WINDOWS-PORT.md        Como cada arquivo e API de sistema do macOS corresponde no Windows
 docs/images/                Capturas de tela do README
+docs/brand/                 O logotipo: originais vetoriais e como usá-los
+scripts/make_icon.py        Desenha o logotipo e gera a partir dele todos os ícones do app
 ```
 
 O prompt de limpeza (`Prompts.swift` / `Prompts.cs`) é idêntico byte a byte nos dois apps; altere os dois juntos e confira o resultado com [eval/](eval/).

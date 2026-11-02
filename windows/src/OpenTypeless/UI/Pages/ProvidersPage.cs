@@ -288,7 +288,7 @@ internal sealed class ProviderCard : UserControl
         text.TextTrimming = TextTrimming.CharacterEllipsis;
         text.MaxWidth = 320;
         ToolTipService.SetToolTip(text, result.Text);
-        _testResult.Children.Add(Ui.Icon(result.Ok ? Glyphs.Completed : Glyphs.ErrorBadge, 13, Palette.Brush(tint)));
+        _testResult.Children.Add(Ui.Icon(result.Ok ? Glyphs.Completed : Glyphs.ErrorBadge, 13, Palette.Brush(tint), filled: true));
         _testResult.Children.Add(text);
         RefreshHeader();
     }

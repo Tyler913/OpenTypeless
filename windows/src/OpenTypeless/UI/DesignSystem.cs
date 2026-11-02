@@ -12,7 +12,7 @@ using Windows.UI.Text;
 
 namespace OpenTypeless.UI;
 
-/// <summary>The accent colours used for icon badges, pills and banners (the macOS system palette).</summary>
+/// <summary>The accent colours used for pills and banners (the macOS system palette).</summary>
 public enum Tint { Gray, Blue, Orange, Purple, Green, Indigo, Red, Teal, Brown, Pink, Secondary, Accent }
 
 public static class Palette
@@ -41,8 +41,6 @@ public static class Palette
     public static T Resource<T>(string key, T fallback) =>
         Application.Current?.Resources.TryGetValue(key, out var value) == true && value is T typed ? typed : fallback;
 
-    public static FontFamily Symbols => Resource<FontFamily>("SymbolThemeFontFamily", new FontFamily("Segoe Fluent Icons,Segoe MDL2 Assets"));
-
     public static readonly Color BrandStart = Color.FromArgb(255, 92, 77, 242);
     public static readonly Color BrandEnd = Color.FromArgb(255, 31, 158, 250);
 
@@ -54,76 +52,36 @@ public static class Palette
     };
 }
 
-/// <summary>Segoe Fluent Icons code points (the SF Symbols of Windows).</summary>
-public static class Glyphs
+/// <summary>
+/// The app's icons are Fluent UI System Icons, the ones it uses bundled as one small font (scripts/make-icon-font.py),
+/// so they look the same on Windows 10 and 11. Each is drawn for 16, 20 and 24 px, regular and filled.
+/// </summary>
+public static class Icons
 {
-    public const string Microphone = "";
-    public const string EaseOfAccess = "";
-    public const string Globe = "";
-    public const string Power = "";
-    public const string Paste = "";
-    public const string Volume = "";
-    public const string Stopwatch = "";
-    public const string Settings = "";
-    public const string Keyboard = "";
-    public const string Key = "";
-    public const string Component = "";
-    public const string Font = "";
-    public const string History = "";
-    public const string Warning = "";
-    public const string Info = "";
-    public const string Refresh = "";
-    public const string Copy = "";
-    public const string CheckMark = "";
-    public const string Completed = "";
-    public const string ErrorBadge = "";
-    public const string Delete = "";
-    public const string Folder = "";
-    public const string OpenInNew = "";
-    public const string List = "";
-    public const string ChevronRight = "";
-    public const string Cancel = "";
-    public const string Link = "";
-    public const string Star = "";
-    public const string StarFill = "";
-    public const string Lightning = "";
-    public const string Cloud = "";
-    public const string Search = "";
-    public const string Code = "";
-    public const string Message = "";
-    public const string Record = "";
-    public const string Dictionary = "";
-    public const string Download = "";
-    public const string TouchPointer = "";
-    public const string Home = "\uE80F";
-    public const string Money = "\uE8C7";
-    public const string Calendar = "\uE787";
-    public const string Speech = "\uE720";
-    public const string Edit = "\uE70F";
-    public const string ReturnKey = "\uE751";
-    public const string Mute = "\uE74F";
-    public const string AllApps = "\uE71D";
-    public const string AppIcon = "\uECAA";
-    public const string Add = "\uE710";
-    public const string Export = "\uEDE1";
-    public const string Import = "\uE8B5";
-    public const string OpenFile = "\uE8E5";
-    public const string Page = "\uE7C3";
-    public const string Video = "\uE714";
-    public const string Send = "\uE724";
-    public const string LineBreak = "\uE8E4";
-    public const string Help = "\uE9CE";
-    public const string Drive = "\uEDA2";
+    public static FontFamily Font => new("ms-appx:///Assets/Fonts/FluentIcons.ttf#OpenTypeless Fluent Icons");
+
+    /// <summary>The <see cref="Glyphs"/> icon as drawn for the nearest size to <paramref name="size"/>, regular or filled.</summary>
+    public static string Glyph(string glyph, double size, bool filled = false)
+    {
+        if (glyph.Length != 1 || glyph[0] < Glyphs.First || glyph[0] > Glyphs.Last) return glyph;
+        var offset = size < 18 ? Glyphs.Size16 : size < 22 ? 0 : Glyphs.Size24;
+        if (filled) offset += Glyphs.Filled;
+        return ((char)(glyph[0] + offset)).ToString();
+    }
 }
 
 public static class Ui
 {
-    public static FontIcon Icon(string glyph, double size, Brush? foreground = null)
+    public static FontIcon Icon(string glyph, double size, Brush? foreground = null, bool filled = false)
     {
-        var icon = new FontIcon { Glyph = glyph, FontSize = size, FontFamily = Palette.Symbols };
+        var icon = new FontIcon { Glyph = Icons.Glyph(glyph, size, filled), FontSize = size, FontFamily = Icons.Font };
         if (foreground != null) icon.Foreground = foreground;
         return icon;
     }
+
+    /// <summary>Changes an icon made by <see cref="Icon"/>, keeping its size.</summary>
+    public static void SetGlyph(FontIcon icon, string glyph, bool filled = false) =>
+        icon.Glyph = Icons.Glyph(glyph, icon.FontSize, filled);
 
     public static TextBlock Text(string text, double size = 13, FontWeight? weight = null, Brush? foreground = null, bool wrap = false)
     {
@@ -146,12 +104,31 @@ public static class Ui
     public static Brush Primary => Palette.Theme("TextFillColorPrimaryBrush");
 }
 
-/// <summary>The app's gradient tile with the waveform glyph (the same artwork as the app icon).</summary>
+/// <summary>
+/// The app's mark: three voice bars running into a text caret, so what you say becomes text at your cursor. The same
+/// geometry and colours as the app icon (scripts/make_icon.py draws that), in tile units (0…1, y down); the bars and
+/// the caret are all <see cref="Stroke"/> wide and centred on y = 0.5. The tray glyphs draw it too.
+/// </summary>
+public static class Logo
+{
+    /// <summary>Centre x and height of each voice bar.</summary>
+    public static readonly (double X, double Height)[] Bars = [(0.245, 0.26), (0.395, 0.50), (0.545, 0.34)];
+    public static readonly (double X, double Height) Caret = (0.725, 0.62);
+    public const double Stroke = 0.104;
+
+    /// <summary>Two colours, one per part: amber for the voice, crimson for the caret.</summary>
+    public static readonly Color VoiceColor = Color.FromArgb(255, 0xFF, 0xA0, 0x00);
+    public static readonly Color CaretColor = Color.FromArgb(255, 0xE8, 0x17, 0x3F);
+    public static readonly Color TileTop = Color.FromArgb(255, 0xFF, 0xFF, 0xFF);
+    public static readonly Color TileBottom = Color.FromArgb(255, 0xEE, 0xEE, 0xF2);
+
+    /// <summary>Horizontal centre of the whole mark, bars and caret.</summary>
+    public static double CenterX => (Bars[0].X - Stroke / 2 + Caret.X + Stroke / 2) / 2;
+}
+
+/// <summary>The app's tile: the mark on a white tile, the same artwork as the macOS app icon.</summary>
 public sealed class AppTile : UserControl
 {
-    /// <summary>Relative bar heights of the waveform, shared with the icon and tray glyphs.</summary>
-    public static readonly double[] Bars = [0.26, 0.6, 1.0, 0.55, 0.82, 0.33];
-
     private double _tileSize = 32;
     public double TileSize
     {
@@ -167,66 +144,44 @@ public sealed class AppTile : UserControl
     private void Render()
     {
         var size = _tileSize;
-        var glyph = size * 0.5;
-        var pitch = glyph / (Bars.Length - 0.35);
-        var barWidth = Math.Max(1.5, pitch * 0.5);
         var canvas = new Canvas { Width = size, Height = size };
-        var x0 = size / 2 - pitch * (Bars.Length - 1) / 2;
-        for (var i = 0; i < Bars.Length; i++)
+        foreach (var bar in Logo.Bars)
         {
-            var h = Math.Max(barWidth, glyph * Bars[i]);
-            var bar = new Rectangle { Width = barWidth, Height = h, RadiusX = barWidth / 2, RadiusY = barWidth / 2, Fill = new SolidColorBrush(Colors.White) };
-            Canvas.SetLeft(bar, x0 + i * pitch - barWidth / 2);
-            Canvas.SetTop(bar, size / 2 - h / 2);
-            canvas.Children.Add(bar);
+            canvas.Children.Add(Capsule(bar, size, Logo.VoiceColor));
         }
+        canvas.Children.Add(Capsule(Logo.Caret, size, Logo.CaretColor));
         Content = new Border
         {
             Width = size,
             Height = size,
             CornerRadius = new CornerRadius(size * 0.26),
-            Background = Palette.Brand(),
+            // A black hairline inside the edge, so the white tile holds on a white background.
+            BorderThickness = new Thickness(Math.Max(0.5, size * 0.006)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(18, 0, 0, 0)),
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0, 0),
+                EndPoint = new Windows.Foundation.Point(0, 1),
+                GradientStops = { new GradientStop { Color = Logo.TileTop, Offset = 0 }, new GradientStop { Color = Logo.TileBottom, Offset = 1 } },
+            },
             Child = canvas,
         };
     }
-}
 
-/// <summary>Coloured rounded square with a white glyph, like the macOS System Settings icons.</summary>
-public sealed class IconBadge : UserControl
-{
-    private readonly Border _border = new();
-    private readonly FontIcon _icon = new() { Foreground = new SolidColorBrush(Colors.White) };
-    private Tint _tint = Tint.Blue;
-    private double _badgeSize = 26;
-
-    public IconBadge()
+    private static Rectangle Capsule((double X, double Height) item, double size, Color color)
     {
-        _icon.FontFamily = Palette.Symbols;
-        _border.Child = _icon;
-        Content = _border;
-        Update();
-    }
-
-    public string Glyph { get => _icon.Glyph; set => _icon.Glyph = value; }
-    public Tint Tint { get => _tint; set { _tint = value; Update(); } }
-    public double BadgeSize { get => _badgeSize; set { _badgeSize = value; Update(); } }
-
-    private void Update()
-    {
-        var color = Palette.Of(_tint);
-        _border.Width = _border.Height = _badgeSize;
-        _border.CornerRadius = new CornerRadius(_badgeSize * 0.27);
-        _border.Background = new LinearGradientBrush
+        var width = Logo.Stroke * size;
+        var capsule = new Rectangle
         {
-            StartPoint = new Windows.Foundation.Point(0, 0),
-            EndPoint = new Windows.Foundation.Point(0, 1),
-            GradientStops =
-            {
-                new GradientStop { Color = Color.FromArgb(217, color.R, color.G, color.B), Offset = 0 },
-                new GradientStop { Color = color, Offset = 1 },
-            },
+            Width = width,
+            Height = item.Height * size,
+            RadiusX = width / 2,
+            RadiusY = width / 2,
+            Fill = new SolidColorBrush(color),
         };
-        _icon.FontSize = _badgeSize * 0.52;
+        Canvas.SetLeft(capsule, (item.X - Logo.Stroke / 2) * size);
+        Canvas.SetTop(capsule, (0.5 - item.Height / 2) * size);
+        return capsule;
     }
 }
 
@@ -371,11 +326,13 @@ public sealed class CardSection : UserControl
     public UIElementCollection Body => _stack.Children;
 }
 
-/// <summary>A settings row: title, optional subtitle, and a control on the trailing edge. Onboarding adds an icon badge.</summary>
+/// <summary>A settings row: title, optional subtitle, and a control on the trailing edge. Onboarding adds an icon, as in Windows Settings.</summary>
 [ContentProperty(Name = nameof(Trailing))]
 public sealed class CardRow : UserControl
 {
-    private readonly IconBadge _badge = new() { BadgeSize = 24, VerticalAlignment = VerticalAlignment.Center };
+    /// <summary>20 px with 2 px either side, so rows line up with dividers inset by 50.</summary>
+    private readonly FontIcon _icon = Ui.Icon("", 20);
+    private string _glyph = "";
     private readonly TitleLine _title = new(Ui.Text("", 13.5));
     private readonly TextBlock _subtitle = Ui.Text("", 12, foreground: Ui.Secondary, wrap: true);
     private readonly ContentPresenter _trailing = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
@@ -384,7 +341,9 @@ public sealed class CardRow : UserControl
 
     public CardRow()
     {
-        _badge.Visibility = Visibility.Collapsed;
+        _icon.Margin = new Thickness(2, 0, 2, 0);
+        _icon.VerticalAlignment = VerticalAlignment.Center;
+        _icon.Visibility = Visibility.Collapsed;
         _subtitle.Visibility = Visibility.Collapsed;
         var text = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { _title, _subtitle } };
         var grid = new Grid
@@ -401,7 +360,7 @@ public sealed class CardRow : UserControl
         };
         Grid.SetColumn(text, 1);
         Grid.SetColumn(_trailing, 2);
-        grid.Children.Add(_badge);
+        grid.Children.Add(_icon);
         grid.Children.Add(text);
         grid.Children.Add(_trailing);
         Content = grid;
@@ -409,11 +368,14 @@ public sealed class CardRow : UserControl
 
     public string Glyph
     {
-        get => _badge.Glyph;
-        set { _badge.Glyph = value; _badge.Visibility = Visibility.Visible; }
+        get => _glyph;
+        set
+        {
+            _glyph = value;
+            Ui.SetGlyph(_icon, value);
+            _icon.Visibility = Visibility.Visible;
+        }
     }
-
-    public Tint Tint { get => _badge.Tint; set => _badge.Tint = value; }
 
     public string Title
     {
@@ -560,11 +522,12 @@ public sealed class StatusPill : UserControl
     }
 }
 
-/// <summary>Tinted inline banner for warnings and hints.</summary>
+/// <summary>Tinted inline banner for warnings and hints, with the filled icon, like an InfoBar's.</summary>
 [ContentProperty(Name = nameof(Trailing))]
 public sealed class Banner : UserControl
 {
-    private readonly FontIcon _icon = new() { FontSize = 14, VerticalAlignment = VerticalAlignment.Center };
+    private readonly FontIcon _icon = Ui.Icon("", 16);
+    private string _glyph = "";
     private readonly TextBlock _text = Ui.Text("", 12.5, wrap: true);
     private readonly ContentPresenter _trailing = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly Border _border = new() { CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 9, 12, 9), BorderThickness = new Thickness(1) };
@@ -572,7 +535,7 @@ public sealed class Banner : UserControl
 
     public Banner()
     {
-        _icon.FontFamily = Palette.Symbols;
+        _icon.VerticalAlignment = VerticalAlignment.Center;
         _text.VerticalAlignment = VerticalAlignment.Center;
         var grid = new Grid
         {
@@ -602,7 +565,16 @@ public sealed class Banner : UserControl
         Trailing = trailing;
     }
 
-    public string Glyph { get => _icon.Glyph; set => _icon.Glyph = value; }
+    public string Glyph
+    {
+        get => _glyph;
+        set
+        {
+            _glyph = value;
+            Ui.SetGlyph(_icon, value, filled: true);
+        }
+    }
+
     public string Text { get => _text.Text; set => _text.Text = value; }
     public Tint Tint { get => _tint; set { _tint = value; Update(); } }
     public object? Trailing { get => _trailing.Content; set => _trailing.Content = value; }

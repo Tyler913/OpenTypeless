@@ -462,27 +462,32 @@ struct ShortcutPage: View {
                         .controlSize(.small)
                     }
                 }
-                .padding(14)
+                .rowPadding(.all, 14)
                 if let message = recorder.message {
                     Text(message)
                         .font(.system(size: 11.5))
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 10)
+                        .rowPadding(.horizontal, 14)
+                        .rowPadding(.bottom, 10)
                 }
                 CardDivider()
-                GlassEffectContainer(spacing: 8) {
-                    HStack(spacing: 8) {
-                        ForEach(Hotkey.presets, id: \.keyCode) { preset in
-                            PresetChip(hotkey: preset, selected: hotkey == preset) {
-                                recorder.stop()
-                                settings.hotkey = preset
-                            }
-                        }
+                // The common choices, one click each; a recorded shortcut selects none of them.
+                Picker(L("听写快捷键", "Dictation shortcut"), selection: Binding<Int>(
+                    get: { Hotkey.presets.firstIndex(of: hotkey) ?? -1 },
+                    set: { index in
+                        guard Hotkey.presets.indices.contains(index) else { return }
+                        recorder.stop()
+                        settings.hotkey = Hotkey.presets[index]
+                    }
+                )) {
+                    ForEach(Hotkey.presets.indices, id: \.self) { index in
+                        Text(Hotkey.presets[index].displayName).tag(index)
                     }
                 }
-                .padding(10)
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .rowPadding(.all, 10)
             }
 
             CommandModeSection(settings: settings)
@@ -620,23 +625,6 @@ private struct RecordingPlaceholder: View {
     }
 }
 
-private struct PresetChip: View {
-    let hotkey: Hotkey
-    let selected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(hotkey.displayName)
-                .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 3)
-        }
-        .buttonStyle(selected ? AnyPrimitiveButtonStyle(.glassProminent) : AnyPrimitiveButtonStyle(.glass))
-        .buttonBorderShape(.roundedRectangle(radius: 10))
-    }
-}
-
 /// Lets a view switch between two button styles at runtime.
 struct AnyPrimitiveButtonStyle: PrimitiveButtonStyle {
     private let make: (Configuration) -> AnyView
@@ -658,13 +646,11 @@ struct ProvidersPage: View {
         PageScaffold(page: .providers,
                      help: L("填写 API Key。语音转文字和文字整理可以使用不同的服务商。",
                              "Add API keys. Speech-to-text and clean-up can use different providers.")) {
-            VStack(spacing: 8) {
-                ForEach(ProviderID.allCases) { id in
-                    ProviderCard(settings: settings, id: id, expanded: Binding(
-                        get: { expanded.contains(id) },
-                        set: { if $0 { expanded.insert(id) } else { expanded.remove(id) } }
-                    ))
-                }
+            ForEach(ProviderID.allCases) { id in
+                ProviderCard(settings: settings, id: id, expanded: Binding(
+                    get: { expanded.contains(id) },
+                    set: { if $0 { expanded.insert(id) } else { expanded.remove(id) } }
+                ))
             }
         }
         .onAppear {
@@ -705,8 +691,8 @@ private struct ProviderCard: View {
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
+                .rowPadding(.horizontal, 14)
+                .rowPadding(.vertical, 11)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -766,7 +752,7 @@ private struct ProviderCard: View {
                             .disabled(testing || settings.endpoint(for: id) == nil)
                     }
                 }
-                .padding(14)
+                .rowPadding(.all, 14)
             }
         }
     }
@@ -1275,8 +1261,8 @@ struct StylePage: View {
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
+                            .rowPadding(.horizontal, 14)
+                            .rowPadding(.vertical, 9)
                     }
                     .buttonStyle(HoverButtonStyle(cornerRadius: Theme.cardRadius))
                 }
@@ -1324,8 +1310,8 @@ struct StylePage: View {
             Spacer()
         }
         .controlSize(.small)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .rowPadding(.horizontal, 12)
+        .rowPadding(.vertical, 8)
         // On the row rather than the page, which already has the import confirmation: one alert per view.
         .alert(notice?.title ?? "", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } }), presenting: notice) { _ in
             Button(L("好", "OK")) {}
@@ -1472,15 +1458,16 @@ struct NoteEditor: View {
         TextEditor(text: $text)
             .font(.system(size: 13))
             .scrollContentBackground(.hidden)
-            .padding(10)
+            .rowPadding(.all, 10)
             .frame(height: height)
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     Text(placeholder)
                         .font(.system(size: 13))
                         .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 15)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 5)
+                        .rowPadding(.horizontal, 10)
+                        .rowPadding(.vertical, 10)
                         .allowsHitTesting(false)
                 }
             }
@@ -1519,8 +1506,8 @@ private struct SnippetList: View {
                 Button { editing = Snippet(trigger: "", expansion: "") } label: {
                     Label(L("添加快捷短语", "Add Snippet"), systemImage: "plus")
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .rowPadding(.horizontal, 14)
+                        .rowPadding(.vertical, 10)
                 }
                 .buttonStyle(HoverButtonStyle(cornerRadius: Theme.cardRadius))
             }
@@ -1554,8 +1541,8 @@ private struct SnippetRow: View {
                 .help(L("删除", "Delete"))
                 .accessibilityLabel(L("删除", "Delete"))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .rowPadding(.horizontal, 14)
+        .rowPadding(.vertical, 8)
     }
 }
 
@@ -1628,8 +1615,8 @@ private struct SnippetEditor: View {
             }
             .controlSize(.small)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .rowPadding(.horizontal, 14)
+        .rowPadding(.vertical, 10)
     }
 }
 
@@ -1648,8 +1635,8 @@ private struct LearnedTermRow: View {
                 .buttonStyle(.borderless).foregroundStyle(.secondary)
                 .help(L("从词汇表删除，以后不再自动学习", "Remove from the vocabulary and never learn it again"))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .rowPadding(.horizontal, 14)
+        .rowPadding(.vertical, 8)
     }
 }
 

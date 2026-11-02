@@ -126,20 +126,55 @@ struct IconBadge: View {
     }
 }
 
-/// A grouped container with a hairline border.
+/// True inside a settings page's grouped `Form`: the building blocks below then become the form's own sections and rows,
+/// drawn by the system like System Settings, instead of drawing cards of their own.
+private struct InSettingsFormKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var inSettingsForm: Bool {
+        get { self[InSettingsFormKey.self] }
+        set { self[InSettingsFormKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Padding for a card's own rows, which a grouped form's rows already have.
+    func rowPadding(_ edges: Edge.Set = .all, _ length: CGFloat) -> some View {
+        modifier(RowPadding(edges: edges, length: length))
+    }
+}
+
+private struct RowPadding: ViewModifier {
+    let edges: Edge.Set
+    let length: CGFloat
+    @Environment(\.inSettingsForm) private var inForm
+
+    func body(content: Content) -> some View {
+        content.padding(edges, inForm ? 0 : length)
+    }
+}
+
+/// A grouped container with a hairline border; in a settings form, a section of its own.
 struct Card<Content: View>: View {
     @ViewBuilder var content: Content
+    @Environment(\.inSettingsForm) private var inForm
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) { content }
-            .background(
-                RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.08))
-            )
+        if inForm {
+            Section { content }
+        } else {
+            VStack(alignment: .leading, spacing: 0) { content }
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.08))
+                )
+        }
     }
 }
 
@@ -208,15 +243,21 @@ struct HelpTip: View {
 struct SectionTitle: View {
     let title: String
     var help: String? = nil
+    @Environment(\.inSettingsForm) private var inForm
 
     var body: some View {
         HStack(spacing: 5) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
+            if inForm {
+                // The form's own section-header style.
+                Text(title)
+            } else {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
             if let help { HelpTip(text: help, topic: title) }
         }
-        .padding(.leading, 4)
+        .padding(.leading, inForm ? 0 : 4)
     }
 }
 
@@ -226,17 +267,32 @@ struct CardSection<Content: View>: View {
     var help: String? = nil
     var footer: String? = nil
     @ViewBuilder var content: Content
+    @Environment(\.inSettingsForm) private var inForm
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionTitle(title: title, help: help)
-            Card { content }
-            if let footer {
-                Text(footer)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 4)
+        if inForm {
+            Section {
+                content
+            } header: {
+                SectionTitle(title: title, help: help)
+            } footer: {
+                if let footer {
+                    Text(footer)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(title: title, help: help)
+                Card { content }
+                if let footer {
+                    Text(footer)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 4)
+                }
             }
         }
     }
@@ -249,6 +305,7 @@ struct CardRow<Trailing: View>: View {
     var subtitle: String? = nil
     var help: String? = nil
     @ViewBuilder var trailing: Trailing
+    @Environment(\.inSettingsForm) private var inForm
 
     var body: some View {
         HStack(spacing: 12) {
@@ -260,7 +317,7 @@ struct CardRow<Trailing: View>: View {
                 }
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 11.5))
+                        .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -268,9 +325,9 @@ struct CardRow<Trailing: View>: View {
             Spacer(minLength: 12)
             trailing
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .frame(minHeight: 42)
+        .padding(.horizontal, inForm ? 0 : 14)
+        .padding(.vertical, inForm ? 1 : 9)
+        .frame(minHeight: inForm ? 22 : 42)
     }
 }
 
@@ -292,11 +349,15 @@ struct RowSwitch: View {
     }
 }
 
+/// A hairline between a card's rows; a grouped form draws its own.
 struct CardDivider: View {
     var inset: CGFloat = 14
+    @Environment(\.inSettingsForm) private var inForm
 
     var body: some View {
-        Rectangle().fill(Color.primary.opacity(0.07)).frame(height: 1).padding(.leading, inset)
+        if !inForm {
+            Rectangle().fill(Color.primary.opacity(0.07)).frame(height: 1).padding(.leading, inset)
+        }
     }
 }
 
@@ -344,24 +405,40 @@ struct StatusPill: View {
     }
 }
 
-/// Tinted inline banner for warnings and hints.
+/// Tinted inline banner for warnings and hints; in a settings form, a row of its own with the symbol in colour.
 struct Banner<Trailing: View>: View {
     let symbol: String
     let color: Color
     let text: String
     @ViewBuilder var trailing: Trailing
+    @Environment(\.inSettingsForm) private var inForm
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: symbol).foregroundStyle(color).font(.system(size: 13, weight: .semibold))
-            Text(text).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            trailing
+        if inForm {
+            Section {
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: symbol)
+                        .symbolRenderingMode(.multicolor)
+                        .foregroundStyle(color)
+                        .font(.system(size: 16))
+                        .frame(width: 22)
+                    Text(text).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    trailing
+                }
+            }
+        } else {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: symbol).foregroundStyle(color).font(.system(size: 13, weight: .semibold))
+                Text(text).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                trailing
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(color.opacity(0.1)))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(color.opacity(0.22)))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(color.opacity(0.1)))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(color.opacity(0.22)))
     }
 }
 

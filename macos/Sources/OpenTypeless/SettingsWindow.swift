@@ -32,6 +32,20 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .history: return "clock.fill"
         }
     }
+
+    /// The colour of the page's icon tile in the sidebar, as System Settings gives each pane its own.
+    var color: Color {
+        switch self {
+        case .home: return .blue
+        case .general: return .gray
+        case .shortcut: return .indigo
+        case .providers: return .orange
+        case .models: return .purple
+        case .style: return .pink
+        case .apps: return .teal
+        case .history: return .green
+        }
+    }
 }
 
 @MainActor
@@ -52,7 +66,6 @@ struct SettingsDetailView: View {
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .buttonStyle(.glass)
             // Rebuild everything when the UI language changes so every L(…) string refreshes.
             .id(settings.appLanguage)
     }
@@ -95,7 +108,12 @@ struct SettingsSidebar: View {
             set: { if let page = $0 { navigation.page = page } }
         )) {
             ForEach(SettingsPage.allCases) { page in
-                Label(page.title, systemImage: page.symbol).tag(page)
+                Label {
+                    Text(page.title)
+                } icon: {
+                    IconBadge(symbol: page.symbol, color: page.color, size: 20)
+                }
+                .tag(page)
             }
         }
         .listStyle(.sidebar)
@@ -123,7 +141,8 @@ struct SettingsSidebar: View {
 }
 
 /// The page's title, with an explanation behind a "?" and controls for the whole page at its end, above the content.
-/// Shared by every page.
+/// Shared by every page. A page of settings is a grouped `Form`, drawn by the system as in System Settings; Home and
+/// History lay out their own content.
 struct PageScaffold<Accessory: View, Content: View>: View {
     let page: SettingsPage
     var help: String? = nil
@@ -133,26 +152,48 @@ struct PageScaffold<Accessory: View, Content: View>: View {
     @ViewBuilder var accessory: Accessory
     @ViewBuilder var content: Content
 
-    var body: some View {
-        let stack = VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 8) {
-                Text(page.title).font(.system(size: 22, weight: .bold))
-                if let help { HelpTip(text: help, topic: page.title) }
-                Spacer(minLength: 12)
-                accessory
-            }
-            content
+    private var header: some View {
+        HStack(spacing: 10) {
+            IconBadge(symbol: page.symbol, color: page.color, size: 26)
+            Text(page.title)
+                .font(.system(size: 20, weight: .bold))
+                .lineLimit(1)
+            if let help { HelpTip(text: help, topic: page.title) }
+            Spacer(minLength: 12)
+            accessory
         }
-        .padding(.horizontal, 30)
-        .padding(.top, 8)
-        .padding(.bottom, 28)
-        .frame(maxWidth: maxWidth.map { $0 + 60 } ?? .infinity, alignment: .leading)
-        .frame(maxWidth: .infinity)
+        .frame(minHeight: 30)
+    }
 
-        if scrolls {
-            ScrollView { stack }.scrollIndicators(.automatic)
+    var body: some View {
+        if scrolls, let maxWidth {
+            VStack(spacing: 0) {
+                header
+                    .padding(.horizontal, 30)
+                    .padding(.top, 10)
+                    .frame(maxWidth: maxWidth + 60)
+                Form { content }
+                    .formStyle(.grouped)
+                    .environment(\.inSettingsForm, true)
+                    .frame(maxWidth: maxWidth + 40)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } else {
-            stack.frame(maxHeight: .infinity, alignment: .top)
+            let stack = VStack(alignment: .leading, spacing: 20) {
+                header
+                content
+            }
+            .padding(.horizontal, 30)
+            .padding(.top, 10)
+            .padding(.bottom, 28)
+            .frame(maxWidth: maxWidth.map { $0 + 60 } ?? .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity)
+
+            if scrolls {
+                ScrollView { stack }.scrollIndicators(.automatic)
+            } else {
+                stack.frame(maxHeight: .infinity, alignment: .top)
+            }
         }
     }
 }

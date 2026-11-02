@@ -718,7 +718,7 @@ private struct ProviderCard: View {
                         SecureField(id.keyPlaceholder, text: Binding(
                             get: { settings.savedAPIKey(for: id) },
                             set: { settings.setAPIKey($0, for: id) }
-                        ))
+                        ), prompt: Text(id.keyPlaceholder))
                         .labelsHidden()
                         .multilineTextAlignment(.leading)
                         .textFieldStyle(.roundedBorder)
@@ -737,7 +737,7 @@ private struct ProviderCard: View {
                         TextField(id == .custom ? "http://localhost:8000/v1" : id.defaultBaseURL, text: Binding(
                             get: { settings.baseURL(for: id) },
                             set: { settings.setBaseURL($0, for: id) }
-                        ))
+                        ), prompt: Text(id == .custom ? "http://localhost:8000/v1" : id.defaultBaseURL))
                         .labelsHidden()
                         .multilineTextAlignment(.leading)
                         .textFieldStyle(.roundedBorder)
@@ -1193,7 +1193,7 @@ private struct PriceRow: View {
                 price[keyPath: keyPath] = value.map { max(0, $0) }
                 settings.setCustomPrice(provider, model, price)
             }
-        ), format: .number.precision(.fractionLength(0...6)))
+        ), format: .number.precision(.fractionLength(0...6)), prompt: Text(verbatim: "$"))
         .labelsHidden()
         .textFieldStyle(.roundedBorder)
         .multilineTextAlignment(.trailing)
@@ -1208,7 +1208,22 @@ private struct ModelField: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            TextField(L("模型 ID", "Model ID"), text: $text)
+            TextField(L("模型 ID", "Model ID")))
+        .labelsHidden()
+        .textFieldStyle(.roundedBorder)
+        .multilineTextAlignment(.trailing)
+        .frame(width: 80)
+    }
+}
+
+/// Free-text model ID with a browse menu of the provider's models (grouped by vendor when long).
+private struct ModelField: View {
+    @Binding var text: String
+    let models: [APIClient.ModelInfo]
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TextField(L("模型 ID", "Model ID"), text: $text, prompt: Text(L("模型 ID", "Model ID")))
                 .labelsHidden()
                 .multilineTextAlignment(.leading)
                 .textFieldStyle(.roundedBorder)
@@ -1462,7 +1477,7 @@ private struct TranslationSection: View {
                     CardRow(title: L("语言", "Language"),
                             help: L("用它的名字，比如 Italiano、繁體中文、Tiếng Việt",
                                     "By its name: Italiano, 繁體中文, Tiếng Việt…")) {
-                        TextField(L("语言", "Language"), text: $settings.translationOtherLanguage)
+                        TextField(L("语言", "Language"), text: $settings.translationOtherLanguage, prompt: Text(L("语言", "Language")))
                             .labelsHidden()
                             .multilineTextAlignment(.leading)
                             .textFieldStyle(.roundedBorder)
@@ -1610,7 +1625,7 @@ private struct SnippetEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField(L("触发词，比如：我的邮箱", "Trigger, e.g. my email"), text: $trigger)
+            TextField(L("触发词，比如：我的邮箱", "Trigger, e.g. my email"), text: $trigger, prompt: Text(L("触发词，比如：我的邮箱", "Trigger, e.g. my email")))
                 .labelsHidden()
                 .multilineTextAlignment(.leading)
                 .textFieldStyle(.roundedBorder)

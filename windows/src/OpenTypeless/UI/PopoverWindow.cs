@@ -171,15 +171,29 @@ public sealed class PopoverWindow : Window
 
     private FrameworkElement BuildContent()
     {
-        var stack = new StackPanel { Spacing = 14, Padding = new Thickness(14), Width = WidthDips };
+        var stack = new StackPanel { Spacing = 14, Padding = new Thickness(16, 16, 16, 12), Width = WidthDips };
         stack.Children.Add(Header());
         if (Warnings() is { } warnings) stack.Children.Add(warnings);
         stack.Children.Add(Recent());
-        stack.Children.Add(Footer());
         // The scroll viewer takes the initial focus, so no row opens with a keyboard focus ring.
         var scroll = new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, IsTabStop = true };
         scroll.Loaded += (_, _) => scroll.Focus(FocusState.Programmatic);
-        return scroll;
+        // The commands in a band along the bottom, as in Windows 11's own tray flyouts (Quick Settings, Volume).
+        var footer = new Border
+        {
+            Background = Palette.Theme("CardBackgroundFillColorSecondaryBrush"),
+            BorderBrush = Palette.Theme("DividerStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(10, 8, 10, 8),
+            Child = Footer(),
+        };
+        var grid = new Grid { Width = WidthDips };
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.Children.Add(scroll);
+        Grid.SetRow(footer, 1);
+        grid.Children.Add(footer);
+        return grid;
     }
 
     private FrameworkElement Header()
@@ -232,7 +246,7 @@ public sealed class PopoverWindow : Window
                 Dismiss();
                 _openSettings(page);
             };
-            stack.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, text, fix));
+            stack.Children.Add(new NoticeBar(Glyphs.Warning, Tint.Orange, text, fix));
         }
         if (failed != null)
         {
@@ -243,7 +257,7 @@ public sealed class PopoverWindow : Window
                 Dismiss();
                 _controller.Retry(failed, paste: true);
             };
-            stack.Children.Add(new Banner(Glyphs.Refresh, Tint.Red,
+            stack.Children.Add(new NoticeBar(Glyphs.Refresh, Tint.Red,
                 L($"上一次转写失败（{duration} 录音已保存）", $"Last dictation failed ({duration} recording saved)"), retry));
         }
         if (update != null) stack.Children.Add(update);
@@ -251,7 +265,7 @@ public sealed class PopoverWindow : Window
     }
 
     /// <summary>A downloaded update, or one that has to be downloaded by hand.</summary>
-    private Banner? UpdateBanner()
+    private NoticeBar? UpdateBanner()
     {
         var updater = Updater.Shared;
         if (updater.Update is not { } update) return null;
@@ -260,7 +274,7 @@ public sealed class PopoverWindow : Window
         {
             var restart = new Button { Content = L("重启更新", "Restart to update"), IsEnabled = !updater.InstallPending };
             restart.Click += (_, _) => updater.InstallAndRestart();
-            return new Banner(Glyphs.Download, Tint.Blue, updater.InstallPending
+            return new NoticeBar(Glyphs.Download, Tint.Blue, updater.InstallPending
                 ? L($"听写结束后自动更新到 {version}", $"Updates to {version} after this dictation")
                 : L($"新版本 {version} 已就绪", $"Version {version} is ready"), restart);
         }
@@ -272,7 +286,7 @@ public sealed class PopoverWindow : Window
                 Dismiss();
                 Updater.OpenInBrowser(update.PageUrl);
             };
-            return new Banner(Glyphs.Download, Tint.Blue, L($"有新版本 {version}", $"Version {version} is available"), download);
+            return new NoticeBar(Glyphs.Download, Tint.Blue, L($"有新版本 {version}", $"Version {version} is available"), download);
         }
         return null;
     }
@@ -370,7 +384,7 @@ public sealed class PopoverWindow : Window
 
     private FrameworkElement Footer()
     {
-        var grid = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 2, 0, 0) };
+        var grid = new Grid { ColumnSpacing = 4 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -399,7 +413,8 @@ public sealed class PopoverWindow : Window
         var action = ShortcutAction.PasteLastDictation;
         var pasteLast = new Button
         {
-            Content = Ui.Icon(Glyphs.Paste, 14),
+            Content = Ui.Icon(Glyphs.Paste, 16),
+            Style = Subtle,
             IsEnabled = _controller.State == SessionController.SessionState.Idle && _history.Records.Count > 0,
         };
         Ui.Label(pasteLast, action.Title());
@@ -412,7 +427,7 @@ public sealed class PopoverWindow : Window
         Grid.SetColumn(pasteLast, 2);
         grid.Children.Add(pasteLast);
 
-        var quit = new Button { Content = Ui.Icon(Glyphs.Power, 14) };
+        var quit = new Button { Content = Ui.Icon(Glyphs.Power, 16), Style = Subtle };
         Ui.Label(quit, L("退出 OpenTypeless", "Quit OpenTypeless"));
         quit.Click += (_, _) => _quit();
         Grid.SetColumn(quit, 4);
@@ -420,14 +435,28 @@ public sealed class PopoverWindow : Window
         return grid;
     }
 
+    /// <summary>A button with no fill or border until the pointer is over it, like the ones in Windows' own flyouts.</summary>
+    private static Style Subtle
+    {
+        get
+        {
+            var style = new Style(typeof(Button)) { BasedOn = (Style)Application.Current.Resources["DefaultButtonStyle"] };
+            style.Setters.Add(new Setter(Control.BackgroundProperty, new SolidColorBrush(Microsoft.UI.Colors.Transparent)));
+            style.Setters.Add(new Setter(Control.BorderBrushProperty, new SolidColorBrush(Microsoft.UI.Colors.Transparent)));
+            style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(10, 7, 10, 7)));
+            return style;
+        }
+    }
+
     private static Button LabeledButton(string glyph, string text)
     {
         var button = new Button
         {
+            Style = Subtle,
             Content = new StackPanel
             {
-                Orientation = Orientation.Horizontal, Spacing = 7,
-                Children = { Ui.Icon(glyph, 14), new TextBlock { Text = text } },
+                Orientation = Orientation.Horizontal, Spacing = 8,
+                Children = { Ui.Icon(glyph, 16), new TextBlock { Text = text } },
             },
         };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, text);

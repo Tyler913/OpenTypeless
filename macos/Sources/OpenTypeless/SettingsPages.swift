@@ -74,9 +74,8 @@ struct GeneralPage: View {
                 CardDivider()
                 CardRow(title: L("单次最长录音", "Maximum recording"),
                         help: L("到时间会自动结束并处理", "Stops and processes automatically at the limit")) {
-                    Stepper(L("\(settings.maxRecordingMinutes) 分钟", "\(settings.maxRecordingMinutes) min"),
-                            value: $settings.maxRecordingMinutes, in: 1...60)
-                        .fixedSize()
+                    ValueStepper(text: L("\(settings.maxRecordingMinutes) 分钟", "\(settings.maxRecordingMinutes) min"),
+                                 value: $settings.maxRecordingMinutes, range: 1...60)
                 }
             }
 
@@ -154,9 +153,8 @@ struct GeneralPage: View {
                         help: L("用来计算节省的时间（默认每分钟 100 字）", "Used to work out the time saved (100 wpm by default)") + "\n\n"
                             + L("「节省的时间」= 按这个速度打出同样的字所需的时间 − 实际说话的时间。",
                                 "“Time saved” is how long typing the same words at this speed would take, minus the time you spent talking.")) {
-                    Stepper(L("\(settings.typingWordsPerMinute) 字/分钟", "\(settings.typingWordsPerMinute) wpm"),
-                            value: $settings.typingWordsPerMinute, in: 10...300, step: 5)
-                        .fixedSize()
+                    ValueStepper(text: L("\(settings.typingWordsPerMinute) 字/分钟", "\(settings.typingWordsPerMinute) wpm"),
+                                 value: $settings.typingWordsPerMinute, range: 10...300, step: 5)
                 }
             }
 
@@ -271,6 +269,22 @@ private struct UpdatesSection: View {
                 Button(L("检查更新", "Check now")) { updater.checkNow() }.controlSize(.small)
             }
         }
+    }
+}
+
+/// A number and the stepper that changes it, side by side (a form would otherwise put the number at the row's start).
+private struct ValueStepper: View {
+    let text: String
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    var step = 1
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(text).monospacedDigit()
+            Stepper(text, value: $value, in: range, step: step).labelsHidden()
+        }
+        .fixedSize()
     }
 }
 
@@ -705,6 +719,8 @@ private struct ProviderCard: View {
                             get: { settings.savedAPIKey(for: id) },
                             set: { settings.setAPIKey($0, for: id) }
                         ))
+                        .labelsHidden()
+                        .multilineTextAlignment(.leading)
                         .textFieldStyle(.roundedBorder)
                         Button(L("粘贴", "Paste")) {
                             if let text = NSPasteboard.general.string(forType: .string) { settings.setAPIKey(text, for: id) }
@@ -722,6 +738,8 @@ private struct ProviderCard: View {
                             get: { settings.baseURL(for: id) },
                             set: { settings.setBaseURL($0, for: id) }
                         ))
+                        .labelsHidden()
+                        .multilineTextAlignment(.leading)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 12, design: .monospaced))
                         if id != .custom, settings.baseURL(for: id) != id.defaultBaseURL {
@@ -939,6 +957,15 @@ struct ModelsPage: View {
             backupChatModels = await loadModels(settings.polishBackupProvider, speech: false)
         }
         .task { PriceStore.shared.refreshIfStale() }
+        .task(id: settings.sttProvider == .openrouter ? settings.sttModel : "") {
+            if settings.sttProvider == .openrouter { await OpenRouterHosts.shared.load(settings.sttModel, settings: settings) }
+        }
+        .task(id: settings.polishProvider == .openrouter ? settings.polishModel : "") {
+            if settings.polishProvider == .openrouter { await OpenRouterHosts.shared.load(settings.polishModel, settings: settings) }
+        }
+        .task(id: settings.polishBackupProvider == .openrouter ? settings.polishBackupModel : "") {
+            if settings.polishBackupProvider == .openrouter { await OpenRouterHosts.shared.load(settings.polishBackupModel, settings: settings) }
+        }
         .onChange(of: settings.polishModel) { controller.refreshModelInfo() }
         .onChange(of: settings.polishProvider) { controller.refreshModelInfo() }
         .onChange(of: settings.polishBackupProvider) { controller.refreshModelInfo() }
@@ -993,16 +1020,29 @@ private struct ProviderPicker: View {
     }
 }
 
+/// The hosts OpenRouter serves each model from, looked up by the Models page as its models change.
+@MainActor
+final class OpenRouterHosts: ObservableObject {
+    static let shared = OpenRouterHosts()
+    @Published private(set) var hosts: [String: [APIClient.ModelHost]] = [:]
+
+    func load(_ model: String, settings: AppSettings) async {
+        guard let endpoint = settings.endpoint(for: .openrouter) else { return }
+        hosts[model] = (try? await APIClient(endpoint: endpoint).listHosts(model: model)) ?? []
+    }
+}
+
 /// Which company serves an OpenRouter clean-up model: whichever answers fastest, or one the user picks. Shown only when
 /// the model has more than one host (or one was picked before).
 private struct HostRow: View {
     @ObservedObject var settings: AppSettings
     let model: String
-    @State private var hosts: [APIClient.ModelHost] = []
+    @ObservedObject private var cache = OpenRouterHosts.shared
+    private var hosts: [APIClient.ModelHost] { cache.hosts[model] ?? [] }
 
     var body: some View {
-        // A stack rather than a Group: an empty Group is no view at all, so its task would never run.
-        VStack(spacing: 0) {
+        // Nothing at all without a choice to show, so a settings form has no empty row for it. The page loads the hosts.
+        Group {
             if hosts.count > 1 || chosen != nil {
                 CardDivider()
                 CardRow(title: L("托管方", "Host"), help: subtitle) {
@@ -1029,11 +1069,6 @@ private struct HostRow: View {
                     .fixedSize()
                 }
             }
-        }
-        .task(id: model) {
-            hosts = []
-            guard let endpoint = settings.endpoint(for: .openrouter) else { return }
-            hosts = (try? await APIClient(endpoint: endpoint).listHosts(model: model)) ?? []
         }
     }
 
@@ -1069,22 +1104,18 @@ private struct HostRow: View {
 private struct SpeechHostRow: View {
     @ObservedObject var settings: AppSettings
     let model: String
-    @State private var hosts: [APIClient.ModelHost] = []
+    @ObservedObject private var cache = OpenRouterHosts.shared
+    private var hosts: [APIClient.ModelHost] { cache.hosts[model] ?? [] }
 
     var body: some View {
-        // A stack rather than a Group: an empty Group is no view at all, so its task would never run.
-        VStack(spacing: 0) {
+        // Nothing at all without a choice to show, so a settings form has no empty row for it. The page loads the hosts.
+        Group {
             if hosts.count > 1 {
                 CardDivider()
                 CardRow(title: L("托管方", "Host"), help: subtitle) {
                     Text(L("自动（按价格）", "Automatic (by price)")).font(.system(size: 12)).foregroundStyle(.secondary)
                 }
             }
-        }
-        .task(id: model) {
-            hosts = []
-            guard let endpoint = settings.endpoint(for: .openrouter) else { return }
-            hosts = (try? await APIClient(endpoint: endpoint).listHosts(model: model)) ?? []
         }
     }
 
@@ -1163,6 +1194,7 @@ private struct PriceRow: View {
                 settings.setCustomPrice(provider, model, price)
             }
         ), format: .number.precision(.fractionLength(0...6)))
+        .labelsHidden()
         .textFieldStyle(.roundedBorder)
         .multilineTextAlignment(.trailing)
         .frame(width: 80)
@@ -1177,6 +1209,8 @@ private struct ModelField: View {
     var body: some View {
         HStack(spacing: 6) {
             TextField(L("模型 ID", "Model ID"), text: $text)
+                .labelsHidden()
+                .multilineTextAlignment(.leading)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12, design: .monospaced))
                 .frame(width: 270)
@@ -1429,6 +1463,8 @@ private struct TranslationSection: View {
                             help: L("用它的名字，比如 Italiano、繁體中文、Tiếng Việt",
                                     "By its name: Italiano, 繁體中文, Tiếng Việt…")) {
                         TextField(L("语言", "Language"), text: $settings.translationOtherLanguage)
+                            .labelsHidden()
+                            .multilineTextAlignment(.leading)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 180)
                     }
@@ -1575,6 +1611,8 @@ private struct SnippetEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextField(L("触发词，比如：我的邮箱", "Trigger, e.g. my email"), text: $trigger)
+                .labelsHidden()
+                .multilineTextAlignment(.leading)
                 .textFieldStyle(.roundedBorder)
                 .onChange(of: trigger) {
                     if trigger.count > SnippetExpander.maxTriggerLength { trigger = String(trigger.prefix(SnippetExpander.maxTriggerLength)) }

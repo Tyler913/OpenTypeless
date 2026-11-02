@@ -174,6 +174,8 @@ struct PageScaffold<Accessory: View, Content: View>: View {
                     .frame(maxWidth: maxWidth + 60)
                 Form { content }
                     .formStyle(.grouped)
+                    // The window's own background behind the sections, as under the title.
+                    .scrollContentBackground(.hidden)
                     .environment(\.inSettingsForm, true)
                     .frame(maxWidth: maxWidth + 40)
             }

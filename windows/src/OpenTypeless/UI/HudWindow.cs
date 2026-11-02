@@ -256,18 +256,18 @@ public sealed class HudWindow : Window
                 break;
             case HudPhase.Learned:
                 row.Spacing = 8;
-                row.Children.Add(Ui.Icon(Glyphs.Dictionary, 14, Palette.Theme("AccentTextFillColorPrimaryBrush")));
+                row.Children.Add(Ui.Icon(Glyphs.Dictionary, 14, Palette.Theme("AccentTextFillColorPrimaryBrush"), filled: true));
                 row.Children.Add(Notice(HudController.Message(_model.Phase) ?? ""));
                 break;
             case HudPhase.Answer:
                 // The start of it; the whole answer is on the clipboard.
                 row.Spacing = 8;
-                row.Children.Add(Ui.Icon(Glyphs.Message, 14, Palette.Theme("AccentTextFillColorPrimaryBrush")));
+                row.Children.Add(Ui.Icon(Glyphs.Message, 14, Palette.Theme("AccentTextFillColorPrimaryBrush"), filled: true));
                 row.Children.Add(Notice(HudController.Message(_model.Phase) ?? ""));
                 break;
             case HudPhase.Error error:
                 row.Spacing = 8;
-                row.Children.Add(Ui.Icon(Glyphs.Warning, 14, Palette.Brush(Tint.Orange)));
+                row.Children.Add(Ui.Icon(Glyphs.Warning, 14, Palette.Brush(Tint.Orange), filled: true));
                 row.Children.Add(Notice(error.Message));
                 break;
         }

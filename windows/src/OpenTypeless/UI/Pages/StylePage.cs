@@ -268,10 +268,10 @@ public sealed class StylePage : PageBase
                                        () => VocabularyTransfer.Data(terms, csv), L("导出失败", "Couldn't export"));
         if (!saved) return;
         _exportLabel.Text = L("已导出", "Exported");
-        _exportIcon.Glyph = Glyphs.CheckMark;
+        Ui.SetGlyph(_exportIcon, Glyphs.CheckMark);
         await Task.Delay(1500);
         _exportLabel.Text = L("导出", "Export");
-        _exportIcon.Glyph = Glyphs.Export;
+        Ui.SetGlyph(_exportIcon, Glyphs.Export);
     }
 
     /// <summary>The two ways spelling is picked up, and the terms learned so far, newest first.</summary>

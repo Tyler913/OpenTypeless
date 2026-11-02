@@ -236,7 +236,10 @@ public sealed class OnboardingWindow : Window
         switch (_step)
         {
             case OnboardingStep.Welcome:
-                _footer.Children.Add(SkipButton(L("跳过引导", "Skip the tour"), Close, HorizontalAlignment.Center));
+                _footer.Children.Add(SkipButton(L("跳过引导", "Skip the tour"), Close, HorizontalAlignment.Left));
+                var next = PrimaryButton(L("继续", "Continue"), () => Go(OnboardingStep.Provider));
+                next.Loaded += (_, _) => next.Focus(FocusState.Programmatic);
+                _footer.Children.Add(next);
                 break;
             case OnboardingStep.Provider:
                 _footer.Children.Add(SkipButton(L("稍后设置", "Set up later"), () => Go(OnboardingStep.TryIt), HorizontalAlignment.Left));
@@ -315,59 +318,45 @@ public sealed class OnboardingWindow : Window
 
     private FrameworkElement WelcomeStep()
     {
-        var grid = new Grid
-        {
-            Padding = new Thickness(40, 0, 40, 18),
-            RowDefinitions =
-            {
-                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
-                new RowDefinition { Height = GridLength.Auto },
-                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
-                new RowDefinition { Height = GridLength.Auto },
-            },
-        };
-        var hero = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-        hero.Children.Add(new AppTile { TileSize = 104, HorizontalAlignment = HorizontalAlignment.Center });
-        var name = Centered(Ui.Text("OpenTypeless", 38, FontWeights.Bold));
-        name.Margin = new Thickness(0, 26, 0, 0);
+        var hero = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Padding = new Thickness(48, 18, 48, 0) };
+        hero.Children.Add(new AppTile { TileSize = 84, HorizontalAlignment = HorizontalAlignment.Center });
+        var name = Centered(Ui.Text("OpenTypeless", 32, FontWeights.SemiBold));
+        name.Margin = new Thickness(0, 18, 0, 0);
         hero.Children.Add(name);
         var tagline = Centered(Ui.Text(L("按住一个键说话，松开后整理好的文字就出现在光标处。", "Hold a key and speak. Let go, and clean text appears at your cursor."),
                                        14, foreground: Ui.Secondary, wrap: true));
-        tagline.Margin = new Thickness(0, 10, 0, 0);
+        tagline.Margin = new Thickness(0, 8, 0, 0);
         hero.Children.Add(tagline);
-        hero.Children.Add(new Border
-        {
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 18, 0, 0),
-            Padding = new Thickness(12, 5, 12, 6),
-            CornerRadius = new CornerRadius(14),
-            Background = Palette.Theme("ControlFillColorDefaultBrush"),
-            BorderBrush = Palette.Theme("ControlElevationBorderBrush"),
-            BorderThickness = new Thickness(1),
-            Child = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 6,
-                Children = { Ui.Icon(Glyphs.Code, 12), Ui.Text(L("完全开源 · MIT 许可", "Fully open source · MIT licensed"), 12, FontWeights.Medium) },
-            },
-        });
-        Grid.SetRow(hero, 1);
-        grid.Children.Add(hero);
+        // What it does: a coloured icon, a title and a line under it.
+        var features = new StackPanel { Spacing = 18, MaxWidth = 460, Margin = new Thickness(0, 30, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
+        features.Children.Add(Feature(Glyphs.Microphone, Tint.Red, L("按住说话", "Hold to talk"),
+            L("按住快捷键说话，松开后自动整理并插入到光标处", "Hold the shortcut while you speak; release to clean up and insert")));
+        features.Children.Add(Feature(Glyphs.Sparkle, Tint.Purple, L("用 AI 整理文字", "Clean up with AI"),
+            L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists")));
+        features.Children.Add(Feature(Glyphs.Code, Tint.Blue, L("完全开源 · MIT 许可", "Fully open source · MIT licensed"),
+            L("录音会用你自己的 API Key 发给你选的服务商转写和整理。推荐 OpenRouter：一个 Key 就能同时用于两步。",
+              "Your recording goes to a provider you choose, with your own API key. OpenRouter is recommended: one key covers both transcription and clean-up.")));
+        hero.Children.Add(features);
+        return hero;
+    }
 
-        var next = new Button
+    /// <summary>One thing the app does, on the welcome step.</summary>
+    private static Grid Feature(string glyph, Tint tint, string title, string detail)
+    {
+        var text = new StackPanel
         {
-            Style = (Style)Application.Current.Resources["AccentButtonStyle"],
-            Width = 56,
-            Height = 56,
-            CornerRadius = new CornerRadius(28),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Content = Ui.Icon(Glyphs.ArrowRight, 20),
+            Spacing = 2,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { Ui.Text(title, 14, FontWeights.SemiBold), Ui.Text(detail, 12.5, foreground: Ui.Secondary, wrap: true) },
         };
-        Ui.Label(next, L("继续", "Continue"));
-        next.Click += (_, _) => Go(OnboardingStep.Provider);
-        next.Loaded += (_, _) => next.Focus(FocusState.Programmatic);
-        Grid.SetRow(next, 3);
-        grid.Children.Add(next);
+        var grid = new Grid { ColumnSpacing = 14 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var icon = HomePage.IconTile(glyph, tint, 36);
+        icon.VerticalAlignment = VerticalAlignment.Top;
+        grid.Children.Add(icon);
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
         return grid;
     }
 

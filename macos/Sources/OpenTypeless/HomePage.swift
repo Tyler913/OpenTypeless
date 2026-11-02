@@ -25,38 +25,37 @@ struct HomePage: View {
             }
 
             let speed = all.speakingWordsPerMinute
-            Card {
-                HStack(spacing: 0) {
-                    StatCell(title: L("总字数", "Words dictated"), value: UsageFormat.count(all.words),
-                             caption: L("今天 \(UsageFormat.count(todayTotals.words))", "\(UsageFormat.count(todayTotals.words)) today"))
-                        .help(L("本月 \(UsageFormat.count(month.words))", "\(UsageFormat.count(month.words)) this month"))
-                    StatDivider()
-                    StatCell(title: L("节省的时间", "Time saved"),
-                             help: all.words > 0
-                                 ? L("说这 \(UsageFormat.count(all.words)) 个字用了 \(UsageFormat.duration(all.speakingSeconds))；按每分钟 \(wpm) 字打出来要 \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm))))。打字速度可以在「通用」里修改。",
-                                     "Saying these \(UsageFormat.count(all.words)) words took \(UsageFormat.duration(all.speakingSeconds)); typing them at \(wpm) wpm would take \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm)))). Change the typing speed under General.")
-                                 : nil,
-                             value: UsageFormat.duration(all.savedSeconds(wordsPerMinute: Double(wpm))),
-                             caption: L("按每分钟打 \(wpm) 字算", "vs. typing at \(wpm) wpm"))
-                    StatDivider()
-                    StatCell(title: L("说话速度", "Speaking speed"),
-                             value: speed.map { L("\(Int($0.rounded())) 字/分钟", "\(Int($0.rounded())) wpm") } ?? "—",
-                             caption: speed.map {
-                                 let ratio = String(format: "%.1f", $0 / Double(wpm))
-                                 return L("是打字的 \(ratio) 倍", "\(ratio)× your typing speed")
-                             } ?? L("说几句就能算出来", "Dictate a little to see it"))
-                    StatDivider()
-                    StatCell(title: L("听写次数", "Dictations"), value: UsageFormat.count(all.dictations),
-                             caption: streaks.current > 0
-                                 ? L("连续 \(streaks.current) 天 · 最长 \(streaks.longest) 天",
-                                     "\(streaks.current)-day streak · Best \(streaks.longest)")
-                                 : L("最长连续 \(streaks.longest) 天", "Longest streak \(streaks.longest) days"))
-                }
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                StatTile(symbol: "text.word.spacing", color: .blue,
+                         title: L("总字数", "Words dictated"), value: UsageFormat.count(all.words),
+                         caption: L("今天 \(UsageFormat.count(todayTotals.words))", "\(UsageFormat.count(todayTotals.words)) today"))
+                    .help(L("本月 \(UsageFormat.count(month.words))", "\(UsageFormat.count(month.words)) this month"))
+                StatTile(symbol: "hourglass", color: .green,
+                         title: L("节省的时间", "Time saved"),
+                         help: all.words > 0
+                             ? L("说这 \(UsageFormat.count(all.words)) 个字用了 \(UsageFormat.duration(all.speakingSeconds))；按每分钟 \(wpm) 字打出来要 \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm))))。打字速度可以在「通用」里修改。",
+                                 "Saying these \(UsageFormat.count(all.words)) words took \(UsageFormat.duration(all.speakingSeconds)); typing them at \(wpm) wpm would take \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm)))). Change the typing speed under General.")
+                             : nil,
+                         value: UsageFormat.duration(all.savedSeconds(wordsPerMinute: Double(wpm))),
+                         caption: L("按每分钟打 \(wpm) 字算", "vs. typing at \(wpm) wpm"))
+                StatTile(symbol: "gauge.with.needle", color: .orange,
+                         title: L("说话速度", "Speaking speed"),
+                         value: speed.map { L("\(Int($0.rounded())) 字/分钟", "\(Int($0.rounded())) wpm") } ?? "—",
+                         caption: speed.map {
+                             let ratio = String(format: "%.1f", $0 / Double(wpm))
+                             return L("是打字的 \(ratio) 倍", "\(ratio)× your typing speed")
+                         } ?? L("说几句就能算出来", "Dictate a little to see it"))
+                StatTile(symbol: "mic.fill", color: .pink,
+                         title: L("听写次数", "Dictations"), value: UsageFormat.count(all.dictations),
+                         caption: streaks.current > 0
+                             ? L("连续 \(streaks.current) 天 · 最长 \(streaks.longest) 天",
+                                 "\(streaks.current)-day streak · Best \(streaks.longest)")
+                             : L("最长连续 \(streaks.longest) 天", "Longest streak \(streaks.longest) days"))
             }
+            .fixedSize(horizontal: false, vertical: true)
 
             // Spend takes a third of the width, the activity grid the rest.
-            ProportionalRow(ratios: [1, 2], spacing: 14) {
+            ProportionalRow(ratios: [1, 2], spacing: 12) {
                 TitledCard(title: L("花费", "Spend"), help: spendHelp) {
                     SpendLine(title: L("今天", "Today"), totals: todayTotals)
                     CardDivider()
@@ -89,39 +88,43 @@ struct HomePage: View {
     }
 }
 
-/// One headline figure in the strip across the page: its label, the number, and a line of context.
-private struct StatCell: View {
+/// One headline figure, on a tile of its own: a coloured symbol and its label, the number, and a line of context.
+private struct StatTile: View {
+    let symbol: String
+    let color: Color
     let title: String
     var help: String? = nil
     let value: String
     let caption: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 5) {
-                Text(title).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
-                if let help { HelpTip(text: help, topic: title) }
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 7) {
+                    IconBadge(symbol: symbol, color: color, size: 22)
+                    Text(title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    if let help { HelpTip(text: help, topic: title) }
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(value)
+                        .font(.system(size: 26, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.55)
+                    Text(caption)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
             }
-            Text(value)
-                .font(.system(size: 24, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            Text(caption)
-                .font(.system(size: 11.5))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            .padding(14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-}
-
-private struct StatDivider: View {
-    var body: some View {
-        Rectangle().fill(Color.primary.opacity(0.07)).frame(width: 1).padding(.vertical, 12)
     }
 }
 

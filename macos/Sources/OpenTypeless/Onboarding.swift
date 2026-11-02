@@ -136,41 +136,39 @@ struct OnboardingView: View {
         }
         .frame(width: Self.size.width, height: Self.size.height)
         .background(alignment: .top) {
-            // A soft wash of the brand colours behind the top of every step.
-            Ellipse()
-                .fill(Theme.brand)
-                .frame(width: 560, height: 260)
-                .blur(radius: 90)
-                .opacity(0.22)
-                .offset(y: -150)
+            // A faint wash of the accent colour behind the top of every step, fading into the window.
+            LinearGradient(colors: [Color.accentColor.opacity(0.10), Color.accentColor.opacity(0)],
+                           startPoint: .top, endPoint: .bottom)
+                .frame(height: 220)
         }
-        .clipped()
         .ignoresSafeArea()
-        .buttonStyle(.glass)
     }
 
     @ViewBuilder private var footer: some View {
         HStack {
             switch step {
             case .welcome:
-                Spacer()
                 SkipButton(title: L("跳过引导", "Skip the tour"), action: finish)
                 Spacer()
+                Button(L("继续", "Continue")) { go(.provider) }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .keyboardShortcut(.defaultAction)
             case .provider:
                 SkipButton(title: L("稍后设置", "Set up later"), action: { go(.tryIt) })
                 Spacer()
                 Button(L("继续", "Continue"), action: saveKey)
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .keyboardShortcut(.defaultAction)
                     .disabled(trimmedKey.isEmpty)
             case .tryIt:
                 SkipButton(title: L("跳过", "Skip"), action: { go(.done) })
                 Spacer()
-                Button(L("继续", "Continue")) { go(.done) }.buttonStyle(.glassProminent).controlSize(.large)
+                Button(L("继续", "Continue")) { go(.done) }.buttonStyle(.borderedProminent).controlSize(.large)
             case .done:
                 Spacer()
-                Button(L("开始使用", "Start dictating"), action: finish).buttonStyle(.glassProminent).controlSize(.large)
+                Button(L("开始使用", "Start dictating"), action: finish).buttonStyle(.borderedProminent).controlSize(.large)
             }
         }
         .padding(.horizontal, 28)
@@ -249,40 +247,58 @@ private struct WelcomeStep: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer()
-            AppTile(size: 104)
+            AppTile(size: 88)
+                .padding(.top, 34)
             Text("OpenTypeless")
-                .font(.system(size: 38, weight: .bold))
-                .padding(.top, 26)
+                .font(.system(size: 32, weight: .bold))
+                .padding(.top, 18)
             Text(L("按住一个键说话，松开后整理好的文字就出现在光标处。", "Hold a key and speak. Let go, and clean text appears at your cursor."))
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.top, 10)
-            HStack(spacing: 6) {
-                Image(systemName: "chevron.left.forwardslash.chevron.right")
-                Text(L("完全开源 · MIT 许可", "Fully open source · MIT licensed"))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
+            // What it does, as Apple's own welcome screens list it: a coloured symbol, a title and a line under it.
+            VStack(alignment: .leading, spacing: 18) {
+                Feature(symbol: "mic.fill", color: .red, title: L("按住说话", "Hold to talk"),
+                        detail: L("按住快捷键说话，松开后自动整理并插入到光标处",
+                                  "Hold the shortcut while you speak; release to clean up and insert"))
+                Feature(symbol: "sparkles", color: .purple, title: L("用 AI 整理文字", "Clean up with AI"),
+                        detail: L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists"))
+                Feature(symbol: "chevron.left.forwardslash.chevron.right", color: .blue,
+                        title: L("完全开源 · MIT 许可", "Fully open source · MIT licensed"),
+                        detail: L("录音会用你自己的 API Key 发给你选的服务商转写和整理。推荐 OpenRouter：一个 Key 就能同时用于两步。",
+                                  "Your recording goes to a provider you choose, with your own API key. OpenRouter is recommended: one key covers both transcription and clean-up."))
             }
-            .font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .glassEffect(.regular, in: .capsule)
-            .padding(.top, 18)
+            .frame(maxWidth: 440, alignment: .leading)
+            .padding(.top, 32)
             Spacer()
-            Button(action: next) {
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 20, weight: .semibold))
-                    .frame(width: 34, height: 34)
-            }
-            .buttonStyle(.glassProminent)
-            .buttonBorderShape(.circle)
-            .controlSize(.large)
-            .keyboardShortcut(.defaultAction)
-            .help(L("继续", "Continue"))
-            .accessibilityLabel(L("继续", "Continue"))
-            Spacer().frame(height: 18)
         }
-        .padding(.horizontal, 40)
+        .padding(.horizontal, 48)
+    }
+}
+
+/// One thing the app does, on the welcome step.
+private struct Feature: View {
+    let symbol: String
+    let color: Color
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(color)
+                .frame(width: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 
@@ -301,11 +317,9 @@ private struct ProviderStep: View {
                                    "Your recording goes to a provider you choose, with your own API key. OpenRouter is recommended: one key covers both transcription and clean-up."))
                 .padding(.top, 22)
 
-            GlassEffectContainer(spacing: 8) {
-                HStack(spacing: 8) {
-                    ForEach(Onboarding.providers) { id in
-                        ProviderChip(id: id, selected: provider == id) { provider = id }
-                    }
+            HStack(spacing: 8) {
+                ForEach(Onboarding.providers) { id in
+                    ProviderChip(id: id, selected: provider == id) { provider = id }
                 }
             }
 
@@ -361,8 +375,9 @@ private struct ProviderChip: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
         }
-        .buttonStyle(selected ? AnyPrimitiveButtonStyle(.glassProminent) : AnyPrimitiveButtonStyle(.glass))
-        .buttonBorderShape(.roundedRectangle(radius: 14))
+        .buttonStyle(selected ? AnyPrimitiveButtonStyle(.borderedProminent) : AnyPrimitiveButtonStyle(.bordered))
+        .buttonBorderShape(.roundedRectangle(radius: 10))
+        .controlSize(.large)
     }
 }
 

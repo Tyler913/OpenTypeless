@@ -903,7 +903,7 @@ public sealed class HistoryPage : PageBase
                     estimate,
                     Card.Make(new CardRow
                     {
-                        Title = L("整理文字", "Clean up text"),
+                        Glyph = Glyphs.Sparkle, Title = L("整理文字", "Clean up text"),
                         Subtitle = _settings.PolishEnabled
                             ? L("用整理模型分段整理转写结果，另行计费", "Runs the transcript through the clean-up model, in parts (billed on top)")
                             : L("文字整理已在设置里关闭", "Clean-up is turned off in Settings"),

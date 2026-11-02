@@ -14,15 +14,16 @@ struct MenuPopoverView: View {
     @State private var copiedID: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             header
             warnings
+            Divider()
             recent
+            Divider()
             footer
         }
-        .padding(14)
+        .padding(12)
         .frame(width: 340)
-        .buttonStyle(.glass)
         .id(settings.appLanguage)
     }
 
@@ -30,8 +31,8 @@ struct MenuPopoverView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            AppTile(size: 28)
-            Text("OpenTypeless").font(.system(size: 14, weight: .semibold))
+            AppTile(size: 30)
+            Text("OpenTypeless").font(.system(size: 14, weight: .bold))
             Spacer()
             switch controller.state {
             case .idle: StatusPill(text: L("就绪", "Ready"), color: .green)
@@ -119,29 +120,26 @@ struct MenuPopoverView: View {
         }
     }
 
+    /// The panel's commands, as rows like a menu-bar extra's (Wi-Fi, Bluetooth): a symbol in a circle and a title.
     private var footer: some View {
-        GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 8) {
-                Button { close(); openSettings(nil) } label: { Label(L("设置", "Settings"), systemImage: "gearshape") }
-                Button { close(); openSettings(.history) } label: { Label(L("历史", "History"), systemImage: "clock") }
-                pasteLastButton
-                Spacer()
-                Button { NSApp.terminate(nil) } label: { Image(systemName: "power") }
-                    .help(L("退出 OpenTypeless", "Quit OpenTypeless"))
-            }
+        VStack(spacing: 0) {
+            MenuRow(symbol: "gearshape.fill", title: L("设置", "Settings")) { close(); openSettings(nil) }
+            MenuRow(symbol: "clock.fill", title: L("历史", "History")) { close(); openSettings(.history) }
+            pasteLastButton
+            Divider().padding(.vertical, 4)
+            MenuRow(symbol: "power", title: L("退出 OpenTypeless", "Quit OpenTypeless")) { NSApp.terminate(nil) }
         }
-        .controlSize(.regular)
-        .padding(.top, 2)
     }
 
     /// Puts the newest dictation at the cursor of the app that had focus before the panel opened (see
     /// `SessionController.pasteLastDictation`); its tooltip shows the shortcut, when there is one.
     private var pasteLastButton: some View {
         let action = ShortcutAction.pasteLastDictation
-        return Button { close(); controller.pasteLastDictation(releasing: nil) } label: { Image(systemName: action.symbol) }
-            .help(action.title + (settings.shortcut(for: action).map { " (\($0.displayName))" } ?? ""))
-            .accessibilityLabel(action.title)
-            .disabled(controller.state != .idle || history.records.isEmpty)
+        return MenuRow(symbol: action.symbol, title: action.title, shortcut: settings.shortcut(for: action)?.displayName) {
+            close()
+            controller.pasteLastDictation(releasing: nil)
+        }
+        .disabled(controller.state != .idle || history.records.isEmpty)
     }
 
     // MARK: Helpers
@@ -205,5 +203,35 @@ private struct RecentRow: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A command in the panel: a symbol in a grey circle, its title, and its shortcut at the end, highlighted under the pointer.
+private struct MenuRow: View {
+    let symbol: String
+    let title: String
+    var shortcut: String? = nil
+    let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(Color.primary.opacity(0.09)))
+                Text(title).font(.system(size: 13))
+                Spacer(minLength: 8)
+                if let shortcut {
+                    Text(shortcut).font(.system(size: 12)).foregroundStyle(.tertiary)
+                }
+            }
+            .opacity(isEnabled ? 1 : 0.45)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(HoverButtonStyle(cornerRadius: 7))
     }
 }

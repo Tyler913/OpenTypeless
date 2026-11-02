@@ -53,28 +53,24 @@ public sealed class HomePage : PageBase
                   $"Hold {_settings.Hotkey.DisplayName} and talk. Your stats will show up here.")));
         }
 
-        // Four headline figures in a strip across the page.
+        // Four headline figures, each on a tile of its own with a coloured icon.
         var speed = all.SpeakingWordsPerMinute;
-        var cells = new Grid();
-        for (var i = 0; i < 4; i++)
-        {
-            if (i > 0) cells.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1) });
-            cells.ColumnDefinitions.Add(new ColumnDefinition());
-        }
-        AddCell(cells, 0, L("总字数", "Words dictated"), null, UsageFormat.Count(all.Words),
+        var cells = new Grid { ColumnSpacing = 12 };
+        for (var i = 0; i < 4; i++) cells.ColumnDefinitions.Add(new ColumnDefinition());
+        AddCell(cells, 0, Glyphs.Font, Tint.Blue, L("总字数", "Words dictated"), null, UsageFormat.Count(all.Words),
                 L($"今天 {UsageFormat.Count(todayTotals.Words)}", $"{UsageFormat.Count(todayTotals.Words)} today"),
                 L($"本月 {UsageFormat.Count(month.Words)}", $"{UsageFormat.Count(month.Words)} this month"));
-        AddCell(cells, 1, L("节省的时间", "Time saved"),
+        AddCell(cells, 1, Glyphs.Timer, Tint.Green, L("节省的时间", "Time saved"),
                 all.Words == 0 ? null : L(
                     $"说这 {UsageFormat.Count(all.Words)} 个字用了 {UsageFormat.Duration(all.SpeakingSeconds)}；按每分钟 {wpm} 字打出来要 {UsageFormat.Duration(all.TypingSeconds(wpm))}。打字速度可以在「通用」里修改。",
                     $"Saying these {UsageFormat.Count(all.Words)} words took {UsageFormat.Duration(all.SpeakingSeconds)}; typing them at {wpm} wpm would take {UsageFormat.Duration(all.TypingSeconds(wpm))}. Change the typing speed under General."),
                 UsageFormat.Duration(all.SavedSeconds(wpm)), L($"按每分钟打 {wpm} 字算", $"vs. typing at {wpm} wpm"));
-        AddCell(cells, 2, L("说话速度", "Speaking speed"), null, speed is { } s ? L($"{s:0} 字/分钟", $"{s:0} wpm") : "—",
+        AddCell(cells, 2, Glyphs.Speed, Tint.Orange, L("说话速度", "Speaking speed"), null, speed is { } s ? L($"{s:0} 字/分钟", $"{s:0} wpm") : "—",
                 speed is { } v ? L($"是打字的 {v / wpm:0.0} 倍", $"{v / wpm:0.0}× your typing speed") : L("说几句就能算出来", "Dictate a little to see it"));
-        AddCell(cells, 3, L("听写次数", "Dictations"), null, UsageFormat.Count(all.Dictations),
+        AddCell(cells, 3, Glyphs.Microphone, Tint.Pink, L("听写次数", "Dictations"), null, UsageFormat.Count(all.Dictations),
                 streak > 0 ? L($"连续 {streak} 天 · 最长 {longest} 天", $"{streak}-day streak · Best {longest}")
                            : L($"最长连续 {longest} 天", $"Longest streak {longest} days"));
-        Body.Children.Add(Card.Make(cells));
+        Body.Children.Add(cells);
 
         // Spend takes a third of the width, the activity grid the rest; both cards as tall as the taller one.
         var spend = new StackPanel();
@@ -86,7 +82,7 @@ public sealed class HomePage : PageBase
         // A new heatmap on every render: XAML refuses (E_INVALIDARG) to put an element into a second card, and one
         // thrown from a dispatcher callback (a new price list, a finished dictation) ends the app with 0xC000027B.
         var heatmap = new ActivityHeatmap { Margin = new Thickness(14, 12, 14, 12), Ledger = ledger };
-        var row = new Grid { ColumnSpacing = 14 };
+        var row = new Grid { ColumnSpacing = 12 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
         row.Children.Add(TitledCard(L("花费", "Spend"), SpendHelp(), spend));
@@ -110,7 +106,7 @@ public sealed class HomePage : PageBase
         var grid = new Grid { RowSpacing = 8 };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        var label = new TitleLine(Ui.Text(title, 12, FontWeights.SemiBold, Ui.Secondary)) { Margin = new Thickness(4, 0, 0, 0), Help = help };
+        var label = new TitleLine(Ui.Text(title, 14, FontWeights.SemiBold)) { Margin = new Thickness(1, 0, 0, 0), Help = help };
         grid.Children.Add(label);
         var card = Card.Make(content);
         card.VerticalAlignment = VerticalAlignment.Stretch;
@@ -119,27 +115,48 @@ public sealed class HomePage : PageBase
         return grid;
     }
 
-    /// <summary>One headline figure, and a hairline before it unless it's the first.</summary>
-    private static void AddCell(Grid grid, int index, string title, string? help, string value, string caption, string? tooltip = null)
+    /// <summary>One headline figure on its own card: a coloured icon and the label, the number, and a line of context.</summary>
+    private static void AddCell(Grid grid, int index, string glyph, Tint tint, string title, string? help, string value, string caption, string? tooltip = null)
     {
-        var valueText = Ui.Text(value, 24, FontWeights.SemiBold);
+        var valueText = Ui.Text(value, 26, FontWeights.SemiBold);
         valueText.TextTrimming = TextTrimming.CharacterEllipsis;
         var captionText = Ui.Text(caption, 12, foreground: Ui.Secondary);
         captionText.TextTrimming = TextTrimming.CharacterEllipsis;
+        var label = new TitleLine(Ui.Text(title, 12.5, foreground: Ui.Secondary)) { Help = help, VerticalAlignment = VerticalAlignment.Center };
+        var heading = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8,
+            Children = { IconTile(glyph, tint), label },
+        };
         var cell = new StackPanel
         {
-            Spacing = 3,
-            Padding = new Thickness(14, 12, 14, 12),
-            Children = { new TitleLine(Ui.Text(title, 12, foreground: Ui.Secondary)) { Help = help }, valueText, captionText },
+            Spacing = 2,
+            Padding = new Thickness(16, 14, 16, 14),
+            Children = { heading, new Border { Height = 8 }, valueText, captionText },
         };
         if (tooltip != null) ToolTipService.SetToolTip(cell, tooltip);
-        Grid.SetColumn(cell, index * 2);
-        grid.Children.Add(cell);
-        if (index == 0) return;
-        var divider = new Border { Background = Palette.Theme("DividerStrokeColorDefaultBrush"), Margin = new Thickness(0, 12, 0, 12) };
-        Grid.SetColumn(divider, index * 2 - 1);
-        grid.Children.Add(divider);
+        var card = Card.Make(cell);
+        Grid.SetColumn(card, index);
+        grid.Children.Add(card);
     }
+
+    /// <summary>A Fluent icon on a rounded square tinted with its colour.</summary>
+    internal static Border IconTile(string glyph, Tint tint, double size = 28) => new()
+    {
+        Width = size,
+        Height = size,
+        CornerRadius = new CornerRadius(size * 0.25),
+        Background = Palette.Brush(tint, 0.16),
+        Child = new FontIcon
+        {
+            Glyph = Icons.Glyph(glyph, size * 0.57, filled: true),
+            FontFamily = Icons.Font,
+            FontSize = size * 0.57,
+            Foreground = Palette.Brush(tint),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        },
+    };
 
     /// One line of the Spend card: label and amount, with the split between the two steps on a tooltip, or under it.
     private static StackPanel SpendLine(string title, UsageTotals totals, bool showsSplit = false)

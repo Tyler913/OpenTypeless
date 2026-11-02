@@ -236,19 +236,19 @@ internal sealed class AppProfileCard : UserControl
         // A picker for each setting.
         _details.Children.Add(new CardRow
         {
-            Title = L("用 AI 整理文字", "Clean up with AI"),
+            Glyph = Glyphs.Sparkle, Title = L("用 AI 整理文字", "Clean up with AI"),
             Trailing = OverrideBox(profile.Polish, _settings.PolishEnabled, value => Update(p => p with { Polish = value })),
         });
         _details.Children.Add(new CardDivider());
         _details.Children.Add(new CardRow
         {
-            Title = L("插入后自动回车", "Press Enter after inserting"),
+            Glyph = Glyphs.Enter, Title = L("插入后自动回车", "Press Enter after inserting"),
             Trailing = OverrideBox(profile.PressEnter, _settings.PressEnterAfterInsert, value => Update(p => p with { PressEnter = value })),
         });
         _details.Children.Add(new CardDivider());
         _details.Children.Add(new CardRow
         {
-            Title = L("说话语言", "Spoken language"),
+            Glyph = Glyphs.Translate, Title = L("说话语言", "Spoken language"),
             Trailing = LanguageBox(),
         });
         _details.Children.Add(new CardDivider());

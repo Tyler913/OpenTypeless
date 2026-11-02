@@ -64,7 +64,7 @@ public sealed class ShortcutPage : PageBase
         enabled.Toggled += (_, _) => _settings.CommandModeEnabled = enabled.IsOn;
         section.Body.Add(new CardRow
         {
-            Title = L("编辑模式", "Command mode"),
+            Glyph = Glyphs.Wand, Title = L("编辑模式", "Command mode"),
             Subtitle = L($"按住听写快捷键时再按一下 {key}，这次说的话会用来修改选中的文字",
                          $"Hold the dictation shortcut and press {key} too: what you say edits the selected text"),
             Trailing = enabled,
@@ -78,7 +78,7 @@ public sealed class ShortcutPage : PageBase
         section.Body.Add(new CardDivider());
         section.Body.Add(new CardRow
         {
-            Title = L("切换键", "Switch key"),
+            Glyph = Glyphs.Shift, Title = L("切换键", "Switch key"),
             Subtitle = _settings.CommandChordClashes ? L("和翻译模式的切换键相同，请换一个", "Translation mode uses this key too — pick another") : null,
             Help = L("按住听写快捷键时按下它（左右两边都可以）", "Pressed while you hold the dictation shortcut (either side)"),
             Trailing = chord,
@@ -199,7 +199,7 @@ public sealed class ShortcutPage : PageBase
         };
         send.Body.Add(new CardRow
         {
-            Title = L("发送键", "Send key"),
+            Glyph = Glyphs.Send, Title = L("发送键", "Send key"),
             Subtitle = L("结束听写，文字插入后自动发送", "Ends the dictation, then sends the text"),
             Help = L("录音时按下它会结束听写，文字插入后再在同一个应用里按一次这个键把它发出去。免手持时可以一步说完并发送。",
                      "Press it while recording to end the dictation; once the text is in, the same key is pressed in that app to send it. Hands-free, that ends and sends in one go.")
@@ -219,7 +219,7 @@ public sealed class ShortcutPage : PageBase
         foreach (var action in ShortcutActions.All)
         {
             if (actions.Body.Count > 0) actions.Body.Add(new CardDivider());
-            actions.Body.Add(new CardRow { Title = action.Title(), Help = action.Subtitle(), Trailing = ActionControls(action) });
+            actions.Body.Add(new CardRow { Glyph = Glyphs.Keyboard, Title = action.Title(), Help = action.Subtitle(), Trailing = ActionControls(action) });
         }
         Body.Children.Add(actions);
         if (_actionRecorder.Message is { } actionMessage) Body.Children.Add(new Banner(Glyphs.Warning, Tint.Orange, actionMessage));

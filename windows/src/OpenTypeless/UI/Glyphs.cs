@@ -52,9 +52,10 @@ public static class Glyphs
     public const string OpenInNew    = "\uE028"; // open
     public const string ChevronRight = "\uE029"; // chevron_right
     public const string ArrowRight   = "\uE02A"; // arrow_right
+    public const string ArrowUp      = "\uE02B"; // arrow_up
 
     internal const char First = '\uE000';
-    internal const char Last = '\uE02A';
+    internal const char Last = '\uE02B';
     internal const int Size16 = 0x100;
     internal const int Size24 = 0x200;
     internal const int Filled = 0x400;

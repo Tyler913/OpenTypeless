@@ -375,6 +375,66 @@ public static partial class Win32
     [DllImport("user32.dll")]
     public static extern bool GetCursorPos(out POINT lpPoint);
 
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(nint hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    public static extern bool ClientToScreen(nint hWnd, ref POINT lpPoint);
+
+    // Layered windows (the glow round the HUD's capsule): per-pixel alpha from a 32-bit premultiplied bitmap.
+    public const uint ULW_ALPHA = 0x00000002;
+    public const byte AC_SRC_OVER = 0x00;
+    public const byte AC_SRC_ALPHA = 0x01;
+    public const long WS_POPUP = 0x80000000;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SIZE
+    {
+        public int cx;
+        public int cy;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct BLENDFUNCTION
+    {
+        public byte BlendOp;
+        public byte BlendFlags;
+        public byte SourceConstantAlpha;
+        public byte AlphaFormat;
+    }
+
+    /// <summary>Draws a layered window: its position, size and pixels, faded by the blend's constant alpha.</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool UpdateLayeredWindow(nint hwnd, nint hdcDst, ref POINT pptDst, ref SIZE psize, nint hdcSrc,
+                                                  ref POINT pptSrc, uint crKey, ref BLENDFUNCTION pblend, uint dwFlags);
+
+    /// <summary>Only fades a layered window: its pixels and place stay as they were.</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool UpdateLayeredWindow(nint hwnd, nint hdcDst, nint pptDst, nint psize, nint hdcSrc,
+                                                  nint pptSrc, uint crKey, ref BLENDFUNCTION pblend, uint dwFlags);
+
+    [DllImport("user32.dll")]
+    public static extern nint GetDC(nint hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern int ReleaseDC(nint hWnd, nint hDC);
+
+    [DllImport("gdi32.dll")]
+    public static extern nint CreateCompatibleDC(nint hdc);
+
+    [DllImport("gdi32.dll")]
+    public static extern nint SelectObject(nint hdc, nint h);
+
+    [DllImport("gdi32.dll")]
+    public static extern bool DeleteDC(nint hdc);
+
+    /// <summary>Cuts a window to a region (the HUD's capsule). On success the window owns the region.</summary>
+    [DllImport("user32.dll")]
+    public static extern int SetWindowRgn(nint hWnd, nint hRgn, bool bRedraw);
+
+    [DllImport("gdi32.dll")]
+    public static extern nint CreateRoundRectRgn(int x1, int y1, int x2, int y2, int widthEllipse, int heightEllipse);
+
     public const uint MONITOR_DEFAULTTONEAREST = 2;
 
     [StructLayout(LayoutKind.Sequential)]

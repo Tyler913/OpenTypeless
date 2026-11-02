@@ -7,8 +7,8 @@ public abstract record HudPhase
     public sealed record Hidden : HudPhase;
     public sealed record Recording : HudPhase;
     /// <summary>
-    /// Transcribing and cleaning up: one state, the user doesn't need the details. Hopping dots, and a bar filling
-    /// the capsule as the answers come back (<see cref="HudModel.Progress"/>).
+    /// Transcribing and cleaning up: one state, the user doesn't need the details. Dots riding a wave, and a ring round
+    /// the ■ button filling as the answers come back (<see cref="HudModel.Progress"/>).
     /// </summary>
     public sealed record Working : HudPhase;
     /// <summary>Nothing to paste into, so the text went to the clipboard.</summary>
@@ -27,6 +27,13 @@ public sealed class HudModel
     public event Action? LevelsChanged;
     public event Action? PreviewChanged;
     public event Action? BadgeChanged;
+    /// <summary>The capsule's ✕, and its ■ while the text is on its way: the same as Esc.</summary>
+    public event Action? CancelRequested;
+    /// <summary>The capsule's ↑: ends the recording as letting go of the key would.</summary>
+    public event Action? FinishRequested;
+
+    public void RequestCancel() => CancelRequested?.Invoke();
+    public void RequestFinish() => FinishRequested?.Invoke();
 
     private string? _badge;
     /// <summary>The mode the dictation is in, when it isn't plain dictation ("→ EN" for a translation into English).</summary>
@@ -66,14 +73,13 @@ public sealed class HudModel
         }
     }
 
-    /// <summary>Where the processing bar stands; the capsule advances it on every frame while working.</summary>
+    /// <summary>Where the processing ring stands; the capsule advances it on every frame while working.</summary>
     public ProcessingProgress Progress { get; private set; } = new(polishes: true);
 
-    /// <summary>Empties the processing bar for a new dictation.</summary>
+    /// <summary>Empties the processing ring for a new dictation.</summary>
     public void StartProgress(bool polishes) => Progress = new ProcessingProgress(polishes);
 
     public float[] Levels { get; private set; } = new float[18];
-    public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;
 
     public void Push(float level)
     {
@@ -94,5 +100,28 @@ public sealed class HudModel
     {
         Levels = levels;
         LevelsChanged?.Invoke();
+    }
+
+    /// <summary>How much each bar of the waveform shrinks with its distance from the middle one.</summary>
+    private static readonly float[] WaveformTaper = [1f, 0.86f, 0.72f, 0.58f, 0.46f];
+
+    /// <summary>
+    /// The capsule's 9 waveform bars (0…1) from the recent levels: the newest level in the middle and
+    /// older ones further out on both sides, so speech ripples outwards, tapering towards the ends. The right side runs
+    /// half a step behind the left (each bar the mean of two levels), so the two sides don't mirror each other. The same
+    /// as the macOS capsule.
+    /// </summary>
+    public static float[] Waveform(float[] levels)
+    {
+        var middle = WaveformTaper.Length - 1;
+        float Level(int age) => age < levels.Length ? levels[levels.Length - 1 - age] : 0;
+        var bars = new float[2 * middle + 1];
+        for (var i = 0; i < bars.Length; i++)
+        {
+            var distance = Math.Abs(i - middle);
+            var level = i <= middle ? Level(distance) : (Level(distance) + Level(distance + 1)) / 2;
+            bars[i] = level * WaveformTaper[distance];
+        }
+        return bars;
     }
 }

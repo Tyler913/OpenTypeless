@@ -80,6 +80,7 @@ ICONS = [
     ("OpenInNew", "open"),
     ("ChevronRight", "chevron_right"),
     ("ArrowRight", "arrow_right"),
+    ("ArrowUp", "arrow_up"),
 ]
 
 FIRST = 0xE000

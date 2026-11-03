@@ -65,7 +65,21 @@ public static class Localization
     /// <summary>The language actually used for display: the chosen one, or the system language if the app supports it.</summary>
     public static AppLanguage Resolved => Current is var chosen and not AppLanguage.System
         ? chosen
-        : Matching(CultureInfo.CurrentUICulture.Name) ?? AppLanguage.En;
+        : SystemLanguage(CultureInfo.CurrentUICulture.Name);
+
+    /// <summary>The system language last matched, by culture name: every <c>L(…)</c> asks while the UI follows the system.</summary>
+    /// <remarks>A reference, so a thread never reads half of one written by another.</remarks>
+    private static SystemMatch? _system;
+
+    private sealed record SystemMatch(string Culture, AppLanguage Language);
+
+    private static AppLanguage SystemLanguage(string culture)
+    {
+        if (_system is { } known && known.Culture == culture) return known.Language;
+        var language = Matching(culture) ?? AppLanguage.En;
+        _system = new SystemMatch(culture, language);
+        return language;
+    }
 
     /// <summary>The supported language for a culture name such as "pt-BR" or "zh-Hant-TW", if any.</summary>
     public static AppLanguage? Matching(string culture)

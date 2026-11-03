@@ -1976,23 +1976,40 @@ public sealed class SessionController
         var usesOpenRouter = _settings.PolishProvider == ProviderId.OpenRouter
             || (_settings.PolishBackupEnabled && _settings.PolishBackupProvider == ProviderId.OpenRouter);
         if (!usesOpenRouter || _settings.Endpoint(ProviderId.OpenRouter) is not { } endpoint) return;
+        // The list is every OpenRouter model, whichever one is chosen: typing a model ID, a key at a time, needs no new
+        // download. It's fetched again for another address or key, after a failure, or once it's ten minutes old.
+        var source = endpoint.BaseUrl.AbsoluteUri + "|" + endpoint.ApiKey;
+        if (source == _modelInfoSource
+            && (_modelInfoLoading || (_modelInfo.Count > 0 && DateTimeOffset.Now - _modelInfoFetchedAt < TimeSpan.FromMinutes(10)))) return;
+        _modelInfoSource = source;
+        _modelInfoLoading = true;
         _ = Load();
 
         async Task Load()
         {
+            Dictionary<string, ModelInfo>? map = null;
             try
             {
                 var models = await new ApiClient(endpoint).ListModels();
-                var map = new Dictionary<string, ModelInfo>();
+                map = new Dictionary<string, ModelInfo>();
                 foreach (var model in models) map.TryAdd(model.Id, model);
-                _modelInfo = map;
             }
             catch
             {
                 // Without metadata, reasoning is still excluded from the output; it just isn't switched off.
             }
+            if (_modelInfoSource != source) return;
+            _modelInfoLoading = false;
+            if (map == null) return;
+            _modelInfo = map;
+            _modelInfoFetchedAt = DateTimeOffset.Now;
         }
     }
+
+    /// <summary>Where <see cref="_modelInfo"/> came from (address and key), when, and whether it's being fetched.</summary>
+    private string? _modelInfoSource;
+    private DateTimeOffset _modelInfoFetchedAt;
+    private bool _modelInfoLoading;
 
     private void PlaySound(Sounds.Kind kind)
     {

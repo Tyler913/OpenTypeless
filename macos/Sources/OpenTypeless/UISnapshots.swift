@@ -39,6 +39,8 @@ enum UISnapshots {
         let requested = CommandLine.arguments.firstIndex(of: "--lang").flatMap { index in
             CommandLine.arguments.indices.contains(index + 1) ? AppLanguage(rawValue: CommandLine.arguments[index + 1]) : nil
         }
+        // The General page's microphones are read in the background in the app; a snapshot is drawn at once.
+        SystemStatus.shared.readNow()
         for language in requested.map { [$0] } ?? (live ? [AppLanguage.zh] : [AppLanguage.zh, .en]) {
             UserDefaults.standard.set(language.rawValue, forKey: AppLanguage.defaultsKey)
             for page in SettingsPage.allCases {

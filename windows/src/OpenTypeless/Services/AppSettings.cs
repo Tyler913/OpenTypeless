@@ -69,6 +69,8 @@ public sealed class AppSettings : INotifyPropertyChanged
         // with it still needs the others (and must not save over them when one is edited).
         _apiKeys = Credentials.Load();
         Localization.Preference = () => GetString(Localization.SettingsKey, "system");
+        // Saving waits a moment (see Save): whatever is still waiting is written as the process ends.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => Flush();
     }
 
     /// <summary>
@@ -949,18 +951,59 @@ public sealed class AppSettings : INotifyPropertyChanged
         Raise(property);
     }
 
+    /// <summary>
+    /// Saves the settings shortly, off the UI thread. Called with <see cref="_lock"/> held, after a change. Writing the
+    /// file and flushing it to disk took from a few to a few hundred milliseconds (antivirus scans the new file), and it
+    /// ran on the UI thread for every switch flipped and every key typed into a settings field. Changes in quick
+    /// succession are written once; <see cref="Flush"/> writes what's left when the app quits.
+    /// </summary>
     private void Save()
     {
         if (!_writable) return;
-        try
+        _pendingJson = _store.ToJsonString(FileJson);
+        if (_saveScheduled) return;
+        _saveScheduled = true;
+        _ = Task.Run(async () =>
         {
-            // Flushed to disk before it replaces the old file, so a power cut can't leave a file of zeros.
-            SafeFile.WriteAllText(_path, _store.ToJsonString(FileJson));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            await Task.Delay(SaveDelay).ConfigureAwait(false);
+            WritePending();
+        });
+    }
+
+    /// <summary>How long a change waits for the next before the file is written.</summary>
+    private static readonly TimeSpan SaveDelay = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>The settings as they are to be written, or null when the file is up to date. Guarded by <see cref="_lock"/>.</summary>
+    private string? _pendingJson;
+    private bool _saveScheduled;
+    /// <summary>Held while writing, so writes happen one at a time, each with the newest settings.</summary>
+    private readonly object _writeLock = new();
+
+    /// <summary>Writes any change not yet saved, now, on the calling thread. Called when the app quits.</summary>
+    public void Flush() => WritePending();
+
+    private void WritePending()
+    {
+        lock (_writeLock)
         {
-            // Best effort: the next change writes again.
-            AppLog.Debug("settings", $"can't save {_path}: {e.Message}");
+            string? json;
+            lock (_lock)
+            {
+                json = _pendingJson;
+                _pendingJson = null;
+                _saveScheduled = false;
+            }
+            if (json == null) return;
+            try
+            {
+                // Flushed to disk before it replaces the old file, so a power cut can't leave a file of zeros.
+                SafeFile.WriteAllText(_path, json);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Best effort: the next change writes again.
+                AppLog.Debug("settings", $"can't save {_path}: {e.Message}");
+            }
         }
     }
 

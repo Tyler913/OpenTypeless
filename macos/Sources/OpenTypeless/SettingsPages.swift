@@ -9,13 +9,16 @@ import UniformTypeIdentifiers
 struct GeneralPage: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject private var permissions = PermissionsMonitor.shared
-    @State private var launchAtLogin = LaunchAtLogin.isEnabled
-    @State private var launchNeedsApproval = LaunchAtLogin.needsApproval
+    /// The microphones and the login item, read off the main thread (see `SystemStatus`). Not `@State` initialised
+    /// from CoreAudio and the login-item service: that ran every time the page was rebuilt, on every click.
+    @ObservedObject private var status = SystemStatus.shared
     @State private var launchError: String?
-    @State private var microphones: [Microphone] = Microphones.all()
-    @State private var defaultMicrophone: Microphone? = Microphones.defaultInput
     @StateObject private var tester = MicrophoneTester()
-    private let timer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+
+    private var launchAtLogin: Bool { status.snapshot.launchAtLogin }
+    private var launchNeedsApproval: Bool { status.snapshot.launchNeedsApproval }
+    private var microphones: [Microphone] { status.snapshot.microphones }
+    private var defaultMicrophone: Microphone? { status.snapshot.defaultMicrophone }
 
     var body: some View {
         PageScaffold(page: .general) {
@@ -87,7 +90,8 @@ struct GeneralPage: View {
                         Text(L("跟随系统", "System default") + (defaultMicrophone.map { L("（\($0.name)）", " (\($0.name))") } ?? "")).tag("")
                         ForEach(microphones) { Text($0.label).tag($0.uid) }
                         if !settings.microphoneUID.isEmpty, !microphones.contains(where: { $0.uid == settings.microphoneUID }) {
-                            Text(L("未连接的设备", "Disconnected device")).tag(settings.microphoneUID)
+                            // Until the first read is in, the chosen one isn't known to be missing.
+                            Text(status.isLoaded ? L("未连接的设备", "Disconnected device") : "").tag(settings.microphoneUID)
                         }
                     }
                     .labelsHidden()
@@ -132,13 +136,20 @@ struct GeneralPage: View {
                         isOn: Binding(
                             get: { launchAtLogin },
                             set: { newValue in
-                                do {
-                                    try LaunchAtLogin.set(newValue)
-                                    launchError = nil
-                                } catch {
-                                    launchError = error.localizedDescription
+                                // Registering asks the background-task service, which can take a while: not on the main thread.
+                                status.assumeLaunchAtLogin(newValue)
+                                Task {
+                                    let failure = await Task.detached(priority: .userInitiated) { () -> String? in
+                                        do {
+                                            try LaunchAtLogin.set(newValue)
+                                            return nil
+                                        } catch {
+                                            return error.localizedDescription
+                                        }
+                                    }.value
+                                    launchError = failure
+                                    status.launchAtLoginChanged()
                                 }
-                                refreshLaunchState()
                             }
                         ))
                 if launchAtLogin {
@@ -160,20 +171,18 @@ struct GeneralPage: View {
 
             UpdatesSection(settings: settings)
         }
-        .onReceive(timer) { _ in
-            refreshLaunchState()
-            let connected = Microphones.all()
-            if connected != microphones { microphones = connected }
-            let systemDefault = Microphones.defaultInput
-            if systemDefault != defaultMicrophone { defaultMicrophone = systemDefault }
+        .onAppear { status.setWatching(true) }
+        .onDisappear {
+            status.setWatching(false)
+            tester.stop()
         }
-        .onDisappear { tester.stop() }
     }
 
     private var selectedMicrophoneUID: String? { settings.microphoneUID.isEmpty ? nil : settings.microphoneUID }
 
     private var microphoneFooter: String? {
         if let error = tester.error { return error }
+        guard status.isLoaded else { return nil }
         guard !settings.microphoneUID.isEmpty else {
             return defaultMicrophone?.isVirtual == true
                 ? L("系统默认的输入是虚拟设备，如果听写没有声音，请在上面选择真正的麦克风。",
@@ -195,11 +204,6 @@ struct GeneralPage: View {
                      "Allow OpenTypeless in System Settings → General → Login Items.")
         }
         return nil
-    }
-
-    private func refreshLaunchState() {
-        launchAtLogin = LaunchAtLogin.isEnabled
-        launchNeedsApproval = LaunchAtLogin.needsApproval
     }
 }
 
@@ -1214,26 +1218,45 @@ private struct ModelField: View {
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12, design: .monospaced))
                 .frame(width: 270)
-            Menu {
-                if models.isEmpty {
-                    Text(L("填写 API Key 后可浏览模型", "Add an API key to browse models"))
-                } else if models.count > 40 {
-                    ForEach(groups, id: \.0) { vendor, items in
-                        Menu(vendor) {
-                            ForEach(items) { model in Button(model.id) { text = model.id } }
-                        }
-                    }
-                } else {
-                    ForEach(models) { model in Button(model.id) { text = model.id } }
-                }
-            } label: {
-                Image(systemName: "list.bullet")
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help(L("浏览可用模型", "Browse models"))
+            ModelMenu(models: models, language: AppLanguage.resolved) { text = $0 }
+                .equatable()
         }
+    }
+}
+
+/// The browse menu. OpenRouter lists hundreds of models, and the Models page redraws on every key typed into any of
+/// its fields: compared by the models it lists, the menu is only built again when they change.
+private struct ModelMenu: View, Equatable {
+    let models: [APIClient.ModelInfo]
+    /// Its one string is in the UI language.
+    let language: AppLanguage
+    let pick: (String) -> Void
+
+    static func == (a: ModelMenu, b: ModelMenu) -> Bool {
+        a.language == b.language && a.models.count == b.models.count
+            && zip(a.models, b.models).allSatisfy { $0.id == $1.id }
+    }
+
+    var body: some View {
+        Menu {
+            if models.isEmpty {
+                Text(L("填写 API Key 后可浏览模型", "Add an API key to browse models"))
+            } else if models.count > 40 {
+                ForEach(groups, id: \.0) { vendor, items in
+                    Menu(vendor) {
+                        ForEach(items) { model in Button(model.id) { pick(model.id) } }
+                    }
+                }
+            } else {
+                ForEach(models) { model in Button(model.id) { pick(model.id) } }
+            }
+        } label: {
+            Image(systemName: "list.bullet")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(L("浏览可用模型", "Browse models"))
     }
 
     private var groups: [(String, [APIClient.ModelInfo])] {

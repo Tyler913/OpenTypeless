@@ -76,6 +76,7 @@ public sealed partial class SettingsWindow : Window
     {
         _refresh.Stop();
         AppWindow.Hide();
+        _pageRequest++; // a page a click asked for just before isn't built for a hidden window
         PageHost.Content = null; // lets pages stop timers and recorders, like SwiftUI's onDisappear
     }
 
@@ -94,7 +95,15 @@ public sealed partial class SettingsWindow : Window
         var item = Nav.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => (SettingsPage)i.Tag == page);
         if (item != null && !ReferenceEquals(Nav.SelectedItem, item))
         {
-            Nav.SelectedItem = item; // raises SelectionChanged → ShowPage
+            _navigating = true;
+            try
+            {
+                Nav.SelectedItem = item; // raises SelectionChanged → ShowPage
+            }
+            finally
+            {
+                _navigating = false;
+            }
         }
         else
         {
@@ -107,13 +116,32 @@ public sealed partial class SettingsWindow : Window
         if (args.SelectedItem is NavigationViewItem { Tag: SettingsPage page })
         {
             _page = page;
-            ShowPage(page);
+            if (_navigating)
+            {
+                ShowPage(page);
+            }
+            else
+            {
+                // A click in the sidebar: the selection moves on this frame and the page, which takes a moment to
+                // build, follows on the next, rather than the click showing nothing until the page is ready.
+                var request = ++_pageRequest;
+                DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+                {
+                    if (request == _pageRequest && _page == page) ShowPage(page);
+                });
+            }
         }
         UpdateNavigationIcons();
     }
 
+    /// <summary>Set while <see cref="Navigate"/> selects a page, which is shown at once.</summary>
+    private bool _navigating;
+    /// <summary>Counts sidebar clicks, so only the last of several quick ones builds its page.</summary>
+    private int _pageRequest;
+
     private void ShowPage(SettingsPage page)
     {
+        _pageRequest++;
         PageHost.Content = page switch
         {
             SettingsPage.Home => new HomePage(this),

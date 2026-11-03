@@ -84,6 +84,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.refreshModelInfo()
         _ = UsageStore.shared // counts the dictations History already has, the first time
         controller.updateWarmMicrophone()
+        // Read now, off the main thread, so the General page has its microphone list the first time it opens.
+        SystemStatus.shared.refresh()
         PriceStore.shared.refreshIfStale()
         LaunchAtLogin.enableByDefaultOnce()
         updater.canInstallNow = { [weak self] in self?.controller.state == .idle }

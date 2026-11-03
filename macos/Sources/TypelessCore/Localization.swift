@@ -48,13 +48,43 @@ public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     /// The language actually used for display: the chosen one, or the first system language the app supports.
     public static var resolved: AppLanguage {
         let chosen = current
-        return chosen != .system ? chosen : Locale.preferredLanguages.lazy.compactMap(matching).first ?? .en
+        return chosen != .system ? chosen : SystemLanguage.shared.value
     }
 
     /// The supported language for a language identifier such as "pt-BR" or "zh-Hant-TW", if any.
     public static func matching(_ identifier: String) -> AppLanguage? {
         let code = identifier.prefix { $0 != "-" && $0 != "_" }.lowercased()
         return code == AppLanguage.system.rawValue ? nil : AppLanguage(rawValue: code)
+    }
+}
+
+/// The first system language the app supports, read once and again only when macOS says the user's languages or region
+/// changed. Every `L(…)` call asks for it while the UI language follows the system, and a page draws a hundred of them:
+/// `Locale.preferredLanguages` reads the preferences and canonicalises each language on every call.
+final class SystemLanguage: @unchecked Sendable {
+    static let shared = SystemLanguage()
+
+    private let lock = NSLock()
+    private var cached: AppLanguage?
+
+    private init() {
+        NotificationCenter.default.addObserver(forName: NSLocale.currentLocaleDidChangeNotification, object: nil,
+                                               queue: nil) { [weak self] _ in self?.reset() }
+    }
+
+    var value: AppLanguage {
+        lock.lock()
+        defer { lock.unlock() }
+        if let cached { return cached }
+        let language = Locale.preferredLanguages.lazy.compactMap(AppLanguage.matching).first ?? .en
+        cached = language
+        return language
+    }
+
+    private func reset() {
+        lock.lock()
+        cached = nil
+        lock.unlock()
     }
 }
 

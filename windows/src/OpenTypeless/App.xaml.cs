@@ -110,6 +110,8 @@ public partial class App : Application
         LaunchAtLogin.EnableByDefaultOnce(_settings);
         _ = UsageStore.Shared; // counts the dictations History already has, the first time
         _controller.UpdateWarmMicrophone();
+        // Read now, off the UI thread, so the General page has its microphone list the first time it opens.
+        _ = MicrophoneList.ReadAsync();
         PriceStore.Shared.RefreshIfStale();
         Updater.Shared.CanInstallNow = () => _controller.State == SessionController.SessionState.Idle;
         Updater.Shared.Quit = Quit;
@@ -185,6 +187,7 @@ public partial class App : Application
         _tray.Dispose();
         _onboarding?.CloseForExit();
         _settingsWindow?.CloseForExit();
+        _settings.Flush();
         Exit();
     }
 }

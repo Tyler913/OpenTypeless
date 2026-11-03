@@ -224,11 +224,19 @@ public sealed class HelpTip : UserControl
             Background = new SolidColorBrush(Colors.Transparent),
             BorderThickness = new Thickness(0),
             VerticalAlignment = VerticalAlignment.Center,
-            Flyout = new Flyout { Content = _body },
+        };
+        // The pop-up is made on the first click: every row has a "?" (most of them hidden), and a page made all of theirs
+        // up front as it opened.
+        _button.Click += (_, _) =>
+        {
+            _flyout ??= new Flyout { Content = _body };
+            _flyout.ShowAt(_button);
         };
         Content = _button;
         UpdateName();
     }
+
+    private Flyout? _flyout;
 
     public HelpTip(string text, string? topic = null) : this()
     {

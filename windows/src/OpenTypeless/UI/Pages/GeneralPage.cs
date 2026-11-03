@@ -29,6 +29,9 @@ public sealed class GeneralPage : PageBase
     private MicrophoneInfo? _defaultMicrophone;
     private string _pickerKey = "";
     private bool _fillingPicker;
+    private bool _microphonesKnown;
+    private bool _readingMicrophones;
+    private bool _closed;
 
     public GeneralPage() : base(SettingsPage.General)
     {
@@ -252,13 +255,14 @@ public sealed class GeneralPage : PageBase
         {
             RefreshPermissions();
             RefreshLaunchState();
-            RefreshMicrophones();
+            _ = ReadMicrophones();
         };
         _timer.Start();
     }
 
     protected override void OnClosed()
     {
+        _closed = true;
         _tester.Changed -= RefreshTester;
         _tester.Stop();
         _timer.Stop();
@@ -366,11 +370,39 @@ public sealed class GeneralPage : PageBase
 
     private string? SelectedMicrophoneId => _settings.MicrophoneId.Length == 0 ? null : _settings.MicrophoneId;
 
-    /// <summary>Refills the device list when a microphone is connected, removed or becomes the default.</summary>
+    /// <summary>Shows the devices last read, and reads them again (see <see cref="MicrophoneList"/>).</summary>
     private void RefreshMicrophones()
     {
-        _microphones = AudioRecorder.Microphones();
-        _defaultMicrophone = AudioRecorder.DefaultMicrophone();
+        if (MicrophoneList.Last is { } known) ShowMicrophones(known);
+        _ = ReadMicrophones();
+    }
+
+    /// <summary>Reads the devices off the UI thread, then shows them; a tick while a read is still going adds none.</summary>
+    private async Task ReadMicrophones()
+    {
+        if (_readingMicrophones) return;
+        _readingMicrophones = true;
+        try
+        {
+            var snapshot = await MicrophoneList.ReadAsync();
+            if (!_closed) ShowMicrophones(snapshot);
+        }
+        catch (Exception e)
+        {
+            AppLog.Debug("microphones", $"couldn't list the microphones: {e.Message}");
+        }
+        finally
+        {
+            _readingMicrophones = false;
+        }
+    }
+
+    /// <summary>Refills the device list when a microphone is connected, removed or becomes the default.</summary>
+    private void ShowMicrophones(MicrophoneList.Snapshot snapshot)
+    {
+        _microphonesKnown = true;
+        _microphones = snapshot.All;
+        _defaultMicrophone = snapshot.Default;
         var chosen = _settings.MicrophoneId;
         var key = string.Join("|", _microphones.Select(m => m.Id + m.Name)) + "#" + _defaultMicrophone?.Name + "#" + chosen;
         if (key == _pickerKey) return;
@@ -394,6 +426,12 @@ public sealed class GeneralPage : PageBase
         if (_tester.Error is { } error)
         {
             _microphone.Footer = error;
+            return;
+        }
+        // Not known to be missing before the first read is in.
+        if (!_microphonesKnown)
+        {
+            _microphone.Footer = null;
             return;
         }
         var chosen = _settings.MicrophoneId;

@@ -59,7 +59,9 @@ final class SettingsNavigation: ObservableObject {
 
 /// The page area to the right of the sidebar.
 struct SettingsDetailView: View {
-    @ObservedObject var settings = AppSettings.shared
+    /// Only the UI language, not all of `AppSettings`: the pages watch the settings they show themselves, and a container
+    /// that redrew on every change (each switch flipped, each key typed) rebuilt the whole page from scratch each time.
+    @AppStorage(AppLanguage.defaultsKey) private var appLanguage: AppLanguage = .system
     @ObservedObject var navigation: SettingsNavigation
     let controller: SessionController
 
@@ -67,8 +69,10 @@ struct SettingsDetailView: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Rebuild everything when the UI language changes so every L(…) string refreshes.
-            .id(settings.appLanguage)
+            .id(appLanguage)
     }
+
+    private var settings: AppSettings { AppSettings.shared }
 
     @ViewBuilder private var content: some View {
         if !navigation.isWindowOpen {
@@ -241,13 +245,18 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// Liquid Glass panel, with the page content extending underneath it.
     static func makeWindow(navigation: SettingsNavigation, controller: SessionController) -> NSWindow {
         let split = NSSplitViewController()
-        let sidebar = NSSplitViewItem(sidebarWithViewController: NSHostingController(
-            rootView: SettingsSidebar(navigation: navigation, settings: AppSettings.shared)))
+        let sidebarHost = NSHostingController(rootView: SettingsSidebar(navigation: navigation, settings: AppSettings.shared))
+        let detailHost = NSHostingController(rootView: SettingsDetailView(navigation: navigation, controller: controller))
+        // The split view and the window set the sizes (fixed sidebar, minimum page width, minimum window size). Left to
+        // size themselves, the hosting views measured their whole page again for its smallest and largest size after
+        // every change, a settings form twice more per click.
+        sidebarHost.sizingOptions = []
+        detailHost.sizingOptions = []
+        let sidebar = NSSplitViewItem(sidebarWithViewController: sidebarHost)
         sidebar.minimumThickness = 220
         sidebar.maximumThickness = 220
         sidebar.canCollapse = false
-        let detail = NSSplitViewItem(viewController: NSHostingController(
-            rootView: SettingsDetailView(navigation: navigation, controller: controller)))
+        let detail = NSSplitViewItem(viewController: detailHost)
         detail.minimumThickness = 640
         split.addSplitViewItem(sidebar)
         split.addSplitViewItem(detail)

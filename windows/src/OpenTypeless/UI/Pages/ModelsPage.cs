@@ -404,9 +404,34 @@ internal sealed class ModelField : UserControl
         }
     }
 
+    /// <summary>
+    /// The models the browse menu lists. Its items are made when it opens, not here: OpenRouter lists hundreds of models,
+    /// and making a menu item for each of them, for every model field, held the page up as it opened.
+    /// </summary>
     public void SetModels(IReadOnlyList<ModelInfo> models)
     {
-        var flyout = new MenuFlyout();
+        _models = models;
+        _menuBuilt = false;
+        if (_browse.Flyout is not MenuFlyout flyout)
+        {
+            flyout = new MenuFlyout();
+            flyout.Opening += (_, _) => BuildMenu(flyout);
+            _browse.Flyout = flyout;
+        }
+        // One item stands in until it opens: a menu without items may not open at all.
+        flyout.Items.Clear();
+        flyout.Items.Add(new MenuFlyoutItem { Text = "…", IsEnabled = false });
+    }
+
+    private IReadOnlyList<ModelInfo> _models = [];
+    private bool _menuBuilt;
+
+    private void BuildMenu(MenuFlyout flyout)
+    {
+        if (_menuBuilt) return;
+        _menuBuilt = true;
+        flyout.Items.Clear();
+        var models = _models;
         if (models.Count == 0)
         {
             flyout.Items.Add(new MenuFlyoutItem { Text = L("填写 API Key 后可浏览模型", "Add an API key to browse models"), IsEnabled = false });
@@ -424,7 +449,6 @@ internal sealed class ModelField : UserControl
         {
             foreach (var model in models) flyout.Items.Add(Item(model));
         }
-        _browse.Flyout = flyout;
     }
 
     private MenuFlyoutItem Item(ModelInfo model)

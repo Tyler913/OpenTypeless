@@ -164,6 +164,10 @@ final class SessionController: ObservableObject {
     /// Clean-ups started ahead of time that finished but were then dropped because the speaker went on: they were billed too.
     private var discardedPolishes: [SegmentedPolishResult] = []
     private var modelInfo: [String: APIClient.ModelInfo] = [:]
+    /// Where `modelInfo` came from (address and key), when, and whether it's being fetched (see `refreshModelInfo`).
+    private var modelInfoSource: String?
+    private var modelInfoFetchedAt: Date?
+    private var modelInfoLoading = false
     /// False when retrying from the history window, or once the screen locked: the result goes to the clipboard instead.
     private var deliverByPaste = true
     /// The text around the cursor in the field being dictated into, read as recording started, for the clean-up to spell
@@ -1773,9 +1777,20 @@ final class SessionController: ObservableObject {
         let usesOpenRouter = settings.polishProvider == .openrouter
             || (settings.polishBackupEnabled && settings.polishBackupProvider == .openrouter)
         guard usesOpenRouter, let endpoint = settings.endpoint(for: .openrouter) else { return }
+        // The list is every OpenRouter model, whichever one is chosen: typing a model ID, a key at a time, needs no new
+        // download. It's fetched again for another address or key, after a failure, or once it's ten minutes old.
+        let source = endpoint.baseURL.absoluteString + "|" + endpoint.apiKey
+        if source == modelInfoSource, modelInfoLoading
+            || (!modelInfo.isEmpty && modelInfoFetchedAt.map { Date().timeIntervalSince($0) < 600 } == true) { return }
+        modelInfoSource = source
+        modelInfoLoading = true
         Task { [weak self] in
-            guard let models = try? await APIClient(endpoint: endpoint).listModels() else { return }
-            self?.modelInfo = Dictionary(models.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            let models = try? await APIClient(endpoint: endpoint).listModels()
+            guard let self, self.modelInfoSource == source else { return }
+            self.modelInfoLoading = false
+            guard let models else { return }
+            self.modelInfo = Dictionary(models.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            self.modelInfoFetchedAt = Date()
         }
     }
 

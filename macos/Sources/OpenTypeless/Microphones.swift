@@ -192,3 +192,96 @@ final class MicrophoneTester: ObservableObject {
         peak = max(scaled, peak * 0.97)
     }
 }
+
+/// The Mac's microphones and the login item's state, for the General page: read off the main thread, every 1.5 s while
+/// the page is open, and published only when something changed. Each read asks coreaudiod about every audio device and
+/// the background-task service about the login item, which takes tens of milliseconds (far more with Bluetooth and
+/// AirPlay devices about): on the main thread, and again each time the page was redrawn, it held every click up.
+@MainActor
+final class SystemStatus: ObservableObject {
+    static let shared = SystemStatus()
+
+    struct Snapshot: Equatable, Sendable {
+        var microphones: [Microphone] = []
+        var defaultMicrophone: Microphone?
+        var launchAtLogin = false
+        var launchNeedsApproval = false
+
+        nonisolated static func read() -> Snapshot {
+            let microphones = Microphones.all()
+            let defaultID = Microphones.defaultInputID
+            return Snapshot(microphones: microphones,
+                            defaultMicrophone: defaultID.flatMap { id in microphones.first { $0.id == id } },
+                            launchAtLogin: LaunchAtLogin.isEnabled,
+                            launchNeedsApproval: LaunchAtLogin.needsApproval)
+        }
+    }
+
+    @Published private(set) var snapshot = Snapshot()
+    /// False until the first read is in, so a chosen microphone isn't called disconnected before the list is known.
+    @Published private(set) var isLoaded = false
+    private var timer: Timer?
+    private var viewers = 0
+    private var reading = false
+    private var readAgain = false
+    /// The login item's state the user just chose, shown until the change has gone through: a read in between would
+    /// still find the old one and flip the switch back.
+    private var launchChoice: Bool?
+
+    private init() {}
+
+    /// Reads everything again, off the main thread. A read asked for while one is running follows it.
+    func refresh() {
+        guard !reading else {
+            readAgain = true
+            return
+        }
+        reading = true
+        Task {
+            var fresh = await Task.detached(priority: .userInitiated) { Snapshot.read() }.value
+            reading = false
+            if let launchChoice { fresh.launchAtLogin = launchChoice }
+            if fresh != snapshot { snapshot = fresh }
+            if !isLoaded { isLoaded = true }
+            if readAgain {
+                readAgain = false
+                refresh()
+            }
+        }
+    }
+
+    /// Polls while at least one page shows it.
+    func setWatching(_ watching: Bool) {
+        viewers = max(0, viewers + (watching ? 1 : -1))
+        if viewers == 0 {
+            timer?.invalidate()
+            timer = nil
+            return
+        }
+        refresh()
+        guard timer == nil else { return }
+        let timer = Timer(timeInterval: 1.5, repeats: true) { _ in
+            MainActor.assumeIsolated { SystemStatus.shared.refresh() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    /// Shows the switch's new position at once, until the next read confirms it.
+    func assumeLaunchAtLogin(_ enabled: Bool) {
+        launchChoice = enabled
+        snapshot.launchAtLogin = enabled
+    }
+
+    /// The change asked for by `assumeLaunchAtLogin` has gone through, or failed: what the system says counts again.
+    func launchAtLoginChanged() {
+        launchChoice = nil
+        refresh()
+    }
+
+    /// Reads everything now, on this thread: for the UI snapshots, which draw the page at once.
+    func readNow() {
+        snapshot = Snapshot.read()
+        isLoaded = true
+    }
+}

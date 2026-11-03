@@ -4949,6 +4949,51 @@
     "fr": "Affiche vos mots au-dessus de la capsule pendant que vous parlez",
     "de": "Zeigt beim Sprechen deine Worte über der Kapsel"
   },
+  "Capsule position": {
+    "ja": "カプセルの位置",
+    "ko": "캡슐 위치",
+    "es": "Posición de la cápsula",
+    "pt": "Posição da cápsula",
+    "ru": "Положение капсулы",
+    "fr": "Position de la capsule",
+    "de": "Position der Kapsel"
+  },
+  "The capsule shows on the screen of the window you're working in. Near the text cursor puts it just below the line you're typing in (above it when there's no room below), never over it; in apps that don't say where the cursor is, it shows at the bottom of the screen.": {
+    "ja": "カプセルは作業中のウインドウがある画面に表示されます。「テキストカーソルの近く」を選ぶと、入力中の行のすぐ下（下に余裕がなければ上）に表示され、その行を隠すことはありません。カーソル位置がわからないアプリでは画面下部に表示されます。",
+    "ko": "캡슐은 작업 중인 창이 있는 화면에 표시됩니다. ‘텍스트 커서 근처’를 고르면 입력 중인 줄 바로 아래(아래에 공간이 없으면 위)에 표시되며, 그 줄을 가리지 않습니다. 커서 위치를 알려 주지 않는 앱에서는 화면 아래쪽에 표시됩니다.",
+    "es": "La cápsula aparece en la pantalla de la ventana en la que trabajas. Cerca del cursor de texto la coloca justo debajo de la línea en la que escribes (encima si no hay sitio debajo), nunca sobre ella; en las apps que no indican dónde está el cursor, aparece en la parte inferior de la pantalla.",
+    "pt": "A cápsula aparece na tela da janela em que você está trabalhando. Perto do cursor de texto a coloca logo abaixo da linha em que você digita (acima dela quando não há espaço embaixo), nunca sobre ela; nos apps que não informam onde está o cursor, ela aparece na parte de baixo da tela.",
+    "ru": "Капсула появляется на экране окна, в котором вы работаете. «Рядом с текстовым курсором» ставит её сразу под строкой, в которой вы печатаете (над ней, если внизу нет места), и никогда поверх неё; в приложениях, которые не сообщают, где курсор, она появляется внизу экрана.",
+    "fr": "La capsule s’affiche sur l’écran de la fenêtre dans laquelle vous travaillez. Près du curseur de texte la place juste sous la ligne où vous écrivez (au-dessus s’il n’y a pas de place en dessous), jamais par-dessus ; dans les apps qui n’indiquent pas où est le curseur, elle s’affiche en bas de l’écran.",
+    "de": "Die Kapsel erscheint auf dem Bildschirm des Fensters, in dem du arbeitest. „Am Textcursor“ setzt sie direkt unter die Zeile, in die du schreibst (darüber, wenn unten kein Platz ist), nie darauf; in Apps, die nicht verraten, wo der Cursor ist, erscheint sie unten auf dem Bildschirm."
+  },
+  "Bottom of the screen": {
+    "ja": "画面の下部",
+    "ko": "화면 아래쪽",
+    "es": "Parte inferior de la pantalla",
+    "pt": "Parte de baixo da tela",
+    "ru": "Внизу экрана",
+    "fr": "En bas de l’écran",
+    "de": "Unten auf dem Bildschirm"
+  },
+  "Top of the screen": {
+    "ja": "画面の上部",
+    "ko": "화면 위쪽",
+    "es": "Parte superior de la pantalla",
+    "pt": "Parte de cima da tela",
+    "ru": "Вверху экрана",
+    "fr": "En haut de l’écran",
+    "de": "Oben auf dem Bildschirm"
+  },
+  "Near the text cursor": {
+    "ja": "テキストカーソルの近く",
+    "ko": "텍스트 커서 근처",
+    "es": "Cerca del cursor de texto",
+    "pt": "Perto do cursor de texto",
+    "ru": "Рядом с текстовым курсором",
+    "fr": "Près du curseur de texte",
+    "de": "Am Textcursor"
+  },
   "Spelling": {
     "ja": "表記",
     "ko": "철자",

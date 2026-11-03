@@ -82,6 +82,7 @@ public static class UISnapshots
                 ("hud-working", new HudPhase.Working()),
                 ("hud-copied", new HudPhase.Copied()),
                 ("hud-learned", new HudPhase.Learned("Typeless、罗技")),
+                ("hud-spending", new HudPhase.Spending(new SpendReminder(SpendLimit.Level.Warning, 8.12, 10))),
                 // A long, real error, to check that it wraps instead of losing its end.
                 ("hud-error", new HudPhase.Error(L("需要麦克风权限：设置 → 隐私和安全性 → 麦克风",
                                                    "Microphone access needed: Settings → Privacy & security → Microphone"))),

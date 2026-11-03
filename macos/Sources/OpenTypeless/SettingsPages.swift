@@ -947,6 +947,8 @@ struct ModelsPage: View {
                       !settings.isConfigured(settings.polishBackupProvider) {
                 setupBanner(for: settings.polishBackupProvider)
             }
+
+            SpendLimitSection(settings: settings)
         }
         .task(id: "\(settings.sttProvider.rawValue)|\(settings.apiKey(for: settings.sttProvider).count)") {
             sttModels = await loadModels(settings.sttProvider, speech: true)
@@ -1202,6 +1204,49 @@ private struct PriceRow: View {
         .textFieldStyle(.roundedBorder)
         .multilineTextAlignment(.trailing)
         .frame(width: 80)
+    }
+}
+
+/// The monthly spending limit: off by default; when on, a reminder in the capsule as this month's spend nears it and
+/// when it reaches it (see `SpendLimit`). It never stops a dictation.
+private struct SpendLimitSection: View {
+    @ObservedObject var settings: AppSettings
+    @ObservedObject var usage = UsageStore.shared
+
+    var body: some View {
+        CardSection(title: L("花费", "Spending")) {
+            CardRow(title: L("每月花费上限", "Monthly spending limit"),
+                    subtitle: L("快到和到达上限时提醒你，听写不受影响", "A reminder near and at the limit; dictation keeps working"),
+                    help: Self.help, isOn: $settings.spendLimitEnabled)
+            if settings.spendLimitEnabled {
+                CardDivider()
+                CardRow(title: L("上限", "Limit"), subtitle: spentLine) {
+                    HStack(spacing: 6) {
+                        TextField("$", value: Binding<Double>(
+                            get: { settings.monthlySpendLimit },
+                            set: { settings.monthlySpendLimit = $0.isFinite ? max(0, $0) : 0 }
+                        ), format: .number.precision(.fractionLength(0...2)), prompt: Text(verbatim: "$"))
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 80)
+                        Text(L("美元/月", "$/month")).font(.system(size: 12)).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    /// What this month has cost so far, against the limit.
+    private var spentLine: String {
+        let spent = UsageFormat.money(usage.ledger.month(CalendarDay(Date())).cost)
+        return L("本月已花费 \(spent)", "\(spent) spent this month")
+    }
+
+    static var help: String {
+        let percent = Int((SpendLimit.warningFraction * 100).rounded())
+        return L("本月花费到上限的 \(percent)% 时提醒一次，到上限时再提醒一次，在听写后的录音浮窗里。只是提醒，不会停止或取消听写。只计入知道价格的请求：OpenRouter 的请求，以及在本页填了价格的其他服务商的模型。按本地时间的自然月计算，每月 1 日重新开始；调高上限后，提醒也会重新开始。",
+                 "You're reminded in the capsule after a dictation once this month's spend reaches \(percent)% of the limit, and again when it reaches the limit. It's only a reminder: no dictation is stopped or cancelled. Only requests with a known price count: OpenRouter's, and other providers' models you've entered a price for on this page. Months follow your local time and start over on the 1st, and so do the reminders when you raise the limit.")
     }
 }
 

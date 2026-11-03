@@ -54,13 +54,56 @@ public sealed class UsageStore
         return true;
     }
 
-    /// <summary>Records one dictation's processing: its cost today, and its words if it just finished.</summary>
-    public void Record(DictationRecord record, double transcriptionCost, double cleanupCost, int unpriced)
+    /// <summary>
+    /// Records one dictation's processing: its cost today, and its words if it just finished. Returns the spending
+    /// reminder that cost brings due, if any (see <see cref="SpendLimit"/>); it's saved as shown, so it comes once a month.
+    /// </summary>
+    public SpendReminder? Record(DictationRecord record, double transcriptionCost, double cleanupCost, int unpriced)
     {
         CountIfFinished(record);
-        Ledger.AddCost(Today, transcriptionCost, cleanupCost, unpriced);
+        var today = Today;
+        var before = Ledger.Month(today).Cost;
+        Ledger.AddCost(today, transcriptionCost, cleanupCost, unpriced);
         Ledger.Save(FilePath);
+        var reminder = SpendReminderFor(today, before);
         Changed?.Invoke();
+        return reminder;
+    }
+
+    /// <summary>This calendar month's spend (what Home shows as "this month") against the monthly limit, while one is set.</summary>
+    public (double Spent, double Limit)? MonthlySpend =>
+        AppSettings.Shared.ActiveSpendLimit is { } limit ? (Ledger.Month(Today).Cost, limit) : null;
+
+    private SpendReminder? SpendReminderFor(DateOnly today, double spentBefore)
+    {
+        var settings = AppSettings.Shared;
+        if (settings.ActiveSpendLimit is not { } limit) return null;
+        var spent = Ledger.Month(today).Cost;
+        var saved = settings.SpendReminderState;
+        var outcome = SpendLimit.Check(spentBefore, spent, limit, SpendLimit.MonthKey(today), saved);
+        if (outcome.State != saved) settings.SpendReminderState = outcome.State;
+        return outcome.Reminder is { } level ? new SpendReminder(level, spent, limit) : null;
+    }
+}
+
+/// <summary>A spending reminder that came due (see <see cref="SpendLimit"/>), shown in the capsule once the dictation is done.</summary>
+public sealed record SpendReminder(SpendLimit.Level Level, double Spent, double Limit)
+{
+    public string Message
+    {
+        get
+        {
+            var amount = UsageFormat.Money(Spent);
+            var cap = UsageFormat.Money(Limit);
+            if (Level == SpendLimit.Level.Reached)
+            {
+                return L($"本月花费已达上限：{amount} / {cap}。听写不受影响",
+                         $"You've reached this month's spending limit: {amount} of {cap}. Dictation keeps working");
+            }
+            var percent = (int)Math.Round(SpendLimit.WarningFraction * 100);
+            return L($"本月已花费 {amount}，达到上限 {cap} 的 {percent}%",
+                     $"This month's spend is {amount}, {percent}% of your {cap} limit");
+        }
     }
 }
 

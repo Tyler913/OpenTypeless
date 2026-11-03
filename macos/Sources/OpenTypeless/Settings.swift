@@ -58,6 +58,11 @@ final class AppSettings: ObservableObject {
     @AppStorage("showHomeAtLogin") var showHomeAtLogin: Bool = false
     /// The typing speed "time saved" on the Home page is measured against.
     @AppStorage("typingWordsPerMinute") var typingWordsPerMinute: Int = UsageTotals.defaultTypingWordsPerMinute
+    /// Remind when this month's spend nears and reaches `monthlySpendLimit` (see `SpendLimit`). Off by default; it never
+    /// stops a dictation.
+    @AppStorage("spendLimitEnabled") var spendLimitEnabled: Bool = false
+    /// The monthly spending limit, in USD.
+    @AppStorage("spendLimit") var monthlySpendLimit: Double = 10
     /// Clean up the transcript of a file transcribed from History (the switch in its import sheet), when clean-up is on.
     @AppStorage("fileCleanUp") var fileCleanUp: Bool = true
 
@@ -359,6 +364,20 @@ final class AppSettings: ObservableObject {
         let key = ModelPrice.key(provider, model)
         if let price, !price.isEmpty { modelPrices[key] = price } else { modelPrices[key] = nil }
         UserDefaults.standard.set(try? JSONEncoder().encode(modelPrices), forKey: "modelPrices")
+    }
+
+    // MARK: Spending limit
+
+    /// The monthly spending limit in USD while it's on and a positive amount; nil otherwise.
+    var activeSpendLimit: Double? {
+        spendLimitEnabled && monthlySpendLimit.isFinite && monthlySpendLimit > 0 ? monthlySpendLimit : nil
+    }
+
+    /// Which of this month's spending reminders were shown, so each comes once (see `SpendLimit.State`). Not published:
+    /// nothing on screen shows it.
+    var spendReminderState: SpendLimit.State {
+        get { SpendLimit.State(stored: UserDefaults.standard.string(forKey: "spendReminder") ?? "") }
+        set { UserDefaults.standard.set(newValue.stored, forKey: "spendReminder") }
     }
 
     // MARK: Learned vocabulary

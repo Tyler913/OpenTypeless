@@ -59,7 +59,7 @@ struct HomePage: View {
                 TitledCard(title: L("花费", "Spend"), help: spendHelp) {
                     SpendLine(title: L("今天", "Today"), totals: todayTotals)
                     CardDivider()
-                    SpendLine(title: L("本月", "This month"), totals: month)
+                    SpendLine(title: L("本月", "This month"), totals: month, limit: settings.activeSpendLimit)
                     CardDivider()
                     SpendLine(title: L("累计", "All time"), totals: all, showsSplit: true)
                 }
@@ -133,6 +133,8 @@ private struct SpendLine: View {
     let title: String
     let totals: UsageTotals
     var showsSplit = false
+    /// The monthly spending limit, for this month's line: how much of it is spent, as a bar.
+    var limit: Double? = nil
 
     private var split: String {
         L("转写 \(UsageFormat.money(totals.transcriptionCost)) · 整理 \(UsageFormat.money(totals.cleanupCost))",
@@ -156,11 +158,37 @@ private struct SpendLine: View {
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let limit { LimitBar(spent: totals.cost, limit: limit).padding(.top, 4) }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .help(totals.cost > 0 ? split : "")
+    }
+}
+
+/// This month's spend against the monthly limit: a bar that turns orange at the reminder's share and red at the limit,
+/// and how much of the limit that is. The menu-bar panel shows the same.
+struct LimitBar: View {
+    let spent: Double
+    let limit: Double
+
+    var body: some View {
+        let level = SpendLimit.level(spent: spent, limit: limit)
+        let percent = SpendLimit.percent(spent: spent, limit: limit)
+        let cap = UsageFormat.money(limit)
+        VStack(alignment: .leading, spacing: 3) {
+            ProgressView(value: SpendLimit.progress(spent: spent, limit: limit))
+                .progressViewStyle(.linear)
+                .controlSize(.small)
+                .tint(level == .reached ? Color.red : level == .warning ? Color.orange : Color.accentColor)
+            Text(L("上限 \(cap) 的 \(percent)%", "\(percent)% of your \(cap) limit"))
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

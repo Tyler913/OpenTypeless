@@ -419,6 +419,33 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("typingWordsPerMinute", Math.Clamp(value, 10, 300));
     }
 
+    /// <summary>
+    /// Remind when this month's spend nears and reaches <see cref="MonthlySpendLimit"/> (see <see cref="TypelessCore.SpendLimit"/>).
+    /// Off by default; it never stops a dictation.
+    /// </summary>
+    public bool SpendLimitEnabled
+    {
+        get => GetBool("spendLimitEnabled", false);
+        set => SetValue("spendLimitEnabled", value);
+    }
+
+    /// <summary>The monthly spending limit, in USD.</summary>
+    public double MonthlySpendLimit
+    {
+        get => GetDouble("spendLimit", 10);
+        set => SetValue("spendLimit", double.IsFinite(value) ? Math.Max(0, value) : 0);
+    }
+
+    /// <summary>The monthly spending limit in USD while it's on and a positive amount; null otherwise.</summary>
+    public double? ActiveSpendLimit => SpendLimitEnabled && MonthlySpendLimit is var limit && double.IsFinite(limit) && limit > 0 ? limit : null;
+
+    /// <summary>Which of this month's spending reminders were shown, so each comes once (see <see cref="TypelessCore.SpendLimit.State"/>).</summary>
+    public SpendLimit.State SpendReminderState
+    {
+        get => SpendLimit.State.FromStored(GetString("spendReminder", ""));
+        set => SetValue("spendReminder", value.Stored);
+    }
+
     /// <summary>The first-launch guide has been shown (see Onboarding); it never comes back after that.</summary>
     public bool DidShowOnboarding
     {
@@ -933,6 +960,11 @@ public sealed class AppSettings : INotifyPropertyChanged
     private int GetInt(string key, int fallback)
     {
         lock (_lock) return _store[key] is JsonValue v && v.TryGetValue<int>(out var i) ? i : fallback;
+    }
+
+    private double GetDouble(string key, double fallback)
+    {
+        lock (_lock) return _store[key] is JsonValue v && v.TryGetValue<double>(out var d) && double.IsFinite(d) ? d : fallback;
     }
 
     private void SetValue<T>(string key, T value, [CallerMemberName] string property = "")

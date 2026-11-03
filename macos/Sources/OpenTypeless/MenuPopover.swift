@@ -9,6 +9,7 @@ struct MenuPopoverView: View {
     @ObservedObject var history = HistoryStore.shared
     @ObservedObject var updater = Updater.shared
     @ObservedObject var permissions = PermissionsMonitor.shared
+    @ObservedObject var usage = UsageStore.shared
     let openSettings: (SettingsPage?) -> Void
     let close: () -> Void
     @State private var copiedID: String?
@@ -17,6 +18,7 @@ struct MenuPopoverView: View {
         VStack(alignment: .leading, spacing: 10) {
             header
             statusModule
+            spendModule
             warnings
             if hasRecent {
                 Divider()
@@ -82,6 +84,26 @@ struct MenuPopoverView: View {
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.06)))
+    }
+
+    /// This month's spend against the monthly limit, while one is set (see `SpendLimit`): the amount, and the same bar
+    /// as on Home.
+    @ViewBuilder private var spendModule: some View {
+        if let month = usage.monthlySpend {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(L("本月花费", "Spent this month")).font(.system(size: 12, weight: .medium))
+                    Spacer(minLength: 8)
+                    Text(UsageFormat.money(month.spent))
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                }
+                LimitBar(spent: month.spent, limit: month.limit)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.06)))
+        }
     }
 
     private var hasRecent: Bool { history.records.contains { !$0.outputText.isEmpty } }

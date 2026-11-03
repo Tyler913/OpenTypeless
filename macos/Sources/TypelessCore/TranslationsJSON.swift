@@ -5008,6 +5008,105 @@ extension Translations {
     "ru": "Серия: {0} дн. · Рекорд: {1}",
     "fr": "{0} jours d’affilée · Record {1}",
     "de": "{0} Tage in Folge · Rekord {1}"
+  },
+  "Spending": {
+    "ja": "費用",
+    "ko": "비용",
+    "es": "Gasto",
+    "pt": "Gastos",
+    "ru": "Расходы",
+    "fr": "Dépenses",
+    "de": "Kosten"
+  },
+  "Monthly spending limit": {
+    "ja": "月の費用上限",
+    "ko": "월 비용 한도",
+    "es": "Límite de gasto mensual",
+    "pt": "Limite de gastos mensal",
+    "ru": "Месячный лимит расходов",
+    "fr": "Plafond de dépenses mensuel",
+    "de": "Monatliches Kostenlimit"
+  },
+  "A reminder near and at the limit; dictation keeps working": {
+    "ja": "上限が近づいたときと達したときにお知らせ。音声入力は止まりません",
+    "ko": "한도에 가까워질 때와 도달할 때 알려 줍니다. 받아쓰기는 계속됩니다",
+    "es": "Un aviso cerca del límite y al alcanzarlo; el dictado sigue funcionando",
+    "pt": "Um aviso perto do limite e ao atingi-lo; o ditado continua funcionando",
+    "ru": "Напоминание у лимита и при его достижении; диктовка продолжает работать",
+    "fr": "Un rappel près du plafond et quand il est atteint ; la dictée continue de fonctionner",
+    "de": "Ein Hinweis kurz vor und beim Limit; das Diktieren läuft weiter"
+  },
+  "You're reminded in the capsule after a dictation once this month's spend reaches {0}% of the limit, and again when it reaches the limit. It's only a reminder: no dictation is stopped or cancelled. Only requests with a known price count: OpenRouter's, and other providers' models you've entered a price for on this page. Months follow your local time and start over on the 1st, and so do the reminders when you raise the limit.": {
+    "ja": "今月の費用が上限の {0}% に達したときと、上限に達したときに、音声入力のあとカプセルで1回ずつお知らせします。お知らせだけで、音声入力を止めたりキャンセルしたりすることはありません。計算に入るのは価格がわかるリクエストだけです：OpenRouter のリクエストと、このページで価格を入力したその他のプロバイダのモデル。月はローカル時間の暦月で、毎月1日にリセットされます。上限を引き上げたときもお知らせはリセットされます。",
+    "ko": "이번 달 비용이 한도의 {0}%에 도달하면 한 번, 한도에 도달하면 다시 한 번, 받아쓰기 후 캡슐에서 알려 줍니다. 알림일 뿐이며 받아쓰기를 멈추거나 취소하지 않습니다. 가격을 알 수 있는 요청만 계산합니다: OpenRouter 요청, 그리고 이 페이지에서 가격을 입력한 다른 제공업체의 모델. 월은 현지 시간 기준이며 매월 1일에 다시 시작하고, 한도를 올리면 알림도 다시 시작합니다.",
+    "es": "Recibes un aviso en la cápsula después de un dictado cuando el gasto de este mes llega al {0}% del límite, y otro cuando llega al límite. Es solo un aviso: ningún dictado se detiene ni se cancela. Solo cuentan las solicitudes con precio conocido: las de OpenRouter y las de modelos de otros proveedores cuyo precio hayas indicado en esta página. Los meses siguen tu hora local y empiezan de nuevo el día 1, y lo mismo los avisos cuando subes el límite.",
+    "pt": "Você recebe um aviso na cápsula depois de um ditado quando os gastos deste mês chegam a {0}% do limite, e outro quando chegam ao limite. É só um aviso: nenhum ditado é interrompido ou cancelado. Só contam as solicitações com preço conhecido: as do OpenRouter e as de modelos de outros provedores para os quais você informou um preço nesta página. Os meses seguem o seu horário local e recomeçam no dia 1, assim como os avisos quando você aumenta o limite.",
+    "ru": "После диктовки капсула напомнит один раз, когда расходы за этот месяц дойдут до {0}% лимита, и ещё раз, когда достигнут лимита. Это только напоминание: диктовка не останавливается и не отменяется. Учитываются только запросы с известной ценой: запросы к OpenRouter и к моделям других провайдеров, для которых вы указали цену на этой странице. Месяцы считаются по местному времени и начинаются заново 1-го числа; напоминания начинаются заново и тогда, когда вы повышаете лимит.",
+    "fr": "Un rappel s’affiche dans la capsule après une dictée lorsque les dépenses du mois atteignent {0} % du plafond, puis à nouveau lorsqu’elles l’atteignent. Ce n’est qu’un rappel : aucune dictée n’est arrêtée ni annulée. Seules les requêtes au prix connu comptent : celles d’OpenRouter et celles des modèles d’autres fournisseurs dont vous avez indiqué le prix sur cette page. Les mois suivent votre heure locale et recommencent le 1er, de même que les rappels quand vous relevez le plafond.",
+    "de": "Nach einem Diktat erinnert dich die Kapsel einmal, wenn die Kosten dieses Monats {0} % des Limits erreichen, und noch einmal, wenn sie das Limit erreichen. Es ist nur ein Hinweis: Kein Diktat wird gestoppt oder abgebrochen. Es zählen nur Anfragen mit bekanntem Preis: die von OpenRouter und die von Modellen anderer Anbieter, für die du auf dieser Seite einen Preis eingetragen hast. Monate richten sich nach deiner Ortszeit und beginnen am 1. neu, ebenso die Hinweise, wenn du das Limit erhöhst."
+  },
+  "Limit": {
+    "ja": "上限",
+    "ko": "한도",
+    "es": "Límite",
+    "pt": "Limite",
+    "ru": "Лимит",
+    "fr": "Plafond",
+    "de": "Limit"
+  },
+  "$/month": {
+    "ja": "ドル/月",
+    "ko": "달러/월",
+    "es": "$/mes",
+    "pt": "US$/mês",
+    "ru": "$/мес.",
+    "fr": "$/mois",
+    "de": "$/Monat"
+  },
+  "{0} spent this month": {
+    "ja": "今月の費用 {0}",
+    "ko": "이번 달 {0} 사용",
+    "es": "{0} gastados este mes",
+    "pt": "{0} gastos este mês",
+    "ru": "Потрачено в этом месяце: {0}",
+    "fr": "{0} dépensés ce mois-ci",
+    "de": "{0} diesen Monat ausgegeben"
+  },
+  "{0}% of your {1} limit": {
+    "ja": "上限 {1} の {0}%",
+    "ko": "한도 {1}의 {0}%",
+    "es": "{0}% de tu límite de {1}",
+    "pt": "{0}% do seu limite de {1}",
+    "ru": "{0}% от лимита {1}",
+    "fr": "{0} % de votre plafond de {1}",
+    "de": "{0} % deines Limits von {1}"
+  },
+  "Spent this month": {
+    "ja": "今月の費用",
+    "ko": "이번 달 비용",
+    "es": "Gastado este mes",
+    "pt": "Gasto este mês",
+    "ru": "Расходы за месяц",
+    "fr": "Dépensé ce mois-ci",
+    "de": "Diesen Monat ausgegeben"
+  },
+  "This month's spend is {0}, {1}% of your {2} limit": {
+    "ja": "今月の費用は {0} で、上限 {2} の {1}% に達しました",
+    "ko": "이번 달 비용이 {0}로 한도 {2}의 {1}%에 도달했습니다",
+    "es": "El gasto de este mes es de {0}, el {1}% de tu límite de {2}",
+    "pt": "Os gastos deste mês somam {0}, {1}% do seu limite de {2}",
+    "ru": "Расходы за этот месяц: {0}, это {1}% от лимита {2}",
+    "fr": "Les dépenses du mois s’élèvent à {0}, soit {1} % de votre plafond de {2}",
+    "de": "Die Kosten diesen Monat liegen bei {0}, {1} % deines Limits von {2}"
+  },
+  "You've reached this month's spending limit: {0} of {1}. Dictation keeps working": {
+    "ja": "今月の費用上限に達しました：{0} / {1}。音声入力はそのまま使えます",
+    "ko": "이번 달 비용 한도에 도달했습니다: {0} / {1}. 받아쓰기는 계속 사용할 수 있습니다",
+    "es": "Has alcanzado el límite de gasto de este mes: {0} de {1}. El dictado sigue funcionando",
+    "pt": "Você atingiu o limite de gastos deste mês: {0} de {1}. O ditado continua funcionando",
+    "ru": "Достигнут лимит расходов на этот месяц: {0} из {1}. Диктовка продолжает работать",
+    "fr": "Vous avez atteint le plafond de dépenses du mois : {0} sur {1}. La dictée continue de fonctionner",
+    "de": "Du hast das Kostenlimit dieses Monats erreicht: {0} von {1}. Das Diktieren läuft weiter"
   }
 }
 

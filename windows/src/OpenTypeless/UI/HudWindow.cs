@@ -25,10 +25,19 @@ public sealed class HudController
     public HudModel Model { get; } = new();
     private HudWindow? _window;
     private DispatcherQueueTimer? _hideTimer;
+    /// <summary>A notice waiting for the capsule to be free (see <see cref="ShowWhenFree"/>).</summary>
+    private (HudPhase Phase, double HideAfter)? _waiting;
 
     public void Show(HudPhase phase, double? autoHideAfter = null)
     {
         _hideTimer?.Stop();
+        // What was waiting for the capsule to be free goes up instead.
+        if (phase is HudPhase.Hidden && _waiting is { } next)
+        {
+            _waiting = null;
+            Show(next.Phase, next.HideAfter);
+            return;
+        }
         Model.Phase = phase;
         if (phase is HudPhase.Hidden)
         {
@@ -41,11 +50,23 @@ public sealed class HudController
         if (autoHideAfter is { } seconds) HideAfter(Message(phase) is { } message ? DisplayTime(message, seconds) : seconds);
     }
 
+    /// <summary>
+    /// A notice that waits its turn: shown now when the capsule is empty, otherwise once what it shows has gone (the text
+    /// of a dictation on its way, a notice about it, or a recording), so it never covers or cuts short any of them. A
+    /// newer one takes the place of one still waiting.
+    /// </summary>
+    public void ShowWhenFree(HudPhase phase, double autoHideAfter)
+    {
+        if (Model.Phase is HudPhase.Hidden) Show(phase, autoHideAfter);
+        else _waiting = (phase, autoHideAfter);
+    }
+
     /// <summary>The text a notice shows (its length decides how long it stays up).</summary>
     internal static string? Message(HudPhase phase) => phase switch
     {
         HudPhase.Learned learned => L("已加入词汇表：", "Added to vocabulary: ") + learned.Terms,
         HudPhase.Answer answer => L("答案已复制：", "Answer copied: ") + answer.Text,
+        HudPhase.Spending spending => spending.Reminder.Message,
         HudPhase.Error error => error.Message,
         _ => null,
     };
@@ -378,6 +399,11 @@ public sealed class HudWindow : Window
                 row.Children.Add(Ui.Icon(Glyphs.Message, 14, Palette.Theme("AccentTextFillColorPrimaryBrush"), filled: true));
                 row.Children.Add(Notice(HudController.Message(phase) ?? ""));
                 break;
+            case HudPhase.Spending spending:
+                var tint = spending.Reminder.Level == SpendLimit.Level.Reached ? Tint.Red : Tint.Orange;
+                row.Children.Add(Ui.Icon(Glyphs.Money, 14, Palette.Brush(tint), filled: true));
+                row.Children.Add(Notice(spending.Reminder.Message));
+                break;
             case HudPhase.Error error:
                 row.Children.Add(Ui.Icon(Glyphs.Warning, 14, Palette.Brush(Tint.Orange), filled: true));
                 row.Children.Add(Notice(error.Message));
@@ -575,6 +601,7 @@ public sealed class HudWindow : Window
         HudPhase.Copied => 170,
         HudPhase.Learned l => Math.Min(372, 150 + l.Terms.Length * 9),
         HudPhase.Answer a => Math.Min(372, 150 + a.Text.Length * 13),
+        HudPhase.Spending s => Math.Min(372, 40 + s.Reminder.Message.Length * 13),
         HudPhase.Error e => Math.Min(372, 40 + e.Message.Length * 13),
         _ => 120,
     };

@@ -1666,7 +1666,13 @@ public sealed class SessionController
         }
         if (transcription + cleanup > 0) record.Cost = (record.Cost ?? 0) + transcription + cleanup;
         Note($"cost: transcription ${transcription:0.######}, clean-up ${cleanup:0.######}, unpriced requests {unpriced}");
-        UsageStore.Shared.Record(record, transcription, cleanup, unpriced);
+        // This month's spend reached part of the monthly limit, or all of it: a reminder once the capsule is free, after
+        // the text (or the notice about it). Only a reminder: nothing is held back or cancelled for it.
+        if (UsageStore.Shared.Record(record, transcription, cleanup, unpriced) is { } reminder)
+        {
+            Note($"spending reminder: {reminder.Level.Name()} (${reminder.Spent:0.####} of ${reminder.Limit:0.##} this month)");
+            Hud.ShowWhenFree(new HudPhase.Spending(reminder), 4);
+        }
     }
 
     /// <summary>Notes in History that a clean-up request of this run carried the text around the cursor; the text isn't kept.</summary>

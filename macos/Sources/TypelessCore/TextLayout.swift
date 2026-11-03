@@ -104,7 +104,7 @@ public enum ExampleLanguage {
     /// The language whose examples go with a clean-up of `transcript`: `hint` (the speech-to-text language, "" to
     /// auto-detect) when set, otherwise the guess. Nil for Chinese, English and anything that can't be told.
     public static func resolve(hint: String?, transcript: String) -> String? {
-        let code = (hint ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        let code = (hint ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if !code.isEmpty { return withExamples.contains(code) ? code : nil }
         guard let guess = detect(transcript), withExamples.contains(guess) else { return nil }
         return guess

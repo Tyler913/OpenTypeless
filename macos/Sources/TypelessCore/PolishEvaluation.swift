@@ -440,7 +440,7 @@ public struct TextShape: Equatable, Sendable {
         var paragraphs = 0, items = 0
         var prose = false
         for raw in text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n") + [""] {
-            let line = raw.trimmingCharacters(in: .whitespaces)
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             if line.isEmpty {
                 if prose { paragraphs += 1 }
                 prose = false

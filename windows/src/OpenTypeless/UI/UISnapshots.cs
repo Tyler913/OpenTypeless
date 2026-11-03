@@ -76,23 +76,33 @@ public static class UISnapshots
 
             var hud = controller.Hud;
             hud.Model.SetLevels(Enumerable.Range(0, 18).Select(i => (float)Math.Abs(Math.Sin(i * 0.7)) * 0.8f + 0.1f).ToArray());
-            (string Name, HudPhase Phase)[] phases =
+            // What the live preview shows (the speaker's words, so not translated).
+            const string words = "Let's move the launch review to Thursday afternoon";
+            (string Name, HudPhase Phase, HudPosition Position, string Preview)[] phases =
             [
-                ("hud-recording", new HudPhase.Recording()),
-                ("hud-working", new HudPhase.Working()),
-                ("hud-copied", new HudPhase.Copied()),
-                ("hud-learned", new HudPhase.Learned("Typeless、罗技")),
+                ("hud-recording", new HudPhase.Recording(), HudPosition.Bottom, ""),
+                ("hud-working", new HudPhase.Working(), HudPosition.Bottom, ""),
+                ("hud-copied", new HudPhase.Copied(), HudPosition.Bottom, ""),
+                ("hud-learned", new HudPhase.Learned("Typeless、罗技"), HudPosition.Bottom, ""),
                 // A long, real error, to check that it wraps instead of losing its end.
                 ("hud-error", new HudPhase.Error(L("需要麦克风权限：设置 → 隐私和安全性 → 麦克风",
-                                                   "Microphone access needed: Settings → Privacy & security → Microphone"))),
+                                                   "Microphone access needed: Settings → Privacy & security → Microphone")), HudPosition.Bottom, ""),
+                // The live preview above the capsule at the bottom of the screen, and below it at the top (or under the cursor).
+                ("hud-preview", new HudPhase.Recording(), HudPosition.Bottom, words),
+                ("hud-top", new HudPhase.Recording(), HudPosition.Top, words),
             ];
-            foreach (var (name, phase) in phases)
+            foreach (var (name, phase, position, preview) in phases)
             {
+                // A recording is placed as it starts: shown anew, at its position.
+                if (phase is HudPhase.Recording) hud.Show(new HudPhase.Hidden());
+                hud.Position = () => position;
+                hud.Model.Preview = preview;
                 hud.Show(phase);
                 await Task.Delay(600);
                 await Capture((FrameworkElement)hud.Window.Content, Path.Combine(directory, name + ".png"));
             }
             hud.Show(new HudPhase.Hidden());
+            hud.Model.Preview = "";
             Console.WriteLine($"✓ snapshots in {directory}");
         }
         catch (Exception error)

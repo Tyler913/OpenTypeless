@@ -398,6 +398,16 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("livePreview", value);
     }
 
+    /// <summary>
+    /// Where the recording capsule shows (see <see cref="HudPlacement"/>): the bottom of the screen, as it always was,
+    /// unless the user picks another; a choice this version can't read is the bottom too.
+    /// </summary>
+    public HudPosition HudPosition
+    {
+        get => HudPositions.Parse(GetString("hudPosition", "bottom"));
+        set => SetValue("hudPosition", value.RawValue());
+    }
+
     /// <summary>Open the Home page when the app starts at sign-in (a manual launch always shows it).</summary>
     public bool ShowHomeAtLogin
     {

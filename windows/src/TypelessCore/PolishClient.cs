@@ -63,6 +63,50 @@ public static class ReasoningConfig
         if (info.Efforts.Contains("none")) return new JsonObject { ["effort"] = "none", ["exclude"] = true };
         return new JsonObject { ["enabled"] = false, ["exclude"] = true };
     }
+
+    /// <summary>
+    /// The fields that switch reasoning off, or to its minimum, on a provider asked directly, by that provider's own
+    /// documented parameter. A model that turns the field down (one that always reasons, say) answers 400 naming it, and
+    /// the clean-up is sent again without it (see <see cref="ApiClient.Polish"/>). Empty where nothing is known to work.
+    /// </summary>
+    public static JsonObject Direct(ProviderId provider, string model)
+    {
+        model = model.Trim().ToLowerInvariant();
+        static JsonObject Effort(string effort) => new() { ["reasoning_effort"] = effort };
+        static JsonObject NoThinking() => new() { ["thinking"] = new JsonObject { ["type"] = "disabled" } };
+        switch (provider)
+        {
+            case ProviderId.Gemini:
+                // Gemini 3 can't stop thinking: the lowest level each takes ("minimal" only on Flash-Lite; 2.5 Flash stops).
+                if (model.StartsWith("gemini-2.5-flash", StringComparison.Ordinal)) return Effort("none");
+                return Effort(model.Contains("flash-lite", StringComparison.Ordinal) ? "minimal" : "low");
+            case ProviderId.Anthropic or ProviderId.Volcengine:
+                // Claude 5 and Doubao Seed think unless told not to.
+                return NoThinking();
+            case ProviderId.Zhipu:
+                // GLM 5.3 can't stop thinking, and turns the field down.
+                return model.StartsWith("glm-5.3", StringComparison.Ordinal) ? new JsonObject() : NoThinking();
+            case ProviderId.Mistral:
+                // Mistral Small and Medium take "none"; Large 4 doesn't.
+                return model.Contains("small", StringComparison.Ordinal) || model.Contains("medium", StringComparison.Ordinal)
+                    ? Effort("none") : new JsonObject();
+            case ProviderId.XAI:
+                return model.StartsWith("grok-", StringComparison.Ordinal) && !model.Contains("non-reasoning", StringComparison.Ordinal)
+                       && !model.Contains("multi-agent", StringComparison.Ordinal)
+                    ? Effort("low") : new JsonObject();
+            case ProviderId.DashScope:
+                return new JsonObject { ["enable_thinking"] = false };
+            case ProviderId.Moonshot:
+                // Kimi K3 always thinks ("low" is its least); K2.6 can stop; the K2.7 coding models can't.
+                if (model.StartsWith("kimi-k3", StringComparison.Ordinal)) return Effort("low");
+                return model.StartsWith("kimi-k2", StringComparison.Ordinal) && !model.Contains("code", StringComparison.Ordinal)
+                    ? NoThinking() : new JsonObject();
+            case ProviderId.Ollama:
+                return Effort("none");
+            default:
+                return new JsonObject();
+        }
+    }
 }
 
 public abstract record SseEvent
@@ -191,6 +235,9 @@ public sealed partial class ApiClient
                 new JsonObject { ["role"] = "user", ["content"] = messages[1] },
             },
         };
+        var provider = Endpoint.Id;
+        // Anthropic's API needs a limit on every request, the bare one included.
+        if (provider.ChatNeedsMaxTokens()) body["max_tokens"] = MaxTokens(transcript, options);
         if (!includeOptional) return body;
         if (IsOpenRouter)
         {
@@ -199,11 +246,12 @@ public sealed partial class ApiClient
             if (ReasoningConfig.Body(options.ModelInfo) is { } reasoning) body["reasoning"] = reasoning;
             if (options.ModelInfo?.SupportedParameters.Contains("temperature") ?? true) body["temperature"] = 0.2;
         }
-        else if (Endpoint.Id != ProviderId.OpenAI)
+        else
         {
-            body["temperature"] = 0.2;
+            if (provider.ChatSendsTemperature()) body["temperature"] = 0.2;
+            foreach (var (key, value) in ReasoningConfig.Direct(provider, options.Model).ToList()) body[key] = value?.DeepClone();
         }
-        if (!IsOpenRouter)
+        if (provider.ChatSendsStreamOptions())
         {
             // OpenAI-compatible servers only report token counts on a stream when asked (OpenRouter always does).
             body["stream_options"] = new JsonObject { ["include_usage"] = true };
@@ -254,7 +302,7 @@ public sealed partial class ApiClient
         {
             // A server rejecting an optional parameter: retry with the bare minimum request.
             var lower = error.Detail.ToLowerInvariant();
-            if (!new[] { "temperature", "max_tokens", "reasoning", "provider", "stream_options", "include_usage", "unsupported", "unrecognized", "unknown" }
+            if (!new[] { "temperature", "max_tokens", "reasoning", "thinking", "provider", "stream_options", "include_usage", "unsupported", "unrecognized", "unknown" }
                     .Any(lower.Contains)) throw;
             return await StreamPolish(transcript, options, false, limits, onPartial, cancellationToken).ConfigureAwait(false);
         }

@@ -68,13 +68,23 @@ public sealed partial class ApiClient
         VersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
     };
 
-    internal HttpRequestMessage Request(string path, HttpContent? content = null)
+    /// <param name="query">Parameters for the URL, in order (a name may repeat).</param>
+    internal HttpRequestMessage Request(string path, HttpContent? content = null, IReadOnlyList<(string Name, string Value)>? query = null)
     {
         var key = Endpoint.ApiKey.Trim();
         if (key.Length == 0 && Endpoint.Id.RequiresKey()) throw ApiException.MissingApiKey(Endpoint.Id.DisplayName());
-        var request = NewRequest(HttpMethod.Post, Url(path));
+        var url = Url(path);
+        if (query is { Count: > 0 })
+        {
+            url = new Uri(url.AbsoluteUri + "?" + string.Join("&", query.Select(q => Uri.EscapeDataString(q.Name) + "=" + Uri.EscapeDataString(q.Value))));
+        }
+        var request = NewRequest(HttpMethod.Post, url);
         request.Content = content;
-        if (key.Length > 0) request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + key);
+        if (key.Length > 0)
+        {
+            var (field, value) = Endpoint.Id.Authorization(key);
+            request.Headers.TryAddWithoutValidation(field, value);
+        }
         if (IsOpenRouter)
         {
             // OpenRouter app attribution headers (optional).
@@ -109,11 +119,49 @@ public sealed partial class ApiClient
                 }
                 if (obj["error"] is JsonValue e && e.TryGetValue<string>(out var errorText)) return errorText;
                 if (obj["message"] is JsonValue mv && mv.TryGetValue<string>(out var messageText)) return messageText;
+                // Deepgram.
+                if (TryString(obj["err_msg"], out var deepgram)) return deepgram;
                 if (obj["detail"] is JsonValue dv && dv.TryGetValue<string>(out var detail)) return detail;
+                // ElevenLabs: {"detail": {"status": "invalid_api_key", "message": "…"}}.
+                if (obj["detail"] is JsonObject detailObject && TryString(detailObject["message"], out var detailMessage)) return detailMessage;
+                // A validation error (ElevenLabs, Mistral): {"detail": [{"loc": ["body", "field"], "msg": "…"}]}, the field
+                // named so a rejected optional parameter can be recognised.
+                if (obj["detail"] is JsonArray { Count: > 0 } details)
+                {
+                    var parts = new List<string>();
+                    foreach (var item in details)
+                    {
+                        if (item is not JsonObject entry || !TryString(entry["msg"], out var msg)) continue;
+                        var location = entry["loc"] is JsonArray loc
+                            ? string.Join(".", loc.Select(n => n is JsonValue v && v.GetValueKind() == JsonValueKind.String ? v.GetValue<string>() : n?.ToJsonString() ?? ""))
+                            : "";
+                        parts.Add(location.Length == 0 ? msg : $"{location}: {msg}");
+                    }
+                    if (parts.Count > 0) return string.Join("; ", parts);
+                }
             }
         }
         catch (JsonException) { }
         return Utf8Prefix(data, 300) ?? "unknown error";
+    }
+
+    /// <summary>
+    /// The status a failed response is classified by: its own, except where the body says the account is out of credit
+    /// under another status (ElevenLabs answers 401 <c>quota_exceeded</c>), which is a 402 so it reads as billing.
+    /// </summary>
+    internal static int HttpStatus(int status, ReadOnlySpan<byte> data)
+    {
+        if (status is not (401 or 403 or 429)) return status;
+        try
+        {
+            if (JsonNode.Parse(data.ToArray()) is JsonObject obj && obj["detail"] is JsonObject detail
+                && TryString(detail["status"], out var code) && code is "quota_exceeded" or "payment_required" or "insufficient_credits")
+            {
+                return 402;
+            }
+        }
+        catch (JsonException) { }
+        return status;
     }
 
     /// <summary>
@@ -174,36 +222,60 @@ public sealed partial class ApiClient
         {
             return await TranscribeOnce(wav, options, timeout, cancellationToken).ConfigureAwait(false);
         }
-        catch (ApiException error) when (error.Kind == ApiErrorKind.Http && error.Status == 400 && HasVocabularyHints(options))
+        catch (ApiException error) when (error.Kind == ApiErrorKind.Http && error.Status is 400 or 422 && HasVocabularyHints(options))
         {
-            // A provider that stopped taking the hints mustn't stop dictation: the same request without them.
+            // A provider that stopped taking the hints mustn't stop dictation: the same request without them. (A field that
+            // fails validation is a 422 at ElevenLabs.)
             return await TranscribeOnce(wav, options with { Vocabulary = null }, timeout, cancellationToken).ConfigureAwait(false);
         }
     }
 
     internal bool HasVocabularyHints(TranscriptionOptions options) => Endpoint.Id.SttFormat() == SttFormat.OpenRouterJson
         ? VocabularyHints.OpenRouterProvider(options.Model, options.Vocabulary) != null
-        : VocabularyHints.MultipartPrompt(Endpoint.Id, options.Model, options.Vocabulary) != null;
+        : VocabularyHints.DirectHints(Endpoint.Id, options.Model, options.Vocabulary) != null;
 
     /// <summary>The transcription request for one chunk, with the vocabulary hints this model takes.</summary>
     internal HttpRequestMessage TranscriptionRequest(byte[] wav, TranscriptionOptions options)
     {
-        switch (Endpoint.Id.SttFormat())
+        var format = Endpoint.Id.SttFormat();
+        var language = string.IsNullOrWhiteSpace(options.Language) ? null : options.Language.Trim();
+        switch (format)
         {
             case SttFormat.OpenRouterJson:
+            {
                 var body = new JsonObject
                 {
                     ["model"] = options.Model,
                     ["input_audio"] = new JsonObject { ["data"] = Convert.ToBase64String(wav), ["format"] = "wav" },
                 };
-                if (!string.IsNullOrEmpty(options.Language)) body["language"] = options.Language;
+                if (language != null) body["language"] = language;
                 if (VocabularyHints.OpenRouterProvider(options.Model, options.Vocabulary) is { } provider) body["provider"] = provider;
-                return Request("audio/transcriptions", JsonContent(body));
+                return Request(format.RequestPath(), JsonContent(body));
+            }
+            case SttFormat.Deepgram:
+            {
+                // The audio is the body; everything else goes in the query. Punctuation and formatting as typed text has
+                // them; the language when one is set, else detected (Deepgram assumes English).
+                var query = new List<(string, string)> { ("model", options.Model), ("smart_format", "true"), ("punctuate", "true") };
+                query.Add(language != null ? ("language", language) : ("detect_language", "true"));
+                if (VocabularyHints.DirectHints(Endpoint.Id, options.Model, options.Vocabulary) is { Style: VocabularyHints.Style.Keyterm } hints)
+                {
+                    query.AddRange(hints.TermList.Select(t => ("keyterm", t)));
+                }
+                var audio = new ByteArrayContent(wav);
+                audio.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+                return Request(format.RequestPath(), audio, query);
+            }
             default:
-                var form = MultipartForm.Transcription(wav, options, VocabularyHints.MultipartPrompt(Endpoint.Id, options.Model, options.Vocabulary));
+            {
+                var hints = VocabularyHints.DirectHints(Endpoint.Id, options.Model, options.Vocabulary);
+                var form = format == SttFormat.ElevenLabs
+                    ? MultipartForm.Scribe(wav, options, hints)
+                    : MultipartForm.Transcription(wav, options, hints);
                 var content = new ByteArrayContent(form.Body);
                 content.Headers.TryAddWithoutValidation("Content-Type", form.ContentType);
-                return Request("audio/transcriptions", content);
+                return Request(format.RequestPath(), content);
+            }
         }
     }
 
@@ -220,21 +292,40 @@ public sealed partial class ApiClient
             }
         }, cancellationToken).ConfigureAwait(false);
 
-        if (!IsSuccess(status)) throw ApiException.Http((int)status, ErrorMessage(data));
+        if (!IsSuccess(status)) throw ApiException.Http(HttpStatus((int)status, data), ErrorMessage(data));
+        return ParseTranscription(data, Endpoint.Id.SttFormat());
+    }
 
+    /// <summary>
+    /// A successful transcription response: <c>text</c> (and <c>usage</c>) for every format but Deepgram's, whose
+    /// transcript is the first alternative of the first channel and whose length is <c>metadata.duration</c>.
+    /// </summary>
+    internal static TranscriptionResult ParseTranscription(byte[] data, SttFormat format)
+    {
         JsonObject? obj = null;
         try { obj = JsonNode.Parse(data) as JsonObject; } catch (JsonException) { }
         if (obj is null)
         {
             // `response_format=text` servers reply with the bare transcript.
             var text = Utf8Prefix(data, int.MaxValue);
-            if (text != null && !text.StartsWith('<')) return new TranscriptionResult(text, null);
+            if (format == SttFormat.Multipart && text != null && !text.StartsWith('<')) return new TranscriptionResult(text, null);
             throw ApiException.BadResponse(Utf8Prefix(data, 200) ?? "");
         }
-        if (obj.ContainsKey("error"))
+        if (obj.ContainsKey("error") || obj.ContainsKey("err_code"))
         {
             // Some upstream failures arrive as 200 + error body.
             throw ApiException.Http(ErrorStatus(data) ?? 502, ErrorMessage(data));
+        }
+        if (format == SttFormat.Deepgram)
+        {
+            if (((obj["results"] as JsonObject)?["channels"] as JsonArray)?.FirstOrDefault() is JsonObject channel
+                && channel["alternatives"] is JsonArray { Count: > 0 } alternatives && alternatives[0] is JsonObject first
+                && TryString(first["transcript"], out var said))
+            {
+                var seconds = RequestUsage.Number((obj["metadata"] as JsonObject)?["duration"]);
+                return new TranscriptionResult(said, seconds is { } length ? new RequestUsage(AudioSeconds: length) : null);
+            }
+            throw ApiException.BadResponse("missing \"results.channels[0].alternatives[0].transcript\"");
         }
         if (obj["text"] is JsonValue value && value.TryGetValue<string>(out var transcript))
         {
@@ -293,17 +384,46 @@ public sealed class MultipartForm
     private void Write(string text) => _body.Write(Encoding.UTF8.GetBytes(text));
 
     /// <summary>
-    /// Only <c>file</c>, <c>model</c>, and (optionally) <c>language</c> and the vocabulary <c>prompt</c>, which goes only
-    /// to OpenAI and Groq (see <see cref="VocabularyHints"/>): some OpenAI-compatible servers reject any parameter they
-    /// don't know.
+    /// Only <c>file</c>, <c>model</c>, and (optionally) <c>language</c> and the vocabulary hints, which go only where
+    /// documented (see <see cref="VocabularyHints"/>): some OpenAI-compatible servers reject any parameter they don't know.
     /// </summary>
-    internal static MultipartForm Transcription(byte[] wav, TranscriptionOptions options, string? prompt = null)
+    internal static MultipartForm Transcription(byte[] wav, TranscriptionOptions options, string? prompt = null) =>
+        Transcription(wav, options, string.IsNullOrEmpty(prompt) ? null : new VocabularyHints.Direct(VocabularyHints.Style.Prompt, Prompt: prompt));
+
+    internal static MultipartForm Transcription(byte[] wav, TranscriptionOptions options, VocabularyHints.Direct? hints)
     {
         var form = new MultipartForm();
         form.AddFile("file", "audio.wav", "audio/wav", wav);
         form.AddField("model", options.Model);
         if (!string.IsNullOrEmpty(options.Language)) form.AddField("language", options.Language);
-        if (!string.IsNullOrEmpty(prompt)) form.AddField("prompt", prompt);
+        if (hints is { Style: VocabularyHints.Style.Prompt, Prompt: { Length: > 0 } prompt })
+        {
+            form.AddField("prompt", prompt);
+        }
+        else if (hints is { Style: VocabularyHints.Style.ContextBias })
+        {
+            // Mistral: the field once per term.
+            foreach (var term in hints.TermList) form.AddField("context_bias", term);
+        }
+        form.Finish();
+        return form;
+    }
+
+    /// <summary>
+    /// ElevenLabs Scribe: <c>model_id</c> and <c>file</c>, the language when one is set (else it's detected), no
+    /// sound-event tags such as "(laughter)" in the text, and the vocabulary as <c>keyterms</c>, a field per term.
+    /// </summary>
+    internal static MultipartForm Scribe(byte[] wav, TranscriptionOptions options, VocabularyHints.Direct? hints)
+    {
+        var form = new MultipartForm();
+        form.AddField("model_id", options.Model);
+        form.AddFile("file", "audio.wav", "audio/wav", wav);
+        if (!string.IsNullOrEmpty(options.Language)) form.AddField("language_code", options.Language);
+        form.AddField("tag_audio_events", "false");
+        if (hints is { Style: VocabularyHints.Style.Keyterms })
+        {
+            foreach (var term in hints.TermList) form.AddField("keyterms", term);
+        }
         form.Finish();
         return form;
     }
@@ -324,7 +444,7 @@ public sealed record ModelInfo(string Id, string Name, IReadOnlyList<string> Sup
         get
         {
             var id = Id.ToLowerInvariant();
-            return new[] { "whisper", "transcribe", "asr", "sensevoice", "stt", "speech", "paraformer", "telespeech" }.Any(id.Contains);
+            return new[] { "whisper", "transcribe", "asr", "sensevoice", "stt", "speech", "paraformer", "telespeech", "voxtral" }.Any(id.Contains);
         }
     }
 }
@@ -377,17 +497,48 @@ public sealed partial class ApiClient
             .ThenBy(h => h.Tag, StringComparer.Ordinal).ToList();
     }
 
-    /// <summary>GET /models. On OpenRouter, <c>outputModality: "transcription"</c> lists STT models.</summary>
+    /// <summary>
+    /// GET /models. On OpenRouter, <c>outputModality: "transcription"</c> lists STT models. Deepgram and ElevenLabs list no
+    /// speech-to-text models this way: nothing to choose from (the model is typed in).
+    /// </summary>
     public async Task<List<ModelInfo>> ListModels(string? outputModality = null, CancellationToken cancellationToken = default)
+    {
+        if (!Endpoint.Id.ListsModels()) return [];
+        using var request = ModelListRequest(outputModality);
+        return ParseModels(await Get(request, cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>The GET for the model list: OpenRouter's speech models by their output, every Claude model in one page.</summary>
+    internal HttpRequestMessage ModelListRequest(string? outputModality = null)
     {
         var url = Url("models");
         if (outputModality != null && IsOpenRouter) url = new Uri(url + "?output_modalities=" + Uri.EscapeDataString(outputModality));
-        using var request = NewRequest(HttpMethod.Get, url);
-        var key = Endpoint.ApiKey.Trim();
-        if (key.Length > 0) request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + key);
-        var (status, data) = await Send(request, 20, cancellationToken).ConfigureAwait(false);
-        if (!IsSuccess(status)) throw ApiException.Http((int)status, ErrorMessage(data));
+        else if (Endpoint.Id == ProviderId.Anthropic) url = new Uri(url + "?limit=1000");
+        return GetRequest(url);
+    }
 
+    /// <summary>A GET with the key in the header this provider reads it from.</summary>
+    internal HttpRequestMessage GetRequest(Uri url)
+    {
+        var request = NewRequest(HttpMethod.Get, url);
+        foreach (var (field, value) in Endpoint.Id.ListHeaders(Endpoint.ApiKey.Trim())) request.Headers.TryAddWithoutValidation(field, value);
+        return request;
+    }
+
+    /// <summary>The body of a successful GET; any other status is an HTTP error.</summary>
+    private async Task<byte[]> Get(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        var (status, data) = await Send(request, 20, cancellationToken).ConfigureAwait(false);
+        if (!IsSuccess(status)) throw ApiException.Http(HttpStatus((int)status, data), ErrorMessage(data));
+        return data;
+    }
+
+    /// <summary>
+    /// <c>{"data": [{"id": …}]}</c>; Gemini's IDs come as "models/gemini-…", which requests name without the prefix, and
+    /// Anthropic's name is its <c>display_name</c>.
+    /// </summary>
+    internal static List<ModelInfo> ParseModels(byte[] data)
+    {
         JsonArray list;
         try
         {
@@ -401,10 +552,11 @@ public sealed partial class ApiClient
         foreach (var node in list)
         {
             if (node is not JsonObject m || !TryString(m["id"], out var id)) continue;
+            if (id.StartsWith("models/", StringComparison.Ordinal)) id = id["models/".Length..];
             var reasoning = m["reasoning"] as JsonObject;
             models.Add(new ModelInfo(
                 id,
-                TryString(m["name"], out var name) ? name : id,
+                TryString(m["name"], out var name) ? name : TryString(m["display_name"], out var displayName) ? displayName : id,
                 Strings(m["supported_parameters"]),
                 reasoning?["mandatory"] is JsonValue mandatory && mandatory.TryGetValue<bool>(out var b) && b,
                 Strings(reasoning?["supported_efforts"])));
@@ -412,7 +564,10 @@ public sealed partial class ApiClient
         return models;
     }
 
-    /// <summary>Verifies the key/URL work: OpenRouter's /models is public, so check its key endpoint instead.</summary>
+    /// <summary>
+    /// Verifies the key/URL work: OpenRouter's /models is public, so check its key endpoint instead; Deepgram and
+    /// ElevenLabs have no model list to ask for, so their own account endpoints (see <see cref="ProviderIdExtensions.KeyCheckPath"/>).
+    /// </summary>
     public async Task<string> VerifyCredentials(CancellationToken cancellationToken = default)
     {
         if (IsOpenRouter)
@@ -423,8 +578,24 @@ public sealed partial class ApiClient
             if (!IsSuccess(status)) throw ApiException.Http((int)status, ErrorMessage(data));
             return L("Key 有效", "Key is valid");
         }
-        var models = await ListModels(cancellationToken: cancellationToken).ConfigureAwait(false);
-        return L($"连接正常，{models.Count} 个模型可用", $"Connected — {models.Count} models available");
+        if (Endpoint.ApiKey.Trim().Length == 0 && Endpoint.Id.RequiresKey()) throw ApiException.MissingApiKey(Endpoint.Id.DisplayName());
+        if (!Endpoint.Id.ListsModels())
+        {
+            using var check = GetRequest(Url(Endpoint.Id.KeyCheckPath()));
+            await Get(check, cancellationToken).ConfigureAwait(false);
+            return L("Key 有效", "Key is valid");
+        }
+        try
+        {
+            using var request = ModelListRequest();
+            var models = ParseModels(await Get(request, cancellationToken).ConfigureAwait(false));
+            return L($"连接正常，{models.Count} 个模型可用", $"Connected — {models.Count} models available");
+        }
+        catch (ApiException error) when (error.Kind == ApiErrorKind.Http && error.Status == 404 && Endpoint.Id.ModelListMayBeMissing())
+        {
+            // The server answered and took the key (a bad one is a 401); it just has no list.
+            return L("连接正常", "Connected");
+        }
     }
 
     /// <summary>

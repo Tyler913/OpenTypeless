@@ -9,8 +9,9 @@ namespace TypelessCore;
 /// OpenRouter's own <c>keyterms</c> field is turned down by every speech-to-text model it serves (Oct 2026), and its
 /// model list doesn't say which take what. So the provider's own field is passed through <c>provider.options</c>, for
 /// the models where it was measured to work: names the model got wrong came out right with it, and terms in the list
-/// that weren't spoken never showed up (see docs/DESIGN.md). Anything else gets no hints rather than a field that might
-/// be rejected; and a request that is rejected anyway is sent again without them (see <see cref="ApiClient"/>).
+/// that weren't spoken never showed up (see docs/DESIGN.md). Asked directly, Mistral, Deepgram and ElevenLabs document a
+/// field of their own for it. Anything else gets no hints rather than a field that might be rejected; and a request that
+/// is rejected anyway is sent again without them (see <see cref="ApiClient"/>).
 /// </remarks>
 public static class VocabularyHints
 {
@@ -22,6 +23,23 @@ public static class VocabularyHints
         Prompt,
         /// <summary>AssemblyAI Universal: <c>keyterms_prompt</c>.</summary>
         KeytermsPrompt,
+        /// <summary>Mistral Voxtral: a <c>context_bias</c> form field per term.</summary>
+        ContextBias,
+        /// <summary>Deepgram Nova-3: a <c>keyterm</c> query parameter per term.</summary>
+        Keyterm,
+        /// <summary>ElevenLabs Scribe: a <c>keyterms</c> form field per term.</summary>
+        Keyterms,
+    }
+
+    /// <summary>The hints of a request sent to the provider itself (not through OpenRouter): a prompt, or terms sent one by one.</summary>
+    public sealed record Direct(Style Style, string? Prompt = null, IReadOnlyList<string>? Terms = null)
+    {
+        public IReadOnlyList<string> TermList => Terms ?? [];
+
+        public bool Equals(Direct? other) =>
+            other is not null && Style == other.Style && Prompt == other.Prompt && TermList.SequenceEqual(other.TermList);
+
+        public override int GetHashCode() => HashCode.Combine(Style, Prompt, TermList.Count);
     }
 
     /// <summary>At most this many terms are sent, the first ones in the list.</summary>
@@ -34,11 +52,16 @@ public static class VocabularyHints
     /// English it is about 400 characters.
     /// </summary>
     public const int MaxPromptTokens = 100;
+    /// <summary>Deepgram limits the keyterms of a request to 500 tokens; the estimate stays well inside that.</summary>
+    public const int MaxKeytermTokens = 400;
+    /// <summary>ElevenLabs takes a keyterm of at most 50 characters and five words, without <see cref="ScribeForbidden"/>.</summary>
+    public const int MaxScribeTermLength = 50;
+    private const string ScribeForbidden = "<>{}[]\\";
 
     private static readonly string[] OpenAIPromptModels =
         ["openai/gpt-4o-transcribe", "openai/gpt-4o-mini-transcribe", "openai/gpt-transcribe", "openai/whisper-1"];
 
-    /// <summary>How this model takes hints, or null when it doesn't (as far as was measured).</summary>
+    /// <summary>How this model takes hints, or null when it doesn't (as far as was measured or documented).</summary>
     public static Style? StyleFor(ProviderId provider, string model)
     {
         model = model.Trim().ToLowerInvariant();
@@ -49,6 +72,10 @@ public static class VocabularyHints
             ProviderId.OpenRouter when OpenAIPromptModels.Any(m => model.StartsWith(m, StringComparison.Ordinal)) => Style.Prompt,
             // Both document `prompt` on /audio/transcriptions.
             ProviderId.OpenAI or ProviderId.Groq => Style.Prompt,
+            ProviderId.Mistral when model.StartsWith("voxtral", StringComparison.Ordinal) => Style.ContextBias,
+            // Keyterm prompting is Nova-3's only.
+            ProviderId.Deepgram when model.StartsWith("nova-3", StringComparison.Ordinal) => Style.Keyterm,
+            ProviderId.ElevenLabs when model.StartsWith("scribe", StringComparison.Ordinal) => Style.Keyterms,
             _ => null,
         };
     }
@@ -77,6 +104,27 @@ public static class VocabularyHints
         return prompt;
     }
 
+    /// <summary>Deepgram's keyterms: as many of the terms, in order, as fit its token limit.</summary>
+    public static List<string> Keyterms(IReadOnlyList<string> terms)
+    {
+        var total = 0;
+        var kept = new List<string>();
+        foreach (var term in terms)
+        {
+            total += TokenEstimate.Count(term);
+            if (total > MaxKeytermTokens) break;
+            kept.Add(term);
+        }
+        return kept;
+    }
+
+    /// <summary>The terms ElevenLabs takes: at most 50 characters and five words, none of <c>&lt;&gt;{}[]\</c>.</summary>
+    public static List<string> ScribeTerms(IReadOnlyList<string> terms) => terms
+        .Where(t => TextMetrics.CharacterCount(t) <= MaxScribeTermLength
+                    && t.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length <= 5
+                    && t.IndexOfAny(ScribeForbidden.ToCharArray()) < 0)
+        .ToList();
+
     /// <summary>The OpenRouter <c>provider</c> object carrying the hints for this model, or null.</summary>
     public static JsonObject? OpenRouterProvider(string model, IEnumerable<string>? vocabulary)
     {
@@ -87,16 +135,36 @@ public static class VocabularyHints
         {
             Style.PhraseList => new JsonObject { ["azure"] = new JsonObject { ["phraseList"] = new JsonObject { ["phrases"] = Array() } } },
             Style.Prompt => new JsonObject { ["openai"] = new JsonObject { ["prompt"] = Prompt(terms) } },
-            _ => new JsonObject { ["assemblyai"] = new JsonObject { ["keyterms_prompt"] = Array() } },
+            Style.KeytermsPrompt => new JsonObject { ["assemblyai"] = new JsonObject { ["keyterms_prompt"] = Array() } },
+            _ => null,
         };
-        return new JsonObject { ["options"] = options };
+        return options is null ? null : new JsonObject { ["options"] = options };
+    }
+
+    /// <summary>The hints for a request to the provider itself, or null.</summary>
+    public static Direct? DirectHints(ProviderId provider, string model, IEnumerable<string>? vocabulary)
+    {
+        var terms = Terms(vocabulary);
+        if (provider == ProviderId.OpenRouter || terms.Count == 0 || StyleFor(provider, model) is not { } style) return null;
+        switch (style)
+        {
+            case Style.Prompt:
+                var prompt = Prompt(terms);
+                return prompt.Length == 0 ? null : new Direct(style, Prompt: prompt);
+            case Style.ContextBias:
+                return new Direct(style, Terms: terms);
+            case Style.Keyterm:
+                var keyterms = Keyterms(terms);
+                return keyterms.Count == 0 ? null : new Direct(style, Terms: keyterms);
+            case Style.Keyterms:
+                var scribe = ScribeTerms(terms);
+                return scribe.Count == 0 ? null : new Direct(style, Terms: scribe);
+            default:
+                return null;
+        }
     }
 
     /// <summary>The <c>prompt</c> form field for a direct OpenAI or Groq request, or null.</summary>
-    public static string? MultipartPrompt(ProviderId provider, string model, IEnumerable<string>? vocabulary)
-    {
-        var terms = Terms(vocabulary);
-        if (provider == ProviderId.OpenRouter || terms.Count == 0 || StyleFor(provider, model) != Style.Prompt) return null;
-        return Prompt(terms);
-    }
+    public static string? MultipartPrompt(ProviderId provider, string model, IEnumerable<string>? vocabulary) =>
+        DirectHints(provider, model, vocabulary) is { Style: Style.Prompt } hints ? hints.Prompt : null;
 }

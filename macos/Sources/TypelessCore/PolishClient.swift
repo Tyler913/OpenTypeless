@@ -63,6 +63,41 @@ public enum ReasoningConfig {
         if info.reasoningEfforts.contains("none") { return ["effort": "none", "exclude": true] }
         return ["enabled": false, "exclude": true]
     }
+
+    /// The fields that switch reasoning off, or to its minimum, on a provider asked directly, by that provider's own
+    /// documented parameter. A model that turns the field down (one that always reasons, say) answers 400 naming it, and
+    /// the clean-up is sent again without it (see `APIClient.polish`). Empty where nothing is known to work.
+    public static func direct(provider: ProviderID, model: String) -> [String: Any] {
+        let model = model.trimmingCharacters(in: .whitespaces).lowercased()
+        switch provider {
+        case .gemini:
+            // Gemini 3 can't stop thinking: the lowest level each takes ("minimal" only on Flash-Lite; 2.5 Flash stops).
+            if model.hasPrefix("gemini-2.5-flash") { return ["reasoning_effort": "none"] }
+            return ["reasoning_effort": model.contains("flash-lite") ? "minimal" : "low"]
+        case .anthropic, .volcengine:
+            // Claude 5 and Doubao Seed think unless told not to.
+            return ["thinking": ["type": "disabled"]]
+        case .zhipu:
+            // GLM 5.3 can't stop thinking, and turns the field down.
+            return model.hasPrefix("glm-5.3") ? [:] : ["thinking": ["type": "disabled"]]
+        case .mistral:
+            // Mistral Small and Medium take "none"; Large 4 doesn't.
+            return model.contains("small") || model.contains("medium") ? ["reasoning_effort": "none"] : [:]
+        case .xai:
+            return model.hasPrefix("grok-") && !model.contains("non-reasoning") && !model.contains("multi-agent")
+                ? ["reasoning_effort": "low"] : [:]
+        case .dashscope:
+            return ["enable_thinking": false]
+        case .moonshot:
+            // Kimi K3 always thinks ("low" is its least); K2.6 can stop; the K2.7 coding models can't.
+            if model.hasPrefix("kimi-k3") { return ["reasoning_effort": "low"] }
+            return model.hasPrefix("kimi-k2") && !model.contains("code") ? ["thinking": ["type": "disabled"]] : [:]
+        case .ollama:
+            return ["reasoning_effort": "none"]
+        case .openrouter, .openai, .groq, .siliconflow, .deepseek, .deepgram, .elevenlabs, .lmstudio, .custom:
+            return [:]
+        }
+    }
 }
 
 /// Parses an OpenAI-style SSE stream for chat completions.
@@ -164,16 +199,20 @@ extension APIClient {
                 ["role": "user", "content": messages[1]],
             ],
         ]
+        let provider = endpoint.id
+        // Anthropic's API needs a limit on every request, the bare one included.
+        if provider.chatNeedsMaxTokens { body["max_tokens"] = Self.maxTokens(transcript: transcript, options: options) }
         guard includeOptional else { return body }
         if isOpenRouter {
             body["max_tokens"] = Self.maxTokens(transcript: transcript, options: options)
             body["provider"] = Self.polishRouting(host: options.host)
             if let reasoning = ReasoningConfig.body(for: options.modelInfo) { body["reasoning"] = reasoning }
             if options.modelInfo?.supportedParameters.contains("temperature") ?? true { body["temperature"] = 0.2 }
-        } else if endpoint.id != .openai {
-            body["temperature"] = 0.2
+        } else {
+            if provider.chatSendsTemperature { body["temperature"] = 0.2 }
+            for (key, value) in ReasoningConfig.direct(provider: provider, model: options.model) { body[key] = value }
         }
-        if !isOpenRouter {
+        if provider.chatSendsStreamOptions {
             // OpenAI-compatible servers only report token counts on a stream when asked (OpenRouter always does).
             body["stream_options"] = ["include_usage": true]
         }
@@ -219,7 +258,7 @@ extension APIClient {
         } catch let APIError.http(status, message) where status == 400 || status == 422 {
             // A server rejecting an optional parameter: retry with the bare minimum request.
             let lower = message.lowercased()
-            guard ["temperature", "max_tokens", "reasoning", "provider", "stream_options", "include_usage",
+            guard ["temperature", "max_tokens", "reasoning", "thinking", "provider", "stream_options", "include_usage",
                    "unsupported", "unrecognized", "unknown"]
                 .contains(where: lower.contains) else { throw APIError.http(status: status, message: message) }
             return try await streamPolish(transcript: transcript, options: options, includeOptional: false,

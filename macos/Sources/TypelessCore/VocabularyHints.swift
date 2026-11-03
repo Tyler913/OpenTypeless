@@ -6,8 +6,9 @@ import Foundation
 /// list doesn't say which take what. So the provider's own field is passed through `provider.options`, for the models
 /// where it was measured to work: names the model got wrong came out right with it, and terms in the list that
 /// weren't spoken never showed up (a clip with 5 rare names, and a Chinese one with 4 among 40 terms; see
-/// docs/DESIGN.md). Anything else gets no hints rather than a field that might be rejected; and a request that is
-/// rejected anyway is sent again without them (see APIClient).
+/// docs/DESIGN.md). Asked directly, Mistral, Deepgram and ElevenLabs document a field of their own for it. Anything
+/// else gets no hints rather than a field that might be rejected; and a request that is rejected anyway is sent again
+/// without them (see APIClient).
 public enum VocabularyHints {
     public enum Style: Sendable, Equatable {
         /// Azure speech (Microsoft MAI-Transcribe): `phraseList.phrases`.
@@ -16,6 +17,20 @@ public enum VocabularyHints {
         case prompt
         /// AssemblyAI Universal: `keyterms_prompt`.
         case keytermsPrompt
+        /// Mistral Voxtral: a `context_bias` form field per term.
+        case contextBias
+        /// Deepgram Nova-3: a `keyterm` query parameter per term.
+        case keyterm
+        /// ElevenLabs Scribe: a `keyterms` form field per term.
+        case keyterms
+    }
+
+    /// The hints of a request sent to the provider itself (not through OpenRouter).
+    public enum Direct: Sendable, Equatable {
+        case prompt(String)
+        case contextBias([String])
+        case keyterm([String])
+        case keyterms([String])
     }
 
     /// At most this many terms are sent, the first ones in the list.
@@ -26,8 +41,13 @@ public enum VocabularyHints {
     /// tokenizer often needs two for a Chinese character (and for a comma and space): the margin covers that. In English
     /// it is about 400 characters.
     static let maxPromptTokens = 100
+    /// Deepgram limits the keyterms of a request to 500 tokens; the estimate stays well inside that.
+    static let maxKeytermTokens = 400
+    /// ElevenLabs takes a keyterm of at most 50 characters and five words, without these characters.
+    static let maxScribeTermLength = 50
+    static let scribeForbidden = Set("<>{}[]\\")
 
-    /// How this model takes hints, or nil when it doesn't (as far as was measured).
+    /// How this model takes hints, or nil when it doesn't (as far as was measured or documented).
     public static func style(provider: ProviderID, model: String) -> Style? {
         let model = model.trimmingCharacters(in: .whitespaces).lowercased()
         switch provider {
@@ -40,7 +60,15 @@ public enum VocabularyHints {
         case .openai, .groq:
             // Both document `prompt` on /audio/transcriptions.
             return .prompt
-        case .siliconflow, .deepseek, .custom:
+        case .mistral:
+            return model.hasPrefix("voxtral") ? .contextBias : nil
+        case .deepgram:
+            // Keyterm prompting is Nova-3's only.
+            return model.hasPrefix("nova-3") ? .keyterm : nil
+        case .elevenlabs:
+            return model.hasPrefix("scribe") ? .keyterms : nil
+        case .siliconflow, .deepseek, .gemini, .anthropic, .xai, .dashscope, .zhipu, .moonshot, .volcengine, .ollama,
+             .lmstudio, .custom:
             return nil
         }
     }
@@ -66,6 +94,27 @@ public enum VocabularyHints {
         return prompt
     }
 
+    /// Deepgram's keyterms: as many of the terms, in order, as fit its token limit.
+    public static func keyterms(_ terms: [String]) -> [String] {
+        var total = 0
+        var kept: [String] = []
+        for term in terms {
+            total += TokenEstimate.count(term)
+            if total > maxKeytermTokens { break }
+            kept.append(term)
+        }
+        return kept
+    }
+
+    /// The terms ElevenLabs takes: at most 50 characters and five words, none of `<>{}[]\`.
+    public static func scribeTerms(_ terms: [String]) -> [String] {
+        terms.filter { term in
+            term.count <= maxScribeTermLength
+                && term.split(whereSeparator: \.isWhitespace).count <= 5
+                && !term.contains(where: scribeForbidden.contains)
+        }
+    }
+
     /// The OpenRouter `provider` object carrying the hints for this model, or nil.
     public static func openRouterProvider(model: String, vocabulary: [String]) -> [String: Any]? {
         let terms = terms(vocabulary)
@@ -75,14 +124,33 @@ public enum VocabularyHints {
         case .phraseList: options = ["azure": ["phraseList": ["phrases": terms]]]
         case .prompt: options = ["openai": ["prompt": prompt(terms)]]
         case .keytermsPrompt: options = ["assemblyai": ["keyterms_prompt": terms]]
+        case .contextBias, .keyterm, .keyterms: return nil
         }
         return ["options": options]
     }
 
+    /// The hints for a request to the provider itself, or nil.
+    public static func direct(provider: ProviderID, model: String, vocabulary: [String]) -> Direct? {
+        let terms = terms(vocabulary)
+        guard provider != .openrouter, !terms.isEmpty, let style = style(provider: provider, model: model) else { return nil }
+        switch style {
+        case .prompt:
+            let prompt = prompt(terms)
+            return prompt.isEmpty ? nil : .prompt(prompt)
+        case .contextBias: return .contextBias(terms)
+        case .keyterm:
+            let kept = keyterms(terms)
+            return kept.isEmpty ? nil : .keyterm(kept)
+        case .keyterms:
+            let kept = scribeTerms(terms)
+            return kept.isEmpty ? nil : .keyterms(kept)
+        case .phraseList, .keytermsPrompt: return nil
+        }
+    }
+
     /// The `prompt` form field for a direct OpenAI or Groq request, or nil.
     public static func multipartPrompt(provider: ProviderID, model: String, vocabulary: [String]) -> String? {
-        let terms = terms(vocabulary)
-        guard provider != .openrouter, !terms.isEmpty, style(provider: provider, model: model) == .prompt else { return nil }
-        return prompt(terms)
+        if case let .prompt(prompt) = direct(provider: provider, model: model, vocabulary: vocabulary) { return prompt }
+        return nil
     }
 }

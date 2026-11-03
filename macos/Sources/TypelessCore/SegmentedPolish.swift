@@ -17,15 +17,20 @@ public struct SegmentedPolishResult: Sendable {
     }
 
     /// The text to insert: each part's clean-up, or the part as spoken where that was unusable.
-    public let text: String
+    public internal(set) var text: String
     public let parts: [Part]
     /// From the start until the first token of the part that answered first.
     public let firstTokenSeconds: Double
     /// From the start until the last part was in.
     public let totalSeconds: Double
+    /// The answer to laying the joined parts out again as a whole (see SegmentedPolish), when one was asked for and came
+    /// back; kept even when it isn't used, since it was billed all the same.
+    public internal(set) var relayout: HedgedPolishResult? = nil
+    /// Whether `text` is the whole laid out again, rather than the parts as they were joined.
+    public internal(set) var relaid = false
 
     /// Every answer that came back, used or not, for pricing.
-    public var answers: [HedgedPolishResult] { parts.compactMap(\.answer) }
+    public var answers: [HedgedPolishResult] { parts.compactMap(\.answer) + (relayout.map { [$0] } ?? []) }
     /// The parts that go in as spoken.
     public var fallbacks: [Part] { parts.filter { $0.fallback != nil } }
     /// The model that answered (the first part's, should the backup have answered some parts).
@@ -33,14 +38,34 @@ public struct SegmentedPolishResult: Sendable {
     public var usedBackup: Bool { answers.contains { $0.usedBackup } }
 }
 
+/// The end of the part before one part of a long transcript and the start of the one after it, as spoken; nil where
+/// there's none.
+public struct SurroundingParts: Sendable, Equatable {
+    public var before: String?
+    public var after: String?
+
+    public init(before: String?, after: String?) {
+        self.before = before
+        self.after = after
+    }
+}
+
 /// Long transcripts are cleaned up in parts. Asked to clean up a long dictation in one go, models summarise it instead:
 /// of 54 real dictations of a minute or more, 15 came back with under 60% of their words (the worst 2,023 → 379), often
 /// rewritten into numbered lists. A part of a few hundred words gets edited as asked. The parts are split at sentence
 /// ends, cleaned up in parallel with the same prompt, checked one by one, and joined again, so a long dictation is also
-/// ready sooner. Each part goes on its own: a neighbouring part pasted in as reference could end up cleaned up into the
-/// answer as well. The text around the cursor (see CursorContext), when there is some, goes with every part, since each
+/// ready sooner. The text around the cursor (see CursorContext), when there is some, goes with every part, since each
 /// is a request of its own and a name can come up in any of them; it's at most a few hundred tokens, and only long
 /// dictations have more than one part.
+///
+/// A part can't see the others, so a correction of something in the part before, a list that goes on across the split or
+/// the layout of the whole was lost at the seams. So each part of a dictation also gets, as reference, the end of the part
+/// before it and the start of the one after (`surroundingWords` words each, as spoken), in blocks of their own with a note
+/// (see `Prompts.polishUserMessage`). An answer that copied text from them beyond a name is caught like one that copied
+/// the text around the cursor (`Prompts.copiedContext`), and that part goes in as spoken. And where the text's layout is
+/// the point (`Prompts.relayouts`), the joined parts are laid out again as a whole by one more request that may only
+/// change line breaks and list markers: its answer is used only when it is the joined text exactly, but for those
+/// (`Prompts.onlyLayoutChanged`), so it can't reword anything, and only when it comes back in time (`relayoutTimeout`).
 public enum SegmentedPolish {
     /// Up to this many words (see WordCount: a Chinese character is one) a transcript goes in one request: about a
     /// minute and a half of Chinese, or two and a half of English.
@@ -50,6 +75,57 @@ public enum SegmentedPolish {
 
     public static func needsParts(_ transcript: String) -> Bool {
         WordCount.count(transcript) > singleRequestLimit
+    }
+
+    /// How much of each neighbouring part goes with a part, at most, in words.
+    static let surroundingWords = partSize / 2
+
+    /// The longest joined text that is laid out again (about five minutes of speech): the request writes all of it out
+    /// again, so a longer one would keep the dictation waiting.
+    static let relayoutLimit = 2000
+
+    /// How long laying the joined text out again may take before the text goes in as joined: a few seconds for the answer
+    /// to start, then the time a fast model takes to write it all out again.
+    public static func relayoutTimeout(_ text: String) -> Double { min(20, 3 + Double(text.utf16.count) * 0.006) }
+
+    /// The neighbouring parts' text that goes with part `index` of `texts`: the end of the part before and the start of the
+    /// part after, whole sentences where they fit in `surroundingWords`. Nil for a transcript in one part.
+    static func surrounding(_ texts: [String], _ index: Int) -> SurroundingParts? {
+        guard texts.count > 1 else { return nil }
+        return SurroundingParts(before: index > 0 ? excerpt(texts[index - 1], fromEnd: true) : nil,
+                                after: index + 1 < texts.count ? excerpt(texts[index + 1], fromEnd: false) : nil)
+    }
+
+    /// Up to `surroundingWords` words of `text` from its end (or its start): whole sentences, or when the nearest sentence
+    /// is longer than that, its nearest words.
+    static func excerpt(_ text: String, fromEnd: Bool) -> String {
+        let sentences = split(text.trimmingCharacters(in: .whitespacesAndNewlines), at: isSentenceEnd)
+        var taken = take(sentences, fromEnd: fromEnd)
+        if taken.isEmpty, let nearest = fromEnd ? sentences.last : sentences.first {
+            taken = take(split(nearest, at: isWordEnd), fromEnd: fromEnd)
+        }
+        return taken.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The pieces nearest the end (or start) that fit in `surroundingWords` together, in their order.
+    private static func take(_ pieces: [String], fromEnd: Bool) -> String {
+        var taken: [String] = []
+        var words = 0
+        for piece in fromEnd ? Array(pieces.reversed()) : pieces {
+            let size = WordCount.count(piece)
+            if words + size > surroundingWords { break }
+            taken.append(piece)
+            words += size
+        }
+        return (fromEnd ? Array(taken.reversed()) : taken).joined()
+    }
+
+    /// Everything a part's request carried as reference, for `Prompts.copiedContext`: the text around the cursor and the
+    /// ends of the parts around it. Nil when there was none.
+    static func reference(_ context: String?, _ surrounding: SurroundingParts?) -> String? {
+        let all = [context, surrounding?.before, surrounding?.after].compactMap { $0 }
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return all.isEmpty ? nil : all.joined(separator: "\n")
     }
 
     /// The parts `transcript` is cleaned up in: itself, untouched, unless it's long. A long one is split at sentence
@@ -142,13 +218,52 @@ public enum SegmentedPolish {
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> SegmentedPolishResult {
         let policy = RetryPolicy(maxAttempts: 2, retriesTimeouts: false)
-        return try await run(transcript: transcript, translation: primary.options.translation,
-                             vocabulary: primary.options.vocabulary, context: primary.options.context,
-                             concurrency: concurrency, holdWhile: holdWhile, polish: { part, partial in
-            try await policy.run { _ in
-                try await HedgedPolish.run(transcript: part, primary: primary, backup: backup, onPartial: partial)
+        let options = primary.options
+        let dictation = concurrency == nil
+        let result = try await runParts(transcript: transcript, translation: options.translation,
+                                        vocabulary: options.vocabulary, context: options.context,
+                                        concurrency: concurrency, holdWhile: holdWhile, polish: { part, surrounding, partial in
+            var first = primary
+            first.options.surrounding = surrounding
+            var second = backup
+            second?.options.surrounding = surrounding
+            let routes = (first, second)
+            return try await policy.run { _ in
+                try await HedgedPolish.run(transcript: part, primary: routes.0, backup: routes.1, onPartial: partial)
             }
-        }, onPartial: onPartial, keepsLineBreaks: primary.options.dictatedLineBreaks)
+        }, onPartial: onPartial, keepsLineBreaks: options.dictatedLineBreaks,
+           sendsSurrounding: dictation && options.translation == nil)
+        guard dictation, result.parts.count > 1, Prompts.relayouts(options.layout), !options.dictatedLineBreaks,
+              WordCount.count(result.text) <= relayoutLimit else { return result }
+        return try await relaid(result, route: primary)
+    }
+
+    /// `result` with its joined text laid out again as a whole by `route`'s layout, when the answer comes back within
+    /// `relayoutTimeout` and changed nothing but the layout; as it was otherwise. Throws only when cancelled.
+    static func relaid(_ result: SegmentedPolishResult, route: PolishRoute) async throws -> SegmentedPolishResult {
+        var relayout = route
+        relayout.options.relayout = true
+        relayout.options.context = nil
+        relayout.options.surrounding = nil
+        relayout.options.onContextSent = nil
+        let request = relayout
+        let text = result.text
+        let answer: HedgedPolishResult
+        do {
+            answer = try await withTimeout(relayoutTimeout(text)) {
+                try await HedgedPolish.run(transcript: text, primary: request, backup: nil)
+            }
+        } catch {
+            if Task.isCancelled || APIError.from(error) == .cancelled { throw APIError.cancelled }
+            return result
+        }
+        var laidOut = result
+        laidOut.relayout = answer
+        if !answer.result.truncated, Prompts.onlyLayoutChanged(original: text, output: answer.result.text) {
+            laidOut.text = answer.result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            laidOut.relaid = true
+        }
+        return laidOut
     }
 
     /// Cleans up the parts of `transcript` with `polish`, all at once (or `concurrency` at a time), and puts each part's
@@ -169,12 +284,34 @@ public enum SegmentedPolish {
         onPartial: (@Sendable (String) -> Void)? = nil,
         keepsLineBreaks: Bool = false
     ) async throws -> SegmentedPolishResult {
+        try await runParts(transcript: transcript, translation: translation, vocabulary: vocabulary, context: context,
+                           concurrency: concurrency, holdWhile: holdWhile,
+                           polish: { part, _, partial in try await polish(part, partial) },
+                           onPartial: onPartial, keepsLineBreaks: keepsLineBreaks, sendsSurrounding: false)
+    }
+
+    /// `run(transcript:…polish:…)`, with `polish` given each part's surrounding parts (see `surrounding`) when
+    /// `sendsSurrounding` and there's more than one part; an answer that copied from them beyond what the clean-up allows
+    /// is then not used.
+    public static func runParts(
+        transcript: String,
+        translation: TranslationTarget? = nil,
+        vocabulary: [String] = [],
+        context: String? = nil,
+        concurrency: Int? = nil,
+        holdWhile: (@Sendable () -> Bool)? = nil,
+        polish: @escaping @Sendable (String, SurroundingParts?, (@Sendable (String) -> Void)?) async throws -> HedgedPolishResult,
+        onPartial: (@Sendable (String) -> Void)? = nil,
+        keepsLineBreaks: Bool = false,
+        sendsSurrounding: Bool = false
+    ) async throws -> SegmentedPolishResult {
         let split = Self.partsAndBreaks(of: transcript)
         let texts = split.map(\.text)
         let breaks = keepsLineBreaks ? [0] + split.dropLast().map(\.breaksAfter) : []
         let start = ProcessInfo.processInfo.systemUptime
         let progress = PartialProgress(count: texts.count, onChange: onPartial)
         let gate = concurrency.map { AsyncSemaphore(max(1, $0)) }
+        let surroundings = texts.indices.map { sendsSurrounding ? surrounding(texts, $0) : nil }
         let outcomes = await withTaskGroup(of: (Int, Result<HedgedPolishResult, Error>).self) { group in
             for (index, text) in texts.enumerated() {
                 group.addTask {
@@ -186,7 +323,7 @@ public enum SegmentedPolish {
                         }
                         // One that waited its turn past a cancellation doesn't start at all.
                         if gate != nil { try Task.checkCancellation() }
-                        outcome = .success(try await polish(text, { progress.update(index, $0) }))
+                        outcome = .success(try await polish(text, surroundings[index], { progress.update(index, $0) }))
                     } catch {
                         outcome = .failure(error)
                     }
@@ -200,7 +337,7 @@ public enum SegmentedPolish {
         }
         if Task.isCancelled { throw APIError.cancelled }
         var results: [SegmentedPolishResult.Part] = []
-        for (text, outcome) in zip(texts, outcomes) {
+        for (index, (text, outcome)) in zip(texts, outcomes).enumerated() {
             switch outcome {
             case let .success(answer)?:
                 let output = answer.result.text, truncated = answer.result.truncated
@@ -208,7 +345,8 @@ public enum SegmentedPolish {
                     Prompts.translationFallback(input: text, output: output, truncated: truncated, target: translation,
                                                 vocabulary: vocabulary)
                 } else {
-                    Prompts.fallback(input: text, output: output, truncated: truncated, context: context)
+                    Prompts.fallback(input: text, output: output, truncated: truncated,
+                                     context: reference(context, surroundings[index]))
                 }
                 results.append(.init(transcript: text, answer: answer, fallback: fallback, error: nil))
             case let .failure(error)?:

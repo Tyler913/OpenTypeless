@@ -1595,12 +1595,13 @@ public sealed class SessionController
         {
             throw ApiException.MissingApiKey(_settings.PolishProvider.DisplayName());
         }
-        var instructions = (dictation ?? _settings.GlobalDictationSettings).ExtraInstructions;
+        var settings = dictation ?? _settings.GlobalDictationSettings;
+        var instructions = settings.ExtraInstructions;
         var primary = Route(endpoint, _settings.PolishModel, instructions, translation, context, sent, forFile,
-                            dictatedLineBreaks: dictatedLineBreaks);
+                            dictatedLineBreaks: dictatedLineBreaks, layout: settings.Layout, spokenLanguage: settings.Language);
         var backup = _settings.PolishBackupEndpoint is { } backupEndpoint
             ? Route(backupEndpoint, _settings.PolishBackupModel, instructions, translation, context, sent, forFile,
-                    dictatedLineBreaks: dictatedLineBreaks)
+                    dictatedLineBreaks: dictatedLineBreaks, layout: settings.Layout, spokenLanguage: settings.Language)
             : null;
         return await SegmentedPolish.Run(raw, primary, backup, onPartial, token,
                                          forFile ? FileTranscription.CleanUpConcurrency : null, holdWhile);
@@ -1611,7 +1612,7 @@ public sealed class SessionController
 
     private PolishRoute Route(ProviderEndpoint endpoint, string model, string instructions, TranslationTarget? translation,
                               string? context = null, ContextSent? sent = null, bool forFile = false, string? selection = null,
-                              bool dictatedLineBreaks = false)
+                              bool dictatedLineBreaks = false, TextLayout layout = TextLayout.Natural, string spokenLanguage = "")
     {
         model = model.Trim();
         return new PolishRoute(Client(endpoint, forFile), new PolishOptions(
@@ -1625,7 +1626,9 @@ public sealed class SessionController
             Selection: selection,
             Context: context,
             OnContextSent: sent is null ? null : sent.Mark,
-            DictatedLineBreaks: dictatedLineBreaks));
+            DictatedLineBreaks: dictatedLineBreaks,
+            Layout: layout,
+            SpokenLanguage: spokenLanguage));
     }
 
     /// <summary>

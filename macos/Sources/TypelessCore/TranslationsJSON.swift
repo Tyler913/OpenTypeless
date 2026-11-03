@@ -5008,6 +5008,60 @@ extension Translations {
     "ru": "Серия: {0} дн. · Рекорд: {1}",
     "fr": "{0} jours d’affilée · Record {1}",
     "de": "{0} Tage in Folge · Rekord {1}"
+  },
+  "Layout": {
+    "ja": "レイアウト",
+    "ko": "레이아웃",
+    "es": "Formato",
+    "pt": "Formatação",
+    "ru": "Оформление",
+    "fr": "Mise en forme",
+    "de": "Layout"
+  },
+  "Natural": {
+    "ja": "自然",
+    "ko": "자연스럽게",
+    "es": "Natural",
+    "pt": "Natural",
+    "ru": "Обычное",
+    "fr": "Naturelle",
+    "de": "Natürlich"
+  },
+  "Chat": {
+    "ja": "チャット",
+    "ko": "채팅",
+    "es": "Chat",
+    "pt": "Chat",
+    "ru": "Чат",
+    "fr": "Discussion",
+    "de": "Chat"
+  },
+  "Light structure": {
+    "ja": "軽い構造化",
+    "ko": "가벼운 구조화",
+    "es": "Estructura ligera",
+    "pt": "Estrutura leve",
+    "ru": "Лёгкая структура",
+    "fr": "Structure légère",
+    "de": "Leichte Struktur"
+  },
+  "Email": {
+    "ja": "メール",
+    "ko": "이메일",
+    "es": "Correo",
+    "pt": "E-mail",
+    "ru": "Письмо",
+    "fr": "E-mail",
+    "de": "E-Mail"
+  },
+  "How the cleaned-up text is laid out. Chat: one block, no lists, no full stop at the end. Natural: short text stays one paragraph, a list only for three or more items you enumerate. Light structure (prompts for an AI, documents): more paragraphs, and a list for two or more parallel items. Email: a greeting and sign-off you dictate go on lines of their own. Only the layout changes, never your words. Common chat, AI and mail apps use their layout by default.": {
+    "ja": "整えた文章の段落分けと箇条書きの使い方です。チャット：ひとまとまりで、箇条書きにせず、文末に句点を付けません。自然：短い文は段落に分けず、3 つ以上をはっきり列挙したときだけ箇条書きにします。軽い構造化（AI へのプロンプトや文書）：段落を多めに分け、並列する 2 つ以上の項目を箇条書きにします。メール：口述した宛名と結びの言葉をそれぞれ独立した行にします。変わるのはレイアウトだけで、話した言葉は変わりません。よく使われるチャット、AI、メールのアプリには最初から対応するレイアウトが使われます。",
+    "ko": "정리된 글의 문단 나누기와 목록 사용 방식입니다. 채팅: 한 덩어리로, 목록 없이, 끝에 마침표를 붙이지 않습니다. 자연스럽게: 짧은 글은 문단을 나누지 않고, 세 가지 이상을 분명히 나열할 때만 목록으로 만듭니다. 가벼운 구조화(AI 프롬프트, 문서): 문단을 더 자주 나누고, 나란한 항목이 두 개 이상이면 목록으로 만듭니다. 이메일: 말한 인사말과 맺음말을 각각 따로 한 줄에 둡니다. 바뀌는 것은 배치뿐이며 말한 내용은 바뀌지 않습니다. 자주 쓰는 채팅, AI, 메일 앱은 기본으로 해당 레이아웃을 씁니다.",
+    "es": "Cómo se organiza el texto limpio. Chat: un solo bloque, sin listas y sin punto final. Natural: un texto corto queda en un párrafo, y solo hay lista cuando enumeras tres o más elementos. Estructura ligera (prompts para una IA, documentos): más párrafos, y una lista para dos o más elementos paralelos. Correo: el saludo y la despedida que dictes van en líneas propias. Solo cambia el formato, nunca tus palabras. Las apps de chat, IA y correo más comunes usan su formato por defecto.",
+    "pt": "Como o texto limpo é organizado. Chat: um bloco só, sem listas e sem ponto final. Natural: um texto curto fica em um parágrafo, e só vira lista quando você enumera três ou mais itens. Estrutura leve (prompts para uma IA, documentos): mais parágrafos, e uma lista para dois ou mais itens paralelos. E-mail: a saudação e a despedida que você ditar ficam em linhas próprias. Só muda a formatação, nunca as suas palavras. Os apps de chat, IA e e-mail mais comuns usam a formatação deles por padrão.",
+    "ru": "Как оформляется очищенный текст. Чат: один блок, без списков и без точки в конце. Обычное: короткий текст остаётся одним абзацем, список — только когда вы перечисляете три пункта или больше. Лёгкая структура (промпты для ИИ, документы): больше абзацев и список для двух и более однородных пунктов. Письмо: продиктованные приветствие и подпись стоят на отдельных строках. Меняется только оформление, а не ваши слова. Распространённые чаты, ИИ-приложения и почтовые программы по умолчанию используют своё оформление.",
+    "fr": "La mise en forme du texte nettoyé. Discussion : un seul bloc, sans liste ni point final. Naturelle : un texte court reste en un paragraphe, et une liste n'apparaît que si vous énumérez trois éléments ou plus. Structure légère (prompts pour une IA, documents) : davantage de paragraphes, et une liste dès deux éléments parallèles. E-mail : la formule d'appel et la formule de politesse que vous dictez vont chacune sur leur ligne. Seule la mise en forme change, jamais vos mots. Les applications courantes de discussion, d'IA et de messagerie utilisent leur mise en forme par défaut.",
+    "de": "Wie der bereinigte Text gegliedert wird. Chat: ein Block, keine Listen, kein Punkt am Ende. Natürlich: kurzer Text bleibt ein Absatz, eine Liste nur, wenn du drei oder mehr Punkte aufzählst. Leichte Struktur (Prompts für eine KI, Dokumente): mehr Absätze und eine Liste schon ab zwei gleichrangigen Punkten. E-Mail: eine diktierte Anrede und Grußformel stehen jeweils in einer eigenen Zeile. Nur das Layout ändert sich, nie deine Worte. Gängige Chat-, KI- und Mail-Apps verwenden standardmäßig ihr Layout."
   }
 }
 

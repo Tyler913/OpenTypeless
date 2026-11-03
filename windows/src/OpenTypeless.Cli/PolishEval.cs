@@ -14,19 +14,6 @@ namespace OpenTypeless.Cli;
 /// </summary>
 public static class PolishEval
 {
-    public sealed class Case
-    {
-        [JsonPropertyName("id")] public string Id { get; set; } = "";
-        [JsonPropertyName("input")] public string Input { get; set; } = "";
-        [JsonPropertyName("mustContain")] public List<string>? MustContain { get; set; }
-        [JsonPropertyName("mustNotContain")] public List<string>? MustNotContain { get; set; }
-        [JsonPropertyName("anyOf")] public List<List<string>>? AnyOf { get; set; }
-        /// <summary>Translate into this language (a <see cref="TranslationTarget"/> id) instead of cleaning up, as translation mode does.</summary>
-        [JsonPropertyName("translateTo")] public string? TranslateTo { get; set; }
-        /// <summary>Text around the cursor sent with the transcript (see <see cref="CursorContext"/>), as the app would.</summary>
-        [JsonPropertyName("context")] public string? Context { get; set; }
-    }
-
     public sealed record Job(
         [property: JsonPropertyName("id")] string Id,
         [property: JsonPropertyName("round")] int Round,
@@ -83,7 +70,7 @@ public static class PolishEval
                     throw ApiException.BadResponse("detailed output / budget ledger must be outside repository");
                 }
             }
-            var cases = JsonSerializer.Deserialize<List<Case>>(await File.ReadAllBytesAsync(casesPath)) ?? [];
+            var cases = JsonSerializer.Deserialize<List<PolishCase>>(await File.ReadAllBytesAsync(casesPath)) ?? [];
             if (cases.Count == 0 || cases.Select(c => c.Id).Distinct().Count() != cases.Count)
             {
                 throw ApiException.BadResponse("empty cases or duplicate IDs");
@@ -179,7 +166,11 @@ public static class PolishEval
                     {
                         var model = models[(i + offset) % models.Count];
                         var price = prices[model];
-                        var caseOptions = options[model] with { Translation = TranslationTarget.From(c.TranslateTo), Context = c.Context };
+                        var caseOptions = options[model] with
+                        {
+                            Translation = TranslationTarget.From(c.TranslateTo), Context = c.Context, Layout = c.TextLayout,
+                            SpokenLanguage = c.Language ?? "",
+                        };
                         var plan = client.EvaluationPlan(c.Input, caseOptions, price.Prompt, price.Completion, providerTag, providerRouting);
                         if (tierThresholds.TryGetValue(model, out var threshold) && plan.InputTokenBound >= threshold)
                         {
@@ -212,10 +203,8 @@ public static class PolishEval
                 var c = cases.First(x => x.Id == job.Id);
                 var reservation = budget.Reserve(job.Plan.UpperBoundUsd, future);
                 var attempt = await client.EvaluatePolish(job.Plan);
-                var failures = new List<string>();
-                foreach (var s in c.MustContain ?? []) if (!attempt.Output.Contains(s)) failures.Add($"missing “{s}”");
-                foreach (var s in c.MustNotContain ?? []) if (attempt.Output.Contains(s)) failures.Add($"still has “{s}”");
-                foreach (var g in c.AnyOf ?? []) if (!g.Any(attempt.Output.Contains)) failures.Add($"none of [{string.Join(", ", g)}]");
+                // The case's own checks (strings, layout, length) and stock phrases the speaker didn't say.
+                var failures = c.Failures(attempt.Output);
                 // The app's own checks: it would insert the transcript as spoken (or, for a translation, its clean-up)
                 // instead of this output.
                 var translation = TranslationTarget.From(c.TranslateTo);

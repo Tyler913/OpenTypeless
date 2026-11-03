@@ -304,7 +304,7 @@ final class AppSettings: ObservableObject {
 
     /// What a dictation started in the app with this bundle ID runs with.
     func dictationSettings(forApp bundleID: String?) -> DictationSettings {
-        globalDictationSettings.applying(AppProfile.matching(bundleID, in: appProfiles))
+        globalDictationSettings.applying(AppProfile.matching(bundleID, in: appProfiles), app: bundleID)
     }
 
     /// What a retry of a dictation made with the profile `id` runs with: that profile's settings while it still exists,

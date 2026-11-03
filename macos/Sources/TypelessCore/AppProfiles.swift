@@ -20,9 +20,11 @@ public struct AppProfile: Codable, Equatable, Identifiable, Sendable {
     public var pressEnter: Bool?
     /// Spoken-language hint for speech-to-text, "" to auto-detect; nil follows the global setting.
     public var language: String?
+    /// How much structure the cleaned-up text gets; nil follows the app's built-in layout (see `TextLayout.builtIn`).
+    public var layout: TextLayout?
 
     public init(id: String = UUID().uuidString, app: String, name: String, instructions: String = "",
-                polish: Bool? = nil, pressEnter: Bool? = nil, language: String? = nil) {
+                polish: Bool? = nil, pressEnter: Bool? = nil, language: String? = nil, layout: TextLayout? = nil) {
         self.id = id
         self.app = app
         self.name = name
@@ -30,10 +32,11 @@ public struct AppProfile: Codable, Equatable, Identifiable, Sendable {
         self.polish = polish
         self.pressEnter = pressEnter
         self.language = language
+        self.layout = layout
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, app, name, instructions, polish, pressEnter, language
+        case id, app, name, instructions, polish, pressEnter, language, layout
     }
 
     /// Lenient, so a profile saved by another version still loads: a field that's missing or of the wrong type counts
@@ -47,6 +50,8 @@ public struct AppProfile: Codable, Equatable, Identifiable, Sendable {
         polish = (try? c.decodeIfPresent(Bool.self, forKey: .polish)) ?? nil
         pressEnter = (try? c.decodeIfPresent(Bool.self, forKey: .pressEnter)) ?? nil
         language = (try? c.decodeIfPresent(String.self, forKey: .language)) ?? nil
+        // One this version doesn't know counts as unset too.
+        layout = ((try? c.decodeIfPresent(String.self, forKey: .layout)) ?? nil).flatMap(TextLayout.init(rawValue:))
     }
 
     /// How app identifiers compare: case-insensitively (bundle IDs are, and so are Windows file names), ignoring the
@@ -71,7 +76,7 @@ public struct AppProfile: Codable, Equatable, Identifiable, Sendable {
 
     /// Whether every setting follows the global one.
     public var isEmpty: Bool {
-        polish == nil && pressEnter == nil && language == nil
+        polish == nil && pressEnter == nil && language == nil && layout == nil
             && instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -114,6 +119,8 @@ public struct DictationSettings: Equatable, Sendable {
     /// The profile applied; nil when none was (the global settings as they are).
     public var profileID: String?
     public var profileName: String?
+    /// How much structure the cleaned-up text gets (see `TextLayout`).
+    public var layout: TextLayout = .natural
 
     public init(polishEnabled: Bool, pressEnter: Bool, language: String, extraInstructions: String) {
         self.polishEnabled = polishEnabled
@@ -122,10 +129,12 @@ public struct DictationSettings: Equatable, Sendable {
         self.extraInstructions = extraInstructions
     }
 
-    /// These settings with `profile`'s overrides on top; unchanged without one.
-    public func applying(_ profile: AppProfile?) -> DictationSettings {
-        guard let profile else { return self }
+    /// These settings with `profile`'s overrides on top; unchanged without one. The layout is the profile's, else the
+    /// built-in one of the app (`app`, or the profile's own), else as it was.
+    public func applying(_ profile: AppProfile?, app: String? = nil) -> DictationSettings {
         var settings = self
+        settings.layout = profile?.layout ?? TextLayout.builtIn(for: app ?? profile?.app) ?? layout
+        guard let profile else { return settings }
         settings.polishEnabled = profile.polish ?? polishEnabled
         settings.pressEnter = profile.pressEnter ?? pressEnter
         settings.language = profile.language ?? language

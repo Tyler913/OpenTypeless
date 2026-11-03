@@ -1451,12 +1451,15 @@ final class SessionController: ObservableObject {
         guard let endpoint = settings.polishEndpoint, settings.isConfigured(settings.polishProvider) else {
             throw APIError.missingAPIKey(settings.polishProvider.displayName)
         }
-        let instructions = (dictation ?? settings.globalDictationSettings).extraInstructions
+        let dictation = dictation ?? settings.globalDictationSettings
+        let instructions = dictation.extraInstructions
         let primary = route(endpoint, model: settings.polishModel, instructions: instructions, translation: translation,
-                            context: context, sent: sent, dictatedLineBreaks: dictatedLineBreaks, forFile: forFile)
+                            context: context, sent: sent, dictatedLineBreaks: dictatedLineBreaks, forFile: forFile,
+                            layout: dictation.layout, spokenLanguage: dictation.language)
         let backup = settings.polishBackupEndpoint.map {
             route($0, model: settings.polishBackupModel, instructions: instructions, translation: translation,
-                  context: context, sent: sent, dictatedLineBreaks: dictatedLineBreaks, forFile: forFile)
+                  context: context, sent: sent, dictatedLineBreaks: dictatedLineBreaks, forFile: forFile,
+                  layout: dictation.layout, spokenLanguage: dictation.language)
         }
         return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup,
                                              concurrency: forFile ? FileTranscription.cleanUpConcurrency : nil,
@@ -1465,7 +1468,8 @@ final class SessionController: ObservableObject {
 
     private func route(_ endpoint: ProviderEndpoint, model: String, instructions: String, translation: TranslationTarget?,
                        selection: String? = nil, context: String? = nil, sent: ContextSent? = nil,
-                       dictatedLineBreaks: Bool = false, forFile: Bool = false) -> PolishRoute {
+                       dictatedLineBreaks: Bool = false, forFile: Bool = false, layout: TextLayout = .natural,
+                       spokenLanguage: String = "") -> PolishRoute {
         let model = model.trimmingCharacters(in: .whitespaces)
         return PolishRoute(client: forFile ? .forFiles(endpoint: endpoint) : APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
@@ -1478,7 +1482,9 @@ final class SessionController: ObservableObject {
             selection: selection,
             context: context,
             onContextSent: { sent?.mark() },
-            dictatedLineBreaks: dictatedLineBreaks
+            dictatedLineBreaks: dictatedLineBreaks,
+            layout: layout,
+            spokenLanguage: spokenLanguage
         ))
     }
 

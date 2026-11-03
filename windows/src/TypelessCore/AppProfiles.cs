@@ -27,6 +27,8 @@ public sealed record AppProfile
     public bool? PressEnter { get; init; }
     /// <summary>Spoken-language hint for speech-to-text, "" to auto-detect; null follows the global setting.</summary>
     public string? Language { get; init; }
+    /// <summary>How much structure the cleaned-up text gets; null follows the app's built-in layout (see <see cref="TextLayouts.BuiltIn"/>).</summary>
+    public TextLayout? Layout { get; init; }
 
     /// <summary>
     /// How app identifiers compare: case-insensitively (bundle IDs are, and so are Windows file names), ignoring the
@@ -50,7 +52,7 @@ public sealed record AppProfile
     public static AppProfile? Matching(string? app, IEnumerable<AppProfile> profiles) => profiles.FirstOrDefault(p => p.Matches(app));
 
     /// <summary>Whether every setting follows the global one.</summary>
-    public bool IsEmpty => Polish is null && PressEnter is null && Language is null && Instructions.Trim().Length == 0;
+    public bool IsEmpty => Polish is null && PressEnter is null && Language is null && Layout is null && Instructions.Trim().Length == 0;
 
     /// <summary>The same JSON as the macOS app's: unset overrides aren't written, so they stay "follow the global setting".</summary>
     public JsonObject ToJson()
@@ -59,6 +61,7 @@ public sealed record AppProfile
         if (Polish is { } polish) json["polish"] = polish;
         if (PressEnter is { } pressEnter) json["pressEnter"] = pressEnter;
         if (Language is { } language) json["language"] = language;
+        if (Layout is { } layout) json["layout"] = layout.Id();
         return json;
     }
 
@@ -80,6 +83,7 @@ public sealed record AppProfile
             Polish = Flag(json["polish"]),
             PressEnter = Flag(json["pressEnter"]),
             Language = Text(json["language"]),
+            Layout = TextLayouts.From(Text(json["layout"])),
         };
 
         static string? Text(JsonNode? value) =>
@@ -130,17 +134,27 @@ public sealed record DictationSettings(bool PolishEnabled, bool PressEnter, stri
     /// <summary>The profile applied; null when none was (the global settings as they are).</summary>
     public string? ProfileId { get; init; }
     public string? ProfileName { get; init; }
+    /// <summary>How much structure the cleaned-up text gets (see <see cref="TextLayout"/>).</summary>
+    public TextLayout Layout { get; init; } = TextLayout.Natural;
 
-    /// <summary>These settings with <paramref name="profile"/>'s overrides on top; unchanged without one.</summary>
-    public DictationSettings Applying(AppProfile? profile) => profile is null ? this : this with
+    /// <summary>
+    /// These settings with <paramref name="profile"/>'s overrides on top; unchanged without one. The layout is the
+    /// profile's, else the built-in one of the app (<paramref name="app"/>, or the profile's own), else as it was.
+    /// </summary>
+    public DictationSettings Applying(AppProfile? profile, string? app = null)
     {
-        PolishEnabled = profile.Polish ?? PolishEnabled,
-        PressEnter = profile.PressEnter ?? PressEnter,
-        Language = profile.Language ?? Language,
-        ExtraInstructions = Combine(ExtraInstructions, profile.Instructions),
-        ProfileId = profile.Id,
-        ProfileName = profile.Name,
-    };
+        var layout = profile?.Layout ?? TextLayouts.BuiltIn(app ?? profile?.App) ?? Layout;
+        return profile is null ? this with { Layout = layout } : this with
+        {
+            PolishEnabled = profile.Polish ?? PolishEnabled,
+            PressEnter = profile.PressEnter ?? PressEnter,
+            Language = profile.Language ?? Language,
+            ExtraInstructions = Combine(ExtraInstructions, profile.Instructions),
+            ProfileId = profile.Id,
+            ProfileName = profile.Name,
+            Layout = layout,
+        };
+    }
 
     /// <summary>
     /// Whether these are the settings <paramref name="app"/> (the one in front when the key is released, or when the text

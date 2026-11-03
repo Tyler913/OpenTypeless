@@ -706,7 +706,7 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     /// <summary>What a dictation started in the app with this executable name ("slack.exe") runs with.</summary>
     public DictationSettings DictationSettingsForApp(string? executable) =>
-        GlobalDictationSettings.Applying(AppProfile.Matching(executable, AppProfiles));
+        GlobalDictationSettings.Applying(AppProfile.Matching(executable, AppProfiles), executable);
 
     /// <summary>
     /// What a retry of a dictation made with the profile <paramref name="id"/> runs with: that profile's settings while it

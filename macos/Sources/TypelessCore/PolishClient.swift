@@ -26,11 +26,24 @@ public struct PolishOptions: Sendable {
     /// The transcripts' line breaks were dictated (see `SpokenLayout`): the prompt then asks to keep them, for a transcript
     /// (or part of one) that has any.
     public var dictatedLineBreaks: Bool
+    /// How much structure the text gets where it goes (see `TextLayout`); a clean-up's or a translation's.
+    public var layout: TextLayout
+    /// The speech-to-text language ("" auto-detects): a clean-up in a language with examples of its own gets them (see
+    /// `ExampleLanguage.resolve`).
+    public var spokenLanguage: String
+    /// For one part of a long transcript, the ends of the parts around it, as spoken, sent as reference (see
+    /// SegmentedPolish); a clean-up's only.
+    public var surrounding: SurroundingParts?
+    /// Lay the transcript, a cleaned-up text, out again by `layout` instead of cleaning it up (see
+    /// `Prompts.relayoutSystemPrompt`): only its line breaks and list markers change.
+    public var relayout: Bool
 
     public init(model: String, vocabulary: [String] = [], misheard: [Correction] = [], extraInstructions: String = "",
                 modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil,
                 translation: TranslationTarget? = nil, selection: String? = nil, context: String? = nil,
-                onContextSent: (@Sendable () -> Void)? = nil, dictatedLineBreaks: Bool = false) {
+                onContextSent: (@Sendable () -> Void)? = nil, dictatedLineBreaks: Bool = false,
+                layout: TextLayout = .natural, spokenLanguage: String = "", surrounding: SurroundingParts? = nil,
+                relayout: Bool = false) {
         self.model = model
         self.vocabulary = vocabulary
         self.misheard = misheard
@@ -43,6 +56,10 @@ public struct PolishOptions: Sendable {
         self.context = context
         self.onContextSent = onContextSent
         self.dictatedLineBreaks = dictatedLineBreaks
+        self.layout = layout
+        self.spokenLanguage = spokenLanguage
+        self.surrounding = surrounding
+        self.relayout = relayout
     }
 }
 
@@ -133,6 +150,9 @@ extension APIClient {
     /// The system prompt and the user message a clean-up (or translation) of `transcript` sends, or an edit of the
     /// options' selection by it.
     static func polishMessages(transcript: String, options: PolishOptions) -> [String] {
+        if options.relayout {
+            return [Prompts.relayoutSystemPrompt(options.layout), Prompts.relayoutUserMessage(transcript)]
+        }
         if let selection = options.selection {
             return [options.systemPromptOverride ?? Prompts.commandSystemPrompt(
                         vocabulary: options.vocabulary, misheard: options.misheard,
@@ -142,13 +162,15 @@ extension APIClient {
         if let target = options.translation {
             return [options.systemPromptOverride ?? Prompts.translateSystemPrompt(
                         target: target, vocabulary: options.vocabulary, misheard: options.misheard,
-                        extraInstructions: options.extraInstructions),
+                        extraInstructions: options.extraInstructions, layout: options.layout),
                     Prompts.translateUserMessage(transcript: transcript, target: target)]
         }
         return [options.systemPromptOverride ?? Prompts.polishSystemPrompt(
                     vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions,
-                    dictatedLineBreaks: options.dictatedLineBreaks && transcript.contains(where: \.isNewline)),
-                Prompts.polishUserMessage(transcript: transcript, context: options.context)]
+                    dictatedLineBreaks: options.dictatedLineBreaks && transcript.contains(where: \.isNewline),
+                    layout: options.layout,
+                    exampleLanguage: ExampleLanguage.resolve(hint: options.spokenLanguage, transcript: transcript)),
+                Prompts.polishUserMessage(transcript: transcript, context: options.context, surrounding: options.surrounding)]
     }
 
     /// Builds the chat request body. Optional tuning parameters are only sent where they're known to
@@ -242,14 +264,15 @@ extension APIClient {
         let body = polishBody(transcript: transcript, options: options, includeOptional: includeOptional)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let messages = (body["messages"] as? [[String: String]] ?? []).compactMap { $0["content"] }
-        let reminder = Prompts.reminder(translation: options.translation)
+        let reminder = options.relayout ? Prompts.relayoutReminder : Prompts.reminder(translation: options.translation)
         let selection = options.selection
         let instruction = transcript
         let session = self.session
         let answering = OnceFlag()
         // Told as the request goes out (not when it's built, nor for one cancelled first), so History says so only when
         // the text around the cursor really went to the provider.
-        let sentContext = options.translation == nil && options.selection == nil && Prompts.contextBlock(options.context) != nil
+        let sentContext = !options.relayout && options.translation == nil && options.selection == nil
+            && Prompts.contextBlock(options.context) != nil
         if sentContext, !Task.isCancelled { options.onContextSent?() }
 
         return try await withTimeout(limits.total) { [request] in

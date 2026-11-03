@@ -236,6 +236,22 @@ private struct AppProfileCard: View {
                     .fixedSize()
                 }
                 CardDivider()
+                CardRow(title: L("排版", "Layout"), help: Self.layoutHelp) {
+                    Picker(L("排版", "Layout"), selection: binding(\.layout)) {
+                        Text(L("默认（\(Self.layoutName(builtInLayout))）", "Default (\(Self.layoutName(builtInLayout)))"))
+                            .tag(TextLayout?.none)
+                        Divider()
+                        ForEach(TextLayout.allCases) { layout in
+                            Text(Self.layoutName(layout)).tag(TextLayout?.some(layout))
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                // Only used while the text is cleaned up.
+                .disabled(!(profile.polish ?? settings.polishEnabled))
+                .opacity(profile.polish ?? settings.polishEnabled ? 1 : 0.5)
+                CardDivider()
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 5) {
                         Text(L("这个应用的整理偏好", "Clean-up preferences for this app")).font(.system(size: 13))
@@ -291,10 +307,29 @@ private struct AppProfileCard: View {
         if let polish = profile.polish { parts.append(polish ? L("整理：开", "Clean-up on") : L("整理：关", "Clean-up off")) }
         if let enter = profile.pressEnter { parts.append(enter ? L("回车：开", "Return on") : L("回车：关", "Return off")) }
         if let language = profile.language { parts.append(Self.languageName(language)) }
+        if let layout = profile.layout { parts.append(Self.layoutName(layout)) }
         if !profile.instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             parts.append(L("自定义整理偏好", "Own clean-up preferences"))
         }
         return parts.isEmpty ? L("全部跟随你平时的设置", "Uses your usual settings") : parts.joined(separator: " · ")
+    }
+
+    /// The layout this app gets when its profile leaves it on Default: its built-in one, or the prompt's own.
+    private var builtInLayout: TextLayout { TextLayout.builtIn(for: profile.app) ?? .natural }
+
+    /// A layout's name in the picker and the card's summary.
+    static func layoutName(_ layout: TextLayout) -> String {
+        switch layout {
+        case .natural: return L("自然", "Natural")
+        case .chat: return L("聊天", "Chat")
+        case .structured: return L("轻结构", "Light structure")
+        case .email: return L("邮件", "Email")
+        }
+    }
+
+    static var layoutHelp: String {
+        L("整理后的文字怎么分段、要不要列表。聊天：一整段，不列表，句尾不加句号。自然：短的不分段，明确列举三项以上才列表。轻结构（写给 AI 的提示词、文档）：更积极地分段，两项以上的并列就列表。邮件：说了称呼和落款就各占一行。只改排版，不改你说的话。常见的聊天、AI、邮件应用默认就用对应的排版。",
+          "How the cleaned-up text is laid out. Chat: one block, no lists, no full stop at the end. Natural: short text stays one paragraph, a list only for three or more items you enumerate. Light structure (prompts for an AI, documents): more paragraphs, and a list for two or more parallel items. Email: a greeting and sign-off you dictate go on lines of their own. Only the layout changes, never your words. Common chat, AI and mail apps use their layout by default.")
     }
 
     /// A spoken-language code as the Models page names it; "" is auto-detect.

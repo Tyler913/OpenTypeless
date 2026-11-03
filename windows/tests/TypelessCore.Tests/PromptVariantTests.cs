@@ -16,6 +16,8 @@ public class PromptVariantTests
     private static JsonObject Cases([CallerFilePath] string source = "") =>
         JsonNode.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(source)!, "..", "..", "..", "testdata", "prompt-variant-cases.json")))!.AsObject();
 
+    private static string Root([CallerFilePath] string source = "") => Path.Combine(Path.GetDirectoryName(source)!, "..", "..", "..");
+
     /// <summary>Every fixed piece of the clean-up's prompts, in the order the fixture's hash takes them.</summary>
     internal static string AllPolishPromptText() => string.Join("\n\n", new[]
     {
@@ -124,6 +126,34 @@ public class PromptVariantTests
             var failures = c.Failures((string)node["output"]!);
             Assert.True(failures.Count == (int)node["failures"]!, $"{node["name"]}: {string.Join("; ", failures)}");
         }
+    }
+
+    /// <summary>
+    /// The evaluation sets' cases agree with themselves: the heaviest legitimate clean-up of each (in
+    /// testdata/polish-guard-cases.json, which the guards must let through) passes the case's own checks.
+    /// </summary>
+    [Fact]
+    public void EvaluationCasesAcceptTheirHeaviestLegitimateCleanUp()
+    {
+        var root = Root();
+        var guard = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "testdata", "polish-guard-cases.json")))!["cases"]!.AsArray()
+            .Where(c => c!["expect"] is null).ToDictionary(c => (string)c!["id"]!, c => (string)c!["output"]!);
+        var count = 0;
+        foreach (var set in new[] { "polish-cases.json", "polish-holdout.json" })
+        {
+            foreach (var c in JsonSerializer.Deserialize<List<PolishCase>>(File.ReadAllText(Path.Combine(root, "eval", set)))!)
+            {
+                Assert.True(guard.TryGetValue(c.Id, out var output), $"{c.Id} has no case in polish-guard-cases.json");
+                var failures = c.Failures(output!);
+                Assert.True(failures.Count == 0, $"{c.Id}: {string.Join("; ", failures)}");
+                Assert.True(TextLayouts.From(c.Layout ?? "natural") != null, $"{c.Id}: unknown layout {c.Layout}");
+                // A case for a language with examples of its own ("h-ja-…") gets them by the guess, as most speakers' do.
+                var language = ExampleLanguage.WithExamples.FirstOrDefault(l => c.Id.StartsWith($"h-{l}-", StringComparison.Ordinal));
+                if (language != null) Assert.True(ExampleLanguage.Resolve(c.Language, c.Input) == language, $"{c.Id}: not told apart as {language}");
+                count++;
+            }
+        }
+        Assert.True(count > 80);
     }
 
     [Fact]

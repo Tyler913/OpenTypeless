@@ -133,10 +133,10 @@ public static class ExampleLanguage
     internal static readonly IReadOnlyDictionary<string, HashSet<string>> CommonWords = new Dictionary<string, HashSet<string>>
     {
         ["en"] = ["the", "and", "is", "are", "to", "of", "it", "that", "this", "you", "we", "with", "for", "have", "was", "will", "can", "but", "not", "what", "so", "um", "uh"],
-        ["es"] = ["el", "los", "las", "del", "es", "y", "pero", "una", "muy", "eso", "esto", "hay", "cuando", "sabes", "entonces", "bueno", "vale", "sea", "están", "tengo", "espera"],
-        ["pt"] = ["o", "os", "dos", "é", "não", "você", "mas", "uma", "muito", "isso", "isto", "tem", "então", "tá", "né", "gente", "aí", "pra", "tipo", "pera", "eu"],
-        ["fr"] = ["le", "les", "des", "est", "et", "je", "tu", "nous", "vous", "pas", "mais", "pour", "avec", "une", "très", "aussi", "ça", "il", "elle", "euh", "quoi", "coup", "fait", "c'est", "n'est"],
-        ["de"] = ["der", "die", "das", "und", "ist", "nicht", "ich", "wir", "aber", "für", "mit", "eine", "ein", "sehr", "auch", "noch", "ja", "doch", "ähm", "äh", "wenn", "dann", "bitte", "nee"],
+        ["es"] = ["el", "los", "las", "del", "es", "y", "pero", "una", "muy", "eso", "esto", "hay", "cuando", "sabes", "entonces", "bueno", "vale", "sea", "están", "tengo", "espera", "lunes", "martes", "miércoles", "jueves", "viernes", "hoy", "mañana", "sí"],
+        ["pt"] = ["o", "os", "dos", "é", "não", "você", "mas", "uma", "muito", "isso", "isto", "tem", "então", "tá", "né", "gente", "aí", "pra", "tipo", "pera", "eu", "segunda", "terça", "quarta", "quinta", "sexta", "hoje", "amanhã", "sim"],
+        ["fr"] = ["le", "les", "des", "est", "et", "je", "tu", "nous", "vous", "pas", "mais", "pour", "avec", "une", "très", "aussi", "ça", "il", "elle", "euh", "quoi", "coup", "fait", "c'est", "n'est", "non", "attends", "oui", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "matin"],
+        ["de"] = ["der", "die", "das", "und", "ist", "nicht", "ich", "wir", "aber", "für", "mit", "eine", "ein", "sehr", "auch", "noch", "ja", "doch", "ähm", "äh", "wenn", "dann", "bitte", "nee", "nein", "montag", "dienstag", "mittwoch", "donnerstag", "freitag", "heute", "morgen"],
     };
 
     /// <summary>

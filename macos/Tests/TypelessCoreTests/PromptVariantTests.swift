@@ -97,6 +97,35 @@ import Testing
         }
     }
 
+    /// The evaluation sets' cases agree with themselves: the heaviest legitimate clean-up of each (in
+    /// testdata/polish-guard-cases.json, which the guards must let through) passes the case's own checks.
+    @Test func evaluationCasesAcceptTheirHeaviestLegitimateCleanUp() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let guardData = try Data(contentsOf: root.appendingPathComponent("testdata/polish-guard-cases.json"))
+        let guardCases = (try JSONSerialization.jsonObject(with: guardData) as! [String: Any])["cases"] as! [[String: Any]]
+        var outputs: [String: String] = [:]
+        for item in guardCases where item["expect"] is NSNull || item["expect"] == nil {
+            outputs[item["id"] as! String] = item["output"] as? String
+        }
+        var count = 0
+        for set in ["polish-cases.json", "polish-holdout.json"] {
+            let data = try Data(contentsOf: root.appendingPathComponent("eval/\(set)"))
+            for c in try JSONDecoder().decode([PolishCase].self, from: data) {
+                let output = try #require(outputs[c.id], "\(c.id) has no case in polish-guard-cases.json")
+                let failures = c.failures(output)
+                #expect(failures.isEmpty, "\(c.id): \(failures)")
+                #expect(TextLayout(rawValue: c.layout ?? "natural") != nil, "\(c.id): unknown layout")
+                // A case for a language with examples of its own ("h-ja-…") gets them by the guess, as most speakers' do.
+                if let language = ExampleLanguage.withExamples.first(where: { c.id.hasPrefix("h-\($0)-") }) {
+                    #expect(ExampleLanguage.resolve(hint: c.language, transcript: c.input) == language, "\(c.id)")
+                }
+                count += 1
+            }
+        }
+        #expect(count > 80)
+    }
+
     @Test func systemPromptPutsWhatVariesAfterTheSharedStart() {
         let plain = Prompts.polishSystemPrompt(vocabulary: [], extraInstructions: "")
         #expect(plain == Prompts.basePolishPrompt)

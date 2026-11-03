@@ -12,7 +12,8 @@ import Testing
         return try JSONSerialization.jsonObject(with: data) as! [String: Any]
     }
 
-    private func number(_ value: Any?) -> Double { RequestUsage.number(value)! }
+    /// The cases' amounts as written, negative ones included (RequestUsage.number would turn those away).
+    private func number(_ value: Any?) -> Double { (value as! NSNumber).doubleValue }
 
     private func level(_ value: Any?) -> SpendLimit.Level? { (value as? String).flatMap(SpendLimit.Level.init(name:)) }
 

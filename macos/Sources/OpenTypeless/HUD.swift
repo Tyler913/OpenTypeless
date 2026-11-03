@@ -37,6 +37,10 @@ final class HUDModel: ObservableObject {
     @Published var preview = ""
     /// The mode the dictation is in, when it isn't plain dictation ("→ EN" for a translation into English).
     @Published var badge: String?
+    /// The capsule hangs from its top edge (at the top of the screen, or below the text cursor), so the live preview goes
+    /// below it and a notice that wraps grows downwards; else it stands on its bottom edge and they go upwards (see
+    /// `HUDAnchor`).
+    @Published var growsDown = false
     /// Counts the recordings started, so the glow behind the capsule blooms once at the start of each.
     @Published private(set) var recordingStarts = 0
     let bar = ProcessingBar()
@@ -144,17 +148,30 @@ final class ProcessingBar: ObservableObject {
     }
 }
 
-/// Small tinted Liquid Glass capsule near the bottom of the screen: ✕, a waveform and ↑. Never takes
-/// focus, so the target text field stays focused for the paste. Clicks go through to what's below, except on the
-/// capsule itself while it shows its ✕ and ↑ / ■ buttons.
+/// Small tinted Liquid Glass capsule, at the bottom of the screen unless the user picked the top or the text cursor
+/// (General → Capsule position): ✕, a waveform and ↑. Never takes focus, so the target text field stays focused for the
+/// paste. Clicks go through to what's below, except on the capsule itself while it shows its ✕ and ↑ / ■ buttons.
 @MainActor
 final class HUDController {
     let model = HUDModel()
     private var panel: NSPanel?
     private var hideWork: DispatchWorkItem?
     private var mouseMonitors: [Any] = []
-    /// Room for the capsule with its glow and, above it, the live preview line.
+    /// Room for the capsule with its glow and the live preview line, above it or below it.
     private static let size = NSSize(width: 460, height: 124)
+    /// The panel reaches this far past the capsule's anchored edge, for the glow (`HUDView` keeps it clear).
+    static let edge: CGFloat = 24
+    /// The capsule's anchored edge is 46 pt from the Dock (as it always was) or from the menu bar, and 8 pt from the line
+    /// being typed into; all of the panel stays on the screen.
+    private static let metrics = HUDPlacement.Metrics(inset: 46, gap: 8, margin: 0)
+    private static let extent = HUDSize(width: Double(size.width), height: Double(size.height - edge))
+    /// How long a recording's capsule waits to be told where the user is working before it shows anyway, near the text
+    /// cursor (which takes a few more calls into the app) and otherwise.
+    private static let caretWait = 0.15
+    private static let windowWait = 0.06
+    /// A recording has started and its capsule waits to be placed (see `locate`); the count tells the reads apart.
+    private var locating = false
+    private var locations = 0
 
     init() {
         model.onLayout = { [weak self] in self?.updateMouse() }
@@ -165,17 +182,26 @@ final class HUDController {
     func show(_ phase: HUDModel.Phase, autoHideAfter: Double? = nil) {
         hideWork?.cancel()
         if phase != .working { model.bar.stop() }
-        if phase == .recording, model.phase != .recording { model.recordingStarted() }
+        let starts = phase == .recording && model.phase != .recording
         withAnimation(.spring(duration: 0.32, bounce: 0.18)) { model.phase = phase }
         if phase == .hidden {
+            locating = false
             stopWatchingMouse()
             panel?.orderOut(nil)
             return
         }
         guard let panel else { return }
-        if !panel.isVisible { position(panel) }
-        panel.orderFrontRegardless()
-        if phase.hasButtons { watchMouse() } else { stopWatchingMouse() }
+        if starts {
+            // Shown once it's known where the user is working: on the screen of the focused window, or near the text cursor.
+            locate()
+        } else if locating {
+            // On to the next phase (the key let go, an error) before that came back: shown now, where it goes without it.
+            reveal(CaretLocator.Location())
+        } else {
+            if !panel.isVisible { place(panel, CaretLocator.Location()) }
+            panel.orderFrontRegardless()
+            if phase.hasButtons { watchMouse() } else { stopWatchingMouse() }
+        }
 
         if let autoHideAfter {
             let work = DispatchWorkItem { [weak self] in self?.show(.hidden) }
@@ -234,12 +260,67 @@ final class HUDController {
         return panel
     }
 
-    private func position(_ panel: NSPanel) {
+    // MARK: - Placement
+
+    /// Asks, off the main thread, where the user is working (the focused window of the app in front, and near the text
+    /// cursor the line being typed into), and shows the recording's capsule there. It waits for the answer only briefly:
+    /// without one in time it shows on the screen under the mouse, at the bottom or the top, and a later answer is
+    /// dropped, so the capsule never jumps once it's up.
+    private func locate() {
+        locating = true
+        locations += 1
+        let number = locations
+        let nearCaret = AppSettings.shared.hudPosition == .caret
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              app.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+            return reveal(CaretLocator.Location())
+        }
+        CaretLocator.locate(pid: app.processIdentifier, caret: nearCaret) { [weak self] location in
+            self?.located(number, location)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + (nearCaret ? Self.caretWait : Self.windowWait)) { [weak self] in
+            MainActor.assumeIsolated { self?.located(number, CaretLocator.Location()) }
+        }
+    }
+
+    /// The answer to read `number`, or nothing in time: taken only while that recording's capsule still waits.
+    private func located(_ number: Int, _ location: CaretLocator.Location) {
+        guard locating, locations == number else { return }
+        reveal(location)
+    }
+
+    /// Places the panel for `location` and shows it, with the glow for the recording that started.
+    private func reveal(_ location: CaretLocator.Location) {
+        locating = false
+        guard let panel, model.phase != .hidden else { return }
+        place(panel, location)
+        panel.orderFrontRegardless()
+        if model.phase == .recording { model.recordingStarted() }
+        if model.phase.hasButtons { watchMouse() } else { stopWatchingMouse() }
+    }
+
+    /// Puts the panel where the chosen position says (see `HUDPlacement`), on the screen the user is working on: the one
+    /// with the text cursor, else most of the focused window, else the mouse.
+    private func place(_ panel: NSPanel, _ location: CaretLocator.Location) {
+        let screens = NSScreen.screens
+        guard let main = screens.first else { return }
+        // AppKit's y goes up from the bottom of the main screen; Accessibility's, and the placement's, down from its top.
+        let top = main.frame.maxY
+        func flipped(_ rect: NSRect) -> HUDRect {
+            HUDRect(x: rect.minX, y: top - rect.maxY, width: rect.width, height: rect.height)
+        }
         let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
-        guard let frame = screen?.visibleFrame else { return }
-        // The capsule's bottom edge 46 pt above the Dock, as it always was (the view keeps 24 pt below it for the glow).
-        panel.setFrameOrigin(NSPoint(x: frame.midX - Self.size.width / 2, y: frame.minY + 22))
+        let index = HUDPlacement.screen(screens.map { flipped($0.frame) }, caret: location.caret, window: location.window,
+                                        mouse: HUDPoint(x: mouse.x, y: top - mouse.y))
+        let screen = index.map { screens[$0] } ?? NSScreen.main ?? main
+        let anchor = HUDPlacement.anchor(AppSettings.shared.hudPosition, area: flipped(screen.visibleFrame),
+                                         extent: Self.extent, caret: location.caret, metrics: Self.metrics)
+        model.growsDown = anchor.growsDown
+        // The panel reaches `edge` past the capsule's anchored edge and the rest of its height the other way. At the bottom
+        // that's 22 pt above the Dock, as it always was.
+        let edge = Double(Self.edge), width = Double(Self.size.width), height = Double(Self.size.height)
+        let panelTop: Double = anchor.growsDown ? anchor.edgeY - edge : anchor.edgeY + edge - height
+        panel.setFrameOrigin(NSPoint(x: anchor.centerX - width / 2, y: Double(top) - panelTop - height))
     }
 
     // MARK: - Clicks on the buttons
@@ -304,26 +385,35 @@ struct HUDView: View {
 
     var body: some View {
         GlassEffectContainer {
+            // The capsule is always the middle child, so it stays the same view (and its glow doesn't bloom again) when
+            // the preview moves to its other side.
             VStack(spacing: 8) {
-                if model.phase == .recording, !model.preview.isEmpty {
-                    Text(model.preview)
-                        .font(.system(size: 13))
-                        .lineLimit(1)
-                        .truncationMode(.head)
-                        .frame(maxWidth: 420)
-                        .padding(.horizontal, 14)
-                        .frame(height: 30)
-                        .glassEffect(Self.glass, in: .capsule)
-                        .transition(.opacity)
-                }
+                if !model.growsDown { preview }
                 capsule
+                if model.growsDown { preview }
             }
             .animation(.easeOut(duration: 0.15), value: model.preview.isEmpty)
         }
-        // The capsule stays where it always was; the preview grows upwards.
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .padding(.bottom, 24)
+        // The capsule's anchored edge stays where it was put (see `HUDController.place`); the preview, and a notice that
+        // wraps, grow away from it: upwards at the bottom of the screen, downwards at the top.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: model.growsDown ? .top : .bottom)
+        .padding(model.growsDown ? Edge.Set.top : Edge.Set.bottom, HUDController.edge)
         .opacity(model.phase == .hidden ? 0 : 1)
+    }
+
+    /// What's being said so far, while recording with the live preview on.
+    @ViewBuilder private var preview: some View {
+        if model.phase == .recording, !model.preview.isEmpty {
+            Text(model.preview)
+                .font(.system(size: 13))
+                .lineLimit(1)
+                .truncationMode(.head)
+                .frame(maxWidth: 420)
+                .padding(.horizontal, 14)
+                .frame(height: 30)
+                .glassEffect(Self.glass, in: .capsule)
+                .transition(.opacity)
+        }
     }
 
     private var capsule: some View {

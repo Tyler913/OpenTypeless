@@ -76,17 +76,24 @@ enum UISnapshots {
         let model = HUDModel()
         model.levels.values = (0..<18).map { i in Float(abs(sin(Double(i) * 0.7))) * 0.8 + 0.1 }
         model.bar.show(0.55)
-        let phases: [(String, HUDModel.Phase)] = [
-            ("hud-recording", .recording),
-            ("hud-working", .working),
-            ("hud-copied", .copied),
-            ("hud-learned", .learned("Typeless、罗技")),
+        // What the live preview shows (the speaker's words, so not translated).
+        let words = "Let's move the launch review to Thursday afternoon"
+        let phases: [(String, HUDModel.Phase, String, Bool)] = [
+            ("hud-recording", .recording, "", false),
+            ("hud-working", .working, "", false),
+            ("hud-copied", .copied, "", false),
+            ("hud-learned", .learned("Typeless、罗技"), "", false),
             // A long, real error, to check that it wraps instead of losing its end.
             ("hud-error", .error(L("需要麦克风权限：系统设置 → 隐私与安全性 → 麦克风",
-                                   "Microphone access needed: System Settings → Privacy & Security → Microphone"))),
+                                   "Microphone access needed: System Settings → Privacy & Security → Microphone")), "", false),
+            // The live preview above the capsule at the bottom of the screen, and below it at the top (or under the cursor).
+            ("hud-preview", .recording, words, false),
+            ("hud-top", .recording, words, true),
         ]
-        for (name, phase) in phases {
+        for (name, phase, preview, growsDown) in phases {
             model.phase = phase
+            model.preview = preview
+            model.growsDown = growsDown
             // A busy backdrop, to judge the glass against real content.
             let hud = HUDView(model: model)
             let view = live ? AnyView(hud) : AnyView(hud.background(

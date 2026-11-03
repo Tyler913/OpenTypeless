@@ -75,6 +75,18 @@ struct GeneralPage: View {
                                 "Shows what you're saying above the capsule as you talk, recognised on this Mac. Only a preview: the inserted text still comes from your speech-to-text provider. The first time, macOS downloads a speech model for your language."),
                         isOn: $settings.livePreview)
                 CardDivider()
+                CardRow(title: L("录音条位置", "Capsule position"),
+                        help: L("录音条显示在你正在用的窗口所在的屏幕上。选「光标附近」时，它出现在正在输入的那一行下方（下方放不下就在上方），不会挡住这一行；读不到光标位置的应用里显示在屏幕底部。",
+                                "The capsule shows on the screen of the window you're working in. Near the text cursor puts it just below the line you're typing in (above it when there's no room below), never over it; in apps that don't say where the cursor is, it shows at the bottom of the screen.")) {
+                    Picker(L("录音条位置", "Capsule position"), selection: $settings.hudPosition) {
+                        ForEach(HUDPosition.allCases, id: \.self) { position in
+                            Text(position.title).tag(position)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                CardDivider()
                 CardRow(title: L("单次最长录音", "Maximum recording"),
                         help: L("到时间会自动结束并处理", "Stops and processes automatically at the limit")) {
                     ValueStepper(text: L("\(settings.maxRecordingMinutes) 分钟", "\(settings.maxRecordingMinutes) min"),

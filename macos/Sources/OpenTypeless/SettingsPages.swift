@@ -656,23 +656,79 @@ struct AnyPrimitiveButtonStyle: PrimitiveButtonStyle {
 
 // MARK: - Providers
 
+/// The providers that are set up (in use, or with a key or address of their own), and an Add menu with the rest, grouped
+/// by what they do, so the page stays short however many providers there are.
 struct ProvidersPage: View {
     @ObservedObject var settings: AppSettings
     @State private var expanded: Set<ProviderID> = []
+    /// Shown since the page opened, so a provider whose key was just cleared doesn't vanish under the pointer.
+    @State private var shown: Set<ProviderID> = []
 
     var body: some View {
         PageScaffold(page: .providers,
                      help: L("填写 API Key。语音转文字和文字整理可以使用不同的服务商。",
-                             "Add API keys. Speech-to-text and clean-up can use different providers.")) {
-            ForEach(ProviderID.allCases) { id in
+                             "Add API keys. Speech-to-text and clean-up can use different providers.")
+                         + "\n\n" + L("这里只列出已经设置的服务商，其他的在「添加服务商」里。",
+                                       "Only the providers you've set up are listed; add others with Add provider.")) {
+            if !available.isEmpty { addMenu }
+        } content: {
+            ForEach(listed) { id in
                 ProviderCard(settings: settings, id: id, expanded: Binding(
                     get: { expanded.contains(id) },
                     set: { if $0 { expanded.insert(id) } else { expanded.remove(id) } }
-                ))
+                ), onRemove: {
+                    shown.remove(id)
+                    expanded.remove(id)
+                })
             }
         }
         .onAppear {
             expanded = [settings.sttProvider, settings.polishProvider]
+            shown = Set(ProviderID.allCases.filter(settings.isSetUp))
+        }
+    }
+
+    private var listed: [ProviderID] {
+        ProviderID.allCases.filter { shown.contains($0) || settings.isSetUp($0) }
+    }
+
+    private var available: [ProviderID] {
+        ProviderID.allCases.filter { !listed.contains($0) }
+    }
+
+    private var addMenu: some View {
+        Menu {
+            ForEach(ProviderGroup.allCases, id: \.self) { group in
+                let ids = available.filter { $0.group == group }
+                if !ids.isEmpty {
+                    Section(group.title) {
+                        ForEach(ids) { id in
+                            Button(id.displayName) { add(id) }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label(L("添加服务商", "Add provider"), systemImage: "plus")
+        }
+        .fixedSize()
+    }
+
+    private func add(_ id: ProviderID) {
+        settings.addProvider(id)
+        shown.insert(id)
+        expanded.insert(id)
+    }
+}
+
+extension ProviderGroup {
+    /// The heading of the providers of this group in the Add menu.
+    var title: String {
+        switch self {
+        case .both: return L("语音转文字和文字整理", "Speech-to-text and clean-up")
+        case .chat: return L("文字整理", "Clean-up")
+        case .speech: return L("语音转文字", "Speech to text")
+        case .local: return L("本机或自建服务", "On this computer or your own server")
         }
     }
 }
@@ -681,6 +737,8 @@ private struct ProviderCard: View {
     @ObservedObject var settings: AppSettings
     let id: ProviderID
     @Binding var expanded: Bool
+    /// Called once Remove has taken the provider off the page.
+    var onRemove: () -> Void = {}
     @State private var testResult: (ok: Bool, text: String, color: Color)?
     @State private var testing = false
 
@@ -757,8 +815,10 @@ private struct ProviderCard: View {
                                     .font(.system(size: 12))
                             }
                         } else {
-                            Text(L("任何兼容 OpenAI 接口的服务：/audio/transcriptions 与 /chat/completions",
-                                   "Any OpenAI-compatible server: /audio/transcriptions and /chat/completions"))
+                            Text(id.isLocal
+                                 ? L("运行在这台电脑上，不需要 API Key", "Runs on this computer; no API key needed")
+                                 : L("任何兼容 OpenAI 接口的服务：/audio/transcriptions 与 /chat/completions",
+                                     "Any OpenAI-compatible server: /audio/transcriptions and /chat/completions"))
                                 .font(.system(size: 11.5)).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -775,8 +835,33 @@ private struct ProviderCard: View {
                     }
                 }
                 .rowPadding(.all, 14)
+                CardDivider(inset: 0)
+                HStack {
+                    Text(supportedSteps).font(.system(size: 11.5)).foregroundStyle(.secondary)
+                    Spacer()
+                    // A provider a step uses stays: switch the step to another one first.
+                    Button(role: .destructive) {
+                        settings.removeProvider(id)
+                        onRemove()
+                    } label: {
+                        Label(L("移除", "Remove"), systemImage: "trash")
+                    }
+                    .controlSize(.small)
+                    .disabled(settings.isInUse(id))
+                    .help(settings.isInUse(id)
+                          ? L("正在使用，先在「模型」里换成别的服务商", "In use: choose another provider under Models first")
+                          : L("移除这个服务商和它的 API Key", "Removes this provider and its API key"))
+                }
+                .rowPadding(.horizontal, 14)
+                .rowPadding(.vertical, 10)
             }
         }
+    }
+
+    /// What this provider can do here: "Speech-to-text and clean-up", or one of them.
+    private var supportedSteps: String {
+        if id.supportsSTT && id.supportsChat { return ProviderGroup.both.title }
+        return id.supportsSTT ? L("仅语音转文字", "Speech-to-text only") : L("仅文字整理", "Clean-up only")
     }
 
     private var usageTags: [String] {
@@ -902,12 +987,12 @@ struct ModelsPage: View {
                 if settings.polishEnabled {
                     CardDivider()
                     CardRow(title: L("服务商", "Provider")) {
-                        ProviderPicker(selection: settings.polishProvider, options: ProviderID.allCases,
+                        ProviderPicker(selection: settings.polishProvider, options: ProviderID.allCases.filter(\.supportsChat),
                                        settings: settings) { settings.selectPolishProvider($0) }
                     }
                     CardDivider()
                     CardRow(title: L("模型", "Model"),
-                            help: settings.polishProvider == .openrouter
+                            help: settings.polishProvider.minimisesReasoning
                                 ? L("推理会自动关闭或降到最低，以减少延迟", "Reasoning is turned off or minimised for speed") : nil) {
                         ModelField(text: $settings.polishModel, models: chatModels)
                     }
@@ -925,7 +1010,7 @@ struct ModelsPage: View {
                     if settings.polishBackupEnabled {
                         CardDivider()
                         CardRow(title: L("备用服务商", "Backup provider")) {
-                            ProviderPicker(selection: settings.polishBackupProvider, options: ProviderID.allCases,
+                            ProviderPicker(selection: settings.polishBackupProvider, options: ProviderID.allCases.filter(\.supportsChat),
                                            settings: settings) { settings.selectPolishBackupProvider($0) }
                         }
                         CardDivider()
@@ -1005,22 +1090,31 @@ private struct ProviderPicker: View {
     let onSelect: (ProviderID) -> Void
 
     var body: some View {
+        // The providers set up on the Providers page first; the others, which need a key, after them.
+        let setUp = options.filter { $0 == selection || settings.isSetUp($0) }
+        let others = options.filter { !setUp.contains($0) }
         Menu {
-            ForEach(options) { id in
-                Button {
-                    onSelect(id)
-                } label: {
-                    if id == selection {
-                        Label(id.displayName, systemImage: "checkmark")
-                    } else {
-                        Text(settings.isConfigured(id) ? id.displayName : id.displayName + L("（未配置）", " (not set)"))
-                    }
-                }
+            ForEach(setUp) { id in item(id) }
+            if !others.isEmpty {
+                Divider()
+                ForEach(others) { id in item(id) }
             }
         } label: {
             Text(selection.displayName)
         }
         .fixedSize()
+    }
+
+    private func item(_ id: ProviderID) -> some View {
+        Button {
+            onSelect(id)
+        } label: {
+            if id == selection {
+                Label(id.displayName, systemImage: "checkmark")
+            } else {
+                Text(settings.isConfigured(id) ? id.displayName : id.displayName + L("（未配置）", " (not set)"))
+            }
+        }
     }
 }
 

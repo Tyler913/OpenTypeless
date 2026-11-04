@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using OpenTypeless.Native;
+using TypelessCore;
 
 namespace OpenTypeless.Services;
 

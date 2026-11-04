@@ -5008,6 +5008,141 @@ extension Translations {
     "ru": "Серия: {0} дн. · Рекорд: {1}",
     "fr": "{0} jours d’affilée · Record {1}",
     "de": "{0} Tage in Folge · Rekord {1}"
+  },
+  "Add provider": {
+    "ja": "サービスを追加",
+    "ko": "제공업체 추가",
+    "es": "Añadir proveedor",
+    "pt": "Adicionar provedor",
+    "ru": "Добавить провайдера",
+    "fr": "Ajouter un fournisseur",
+    "de": "Anbieter hinzufügen"
+  },
+  "Alibaba Cloud Model Studio (Qwen)": {
+    "ja": "Alibaba Cloud Model Studio（Qwen）",
+    "ko": "Alibaba Cloud Model Studio (Qwen)",
+    "es": "Alibaba Cloud Model Studio (Qwen)",
+    "pt": "Alibaba Cloud Model Studio (Qwen)",
+    "ru": "Alibaba Cloud Model Studio (Qwen)",
+    "fr": "Alibaba Cloud Model Studio (Qwen)",
+    "de": "Alibaba Cloud Model Studio (Qwen)"
+  },
+  "Clean-up only": {
+    "ja": "整形のみ",
+    "ko": "정리 전용",
+    "es": "Solo limpieza",
+    "pt": "Somente limpeza",
+    "ru": "Только обработка текста",
+    "fr": "Nettoyage uniquement",
+    "de": "Nur Bereinigung"
+  },
+  "Connected": {
+    "ja": "接続済み",
+    "ko": "연결됨",
+    "es": "Conectado",
+    "pt": "Conectado",
+    "ru": "Подключено",
+    "fr": "Connecté",
+    "de": "Verbunden"
+  },
+  "In use: choose another provider under Models first": {
+    "ja": "使用中です。先に「モデル」で別のサービスに切り替えてください",
+    "ko": "사용 중입니다. 먼저 모델에서 다른 제공업체를 선택하세요",
+    "es": "En uso: elige antes otro proveedor en Modelos",
+    "pt": "Em uso: escolha outro provedor em Modelos primeiro",
+    "ru": "Используется: сначала выберите другого провайдера в разделе «Модели»",
+    "fr": "Utilisé : choisissez d’abord un autre fournisseur dans Modèles",
+    "de": "In Verwendung: Wähle zuerst unter Modelle einen anderen Anbieter"
+  },
+  "Moonshot Kimi": {
+    "ja": "Moonshot Kimi",
+    "ko": "Moonshot Kimi",
+    "es": "Moonshot Kimi",
+    "pt": "Moonshot Kimi",
+    "ru": "Moonshot Kimi",
+    "fr": "Moonshot Kimi",
+    "de": "Moonshot Kimi"
+  },
+  "On this computer or your own server": {
+    "ja": "このコンピュータまたは自前のサーバ",
+    "ko": "이 컴퓨터 또는 자체 서버",
+    "es": "En este ordenador o tu propio servidor",
+    "pt": "Neste computador ou no seu próprio servidor",
+    "ru": "На этом компьютере или своём сервере",
+    "fr": "Sur cet ordinateur ou votre propre serveur",
+    "de": "Auf diesem Computer oder eigenem Server"
+  },
+  "Only the providers you've set up are listed; add others with Add provider.": {
+    "ja": "設定済みのサービスだけが表示されます。ほかのサービスは「サービスを追加」から追加できます。",
+    "ko": "설정한 제공업체만 표시됩니다. 다른 제공업체는 제공업체 추가로 추가하세요.",
+    "es": "Solo se muestran los proveedores que has configurado; añade otros con Añadir proveedor.",
+    "pt": "Só aparecem os provedores que você configurou; adicione outros com Adicionar provedor.",
+    "ru": "Показаны только настроенные провайдеры; другие добавьте кнопкой «Добавить провайдера».",
+    "fr": "Seuls les fournisseurs configurés sont affichés ; ajoutez-en d’autres avec Ajouter un fournisseur.",
+    "de": "Nur eingerichtete Anbieter werden angezeigt; weitere fügst du mit Anbieter hinzufügen hinzu."
+  },
+  "Paste your API key": {
+    "ja": "API キーを貼り付け",
+    "ko": "API 키 붙여넣기",
+    "es": "Pega tu clave de API",
+    "pt": "Cole sua chave de API",
+    "ru": "Вставьте API-ключ",
+    "fr": "Collez votre clé API",
+    "de": "API-Schlüssel einfügen"
+  },
+  "Removes this provider and its API key": {
+    "ja": "このサービスと API キーを削除します",
+    "ko": "이 제공업체와 API 키를 삭제합니다",
+    "es": "Quita este proveedor y su clave de API",
+    "pt": "Remove este provedor e sua chave de API",
+    "ru": "Удаляет этого провайдера и его API-ключ",
+    "fr": "Retire ce fournisseur et sa clé API",
+    "de": "Entfernt diesen Anbieter und seinen API-Schlüssel"
+  },
+  "Runs on this computer; no API key needed": {
+    "ja": "このコンピュータで動作するため、API キーは不要です",
+    "ko": "이 컴퓨터에서 실행되므로 API 키가 필요 없습니다",
+    "es": "Se ejecuta en este ordenador; no necesita clave de API",
+    "pt": "Roda neste computador; não precisa de chave de API",
+    "ru": "Работает на этом компьютере; API-ключ не нужен",
+    "fr": "Fonctionne sur cet ordinateur ; aucune clé API requise",
+    "de": "Läuft auf diesem Computer; kein API-Schlüssel nötig"
+  },
+  "Speech-to-text and clean-up": {
+    "ja": "音声認識と整形",
+    "ko": "음성 인식 및 정리",
+    "es": "Voz a texto y limpieza",
+    "pt": "Voz para texto e limpeza",
+    "ru": "Распознавание речи и обработка текста",
+    "fr": "Transcription et nettoyage",
+    "de": "Spracherkennung und Bereinigung"
+  },
+  "Speech-to-text only": {
+    "ja": "音声認識のみ",
+    "ko": "음성 인식 전용",
+    "es": "Solo voz a texto",
+    "pt": "Somente voz para texto",
+    "ru": "Только распознавание речи",
+    "fr": "Transcription uniquement",
+    "de": "Nur Spracherkennung"
+  },
+  "Volcengine Ark (Doubao)": {
+    "ja": "Volcengine Ark（Doubao）",
+    "ko": "Volcengine Ark (Doubao)",
+    "es": "Volcengine Ark (Doubao)",
+    "pt": "Volcengine Ark (Doubao)",
+    "ru": "Volcengine Ark (Doubao)",
+    "fr": "Volcengine Ark (Doubao)",
+    "de": "Volcengine Ark (Doubao)"
+  },
+  "Zhipu GLM": {
+    "ja": "Zhipu GLM",
+    "ko": "Zhipu GLM",
+    "es": "Zhipu GLM",
+    "pt": "Zhipu GLM",
+    "ru": "Zhipu GLM",
+    "fr": "Zhipu GLM",
+    "de": "Zhipu GLM"
   }
 }
 

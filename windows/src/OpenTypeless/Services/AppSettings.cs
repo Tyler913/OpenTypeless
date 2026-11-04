@@ -537,6 +537,55 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     public bool IsConfigured(ProviderId id) => Endpoint(id) != null && (!id.RequiresKey() || ApiKey(id).Length > 0);
 
+    /// <summary>Whether a step uses this provider: speech to text, clean-up, or either's backup (while switched on).</summary>
+    public bool IsInUse(ProviderId id) =>
+        SttProvider == id || (PolishEnabled && PolishProvider == id) || (SttBackupEnabled && SttBackupProvider == id)
+        || (PolishEnabled && PolishBackupEnabled && PolishBackupProvider == id);
+
+    /// <summary>
+    /// Providers added on the Providers page that have no key or address of their own yet (a local server, say), by raw
+    /// value, so the page keeps showing them.
+    /// </summary>
+    public IReadOnlyList<string> AddedProviders
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _store["addedProviders"] is JsonArray list
+                    ? list.Select(n => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : null).OfType<string>().ToList()
+                    : [];
+            }
+        }
+    }
+
+    /// <summary>Whether the Providers page lists this provider: one in use, with a key or an address of its own, or added there.</summary>
+    public bool IsSetUp(ProviderId id)
+    {
+        if (IsInUse(id) || ApiKey(id).Length > 0 || AddedProviders.Contains(id.RawValue())) return true;
+        lock (_lock) return _store["baseURLs"] is JsonObject urls && urls.ContainsKey(id.RawValue());
+    }
+
+    /// <summary>Lists a provider on the Providers page, to fill in its key or address.</summary>
+    public void AddProvider(ProviderId id)
+    {
+        var added = AddedProviders;
+        if (added.Contains(id.RawValue())) return;
+        SetNode("addedProviders", new JsonArray(added.Append(id.RawValue()).Select(s => (JsonNode)JsonValue.Create(s)!).ToArray()), "AddedProviders");
+    }
+
+    /// <summary>Takes a provider off the Providers page, forgetting its key and address. Not one a step uses.</summary>
+    /// <returns>False when Credential Manager refused to forget the key.</returns>
+    public bool RemoveProvider(ProviderId id)
+    {
+        if (IsInUse(id)) return true;
+        var forgotten = SetApiKey("", id);
+        SetBaseUrl("", id);
+        var added = AddedProviders.Where(s => s != id.RawValue()).Select(s => (JsonNode)JsonValue.Create(s)!).ToArray();
+        SetNode("addedProviders", new JsonArray(added), "AddedProviders");
+        return forgotten;
+    }
+
     public ProviderEndpoint? SttEndpoint => Endpoint(SttProvider);
     public ProviderEndpoint? PolishEndpoint => Endpoint(PolishProvider);
 

@@ -204,7 +204,7 @@ public sealed class ModelsPage : PageBase
             polish.Body.Add(new CardRow
             {
                 Glyph = Glyphs.Cloud, Title = L("服务商", "Provider"),
-                Trailing = ProviderPicker(_settings.PolishProvider, ProviderIdExtensions.All, id =>
+                Trailing = ProviderPicker(_settings.PolishProvider, ProviderIdExtensions.All.Where(p => p.SupportsChat()), id =>
                 {
                     _settings.SelectPolishProvider(id);
                     _controller.RefreshModelInfo();
@@ -214,7 +214,7 @@ public sealed class ModelsPage : PageBase
             _chatRow = new CardRow
             {
                 Glyph = Glyphs.Brain, Title = L("模型", "Model"),
-                Help = _settings.PolishProvider == ProviderId.OpenRouter ? L("推理会自动关闭或降到最低，以减少延迟", "Reasoning is turned off or minimised for speed") : null,
+                Help = _settings.PolishProvider.MinimisesReasoning() ? L("推理会自动关闭或降到最低，以减少延迟", "Reasoning is turned off or minimised for speed") : null,
                 Trailing = _chatField,
             };
             polish.Body.Add(_chatRow);
@@ -246,7 +246,7 @@ public sealed class ModelsPage : PageBase
                 polish.Body.Add(new CardRow
                 {
                     Glyph = Glyphs.Cloud, Title = L("备用服务商", "Backup provider"),
-                    Trailing = ProviderPicker(_settings.PolishBackupProvider, ProviderIdExtensions.All, id =>
+                    Trailing = ProviderPicker(_settings.PolishBackupProvider, ProviderIdExtensions.All.Where(p => p.SupportsChat()), id =>
                     {
                         _settings.SelectPolishBackupProvider(id);
                         _controller.RefreshModelInfo();
@@ -295,8 +295,13 @@ public sealed class ModelsPage : PageBase
     private DropDownButton ProviderPicker(ProviderId selection, IEnumerable<ProviderId> options, Action<ProviderId> onSelect)
     {
         var flyout = new MenuFlyout();
-        foreach (var id in options)
+        // The providers set up on the Providers page first; the others, which need a key, after them.
+        var list = options.ToList();
+        var setUp = list.Where(id => id == selection || _settings.IsSetUp(id)).ToList();
+        var others = list.Where(id => !setUp.Contains(id)).ToList();
+        foreach (var id in setUp.Concat(others))
         {
+            if (id == others.FirstOrDefault() && others.Count > 0 && setUp.Count > 0) flyout.Items.Add(new MenuFlyoutSeparator());
             var item = new ToggleMenuFlyoutItem
             {
                 Text = id == selection || _settings.IsConfigured(id) ? id.DisplayName() : id.DisplayName() + L("（未配置）", " (not set)"),

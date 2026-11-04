@@ -355,12 +355,13 @@ public class ProvidersTests
             "/v1/models" => (200, """{"data":[{"id":"claude-haiku-5-5","display_name":"Claude Haiku 5.5","type":"model"}],"has_more":false}"""),
             _ => (404, "Not Found"),
         });
-        Assert.Equal("Key is valid", await Client(ProviderId.Deepgram, "dg").VerifyCredentials());
+        Assert.Equal(L("Key 有效", "Key is valid"), await Client(ProviderId.Deepgram, "dg").VerifyCredentials());
         Assert.Equal("Token dg", sent[0].Headers["Authorization"]);
-        Assert.Equal("Key is valid", await Client(ProviderId.ElevenLabs, "el").VerifyCredentials());
+        Assert.Equal(L("Key 有效", "Key is valid"), await Client(ProviderId.ElevenLabs, "el").VerifyCredentials());
         Assert.Equal("https://api.elevenlabs.io/v1/user", sent[1].Url.AbsoluteUri);
         Assert.Equal("el", sent[1].Headers["xi-api-key"]);
-        Assert.Equal("Connected — 1 models available", await Client(ProviderId.Anthropic, "sk-ant").VerifyCredentials());
+        var count = 1;
+        Assert.Equal(L($"连接正常，{count} 个模型可用", $"Connected — {count} models available"), await Client(ProviderId.Anthropic, "sk-ant").VerifyCredentials());
         Assert.Equal("https://api.anthropic.com/v1/models?limit=1000", sent[2].Url.AbsoluteUri);
         Assert.Equal("sk-ant", sent[2].Headers["x-api-key"]);
         Assert.Equal("2023-06-01", sent[2].Headers["anthropic-version"]);
@@ -372,7 +373,7 @@ public class ProvidersTests
     public async Task VolcengineWithoutAModelListStillConnects()
     {
         Serve(_ => (404, """{"error":{"code":"NotFound","message":"The requested resource was not found."}}"""));
-        Assert.Equal("Connected", await Client(ProviderId.Volcengine).VerifyCredentials());
+        Assert.Equal(L("连接正常", "Connected"), await Client(ProviderId.Volcengine).VerifyCredentials());
         // Elsewhere a missing list is an error: the base URL is probably wrong.
         var error = await Assert.ThrowsAsync<ApiException>(() => Client(ProviderId.Moonshot).VerifyCredentials());
         Assert.Equal(404, error.Status);

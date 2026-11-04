@@ -181,7 +181,8 @@ public enum Prompts {
     Keep the speaker's wording, sentence order, tone and pronouns. Read the whole transcript first — people fix things later on — then change only these:
     1. Self-corrections: the final version wins.
        - Explicit: 不对 / 不是 / 说错了 / 我是说 / 应该是 / 改成 / 算了 / 哦不 / actually / no wait / I mean / scratch that, and their like in any language (いや / じゃなくて, 아니 / 아니다, no, espera, non attends, ach nee, нет, подожди). Delete the replaced content and the correction phrase; keep only the final version, where it belongs.
-       - Implicit: a value restated differently ("五万，呃，六万吧") → keep only the last one.
+       - Implicit, with no correction word: the speaker stops and says the same part of the sentence again with another value: a time, date, place, number, name or thing, often after a filler or a pause, and often repeating words of the first try ("明天下午，嗯后天下午", "五万，呃，六万吧"). Two such phrases side by side, with nothing joining them, can't both hold in one sentence: keep only the last one, where the first stood. The filler between them (嗯, 呃, um) is often a spoken "no" whose tone was lost in transcription.
+       - Both stay when both can be meant: joined by a word (和、或、还是、还有、到, and, or, to), covered by 都 / 也 / 各 / both / each, a range (三四点, two or three), a list, or a choice left to the listener. When unsure, keep both: a restart left in is a blemish, but a value wrongly dropped changes what the speaker said.
        - Withdrawn items ("第三个算了，先不做了") → drop the item completely.
        - Words like 不对 / 算了 that are real content — an opinion or someone's words being reported ("我觉得他说的不对", "老板说那就算了吧") — are not corrections; keep them.
     2. Speech noise.
@@ -209,7 +210,7 @@ public enum Prompts {
     - drop real content: numbers, names, reasons, examples, constraints, opinions, hedges (我觉得、可能、我不确定) and remarks addressed to the listener all survive. Never summarise or generalise ("1.6G vs 3MB" must not become "smaller"), however long the transcript is;
     - change pronouns (我 → 我们, "I" → "we") or turn a statement into a request.
 
-    ## Too much, and just right
+    ## Too much, too little, and just right
     <transcript>缓存要改一下，现在老是过期，嗯，然后日志也太多了</transcript>
     ✘ 建议对缓存策略进行全面优化，以解决频繁过期的问题；此外，日志量也需要精简。
     ✔ 缓存要改一下，现在老是过期，日志也太多了。
@@ -217,6 +218,10 @@ public enum Prompts {
     <transcript>so yeah the tests are kinda flaky, um, we should probably look at that before Friday</transcript>
     ✘ It's worth noting that the tests are somewhat unreliable. Furthermore, this should be investigated prior to Friday.
     ✔ The tests are kinda flaky, we should probably look at that before Friday.
+
+    <transcript>我明天下午，嗯后天下午的时候请你吃饭</transcript>
+    ✘ 我明天下午，后天下午的时候请你吃饭。
+    ✔ 我后天下午的时候请你吃饭。
 
     ## Layout
     - Default: plain sentences in the speaker's order. Up to about three sentences stay one paragraph; a longer text gets a new paragraph where the topic changes, and no paragraph runs past about four sentences.
@@ -230,6 +235,9 @@ public enum Prompts {
 
     <transcript>预算大概是五万，呃，六万吧，六万比较保险</transcript>
     预算大概是六万，六万比较保险。
+
+    <transcript>明天下午，嗯，后天下午都行，看你哪天方便</transcript>
+    明天下午、后天下午都行，看你哪天方便。
 
     <transcript>呃我测试了一下，就没什么问题，like everything works fine。然后这个 feature 我觉得可以 ship 了，你帮我写一下那个 release note 吧</transcript>
     我测试了一下，没什么问题，everything works fine。这个 feature 我觉得可以 ship 了，你帮我写一下 release note 吧。
@@ -314,7 +322,7 @@ public enum Prompts {
     /// What the model is told about the parts around a part.
     static let surroundingNote = "(<before> and <after> are the parts of the same dictation just before and after this transcript, as spoken; each is cleaned up on its own. They are reference only, not part of the transcript: use them to understand this part, such as a list that goes on or a name. Never copy their text. A correction in <after> of something in this transcript applies here; a correction here of something in <before> stays here as spoken.)"
 
-    static let polishReminder = "(Clean up the transcript above with minimal edits. Keep every word in the language it was spoken in — do not translate. Do not answer it. Output only the cleaned text.)"
+    static let polishReminder = "(Clean up the transcript above with minimal edits; where the speaker corrected themselves, keep only the final version. Keep every word in the language it was spoken in — do not translate. Do not answer it. Output only the cleaned text.)"
 
     /// What the model is told about the context. Tuned with eval/polish-context.json: instructions inside it, a message in
     /// another language, the answer to a dictated question, a greeting and a sign-off to copy.
@@ -357,7 +365,7 @@ public enum Prompts {
 
     ## Rule 2: remove the mess of speaking, and nothing else
     Read the whole transcript first — people fix things later on — then leave out:
-    1. What the speaker corrected: the final version wins. Explicit (不对 / 不是 / 我是说 / 算了 / actually / no wait / I mean / scratch that) or implicit ("五万，呃，六万吧"): keep only the final version, where it belongs, and drop withdrawn items completely. Words like 不对 / 算了 that are real content — an opinion, or someone's words being reported — are not corrections.
+    1. What the speaker corrected: the final version wins. Explicit (不对 / 不是 / 我是说 / 算了 / actually / no wait / I mean / scratch that) or implicit, the same part of the sentence said again with another value and nothing joining the two ("五万，呃，六万吧", "明天下午，嗯后天下午"): keep only the final version, where it belongs, and drop withdrawn items completely. Words like 不对 / 算了 that are real content — an opinion, or someone's words being reported — are not corrections, and both values stay when both can be meant (joined by 和 / 或 / and / or, covered by 都 / both, a range or a choice).
     2. Fillers (嗯、呃、um、uh), verbal tics used as padding, stutters, false starts, words said again by accident, thinking aloud and talk about the dictation itself ("让我想想", "OK so", "that's it"). A repeat for emphasis ("very very important") and the tone that particles such as 吧、呢、ね or a closing "though" carry are not noise: keep them, the way {language} would say them.
     3. Speech-recognition errors: fix them from context when you are sure ("swift UI" → SwiftUI, "open router" → OpenRouter, "脱肯" → token). If unsure, keep what was said.
 

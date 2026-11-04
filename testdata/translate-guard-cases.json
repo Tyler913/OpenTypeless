@@ -1,6 +1,6 @@
 {
   "_comment": "Translation guard cases shared by the macOS and Windows tests (Prompts.translationFallback). target is a TranslationTarget id: a listed language's code, or a name typed in. The legitimate translations keep names, code and terms as they were (those found in the transcript, or in the speaker's vocabulary when one is given, don't count against the target script), and the long ones calibrate the length band across writing systems; the rest came back untranslated, in another language, as an answer or as a summary. translatePromptSHA256 is the SHA-256 of the translate prompt's template (Prompts.baseTranslatePrompt, UTF-8), so both apps send the same text.",
-  "translatePromptSHA256": "c43561a567a6b02f6d4cea7353eab1ace70c2e122f9779910bbe037af1585ba2",
+  "translatePromptSHA256": "eed626a5dff095b00c64a3e801f8aef9d7fbbcc1c262c6ed75072b9de5dedc89",
   "cases": [
     {
       "id": "zh-to-en",

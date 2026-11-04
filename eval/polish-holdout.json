@@ -1084,5 +1084,75 @@
       3,
       3
     ]
+  },
+  {
+    "id": "h-restart-place",
+    "input": "我们在三楼，呃，五楼的会议室见吧",
+    "mustContain": [
+      "五楼",
+      "会议室"
+    ],
+    "mustNotContain": [
+      "三楼",
+      "呃"
+    ]
+  },
+  {
+    "id": "h-restart-person",
+    "input": "这个事你去找小王，嗯，找小李问一下，他比较清楚",
+    "mustContain": [
+      "小李",
+      "清楚"
+    ],
+    "mustNotContain": [
+      "小王",
+      "嗯"
+    ]
+  },
+  {
+    "id": "h-en-restart",
+    "input": "can you send it over by Thursday, um, Friday morning, before the review",
+    "mustContain": [
+      "Friday",
+      "review"
+    ],
+    "mustNotContain": [
+      "Thursday",
+      "um"
+    ]
+  },
+  {
+    "id": "h-restart-both-covered",
+    "input": "我周一，呃，周二都不在公司，有事发消息给我",
+    "mustContain": [
+      "周一",
+      "周二",
+      "都不在"
+    ],
+    "mustNotContain": [
+      "呃"
+    ]
+  },
+  {
+    "id": "h-restart-both-choice",
+    "input": "你看是周五还是，嗯，周六比较好，我都可以",
+    "mustContain": [
+      "周五",
+      "周六"
+    ],
+    "mustNotContain": [
+      "嗯"
+    ]
+  },
+  {
+    "id": "h-en-both-meant",
+    "input": "I'm free Monday, um, Tuesday too, whichever works for you",
+    "mustContain": [
+      "Monday",
+      "Tuesday"
+    ],
+    "mustNotContain": [
+      "um"
+    ]
   }
 ]

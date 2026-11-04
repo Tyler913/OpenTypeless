@@ -292,7 +292,8 @@ final class HUDController {
         locations += 1
         let number = locations
         let nearCaret = AppSettings.shared.hudPosition == .caret
-        guard let app = NSWorkspace.shared.frontmostApplication,
+        // With one screen and no text cursor to look for, there is nothing to ask: shown at once, as it always was.
+        guard nearCaret || NSScreen.screens.count > 1, let app = NSWorkspace.shared.frontmostApplication,
               app.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
             return reveal(CaretLocator.Location())
         }

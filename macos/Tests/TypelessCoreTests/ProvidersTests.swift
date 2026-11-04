@@ -415,9 +415,9 @@ final class MockProviders: URLProtocol {
             default: return (404, "Not Found")
             }
         }
-        #expect(try await client(.deepgram, key: "dg").verifyCredentials() == "Key is valid")
-        #expect(try await client(.elevenlabs, key: "el").verifyCredentials() == "Key is valid")
-        #expect(try await client(.anthropic, key: "sk-ant").verifyCredentials() == "Connected — 1 models available")
+        #expect(try await client(.deepgram, key: "dg").verifyCredentials() == L("Key 有效", "Key is valid"))
+        #expect(try await client(.elevenlabs, key: "el").verifyCredentials() == L("Key 有效", "Key is valid"))
+        #expect(try await client(.anthropic, key: "sk-ant").verifyCredentials() == L("连接正常，\(1) 个模型可用", "Connected — \(1) models available"))
         let sent = MockProviders.requests
         #expect(sent.count == 3)
         #expect(sent[0].header("Authorization") == "Token dg")
@@ -430,7 +430,7 @@ final class MockProviders: URLProtocol {
 
     @Test func volcengineWithoutAModelListStillConnects() async throws {
         MockProviders.serve { _ in (404, #"{"error":{"code":"NotFound","message":"The requested resource was not found."}}"#) }
-        #expect(try await client(.volcengine).verifyCredentials() == "Connected")
+        #expect(try await client(.volcengine).verifyCredentials() == L("连接正常", "Connected"))
         // Elsewhere a missing list is an error: the base URL is probably wrong.
         await #expect(throws: APIError.http(status: 404, message: "The requested resource was not found.")) {
             try await client(.moonshot).verifyCredentials()

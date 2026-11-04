@@ -174,6 +174,7 @@ public sealed class PopoverWindow : Window
         var stack = new StackPanel { Spacing = 14, Padding = new Thickness(16, 16, 16, 12), Width = WidthDips };
         stack.Children.Add(Header());
         stack.Children.Add(StatusModule());
+        if (SpendModule() is { } spend) stack.Children.Add(spend);
         if (Warnings() is { } warnings) stack.Children.Add(warnings);
         if (Recent() is { } recent) stack.Children.Add(recent);
         // The scroll viewer takes the initial focus, so no row opens with a keyboard focus ring.
@@ -274,6 +275,29 @@ public sealed class PopoverWindow : Window
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
         return Card.Make(grid);
+    }
+
+    /// <summary>
+    /// This month's spend against the monthly limit, while one is set (see <see cref="SpendLimit"/>): the amount, and the
+    /// same bar as on Home.
+    /// </summary>
+    private static FrameworkElement? SpendModule()
+    {
+        if (UsageStore.Shared.MonthlySpend is not { } month) return null;
+        var title = Ui.Text(L("本月花费", "Spent this month"), 13, FontWeights.SemiBold);
+        title.VerticalAlignment = VerticalAlignment.Center;
+        var amount = Ui.Text(UsageFormat.Money(month.Spent), 14, FontWeights.SemiBold);
+        amount.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(amount, 1);
+        var figures = new Grid { ColumnSpacing = 8 };
+        figures.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        figures.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        figures.Children.Add(title);
+        figures.Children.Add(amount);
+        var panel = new StackPanel { Spacing = 6, Padding = new Thickness(12, 10, 12, 10) };
+        panel.Children.Add(figures);
+        panel.Children.Add(HomePage.LimitBar(month.Spent, month.Limit, new Thickness(0)));
+        return Card.Make(panel);
     }
 
     private static TextBlock Centered(TextBlock text)

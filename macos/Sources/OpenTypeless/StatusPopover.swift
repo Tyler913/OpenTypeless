@@ -36,7 +36,8 @@ final class StatusPopover: NSObject, NSPopoverDelegate {
             rootView.settings.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
             rootView.history.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
             rootView.updater.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
-            rootView.permissions.objectWillChange.map { _ in () }.eraseToAnyPublisher()
+            rootView.permissions.objectWillChange.map { _ in () }.eraseToAnyPublisher(),
+            rootView.usage.objectWillChange.map { _ in () }.eraseToAnyPublisher()
         )
         .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
         .sink { [weak self] in self?.refit() }

@@ -1,0 +1,88 @@
+{
+  "_comment": "Shared by the macOS (swift-testing) and Windows (xUnit) test suites, so both apps remind about the monthly spending limit at the same points. Amounts are USD; a state is SpendLimit.State as it's saved (\"month:level\", \"\" for none).",
+  "levels": [
+    { "spent": 0, "limit": 10, "level": "none", "progress": 0, "percent": 0 },
+    { "spent": 7.99, "limit": 10, "level": "none", "progress": 0.799, "percent": 79 },
+    { "spent": 7.999999, "limit": 10, "level": "none", "progress": 0.7999999, "percent": 79 },
+    { "spent": 8, "limit": 10, "level": "warning", "progress": 0.8, "percent": 80 },
+    { "spent": 9.5, "limit": 10, "level": "warning", "progress": 0.95, "percent": 95 },
+    { "spent": 10, "limit": 10, "level": "reached", "progress": 1, "percent": 100 },
+    { "spent": 12.5, "limit": 10, "level": "reached", "progress": 1, "percent": 125 },
+    { "spent": 4, "limit": 5, "level": "warning", "progress": 0.8, "percent": 80 },
+    { "spent": 0.0004, "limit": 0.0005, "level": "warning", "progress": 0.8, "percent": 80 },
+    { "spent": -1, "limit": 10, "level": "none", "progress": 0, "percent": 0 },
+    { "spent": 3, "limit": 0, "level": "none", "progress": 0, "percent": 0 },
+    { "spent": 3, "limit": -10, "level": "none", "progress": 0, "percent": 0 },
+    { "spent": 1e300, "limit": 1e-300, "level": "reached", "progress": 1, "percent": 1000000 }
+  ],
+  "monthKeys": [
+    { "date": "2026-11-03", "month": "2026-11" },
+    { "date": "2026-01-31", "month": "2026-01" },
+    { "date": "0987-12-01", "month": "0987-12" }
+  ],
+  "stored": [
+    { "stored": "", "month": "", "reminded": "none", "roundTrip": "" },
+    { "stored": "2026-11:warning", "month": "2026-11", "reminded": "warning", "roundTrip": "2026-11:warning" },
+    { "stored": "2026-11:reached", "month": "2026-11", "reminded": "reached", "roundTrip": "2026-11:reached" },
+    { "stored": "2026-11:none", "month": "2026-11", "reminded": "none", "roundTrip": "2026-11:none" },
+    { "stored": "2026-11:", "month": "", "reminded": "none", "roundTrip": "" },
+    { "stored": "2026-11:everything", "month": "", "reminded": "none", "roundTrip": "" },
+    { "stored": "2026-13:warning", "month": "", "reminded": "none", "roundTrip": "" },
+    { "stored": "2026-00:warning", "month": "", "reminded": "none", "roundTrip": "" },
+    { "stored": "2026-1:warning", "month": "", "reminded": "none", "roundTrip": "" },
+    { "stored": "２０２６-11:warning", "month": "", "reminded": "none", "roundTrip": "" },
+    { "stored": "2026-11:warning:reached", "month": "", "reminded": "none", "roundTrip": "" },
+    { "stored": "warning", "month": "", "reminded": "none", "roundTrip": "" }
+  ],
+  "checks": [
+    { "name": "below the warning: nothing", "spentBefore": 5, "spent": 6, "limit": 10, "month": "2026-11", "state": "", "reminder": null, "after": "2026-11:none" },
+    { "name": "crossing 80%: the warning", "spentBefore": 7.9, "spent": 8.1, "limit": 10, "month": "2026-11", "state": "2026-11:none", "reminder": "warning", "after": "2026-11:warning" },
+    { "name": "landing exactly on 80%", "spentBefore": 7, "spent": 8, "limit": 10, "month": "2026-11", "state": "", "reminder": "warning", "after": "2026-11:warning" },
+    { "name": "the warning only once", "spentBefore": 8.1, "spent": 8.5, "limit": 10, "month": "2026-11", "state": "2026-11:warning", "reminder": null, "after": "2026-11:warning" },
+    { "name": "crossing the limit after the warning", "spentBefore": 9.9, "spent": 10.2, "limit": 10, "month": "2026-11", "state": "2026-11:warning", "reminder": "reached", "after": "2026-11:reached" },
+    { "name": "landing exactly on the limit", "spentBefore": 9, "spent": 10, "limit": 10, "month": "2026-11", "state": "2026-11:warning", "reminder": "reached", "after": "2026-11:reached" },
+    { "name": "the limit only once", "spentBefore": 10.2, "spent": 11, "limit": 10, "month": "2026-11", "state": "2026-11:reached", "reminder": null, "after": "2026-11:reached" },
+    { "name": "past both at once: only the limit's", "spentBefore": 7, "spent": 10.5, "limit": 10, "month": "2026-11", "state": "", "reminder": "reached", "after": "2026-11:reached" },
+    { "name": "turned on while already over: reminded at the next request", "spentBefore": 15, "spent": 15.1, "limit": 10, "month": "2026-11", "state": "", "reminder": "reached", "after": "2026-11:reached" },
+    { "name": "turned on while between: the warning", "spentBefore": 8.5, "spent": 8.6, "limit": 10, "month": "2026-11", "state": "", "reminder": "warning", "after": "2026-11:warning" },
+    { "name": "last month's reminder doesn't count", "spentBefore": 8.5, "spent": 8.6, "limit": 10, "month": "2026-12", "state": "2026-11:reached", "reminder": "warning", "after": "2026-12:warning" },
+    { "name": "a new month starts below: the state starts over", "spentBefore": 0, "spent": 0.2, "limit": 10, "month": "2026-12", "state": "2026-11:reached", "reminder": null, "after": "2026-12:none" },
+    { "name": "limit raised above the spend: both armed again", "spentBefore": 10.5, "spent": 10.6, "limit": 20, "month": "2026-11", "state": "2026-11:reached", "reminder": null, "after": "2026-11:none" },
+    { "name": "limit raised to just above the spend: the limit's armed again, not the warning", "spentBefore": 10.5, "spent": 10.6, "limit": 12, "month": "2026-11", "state": "2026-11:reached", "reminder": null, "after": "2026-11:warning" },
+    { "name": "limit raised, then crossed in one request", "spentBefore": 10.5, "spent": 21, "limit": 20, "month": "2026-11", "state": "2026-11:reached", "reminder": "reached", "after": "2026-11:reached" },
+    { "name": "limit lowered below the spend: reminded at once", "spentBefore": 6, "spent": 6.1, "limit": 5, "month": "2026-11", "state": "2026-11:none", "reminder": "reached", "after": "2026-11:reached" },
+    { "name": "limit lowered below a warned spend: the limit's", "spentBefore": 8.5, "spent": 8.6, "limit": 8, "month": "2026-11", "state": "2026-11:warning", "reminder": "reached", "after": "2026-11:reached" },
+    { "name": "no limit: nothing, and nothing kept", "spentBefore": 50, "spent": 60, "limit": 0, "month": "2026-11", "state": "2026-11:reached", "reminder": null, "after": "2026-11:none" },
+    { "name": "an unreadable state counts as none", "spentBefore": 8.5, "spent": 8.6, "limit": 10, "month": "2026-11", "state": "garbage", "reminder": "warning", "after": "2026-11:warning" },
+    { "name": "a request with no cost changes nothing", "spentBefore": 9, "spent": 9, "limit": 10, "month": "2026-11", "state": "2026-11:warning", "reminder": null, "after": "2026-11:warning" }
+  ],
+  "sequences": [
+    {
+      "name": "a month of dictation against a $10 limit, raised to $20, then a new month",
+      "steps": [
+        { "month": "2026-11", "spentBefore": 0, "spent": 3, "limit": 10, "reminder": null },
+        { "month": "2026-11", "spentBefore": 3, "spent": 7.5, "limit": 10, "reminder": null },
+        { "month": "2026-11", "spentBefore": 7.5, "spent": 8.2, "limit": 10, "reminder": "warning" },
+        { "month": "2026-11", "spentBefore": 8.2, "spent": 9.9, "limit": 10, "reminder": null },
+        { "month": "2026-11", "spentBefore": 9.9, "spent": 10.1, "limit": 10, "reminder": "reached" },
+        { "month": "2026-11", "spentBefore": 10.1, "spent": 12, "limit": 10, "reminder": null },
+        { "month": "2026-11", "spentBefore": 12, "spent": 12.5, "limit": 20, "reminder": null },
+        { "month": "2026-11", "spentBefore": 12.5, "spent": 16, "limit": 20, "reminder": "warning" },
+        { "month": "2026-11", "spentBefore": 16, "spent": 19, "limit": 20, "reminder": null },
+        { "month": "2026-11", "spentBefore": 19, "spent": 20, "limit": 20, "reminder": "reached" },
+        { "month": "2026-12", "spentBefore": 0, "spent": 1, "limit": 20, "reminder": null },
+        { "month": "2026-12", "spentBefore": 1, "spent": 17, "limit": 20, "reminder": "warning" },
+        { "month": "2026-12", "spentBefore": 17, "spent": 18, "limit": 20, "reminder": null }
+      ]
+    },
+    {
+      "name": "a big file past both thresholds, then the next month starts over",
+      "steps": [
+        { "month": "2026-11", "spentBefore": 1, "spent": 6, "limit": 5, "reminder": "reached" },
+        { "month": "2026-11", "spentBefore": 6, "spent": 6.5, "limit": 5, "reminder": null },
+        { "month": "2026-12", "spentBefore": 0, "spent": 4, "limit": 5, "reminder": "warning" },
+        { "month": "2026-12", "spentBefore": 4, "spent": 5, "limit": 5, "reminder": "reached" }
+      ]
+    }
+  ]
+}

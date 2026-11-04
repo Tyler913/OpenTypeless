@@ -1515,7 +1515,14 @@ final class SessionController: ObservableObject {
         }
         if transcriptionCost + cleanup > 0 { record.cost = (record.cost ?? 0) + transcriptionCost + cleanup }
         note(String(format: "cost: transcription $%.6f, clean-up $%.6f, unpriced requests %d", transcriptionCost, cleanup, unpriced))
-        UsageStore.shared.record(&record, transcriptionCost: transcriptionCost, cleanupCost: cleanup, unpriced: unpriced)
+        // This month's spend reached part of the monthly limit, or all of it: a reminder once the capsule is free, after
+        // the text (or the notice about it). Only a reminder: nothing is held back or cancelled for it.
+        if let reminder = UsageStore.shared.record(&record, transcriptionCost: transcriptionCost, cleanupCost: cleanup,
+                                                   unpriced: unpriced) {
+            note(String(format: "spending reminder: %@ ($%.4f of $%.2f this month)", reminder.level.name, reminder.spent,
+                        reminder.limit))
+            hud.showWhenFree(.spending(reminder), autoHideAfter: 4)
+        }
     }
 
     /// Notes in History that a clean-up request of this run carried the text around the cursor; the text isn't kept.

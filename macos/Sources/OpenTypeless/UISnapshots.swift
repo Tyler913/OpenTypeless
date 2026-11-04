@@ -81,6 +81,7 @@ enum UISnapshots {
             ("hud-working", .working),
             ("hud-copied", .copied),
             ("hud-learned", .learned("Typeless、罗技")),
+            ("hud-spending", .spending(SpendReminder(level: .warning, spent: 8.12, limit: 10))),
             // A long, real error, to check that it wraps instead of losing its end.
             ("hud-error", .error(L("需要麦克风权限：系统设置 → 隐私与安全性 → 麦克风",
                                    "Microphone access needed: System Settings → Privacy & Security → Microphone"))),

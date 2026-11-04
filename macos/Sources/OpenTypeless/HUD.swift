@@ -16,6 +16,8 @@ final class HUDModel: ObservableObject {
         case learned(String)
         /// The answer to a question about the selection (see `SelectionCommand.Reply`), also on the clipboard.
         case answer(String)
+        /// This month's spend has reached a share of the monthly limit, or the limit (see `SpendLimit`).
+        case spending(SpendReminder)
         case error(String)
 
         /// The text a notice shows (its length decides how long it stays up).
@@ -23,6 +25,7 @@ final class HUDModel: ObservableObject {
             switch self {
             case let .learned(terms): return L("已加入词汇表：", "Added to vocabulary: ") + terms
             case let .answer(answer): return L("答案已复制：", "Answer copied: ") + answer
+            case let .spending(reminder): return reminder.message
             case let .error(message): return message
             default: return nil
             }
@@ -153,6 +156,8 @@ final class HUDController {
     private var panel: NSPanel?
     private var hideWork: DispatchWorkItem?
     private var mouseMonitors: [Any] = []
+    /// A notice waiting for the capsule to be free (see `showWhenFree`).
+    private var waiting: (phase: HUDModel.Phase, hideAfter: Double)?
     /// Room for the capsule with its glow and, above it, the live preview line.
     private static let size = NSSize(width: 460, height: 124)
 
@@ -168,6 +173,11 @@ final class HUDController {
         if phase == .recording, model.phase != .recording { model.recordingStarted() }
         withAnimation(.spring(duration: 0.32, bounce: 0.18)) { model.phase = phase }
         if phase == .hidden {
+            // What was waiting for the capsule to be free goes up instead.
+            if let next = waiting {
+                waiting = nil
+                return show(next.phase, autoHideAfter: next.hideAfter)
+            }
             stopWatchingMouse()
             panel?.orderOut(nil)
             return
@@ -182,6 +192,17 @@ final class HUDController {
             hideWork = work
             let delay = phase.message.map { Self.displayTime(for: $0, requested: autoHideAfter) } ?? autoHideAfter
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        }
+    }
+
+    /// A notice that waits its turn: shown now when the capsule is empty, otherwise once what it shows has gone (the
+    /// text of a dictation on its way, a notice about it, or a recording), so it never covers or cuts short any of them.
+    /// A newer one takes the place of one still waiting.
+    func showWhenFree(_ phase: HUDModel.Phase, autoHideAfter: Double) {
+        if model.phase == .hidden {
+            show(phase, autoHideAfter: autoHideAfter)
+        } else {
+            waiting = (phase, autoHideAfter)
         }
     }
 
@@ -360,6 +381,10 @@ struct HUDView: View {
         case .answer:
             // The start of it; the whole answer is on the clipboard.
             NoticeRow(symbol: "text.bubble.fill", tint: .tint, text: model.phase.message ?? "")
+                .noticeStyle()
+        case let .spending(reminder):
+            NoticeRow(symbol: "dollarsign.circle.fill", tint: reminder.level == .reached ? Color.red : Color.orange,
+                      text: reminder.message)
                 .noticeStyle()
         case let .error(message):
             // Up to three lines: the end of an error is often what to do about it ("… → Privacy & Security → Microphone").

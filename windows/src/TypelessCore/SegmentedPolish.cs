@@ -21,8 +21,18 @@ public sealed record SegmentedPolishResult(string Text, IReadOnlyList<SegmentedP
         public string Text => Fallback == null && Answer != null ? Answer.Result.Text : Transcript;
     }
 
+    /// <summary>
+    /// The answer to laying the joined parts out again as a whole (see <see cref="SegmentedPolish"/>), when one was asked
+    /// for and came back; kept even when it isn't used, since it was billed all the same.
+    /// </summary>
+    public HedgedPolishResult? Relayout { get; init; }
+
+    /// <summary>Whether <see cref="Text"/> is the whole laid out again, rather than the parts as they were joined.</summary>
+    public bool Relaid { get; init; }
+
     /// <summary>Every answer that came back, used or not, for pricing.</summary>
-    public IReadOnlyList<HedgedPolishResult> Answers => Parts.Select(p => p.Answer).OfType<HedgedPolishResult>().ToList();
+    public IReadOnlyList<HedgedPolishResult> Answers =>
+        Parts.Select(p => p.Answer).Append(Relayout).OfType<HedgedPolishResult>().ToList();
 
     /// <summary>The parts that go in as spoken.</summary>
     public IReadOnlyList<Part> Fallbacks => Parts.Where(p => p.Fallback != null).ToList();
@@ -33,15 +43,28 @@ public sealed record SegmentedPolishResult(string Text, IReadOnlyList<SegmentedP
     public bool UsedBackup => Answers.Any(a => a.UsedBackup);
 }
 
+/// <summary>The end of the part before one part of a long transcript and the start of the one after it, as spoken; null where there's none.</summary>
+public sealed record SurroundingParts(string? Before, string? After);
+
 /// <summary>
 /// Long transcripts are cleaned up in parts. Asked to clean up a long dictation in one go, models summarise it instead:
 /// of 54 real dictations of a minute or more, 15 came back with under 60% of their words (the worst 2,023 → 379), often
 /// rewritten into numbered lists. A part of a few hundred words gets edited as asked. The parts are split at sentence
 /// ends, cleaned up in parallel with the same prompt, checked one by one, and joined again, so a long dictation is also
-/// ready sooner. Each part goes on its own: a neighbouring part pasted in as reference could end up cleaned up into the
-/// answer as well. The text around the cursor (see <see cref="CursorContext"/>), when there is some, goes with every part,
+/// ready sooner. The text around the cursor (see <see cref="CursorContext"/>), when there is some, goes with every part,
 /// since each is a request of its own and a name can come up in any of them; it's at most a few hundred tokens, and only
 /// long dictations have more than one part.
+/// <para>
+/// A part can't see the others, so a correction of something in the part before, a list that goes on across the split
+/// or the layout of the whole was lost at the seams. So each part of a dictation also gets, as reference, the end of the
+/// part before it and the start of the one after (<see cref="SurroundingWords"/> words each, as spoken), in blocks of
+/// their own with a note (see <see cref="Prompts.PolishUserMessage"/>). An answer that copied text from them beyond a
+/// name is caught like one that copied the text around the cursor (<see cref="Prompts.CopiedContext"/>), and that part
+/// goes in as spoken. And where the text's layout is the point (<see cref="Prompts.Relayouts"/>), the joined parts are
+/// laid out again as a whole by one more request that may only change line breaks and list markers: its answer is used
+/// only when it is the joined text exactly, but for those (<see cref="Prompts.OnlyLayoutChanged"/>), so it can't reword
+/// anything, and only when it comes back in time (<see cref="RelayoutTimeout"/>).
+/// </para>
 /// </summary>
 public static class SegmentedPolish
 {
@@ -55,6 +78,65 @@ public static class SegmentedPolish
     internal const int PartSize = 300;
 
     public static bool NeedsParts(string transcript) => WordCount.Count(transcript) > SingleRequestLimit;
+
+    /// <summary>How much of each neighbouring part goes with a part, at most, in words.</summary>
+    internal const int SurroundingWords = PartSize / 2;
+
+    /// <summary>
+    /// The longest joined text that is laid out again (about five minutes of speech): the request writes all of it out
+    /// again, so a longer one would keep the dictation waiting.
+    /// </summary>
+    internal const int RelayoutLimit = 2000;
+
+    /// <summary>
+    /// How long laying the joined text out again may take before the text goes in as joined: a few seconds for the answer
+    /// to start, then the time a fast model takes to write it all out again.
+    /// </summary>
+    public static double RelayoutTimeout(string text) => Math.Min(20, 3 + text.Length * 0.006);
+
+    /// <summary>
+    /// The neighbouring parts' text that goes with part <paramref name="index"/> of <paramref name="texts"/>: the end of the
+    /// part before and the start of the part after, whole sentences where they fit in <see cref="SurroundingWords"/>.
+    /// Null for a transcript in one part.
+    /// </summary>
+    internal static SurroundingParts? Surrounding(IReadOnlyList<string> texts, int index)
+    {
+        if (texts.Count < 2) return null;
+        return new SurroundingParts(index > 0 ? Excerpt(texts[index - 1], fromEnd: true) : null,
+                                    index + 1 < texts.Count ? Excerpt(texts[index + 1], fromEnd: false) : null);
+    }
+
+    /// <summary>
+    /// Up to <see cref="SurroundingWords"/> words of <paramref name="text"/> from its end (or its start): whole sentences,
+    /// or when the nearest sentence is longer than that, its nearest words.
+    /// </summary>
+    internal static string Excerpt(string text, bool fromEnd)
+    {
+        var trimmed = text.Trim();
+        var sentences = Split(trimmed, IsSentenceEnd);
+        var taken = Take(sentences, fromEnd);
+        if (taken.Length == 0 && sentences.Count > 0)
+        {
+            taken = Take(Split(fromEnd ? sentences[^1] : sentences[0], IsWordEnd), fromEnd);
+        }
+        return taken.Trim();
+    }
+
+    /// <summary>The pieces nearest the end (or start) that fit in <see cref="SurroundingWords"/> together, in their order.</summary>
+    private static string Take(List<string> pieces, bool fromEnd)
+    {
+        var taken = new List<string>();
+        var words = 0;
+        foreach (var piece in fromEnd ? Enumerable.Reverse(pieces) : pieces)
+        {
+            var size = WordCount.Count(piece);
+            if (words + size > SurroundingWords) break;
+            taken.Add(piece);
+            words += size;
+        }
+        if (fromEnd) taken.Reverse();
+        return string.Concat(taken);
+    }
 
     /// <summary>
     /// The parts <paramref name="transcript"/> is cleaned up in: itself, untouched, unless it's long. A long one is split at
@@ -156,15 +238,58 @@ public static class SegmentedPolish
     /// <param name="holdWhile">
     /// With a cap, a part waits to start while this says so (a file's clean-up, while a dictation is under way).
     /// </param>
-    public static Task<SegmentedPolishResult> Run(string transcript, PolishRoute primary, PolishRoute? backup,
-                                                  Action<string>? onPartial = null, CancellationToken cancellationToken = default,
-                                                  int? concurrency = null, Func<bool>? holdWhile = null)
+    /// <remarks>
+    /// A dictation's clean-up (not a translation's, nor a file's, whose parts are many and go a few at a time) sends each
+    /// part with the ends of the parts around it, and is laid out again as a whole where its layout calls for it (see
+    /// <see cref="SegmentedPolish"/>).
+    /// </remarks>
+    public static async Task<SegmentedPolishResult> Run(string transcript, PolishRoute primary, PolishRoute? backup,
+                                                        Action<string>? onPartial = null, CancellationToken cancellationToken = default,
+                                                        int? concurrency = null, Func<bool>? holdWhile = null)
     {
         var policy = new RetryPolicy(MaxAttempts: 2, RetriesTimeouts: false);
-        return Run(transcript, (part, partial, token) => policy.Run(
-                       (_, ct) => HedgedPolish.Run(part, primary, backup, cancellationToken: ct, onPartial: partial), cancellationToken: token),
-                   onPartial, cancellationToken, primary.Options.Translation, primary.Options.Vocabulary, primary.Options.Context,
-                   concurrency, holdWhile, primary.Options.DictatedLineBreaks);
+        var options = primary.Options;
+        var dictation = concurrency is null;
+        var result = await RunParts(transcript, (part, surrounding, partial, token) =>
+                                    {
+                                        PolishRoute With(PolishRoute route) => route with { Options = route.Options with { Surrounding = surrounding } };
+                                        return policy.Run((_, ct) => HedgedPolish.Run(part, With(primary), backup is null ? null : With(backup),
+                                                                                      cancellationToken: ct, onPartial: partial),
+                                                          cancellationToken: token);
+                                    },
+                                    onPartial, cancellationToken, options.Translation, options.Vocabulary, options.Context,
+                                    concurrency, holdWhile, options.DictatedLineBreaks,
+                                    sendsSurrounding: dictation && options.Translation is null).ConfigureAwait(false);
+        if (!dictation || result.Parts.Count < 2 || !Prompts.Relayouts(options.Layout) || options.DictatedLineBreaks
+            || WordCount.Count(result.Text) > RelayoutLimit)
+        {
+            return result;
+        }
+        return await Relaid(result, primary, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <paramref name="result"/> with its joined text laid out again as a whole by <paramref name="route"/>'s layout, when
+    /// the answer comes back within <see cref="RelayoutTimeout"/> and changed nothing but the layout; as it was otherwise.
+    /// Throws only when cancelled.
+    /// </summary>
+    internal static async Task<SegmentedPolishResult> Relaid(SegmentedPolishResult result, PolishRoute route, CancellationToken cancellationToken)
+    {
+        var relayout = route with { Options = route.Options with { Relayout = true, Context = null, Surrounding = null, OnContextSent = null } };
+        HedgedPolishResult answer;
+        try
+        {
+            answer = await Timeouts.WithTimeout(RelayoutTimeout(result.Text),
+                                                ct => HedgedPolish.Run(result.Text, relayout, null, cancellationToken: ct),
+                                                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception error)
+        {
+            if (cancellationToken.IsCancellationRequested || ApiException.From(error).IsCancelled) throw ApiException.Cancelled();
+            return result;
+        }
+        var used = !answer.Result.Truncated && Prompts.OnlyLayoutChanged(result.Text, answer.Result.Text);
+        return result with { Text = used ? answer.Result.Text.Trim() : result.Text, Relayout = answer, Relaid = used };
     }
 
     /// <summary>
@@ -177,12 +302,27 @@ public static class SegmentedPolish
     /// the text around the cursor the requests carry, if any. <paramref name="keepsLineBreaks"/>: the transcript's line
     /// breaks were dictated, and those between two parts are put back as they were.
     /// </summary>
-    public static async Task<SegmentedPolishResult> Run(string transcript,
-                                                        Func<string, Action<string>?, CancellationToken, Task<HedgedPolishResult>> polish,
-                                                        Action<string>? onPartial = null, CancellationToken cancellationToken = default,
-                                                        TranslationTarget? translation = null, IReadOnlyList<string>? vocabulary = null,
-                                                        string? context = null, int? concurrency = null, Func<bool>? holdWhile = null,
-                                                        bool keepsLineBreaks = false)
+    public static Task<SegmentedPolishResult> Run(string transcript,
+                                                  Func<string, Action<string>?, CancellationToken, Task<HedgedPolishResult>> polish,
+                                                  Action<string>? onPartial = null, CancellationToken cancellationToken = default,
+                                                  TranslationTarget? translation = null, IReadOnlyList<string>? vocabulary = null,
+                                                  string? context = null, int? concurrency = null, Func<bool>? holdWhile = null,
+                                                  bool keepsLineBreaks = false) =>
+        RunParts(transcript, (part, _, partial, token) => polish(part, partial, token), onPartial, cancellationToken, translation,
+                 vocabulary, context, concurrency, holdWhile, keepsLineBreaks, sendsSurrounding: false);
+
+    /// <summary>
+    /// <see cref="Run(string, Func{string, Action{string}?, CancellationToken, Task{HedgedPolishResult}}, Action{string}?, CancellationToken, TranslationTarget?, IReadOnlyList{string}?, string?, int?, Func{bool}?, bool)"/>,
+    /// with <paramref name="polish"/> given each part's surrounding parts (see <see cref="Surrounding"/>) when
+    /// <paramref name="sendsSurrounding"/> and there's more than one part; an answer that copied from them beyond what
+    /// the clean-up allows is then not used.
+    /// </summary>
+    public static async Task<SegmentedPolishResult> RunParts(string transcript,
+                                                             Func<string, SurroundingParts?, Action<string>?, CancellationToken, Task<HedgedPolishResult>> polish,
+                                                             Action<string>? onPartial = null, CancellationToken cancellationToken = default,
+                                                             TranslationTarget? translation = null, IReadOnlyList<string>? vocabulary = null,
+                                                             string? context = null, int? concurrency = null, Func<bool>? holdWhile = null,
+                                                             bool keepsLineBreaks = false, bool sendsSurrounding = false)
     {
         var split = PartsAndBreaks(transcript);
         var texts = split.Select(p => p.Text).ToList();
@@ -190,6 +330,7 @@ public static class SegmentedPolish
         var clock = Stopwatch.StartNew();
         var progress = new PartialProgress(texts.Count, onPartial);
         var gate = concurrency is { } limit ? new SemaphoreSlim(Math.Max(1, limit)) : null;
+        var surroundings = texts.Select((_, index) => sendsSurrounding ? Surrounding(texts, index) : null).ToList();
         var outcomes = await Task.WhenAll(texts.Select((text, index) => Attempt(text, index))).ConfigureAwait(false);
         if (cancellationToken.IsCancellationRequested) throw ApiException.Cancelled();
         var results = new List<SegmentedPolishResult.Part>();
@@ -199,7 +340,7 @@ public static class SegmentedPolish
             if (answer != null)
             {
                 var fallback = translation is null
-                    ? Prompts.Fallback(texts[i], answer.Result.Text, answer.Result.Truncated, context)
+                    ? Prompts.Fallback(texts[i], answer.Result.Text, answer.Result.Truncated, Reference(context, surroundings[i]))
                     : Prompts.TranslationFallback(texts[i], answer.Result.Text, answer.Result.Truncated, translation, vocabulary);
                 results.Add(new SegmentedPolishResult.Part(texts[i], answer, fallback, null));
             }
@@ -241,7 +382,7 @@ public static class SegmentedPolish
                 {
                     while (holdWhile()) await Task.Delay(200, cancellationToken).ConfigureAwait(false);
                 }
-                return (await polish(text, partial => progress.Update(index, partial), cancellationToken).ConfigureAwait(false), null);
+                return (await polish(text, surroundings[index], partial => progress.Update(index, partial), cancellationToken).ConfigureAwait(false), null);
             }
             catch (Exception error)
             {
@@ -252,6 +393,16 @@ public static class SegmentedPolish
                 gate?.Release();
             }
         }
+    }
+
+    /// <summary>
+    /// Everything a part's request carried as reference, for <see cref="Prompts.CopiedContext"/>: the text around the cursor
+    /// and the ends of the parts around it. Null when there was none.
+    /// </summary>
+    internal static string? Reference(string? context, SurroundingParts? surrounding)
+    {
+        var all = new[] { context, surrounding?.Before, surrounding?.After }.Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+        return all.Count == 0 ? null : string.Join("\n", all);
     }
 
     // MARK: - Splitting

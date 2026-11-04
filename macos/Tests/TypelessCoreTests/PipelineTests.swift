@@ -313,9 +313,13 @@ extension PipelineTests {
             return (200, Data("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n".utf8))
         }
         let client = APIClient(endpoint: endpoint(.deepseek), session: MockOpenRouter.session())
-        let result = try await client.polish(transcript: "x", options: PolishOptions(model: "m"))
+        let result = try await client.polish(transcript: "x", options: PolishOptions(model: "rejects-temperature"))
         #expect(result.text == "ok")
         #expect(bodies.count == 2)
+        // The next clean-up with that model goes out bare at once, without paying for the refusal again.
+        #expect(try await client.polish(transcript: "y", options: PolishOptions(model: "rejects-temperature")).text == "ok")
+        #expect(bodies.count == 3)
+        #expect(bodies.last?["temperature"] == nil)
     }
 
     @Test func cutOffAnswersAreTruncated() async throws {

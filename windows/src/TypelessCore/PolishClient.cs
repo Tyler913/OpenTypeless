@@ -38,7 +38,24 @@ public sealed record PolishOptions(
     /// The transcripts' line breaks were dictated (see <see cref="SpokenLayout"/>): the prompt then asks to keep them, for a
     /// transcript (or part of one) that has any.
     /// </summary>
-    bool DictatedLineBreaks = false);
+    bool DictatedLineBreaks = false,
+    /// <summary>How much structure the text gets where it goes (see <see cref="TextLayout"/>); a clean-up's or a translation's.</summary>
+    TextLayout Layout = TextLayout.Natural,
+    /// <summary>
+    /// The speech-to-text language ("" auto-detects): a clean-up in a language with examples of its own gets them (see
+    /// <see cref="ExampleLanguage.Resolve"/>).
+    /// </summary>
+    string SpokenLanguage = "",
+    /// <summary>
+    /// For one part of a long transcript, the ends of the parts around it, as spoken, sent as reference (see
+    /// <see cref="SegmentedPolish"/>); a clean-up's only.
+    /// </summary>
+    SurroundingParts? Surrounding = null,
+    /// <summary>
+    /// Lay the transcript, a cleaned-up text, out again by <see cref="Layout"/> instead of cleaning it up (see
+    /// <see cref="Prompts.RelayoutSystemPrompt"/>): only its line breaks and list markers change.
+    /// </summary>
+    bool Relayout = false);
 
 public static class ReasoningConfig
 {
@@ -62,6 +79,50 @@ public static class ReasoningConfig
         }
         if (info.Efforts.Contains("none")) return new JsonObject { ["effort"] = "none", ["exclude"] = true };
         return new JsonObject { ["enabled"] = false, ["exclude"] = true };
+    }
+
+    /// <summary>
+    /// The fields that switch reasoning off, or to its minimum, on a provider asked directly, by that provider's own
+    /// documented parameter. A model that turns the field down (one that always reasons, say) answers 400 naming it, and
+    /// the clean-up is sent again without it (see <see cref="ApiClient.Polish"/>). Empty where nothing is known to work.
+    /// </summary>
+    public static JsonObject Direct(ProviderId provider, string model)
+    {
+        model = model.Trim().ToLowerInvariant();
+        static JsonObject Effort(string effort) => new() { ["reasoning_effort"] = effort };
+        static JsonObject NoThinking() => new() { ["thinking"] = new JsonObject { ["type"] = "disabled" } };
+        switch (provider)
+        {
+            case ProviderId.Gemini:
+                // Gemini 3 can't stop thinking: the lowest level each takes ("minimal" only on Flash-Lite; 2.5 Flash stops).
+                if (model.StartsWith("gemini-2.5-flash", StringComparison.Ordinal)) return Effort("none");
+                return Effort(model.Contains("flash-lite", StringComparison.Ordinal) ? "minimal" : "low");
+            case ProviderId.Anthropic or ProviderId.Volcengine:
+                // Claude 5 and Doubao Seed think unless told not to.
+                return NoThinking();
+            case ProviderId.Zhipu:
+                // GLM 5.3 can't stop thinking, and turns the field down.
+                return model.StartsWith("glm-5.3", StringComparison.Ordinal) ? new JsonObject() : NoThinking();
+            case ProviderId.Mistral:
+                // Mistral Small and Medium take "none"; Large 4 doesn't.
+                return model.Contains("small", StringComparison.Ordinal) || model.Contains("medium", StringComparison.Ordinal)
+                    ? Effort("none") : new JsonObject();
+            case ProviderId.XAI:
+                return model.StartsWith("grok-", StringComparison.Ordinal) && !model.Contains("non-reasoning", StringComparison.Ordinal)
+                       && !model.Contains("multi-agent", StringComparison.Ordinal)
+                    ? Effort("low") : new JsonObject();
+            case ProviderId.DashScope:
+                return new JsonObject { ["enable_thinking"] = false };
+            case ProviderId.Moonshot:
+                // Kimi K3 always thinks ("low" is its least); K2.6 can stop; the K2.7 coding models can't.
+                if (model.StartsWith("kimi-k3", StringComparison.Ordinal)) return Effort("low");
+                return model.StartsWith("kimi-k2", StringComparison.Ordinal) && !model.Contains("code", StringComparison.Ordinal)
+                    ? NoThinking() : new JsonObject();
+            case ProviderId.Ollama:
+                return Effort("none");
+            default:
+                return new JsonObject();
+        }
     }
 }
 
@@ -149,6 +210,10 @@ public sealed partial class ApiClient
     /// </summary>
     internal static string[] PolishMessages(string transcript, PolishOptions options)
     {
+        if (options.Relayout)
+        {
+            return [Prompts.RelayoutSystemPrompt(options.Layout), Prompts.RelayoutUserMessage(transcript)];
+        }
         if (options.Selection is { } selection)
         {
             return
@@ -161,15 +226,17 @@ public sealed partial class ApiClient
         {
             return
             [
-                options.SystemPromptOverride ?? Prompts.TranslateSystemPrompt(target, options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard),
+                options.SystemPromptOverride ?? Prompts.TranslateSystemPrompt(target, options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard,
+                                                                              options.Layout),
                 Prompts.TranslateUserMessage(transcript, target),
             ];
         }
         return
         [
             options.SystemPromptOverride ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard,
-                                                                       options.DictatedLineBreaks && transcript.Contains('\n')),
-            Prompts.PolishUserMessage(transcript, options.Context),
+                                                                       options.DictatedLineBreaks && transcript.Contains('\n'), options.Layout,
+                                                                       ExampleLanguage.Resolve(options.SpokenLanguage, transcript)),
+            Prompts.PolishUserMessage(transcript, options.Context, options.Surrounding),
         ];
     }
 
@@ -191,6 +258,9 @@ public sealed partial class ApiClient
                 new JsonObject { ["role"] = "user", ["content"] = messages[1] },
             },
         };
+        var provider = Endpoint.Id;
+        // Anthropic's API needs a limit on every request, the bare one included.
+        if (provider.ChatNeedsMaxTokens()) body["max_tokens"] = MaxTokens(transcript, options);
         if (!includeOptional) return body;
         if (IsOpenRouter)
         {
@@ -199,11 +269,12 @@ public sealed partial class ApiClient
             if (ReasoningConfig.Body(options.ModelInfo) is { } reasoning) body["reasoning"] = reasoning;
             if (options.ModelInfo?.SupportedParameters.Contains("temperature") ?? true) body["temperature"] = 0.2;
         }
-        else if (Endpoint.Id != ProviderId.OpenAI)
+        else
         {
-            body["temperature"] = 0.2;
+            if (provider.ChatSendsTemperature()) body["temperature"] = 0.2;
+            foreach (var (key, value) in ReasoningConfig.Direct(provider, options.Model).ToList()) body[key] = value?.DeepClone();
         }
-        if (!IsOpenRouter)
+        if (provider.ChatSendsStreamOptions())
         {
             // OpenAI-compatible servers only report token counts on a stream when asked (OpenRouter always does).
             body["stream_options"] = new JsonObject { ["include_usage"] = true };
@@ -246,19 +317,31 @@ public sealed partial class ApiClient
     {
         // An edit streams out its selection rewritten, so that is what takes time.
         var limits = new StreamLimits(idleTimeout, totalTimeout ?? PolishTimeout((options.Selection ?? "") + transcript), firstTokenTimeout);
+        var bareKey = BareKey(options.Model);
+        if (BareOnly.ContainsKey(bareKey))
+            return await StreamPolish(transcript, options, false, limits, onPartial, cancellationToken).ConfigureAwait(false);
         try
         {
             return await StreamPolish(transcript, options, true, limits, onPartial, cancellationToken).ConfigureAwait(false);
         }
         catch (ApiException error) when (error.Kind == ApiErrorKind.Http && error.Status is 400 or 422)
         {
-            // A server rejecting an optional parameter: retry with the bare minimum request.
+            // A server rejecting an optional parameter: retry with the bare minimum request, and send that from now on.
             var lower = error.Detail.ToLowerInvariant();
-            if (!new[] { "temperature", "max_tokens", "reasoning", "provider", "stream_options", "include_usage", "unsupported", "unrecognized", "unknown" }
+            if (!new[] { "temperature", "max_tokens", "reasoning", "thinking", "provider", "stream_options", "include_usage", "unsupported", "unrecognized", "unknown" }
                     .Any(lower.Contains)) throw;
+            BareOnly.TryAdd(bareKey, 0);
             return await StreamPolish(transcript, options, false, limits, onPartial, cancellationToken).ConfigureAwait(false);
         }
     }
+
+    /// <summary>
+    /// Endpoints and models that turned an optional parameter down (a reasoning switch the model doesn't take, say): their
+    /// later clean-ups go out bare at once, instead of each one paying for the refusal first. Kept until the app quits.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> BareOnly = new();
+
+    private string BareKey(string model) => Endpoint.BaseUrl.AbsoluteUri.TrimEnd('/') + "\n" + model;
 
     private sealed record StreamLimits(double Idle, double Total, double FirstToken);
 
@@ -270,7 +353,7 @@ public sealed partial class ApiClient
         request.Headers.TryAddWithoutValidation("Accept", "text/event-stream");
         // Told as the request goes out (not when it's built, nor for one cancelled first), so History says so only when the
         // text around the cursor really went to the provider.
-        var sentContext = options.Translation is null && options.Selection is null && Prompts.ContextBlock(options.Context) != null;
+        var sentContext = !options.Relayout && options.Translation is null && options.Selection is null && Prompts.ContextBlock(options.Context) != null;
         if (sentContext && !cancellationToken.IsCancellationRequested) options.OnContextSent?.Invoke();
 
         return await Timeouts.WithTimeout(limits.Total, async ct =>
@@ -335,7 +418,8 @@ public sealed partial class ApiClient
                     // An edit's answer is cleaned up as an edit's.
                     var cleaned = options.Selection is { } selection
                         ? Prompts.SanitizeCommandOutput(text.ToString(), selection, transcript)
-                        : Prompts.SanitizePolishOutput(text.ToString(), Prompts.Reminder(options.Translation), sentContext);
+                        : Prompts.SanitizePolishOutput(text.ToString(), options.Relayout ? Prompts.RelayoutReminder : Prompts.Reminder(options.Translation),
+                                                       sentContext);
                     if (cleaned.Length == 0) throw ApiException.BadResponse(L("模型返回了空内容", "the model returned nothing"));
                     if (usage is null || (usage.InputTokens == null && usage.OutputTokens == null && usage.Cost == null))
                     {

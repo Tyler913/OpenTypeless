@@ -4,17 +4,6 @@ import TypelessCore
 /// Isolated OpenRouter benchmark; never initializes AppSettings or reads the saved keys unless asked.
 /// See eval/README.md for budget, output privacy, repetition and dry-run options.
 enum PolishEval {
-    struct Case: Codable {
-        let id: String
-        let input: String
-        var mustContain: [String]?
-        var mustNotContain: [String]?
-        var anyOf: [[String]]?
-        /// Translate into this language (a `TranslationTarget` id) instead of cleaning up, as translation mode does.
-        var translateTo: String?
-        /// Text around the cursor sent with the transcript (see CursorContext), as the app would.
-        var context: String?
-    }
     struct Job: Codable {
         let id: String
         let round: Int
@@ -56,7 +45,7 @@ enum PolishEval {
                     throw APIError.badResponse("detailed output / budget ledger must be outside repository")
                 }
             }
-            let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: URL(fileURLWithPath: casesPath)))
+            let cases = try JSONDecoder().decode([PolishCase].self, from: Data(contentsOf: URL(fileURLWithPath: casesPath)))
             guard !cases.isEmpty, Set(cases.map(\.id)).count == cases.count else {
                 throw APIError.badResponse("empty cases or duplicate IDs")
             }
@@ -132,6 +121,8 @@ enum PolishEval {
                         var caseOptions = options[model]!
                         caseOptions.translation = c.translateTo.flatMap { TranslationTarget($0) }
                         caseOptions.context = c.context
+                        caseOptions.layout = c.textLayout
+                        caseOptions.spokenLanguage = c.language ?? ""
                         let plan = try client.evaluationPlan(transcript: c.input, options: caseOptions,
                                                             promptPrice: price.0, completionPrice: price.1, providerTag: providerTag,
                                                             providerRouting: providerRouting)
@@ -164,10 +155,8 @@ enum PolishEval {
                 let c = cases.first { $0.id == job.id }!
                 let reservation = try budget.reserve(job.plan.upperBoundUSD, future: future)
                 let attempt = await client.evaluatePolish(plan: job.plan)
-                var failures: [String] = []
-                for s in c.mustContain ?? [] where !attempt.output.contains(s) { failures.append("missing “\(s)”") }
-                for s in c.mustNotContain ?? [] where attempt.output.contains(s) { failures.append("still has “\(s)”") }
-                for g in c.anyOf ?? [] where !g.contains(where: attempt.output.contains) { failures.append("none of \(g)") }
+                // The case's own checks (strings, layout, length) and stock phrases the speaker didn't say.
+                var failures = c.failures(attempt.output)
                 // The app's own checks: it would insert the transcript as spoken (or, for a translation, its clean-up)
                 // instead of this output.
                 let translation = c.translateTo.flatMap { TranslationTarget($0) }

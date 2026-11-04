@@ -114,9 +114,23 @@ public static class WindowHelpers
         return MonitorAt(point);
     }
 
-    public static (Win32.RECT Work, Win32.RECT Monitor, double Scale) MonitorAt(Win32.POINT point)
+    public static (Win32.RECT Work, Win32.RECT Monitor, double Scale) MonitorAt(Win32.POINT point) =>
+        MonitorInfo(Win32.MonitorFromPoint(point, Win32.MONITOR_DEFAULTTONEAREST));
+
+    /// <summary>Every monitor's work area, whole area and DPI scale, in physical pixels.</summary>
+    public static List<(Win32.RECT Work, Win32.RECT Monitor, double Scale)> Monitors()
     {
-        var monitor = Win32.MonitorFromPoint(point, Win32.MONITOR_DEFAULTTONEAREST);
+        var monitors = new List<(Win32.RECT Work, Win32.RECT Monitor, double Scale)>();
+        Win32.EnumDisplayMonitors(0, 0, (nint monitor, nint dc, ref Win32.RECT area, nint data) =>
+        {
+            monitors.Add(MonitorInfo(monitor));
+            return true;
+        }, 0);
+        return monitors;
+    }
+
+    private static (Win32.RECT Work, Win32.RECT Monitor, double Scale) MonitorInfo(nint monitor)
+    {
         var info = new Win32.MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<Win32.MONITORINFO>() };
         Win32.GetMonitorInfo(monitor, ref info);
         var dpi = Win32.GetDpiForMonitor(monitor, 0, out var x, out _) == 0 ? x : 96u;

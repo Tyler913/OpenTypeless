@@ -41,11 +41,51 @@ final class UsageStore: ObservableObject {
         return true
     }
 
-    /// Records one dictation's processing: its cost today, and its words if it just finished.
-    func record(_ record: inout DictationRecord, transcriptionCost: Double, cleanupCost: Double, unpriced: Int) {
+    /// Records one dictation's processing: its cost today, and its words if it just finished. Returns the spending
+    /// reminder that cost brings due, if any (see `SpendLimit`); it's saved as shown, so it comes once a month.
+    @discardableResult
+    func record(_ record: inout DictationRecord, transcriptionCost: Double, cleanupCost: Double, unpriced: Int) -> SpendReminder? {
         countIfFinished(&record)
-        ledger.addCost(on: CalendarDay(Date()), transcription: transcriptionCost, cleanup: cleanupCost, unpriced: unpriced)
+        let today = CalendarDay(Date())
+        let before = ledger.month(today).cost
+        ledger.addCost(on: today, transcription: transcriptionCost, cleanup: cleanupCost, unpriced: unpriced)
         ledger.save(to: Self.fileURL)
+        return spendReminder(today: today, spentBefore: before)
+    }
+
+    /// This calendar month's spend (what Home shows as "this month") against the monthly limit, while one is set.
+    var monthlySpend: (spent: Double, limit: Double)? {
+        guard let limit = AppSettings.shared.activeSpendLimit else { return nil }
+        return (ledger.month(CalendarDay(Date())).cost, limit)
+    }
+
+    private func spendReminder(today: CalendarDay, spentBefore: Double) -> SpendReminder? {
+        let settings = AppSettings.shared
+        guard let limit = settings.activeSpendLimit else { return nil }
+        let spent = ledger.month(today).cost
+        let saved = settings.spendReminderState
+        let outcome = SpendLimit.check(spentBefore: spentBefore, spent: spent, limit: limit,
+                                       month: SpendLimit.monthKey(today), state: saved)
+        if outcome.state != saved { settings.spendReminderState = outcome.state }
+        return outcome.reminder.map { SpendReminder(level: $0, spent: spent, limit: limit) }
+    }
+}
+
+/// A spending reminder that came due (see `SpendLimit`), shown in the capsule once the dictation is done.
+struct SpendReminder: Equatable {
+    let level: SpendLimit.Level
+    let spent: Double
+    let limit: Double
+
+    var message: String {
+        let amount = UsageFormat.money(self.spent), cap = UsageFormat.money(self.limit)
+        if level == .reached {
+            return L("本月花费已达上限：\(amount) / \(cap)。听写不受影响",
+                     "You've reached this month's spending limit: \(amount) of \(cap). Dictation keeps working")
+        }
+        let percent = Int((SpendLimit.warningFraction * 100).rounded())
+        return L("本月已花费 \(amount)，达到上限 \(cap) 的 \(percent)%",
+                 "This month's spend is \(amount), \(percent)% of your \(cap) limit")
     }
 }
 

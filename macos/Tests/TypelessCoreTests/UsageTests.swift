@@ -364,7 +364,7 @@ extension PipelineTests {
         }
         let client = APIClient(endpoint: ProviderEndpoint(id: .openai, baseURL: URL(string: "https://example.com/v1")!, apiKey: "k"),
                                session: MockOpenRouter.session())
-        let result = try await client.polish(transcript: "x", options: PolishOptions(model: "m"))
+        let result = try await client.polish(transcript: "x", options: PolishOptions(model: "rejects-stream-options"))
         #expect(result.text == "ok")
         #expect(bodies.count == 2)
         #expect(bodies.last?["stream_options"] == nil)

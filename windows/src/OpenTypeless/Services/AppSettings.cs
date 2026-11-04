@@ -398,6 +398,16 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("livePreview", value);
     }
 
+    /// <summary>
+    /// Where the recording capsule shows (see <see cref="HudPlacement"/>): the bottom of the screen, as it always was,
+    /// unless the user picks another; a choice this version can't read is the bottom too.
+    /// </summary>
+    public HudPosition HudPosition
+    {
+        get => HudPositions.Parse(GetString("hudPosition", "bottom"));
+        set => SetValue("hudPosition", value.RawValue());
+    }
+
     /// <summary>Open the Home page when the app starts at sign-in (a manual launch always shows it).</summary>
     public bool ShowHomeAtLogin
     {
@@ -417,6 +427,33 @@ public sealed class AppSettings : INotifyPropertyChanged
     {
         get => Math.Clamp(GetInt("typingWordsPerMinute", UsageTotals.DefaultTypingWordsPerMinute), 10, 300);
         set => SetValue("typingWordsPerMinute", Math.Clamp(value, 10, 300));
+    }
+
+    /// <summary>
+    /// Remind when this month's spend nears and reaches <see cref="MonthlySpendLimit"/> (see <see cref="TypelessCore.SpendLimit"/>).
+    /// Off by default; it never stops a dictation.
+    /// </summary>
+    public bool SpendLimitEnabled
+    {
+        get => GetBool("spendLimitEnabled", false);
+        set => SetValue("spendLimitEnabled", value);
+    }
+
+    /// <summary>The monthly spending limit, in USD.</summary>
+    public double MonthlySpendLimit
+    {
+        get => GetDouble("spendLimit", 10);
+        set => SetValue("spendLimit", double.IsFinite(value) ? Math.Max(0, value) : 0);
+    }
+
+    /// <summary>The monthly spending limit in USD while it's on and a positive amount; null otherwise.</summary>
+    public double? ActiveSpendLimit => SpendLimitEnabled && MonthlySpendLimit is var limit && double.IsFinite(limit) && limit > 0 ? limit : null;
+
+    /// <summary>Which of this month's spending reminders were shown, so each comes once (see <see cref="TypelessCore.SpendLimit.State"/>).</summary>
+    public SpendLimit.State SpendReminderState
+    {
+        get => SpendLimit.State.FromStored(GetString("spendReminder", ""));
+        set => SetValue("spendReminder", value.Stored);
     }
 
     /// <summary>The first-launch guide has been shown (see Onboarding); it never comes back after that.</summary>
@@ -536,6 +573,55 @@ public sealed class AppSettings : INotifyPropertyChanged
     }
 
     public bool IsConfigured(ProviderId id) => Endpoint(id) != null && (!id.RequiresKey() || ApiKey(id).Length > 0);
+
+    /// <summary>Whether a step uses this provider: speech to text, clean-up, or either's backup (while switched on).</summary>
+    public bool IsInUse(ProviderId id) =>
+        SttProvider == id || (PolishEnabled && PolishProvider == id) || (SttBackupEnabled && SttBackupProvider == id)
+        || (PolishEnabled && PolishBackupEnabled && PolishBackupProvider == id);
+
+    /// <summary>
+    /// Providers added on the Providers page that have no key or address of their own yet (a local server, say), by raw
+    /// value, so the page keeps showing them.
+    /// </summary>
+    public IReadOnlyList<string> AddedProviders
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _store["addedProviders"] is JsonArray list
+                    ? list.Select(n => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : null).OfType<string>().ToList()
+                    : [];
+            }
+        }
+    }
+
+    /// <summary>Whether the Providers page lists this provider: one in use, with a key or an address of its own, or added there.</summary>
+    public bool IsSetUp(ProviderId id)
+    {
+        if (IsInUse(id) || ApiKey(id).Length > 0 || AddedProviders.Contains(id.RawValue())) return true;
+        lock (_lock) return _store["baseURLs"] is JsonObject urls && urls.ContainsKey(id.RawValue());
+    }
+
+    /// <summary>Lists a provider on the Providers page, to fill in its key or address.</summary>
+    public void AddProvider(ProviderId id)
+    {
+        var added = AddedProviders;
+        if (added.Contains(id.RawValue())) return;
+        SetNode("addedProviders", new JsonArray(added.Append(id.RawValue()).Select(s => (JsonNode)JsonValue.Create(s)!).ToArray()), "AddedProviders");
+    }
+
+    /// <summary>Takes a provider off the Providers page, forgetting its key and address. Not one a step uses.</summary>
+    /// <returns>False when Credential Manager refused to forget the key.</returns>
+    public bool RemoveProvider(ProviderId id)
+    {
+        if (IsInUse(id)) return true;
+        var forgotten = SetApiKey("", id);
+        SetBaseUrl("", id);
+        var added = AddedProviders.Where(s => s != id.RawValue()).Select(s => (JsonNode)JsonValue.Create(s)!).ToArray();
+        SetNode("addedProviders", new JsonArray(added), "AddedProviders");
+        return forgotten;
+    }
 
     public ProviderEndpoint? SttEndpoint => Endpoint(SttProvider);
     public ProviderEndpoint? PolishEndpoint => Endpoint(PolishProvider);
@@ -706,7 +792,7 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     /// <summary>What a dictation started in the app with this executable name ("slack.exe") runs with.</summary>
     public DictationSettings DictationSettingsForApp(string? executable) =>
-        GlobalDictationSettings.Applying(AppProfile.Matching(executable, AppProfiles));
+        GlobalDictationSettings.Applying(AppProfile.Matching(executable, AppProfiles), executable);
 
     /// <summary>
     /// What a retry of a dictation made with the profile <paramref name="id"/> runs with: that profile's settings while it
@@ -933,6 +1019,11 @@ public sealed class AppSettings : INotifyPropertyChanged
     private int GetInt(string key, int fallback)
     {
         lock (_lock) return _store[key] is JsonValue v && v.TryGetValue<int>(out var i) ? i : fallback;
+    }
+
+    private double GetDouble(string key, double fallback)
+    {
+        lock (_lock) return _store[key] is JsonValue v && v.TryGetValue<double>(out var d) && double.IsFinite(d) ? d : fallback;
     }
 
     private void SetValue<T>(string key, T value, [CallerMemberName] string property = "")

@@ -6,8 +6,9 @@ using TypelessCore;
 namespace OpenTypeless.Native;
 
 /// <summary>
-/// The slice of the UI Automation client API the edit watcher, the paste and command mode need: the focused element,
-/// whether it's still the same element, its text, the text around its cursor, and the text selected in it. Calls go into
+/// The slice of the UI Automation client API the edit watcher, the paste, command mode and the capsule's placement need:
+/// the focused element, whether it's still the same element, its text, the text around its cursor, the text selected in
+/// it, and where that is on the screen. Calls go into
 /// the other app's process, so make them off the UI thread.
 /// </summary>
 internal static class UIAutomation
@@ -248,11 +249,12 @@ internal static class UIAutomation
         [PreserveSig] int Clone(out IUIAutomationTextRange? clone);
         [PreserveSig] int Compare(IUIAutomationTextRange range, out int areSame);
         void CompareEndpoints();
-        void ExpandToEnclosingUnit();
+        [PreserveSig] int ExpandToEnclosingUnit(int textUnit);
         void FindAttribute();
         void FindText();
         [PreserveSig] int GetAttributeValue(int attributeId, [MarshalAs(UnmanagedType.Struct)] out object? value);
-        void GetBoundingRectangles();
+        // Left, top, width and height of each line the range is on, one after the other, in screen pixels.
+        [PreserveSig] int GetBoundingRectangles([MarshalAs(UnmanagedType.SafeArray, SafeArraySubType = VarEnum.VT_R8)] out double[]? rectangles);
         void GetEnclosingElement();
         [PreserveSig] int GetText(int maxLength, [MarshalAs(UnmanagedType.BStr)] out string? text);
         void Move();

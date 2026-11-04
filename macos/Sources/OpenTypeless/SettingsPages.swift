@@ -75,6 +75,18 @@ struct GeneralPage: View {
                                 "Shows what you're saying above the capsule as you talk, recognised on this Mac. Only a preview: the inserted text still comes from your speech-to-text provider. The first time, macOS downloads a speech model for your language."),
                         isOn: $settings.livePreview)
                 CardDivider()
+                CardRow(title: L("录音条位置", "Capsule position"),
+                        help: L("录音条显示在你正在用的窗口所在的屏幕上。选「光标附近」时，它出现在正在输入的那一行下方（下方放不下就在上方），不会挡住这一行；读不到光标位置的应用里显示在屏幕底部。",
+                                "The capsule shows on the screen of the window you're working in. Near the text cursor puts it just below the line you're typing in (above it when there's no room below), never over it; in apps that don't say where the cursor is, it shows at the bottom of the screen.")) {
+                    Picker(L("录音条位置", "Capsule position"), selection: $settings.hudPosition) {
+                        ForEach(HUDPosition.allCases, id: \.self) { position in
+                            Text(position.title).tag(position)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                CardDivider()
                 CardRow(title: L("单次最长录音", "Maximum recording"),
                         help: L("到时间会自动结束并处理", "Stops and processes automatically at the limit")) {
                     ValueStepper(text: L("\(settings.maxRecordingMinutes) 分钟", "\(settings.maxRecordingMinutes) min"),
@@ -656,23 +668,79 @@ struct AnyPrimitiveButtonStyle: PrimitiveButtonStyle {
 
 // MARK: - Providers
 
+/// The providers that are set up (in use, or with a key or address of their own), and an Add menu with the rest, grouped
+/// by what they do, so the page stays short however many providers there are.
 struct ProvidersPage: View {
     @ObservedObject var settings: AppSettings
     @State private var expanded: Set<ProviderID> = []
+    /// Shown since the page opened, so a provider whose key was just cleared doesn't vanish under the pointer.
+    @State private var shown: Set<ProviderID> = []
 
     var body: some View {
         PageScaffold(page: .providers,
                      help: L("填写 API Key。语音转文字和文字整理可以使用不同的服务商。",
-                             "Add API keys. Speech-to-text and clean-up can use different providers.")) {
-            ForEach(ProviderID.allCases) { id in
+                             "Add API keys. Speech-to-text and clean-up can use different providers.")
+                         + "\n\n" + L("这里只列出已经设置的服务商，其他的在「添加服务商」里。",
+                                       "Only the providers you've set up are listed; add others with Add provider.")) {
+            if !available.isEmpty { addMenu }
+        } content: {
+            ForEach(listed) { id in
                 ProviderCard(settings: settings, id: id, expanded: Binding(
                     get: { expanded.contains(id) },
                     set: { if $0 { expanded.insert(id) } else { expanded.remove(id) } }
-                ))
+                ), onRemove: {
+                    shown.remove(id)
+                    expanded.remove(id)
+                })
             }
         }
         .onAppear {
             expanded = [settings.sttProvider, settings.polishProvider]
+            shown = Set(ProviderID.allCases.filter(settings.isSetUp))
+        }
+    }
+
+    private var listed: [ProviderID] {
+        ProviderID.allCases.filter { shown.contains($0) || settings.isSetUp($0) }
+    }
+
+    private var available: [ProviderID] {
+        ProviderID.allCases.filter { !listed.contains($0) }
+    }
+
+    private var addMenu: some View {
+        Menu {
+            ForEach(ProviderGroup.allCases, id: \.self) { group in
+                let ids = available.filter { $0.group == group }
+                if !ids.isEmpty {
+                    Section(group.title) {
+                        ForEach(ids) { id in
+                            Button(id.displayName) { add(id) }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label(L("添加服务商", "Add provider"), systemImage: "plus")
+        }
+        .fixedSize()
+    }
+
+    private func add(_ id: ProviderID) {
+        settings.addProvider(id)
+        shown.insert(id)
+        expanded.insert(id)
+    }
+}
+
+extension ProviderGroup {
+    /// The heading of the providers of this group in the Add menu.
+    var title: String {
+        switch self {
+        case .both: return L("语音转文字和文字整理", "Speech-to-text and clean-up")
+        case .chat: return L("文字整理", "Clean-up")
+        case .speech: return L("语音转文字", "Speech to text")
+        case .local: return L("本机或自建服务", "On this computer or your own server")
         }
     }
 }
@@ -681,6 +749,8 @@ private struct ProviderCard: View {
     @ObservedObject var settings: AppSettings
     let id: ProviderID
     @Binding var expanded: Bool
+    /// Called once Remove has taken the provider off the page.
+    var onRemove: () -> Void = {}
     @State private var testResult: (ok: Bool, text: String, color: Color)?
     @State private var testing = false
 
@@ -757,8 +827,10 @@ private struct ProviderCard: View {
                                     .font(.system(size: 12))
                             }
                         } else {
-                            Text(L("任何兼容 OpenAI 接口的服务：/audio/transcriptions 与 /chat/completions",
-                                   "Any OpenAI-compatible server: /audio/transcriptions and /chat/completions"))
+                            Text(id.isLocal
+                                 ? L("运行在这台电脑上，不需要 API Key", "Runs on this computer; no API key needed")
+                                 : L("任何兼容 OpenAI 接口的服务：/audio/transcriptions 与 /chat/completions",
+                                     "Any OpenAI-compatible server: /audio/transcriptions and /chat/completions"))
                                 .font(.system(size: 11.5)).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -775,8 +847,33 @@ private struct ProviderCard: View {
                     }
                 }
                 .rowPadding(.all, 14)
+                CardDivider(inset: 0)
+                HStack {
+                    Text(supportedSteps).font(.system(size: 11.5)).foregroundStyle(.secondary)
+                    Spacer()
+                    // A provider a step uses stays: switch the step to another one first.
+                    Button(role: .destructive) {
+                        settings.removeProvider(id)
+                        onRemove()
+                    } label: {
+                        Label(L("移除", "Remove"), systemImage: "trash")
+                    }
+                    .controlSize(.small)
+                    .disabled(settings.isInUse(id))
+                    .help(settings.isInUse(id)
+                          ? L("正在使用，先在「模型」里换成别的服务商", "In use: choose another provider under Models first")
+                          : L("移除这个服务商和它的 API Key", "Removes this provider and its API key"))
+                }
+                .rowPadding(.horizontal, 14)
+                .rowPadding(.vertical, 10)
             }
         }
+    }
+
+    /// What this provider can do here: "Speech-to-text and clean-up", or one of them.
+    private var supportedSteps: String {
+        if id.supportsSTT && id.supportsChat { return ProviderGroup.both.title }
+        return id.supportsSTT ? L("仅语音转文字", "Speech-to-text only") : L("仅文字整理", "Clean-up only")
     }
 
     private var usageTags: [String] {
@@ -902,12 +999,12 @@ struct ModelsPage: View {
                 if settings.polishEnabled {
                     CardDivider()
                     CardRow(title: L("服务商", "Provider")) {
-                        ProviderPicker(selection: settings.polishProvider, options: ProviderID.allCases,
+                        ProviderPicker(selection: settings.polishProvider, options: ProviderID.allCases.filter(\.supportsChat),
                                        settings: settings) { settings.selectPolishProvider($0) }
                     }
                     CardDivider()
                     CardRow(title: L("模型", "Model"),
-                            help: settings.polishProvider == .openrouter
+                            help: settings.polishProvider.minimisesReasoning
                                 ? L("推理会自动关闭或降到最低，以减少延迟", "Reasoning is turned off or minimised for speed") : nil) {
                         ModelField(text: $settings.polishModel, models: chatModels)
                     }
@@ -925,7 +1022,7 @@ struct ModelsPage: View {
                     if settings.polishBackupEnabled {
                         CardDivider()
                         CardRow(title: L("备用服务商", "Backup provider")) {
-                            ProviderPicker(selection: settings.polishBackupProvider, options: ProviderID.allCases,
+                            ProviderPicker(selection: settings.polishBackupProvider, options: ProviderID.allCases.filter(\.supportsChat),
                                            settings: settings) { settings.selectPolishBackupProvider($0) }
                         }
                         CardDivider()
@@ -947,6 +1044,8 @@ struct ModelsPage: View {
                       !settings.isConfigured(settings.polishBackupProvider) {
                 setupBanner(for: settings.polishBackupProvider)
             }
+
+            SpendLimitSection(settings: settings)
         }
         .task(id: "\(settings.sttProvider.rawValue)|\(settings.apiKey(for: settings.sttProvider).count)") {
             sttModels = await loadModels(settings.sttProvider, speech: true)
@@ -1005,22 +1104,31 @@ private struct ProviderPicker: View {
     let onSelect: (ProviderID) -> Void
 
     var body: some View {
+        // The providers set up on the Providers page first; the others, which need a key, after them.
+        let setUp = options.filter { $0 == selection || settings.isSetUp($0) }
+        let others = options.filter { !setUp.contains($0) }
         Menu {
-            ForEach(options) { id in
-                Button {
-                    onSelect(id)
-                } label: {
-                    if id == selection {
-                        Label(id.displayName, systemImage: "checkmark")
-                    } else {
-                        Text(settings.isConfigured(id) ? id.displayName : id.displayName + L("（未配置）", " (not set)"))
-                    }
-                }
+            ForEach(setUp) { id in item(id) }
+            if !others.isEmpty {
+                Divider()
+                ForEach(others) { id in item(id) }
             }
         } label: {
             Text(selection.displayName)
         }
         .fixedSize()
+    }
+
+    private func item(_ id: ProviderID) -> some View {
+        Button {
+            onSelect(id)
+        } label: {
+            if id == selection {
+                Label(id.displayName, systemImage: "checkmark")
+            } else {
+                Text(settings.isConfigured(id) ? id.displayName : id.displayName + L("（未配置）", " (not set)"))
+            }
+        }
     }
 }
 
@@ -1202,6 +1310,49 @@ private struct PriceRow: View {
         .textFieldStyle(.roundedBorder)
         .multilineTextAlignment(.trailing)
         .frame(width: 80)
+    }
+}
+
+/// The monthly spending limit: off by default; when on, a reminder in the capsule as this month's spend nears it and
+/// when it reaches it (see `SpendLimit`). It never stops a dictation.
+private struct SpendLimitSection: View {
+    @ObservedObject var settings: AppSettings
+    @ObservedObject var usage = UsageStore.shared
+
+    var body: some View {
+        CardSection(title: L("花费", "Spending")) {
+            CardRow(title: L("每月花费上限", "Monthly spending limit"),
+                    subtitle: L("快到和到达上限时提醒你，听写不受影响", "A reminder near and at the limit; dictation keeps working"),
+                    help: Self.help, isOn: $settings.spendLimitEnabled)
+            if settings.spendLimitEnabled {
+                CardDivider()
+                CardRow(title: L("上限", "Limit"), subtitle: spentLine) {
+                    HStack(spacing: 6) {
+                        TextField("$", value: Binding<Double>(
+                            get: { settings.monthlySpendLimit },
+                            set: { settings.monthlySpendLimit = $0.isFinite ? max(0, $0) : 0 }
+                        ), format: .number.precision(.fractionLength(0...2)), prompt: Text(verbatim: "$"))
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 80)
+                        Text(L("美元/月", "$/month")).font(.system(size: 12)).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    /// What this month has cost so far, against the limit.
+    private var spentLine: String {
+        let spent = UsageFormat.money(usage.ledger.month(CalendarDay(Date())).cost)
+        return L("本月已花费 \(spent)", "\(spent) spent this month")
+    }
+
+    static var help: String {
+        let percent = Int((SpendLimit.warningFraction * 100).rounded())
+        return L("本月花费到上限的 \(percent)% 时提醒一次，到上限时再提醒一次，在听写后的录音浮窗里。只是提醒，不会停止或取消听写。只计入知道价格的请求：OpenRouter 的请求，以及在本页填了价格的其他服务商的模型。按本地时间的自然月计算，每月 1 日重新开始；调高上限后，提醒也会重新开始。",
+                 "You're reminded in the capsule after a dictation once this month's spend reaches \(percent)% of the limit, and again when it reaches the limit. It's only a reminder: no dictation is stopped or cancelled. Only requests with a known price count: OpenRouter's, and other providers' models you've entered a price for on this page. Months follow your local time and start over on the 1st, and so do the reminders when you raise the limit.")
     }
 }
 

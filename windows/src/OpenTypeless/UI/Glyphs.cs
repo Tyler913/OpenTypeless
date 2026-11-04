@@ -81,9 +81,10 @@ public static class Glyphs
     public const string Shield       = "\uE045"; // shield_checkmark
     public const string Cloud        = "\uE046"; // cloud
     public const string DataUsage    = "\uE047"; // data_usage
+    public const string Placement    = "\uE048"; // panel_bottom
 
     internal const char First = '\uE000';
-    internal const char Last = '\uE047';
+    internal const char Last = '\uE048';
     internal const int Size16 = 0x100;
     internal const int Size24 = 0x200;
     internal const int Filled = 0x400;

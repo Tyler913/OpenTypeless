@@ -13,7 +13,7 @@ public sealed class ModelsPage : PageBase
     private static readonly HashSet<string> StructuralProperties =
         [nameof(AppSettings.SttProvider), nameof(AppSettings.PolishProvider), nameof(AppSettings.PolishEnabled),
          nameof(AppSettings.PolishBackupEnabled), nameof(AppSettings.PolishBackupProvider), "ApiKeys", "BaseUrls",
-         nameof(AppSettings.SttBackupEnabled), nameof(AppSettings.SttBackupProvider)];
+         nameof(AppSettings.SttBackupEnabled), nameof(AppSettings.SttBackupProvider), nameof(AppSettings.SpendLimitEnabled)];
 
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly SettingsWindow _window;
@@ -204,7 +204,7 @@ public sealed class ModelsPage : PageBase
             polish.Body.Add(new CardRow
             {
                 Glyph = Glyphs.Cloud, Title = L("服务商", "Provider"),
-                Trailing = ProviderPicker(_settings.PolishProvider, ProviderIdExtensions.All, id =>
+                Trailing = ProviderPicker(_settings.PolishProvider, ProviderIdExtensions.All.Where(p => p.SupportsChat()), id =>
                 {
                     _settings.SelectPolishProvider(id);
                     _controller.RefreshModelInfo();
@@ -214,7 +214,7 @@ public sealed class ModelsPage : PageBase
             _chatRow = new CardRow
             {
                 Glyph = Glyphs.Brain, Title = L("模型", "Model"),
-                Help = _settings.PolishProvider == ProviderId.OpenRouter ? L("推理会自动关闭或降到最低，以减少延迟", "Reasoning is turned off or minimised for speed") : null,
+                Help = _settings.PolishProvider.MinimisesReasoning() ? L("推理会自动关闭或降到最低，以减少延迟", "Reasoning is turned off or minimised for speed") : null,
                 Trailing = _chatField,
             };
             polish.Body.Add(_chatRow);
@@ -246,7 +246,7 @@ public sealed class ModelsPage : PageBase
                 polish.Body.Add(new CardRow
                 {
                     Glyph = Glyphs.Cloud, Title = L("备用服务商", "Backup provider"),
-                    Trailing = ProviderPicker(_settings.PolishBackupProvider, ProviderIdExtensions.All, id =>
+                    Trailing = ProviderPicker(_settings.PolishBackupProvider, ProviderIdExtensions.All.Where(p => p.SupportsChat()), id =>
                     {
                         _settings.SelectPolishBackupProvider(id);
                         _controller.RefreshModelInfo();
@@ -278,11 +278,65 @@ public sealed class ModelsPage : PageBase
             Body.Children.Add(SetupBanner(_settings.PolishBackupProvider));
         }
 
+        Body.Children.Add(SpendLimitSection());
+
         ShowPrices();
         _sttHost.Show(_settings.SttProvider, _settings.SttModel);
         if (_settings.PolishEnabled) _chatHost.Show(_settings.PolishProvider, _settings.PolishModel);
         if (_settings.PolishEnabled && _settings.PolishBackupEnabled) _backupHost.Show(_settings.PolishBackupProvider, _settings.PolishBackupModel);
         LoadModelsIfNeeded();
+    }
+
+    /// <summary>
+    /// The monthly spending limit: off by default; when on, a reminder in the capsule as this month's spend nears it and
+    /// when it reaches it (see <see cref="SpendLimit"/>). It never stops a dictation.
+    /// </summary>
+    private CardSection SpendLimitSection()
+    {
+        var section = new CardSection { Title = L("花费", "Spending") };
+        var enabled = new ToggleSwitch { IsOn = _settings.SpendLimitEnabled, OnContent = "", OffContent = "", MinWidth = 0 };
+        enabled.Toggled += (_, _) => _settings.SpendLimitEnabled = enabled.IsOn;
+        var percent = (int)Math.Round(SpendLimit.WarningFraction * 100);
+        section.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Money, Title = L("每月花费上限", "Monthly spending limit"),
+            Subtitle = L("快到和到达上限时提醒你，听写不受影响", "A reminder near and at the limit; dictation keeps working"),
+            Help = L($"本月花费到上限的 {percent}% 时提醒一次，到上限时再提醒一次，在听写后的录音浮窗里。只是提醒，不会停止或取消听写。只计入知道价格的请求：OpenRouter 的请求，以及在本页填了价格的其他服务商的模型。按本地时间的自然月计算，每月 1 日重新开始；调高上限后，提醒也会重新开始。",
+                     $"You're reminded in the capsule after a dictation once this month's spend reaches {percent}% of the limit, and again when it reaches the limit. It's only a reminder: no dictation is stopped or cancelled. Only requests with a known price count: OpenRouter's, and other providers' models you've entered a price for on this page. Months follow your local time and start over on the 1st, and so do the reminders when you raise the limit."),
+            Trailing = enabled,
+        });
+        if (!_settings.SpendLimitEnabled) return section;
+
+        section.Body.Add(new CardDivider());
+        var amount = new NumberBox
+        {
+            Width = 92,
+            Minimum = 0,
+            Value = _settings.MonthlySpendLimit,
+            PlaceholderText = "$",
+            NumberFormatter = new Windows.Globalization.NumberFormatting.DecimalFormatter { FractionDigits = 0, IsDecimalPointAlwaysDisplayed = false },
+        };
+        amount.ValueChanged += (_, e) =>
+        {
+            if (!double.IsNaN(e.NewValue)) _settings.MonthlySpendLimit = Math.Max(0, e.NewValue);
+        };
+        var spent = UsageFormat.Money(UsageStore.Shared.Ledger.Month(UsageStore.Today).Cost);
+        section.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.DataUsage, Title = L("上限", "Limit"),
+            Subtitle = L($"本月已花费 {spent}", $"{spent} spent this month"),
+            Trailing = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children =
+                {
+                    amount,
+                    new TextBlock { Text = L("美元/月", "$/month"), VerticalAlignment = VerticalAlignment.Center, Foreground = Ui.Secondary },
+                },
+            },
+        });
+        return section;
     }
 
     private NoticeBar SetupBanner(ProviderId id)
@@ -295,8 +349,13 @@ public sealed class ModelsPage : PageBase
     private DropDownButton ProviderPicker(ProviderId selection, IEnumerable<ProviderId> options, Action<ProviderId> onSelect)
     {
         var flyout = new MenuFlyout();
-        foreach (var id in options)
+        // The providers set up on the Providers page first; the others, which need a key, after them.
+        var list = options.ToList();
+        var setUp = list.Where(id => id == selection || _settings.IsSetUp(id)).ToList();
+        var others = list.Where(id => !setUp.Contains(id)).ToList();
+        foreach (var id in setUp.Concat(others))
         {
+            if (id == others.FirstOrDefault() && others.Count > 0 && setUp.Count > 0) flyout.Items.Add(new MenuFlyoutSeparator());
             var item = new ToggleMenuFlyoutItem
             {
                 Text = id == selection || _settings.IsConfigured(id) ? id.DisplayName() : id.DisplayName() + L("（未配置）", " (not set)"),

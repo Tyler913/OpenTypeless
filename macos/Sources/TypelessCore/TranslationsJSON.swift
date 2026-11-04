@@ -4955,6 +4955,51 @@ extension Translations {
     "fr": "Affiche vos mots au-dessus de la capsule pendant que vous parlez",
     "de": "Zeigt beim Sprechen deine Worte über der Kapsel"
   },
+  "Capsule position": {
+    "ja": "カプセルの位置",
+    "ko": "캡슐 위치",
+    "es": "Posición de la cápsula",
+    "pt": "Posição da cápsula",
+    "ru": "Положение капсулы",
+    "fr": "Position de la capsule",
+    "de": "Position der Kapsel"
+  },
+  "The capsule shows on the screen of the window you're working in. Near the text cursor puts it just below the line you're typing in (above it when there's no room below), never over it; in apps that don't say where the cursor is, it shows at the bottom of the screen.": {
+    "ja": "カプセルは作業中のウインドウがある画面に表示されます。「テキストカーソルの近く」を選ぶと、入力中の行のすぐ下（下に余裕がなければ上）に表示され、その行を隠すことはありません。カーソル位置がわからないアプリでは画面下部に表示されます。",
+    "ko": "캡슐은 작업 중인 창이 있는 화면에 표시됩니다. ‘텍스트 커서 근처’를 고르면 입력 중인 줄 바로 아래(아래에 공간이 없으면 위)에 표시되며, 그 줄을 가리지 않습니다. 커서 위치를 알려 주지 않는 앱에서는 화면 아래쪽에 표시됩니다.",
+    "es": "La cápsula aparece en la pantalla de la ventana en la que trabajas. Cerca del cursor de texto la coloca justo debajo de la línea en la que escribes (encima si no hay sitio debajo), nunca sobre ella; en las apps que no indican dónde está el cursor, aparece en la parte inferior de la pantalla.",
+    "pt": "A cápsula aparece na tela da janela em que você está trabalhando. Perto do cursor de texto a coloca logo abaixo da linha em que você digita (acima dela quando não há espaço embaixo), nunca sobre ela; nos apps que não informam onde está o cursor, ela aparece na parte de baixo da tela.",
+    "ru": "Капсула появляется на экране окна, в котором вы работаете. «Рядом с текстовым курсором» ставит её сразу под строкой, в которой вы печатаете (над ней, если внизу нет места), и никогда поверх неё; в приложениях, которые не сообщают, где курсор, она появляется внизу экрана.",
+    "fr": "La capsule s’affiche sur l’écran de la fenêtre dans laquelle vous travaillez. Près du curseur de texte la place juste sous la ligne où vous écrivez (au-dessus s’il n’y a pas de place en dessous), jamais par-dessus ; dans les apps qui n’indiquent pas où est le curseur, elle s’affiche en bas de l’écran.",
+    "de": "Die Kapsel erscheint auf dem Bildschirm des Fensters, in dem du arbeitest. „Am Textcursor“ setzt sie direkt unter die Zeile, in die du schreibst (darüber, wenn unten kein Platz ist), nie darauf; in Apps, die nicht verraten, wo der Cursor ist, erscheint sie unten auf dem Bildschirm."
+  },
+  "Bottom of the screen": {
+    "ja": "画面の下部",
+    "ko": "화면 아래쪽",
+    "es": "Parte inferior de la pantalla",
+    "pt": "Parte de baixo da tela",
+    "ru": "Внизу экрана",
+    "fr": "En bas de l’écran",
+    "de": "Unten auf dem Bildschirm"
+  },
+  "Top of the screen": {
+    "ja": "画面の上部",
+    "ko": "화면 위쪽",
+    "es": "Parte superior de la pantalla",
+    "pt": "Parte de cima da tela",
+    "ru": "Вверху экрана",
+    "fr": "En haut de l’écran",
+    "de": "Oben auf dem Bildschirm"
+  },
+  "Near the text cursor": {
+    "ja": "テキストカーソルの近く",
+    "ko": "텍스트 커서 근처",
+    "es": "Cerca del cursor de texto",
+    "pt": "Perto do cursor de texto",
+    "ru": "Рядом с текстовым курсором",
+    "fr": "Près du curseur de texte",
+    "de": "Am Textcursor"
+  },
   "Spelling": {
     "ja": "表記",
     "ko": "철자",
@@ -5008,6 +5053,294 @@ extension Translations {
     "ru": "Серия: {0} дн. · Рекорд: {1}",
     "fr": "{0} jours d’affilée · Record {1}",
     "de": "{0} Tage in Folge · Rekord {1}"
+  },
+  "Spending": {
+    "ja": "費用",
+    "ko": "비용",
+    "es": "Gasto",
+    "pt": "Gastos",
+    "ru": "Расходы",
+    "fr": "Dépenses",
+    "de": "Kosten"
+  },
+  "Monthly spending limit": {
+    "ja": "月の費用上限",
+    "ko": "월 비용 한도",
+    "es": "Límite de gasto mensual",
+    "pt": "Limite de gastos mensal",
+    "ru": "Месячный лимит расходов",
+    "fr": "Plafond de dépenses mensuel",
+    "de": "Monatliches Kostenlimit"
+  },
+  "A reminder near and at the limit; dictation keeps working": {
+    "ja": "上限が近づいたときと達したときにお知らせ。音声入力は止まりません",
+    "ko": "한도에 가까워질 때와 도달할 때 알려 줍니다. 받아쓰기는 계속됩니다",
+    "es": "Un aviso cerca del límite y al alcanzarlo; el dictado sigue funcionando",
+    "pt": "Um aviso perto do limite e ao atingi-lo; o ditado continua funcionando",
+    "ru": "Напоминание у лимита и при его достижении; диктовка продолжает работать",
+    "fr": "Un rappel près du plafond et quand il est atteint ; la dictée continue de fonctionner",
+    "de": "Ein Hinweis kurz vor und beim Limit; das Diktieren läuft weiter"
+  },
+  "You're reminded in the capsule after a dictation once this month's spend reaches {0}% of the limit, and again when it reaches the limit. It's only a reminder: no dictation is stopped or cancelled. Only requests with a known price count: OpenRouter's, and other providers' models you've entered a price for on this page. Months follow your local time and start over on the 1st, and so do the reminders when you raise the limit.": {
+    "ja": "今月の費用が上限の {0}% に達したときと、上限に達したときに、音声入力のあとカプセルで1回ずつお知らせします。お知らせだけで、音声入力を止めたりキャンセルしたりすることはありません。計算に入るのは価格がわかるリクエストだけです：OpenRouter のリクエストと、このページで価格を入力したその他のプロバイダのモデル。月はローカル時間の暦月で、毎月1日にリセットされます。上限を引き上げたときもお知らせはリセットされます。",
+    "ko": "이번 달 비용이 한도의 {0}%에 도달하면 한 번, 한도에 도달하면 다시 한 번, 받아쓰기 후 캡슐에서 알려 줍니다. 알림일 뿐이며 받아쓰기를 멈추거나 취소하지 않습니다. 가격을 알 수 있는 요청만 계산합니다: OpenRouter 요청, 그리고 이 페이지에서 가격을 입력한 다른 제공업체의 모델. 월은 현지 시간 기준이며 매월 1일에 다시 시작하고, 한도를 올리면 알림도 다시 시작합니다.",
+    "es": "Recibes un aviso en la cápsula después de un dictado cuando el gasto de este mes llega al {0}% del límite, y otro cuando llega al límite. Es solo un aviso: ningún dictado se detiene ni se cancela. Solo cuentan las solicitudes con precio conocido: las de OpenRouter y las de modelos de otros proveedores cuyo precio hayas indicado en esta página. Los meses siguen tu hora local y empiezan de nuevo el día 1, y lo mismo los avisos cuando subes el límite.",
+    "pt": "Você recebe um aviso na cápsula depois de um ditado quando os gastos deste mês chegam a {0}% do limite, e outro quando chegam ao limite. É só um aviso: nenhum ditado é interrompido ou cancelado. Só contam as solicitações com preço conhecido: as do OpenRouter e as de modelos de outros provedores para os quais você informou um preço nesta página. Os meses seguem o seu horário local e recomeçam no dia 1, assim como os avisos quando você aumenta o limite.",
+    "ru": "После диктовки капсула напомнит один раз, когда расходы за этот месяц дойдут до {0}% лимита, и ещё раз, когда достигнут лимита. Это только напоминание: диктовка не останавливается и не отменяется. Учитываются только запросы с известной ценой: запросы к OpenRouter и к моделям других провайдеров, для которых вы указали цену на этой странице. Месяцы считаются по местному времени и начинаются заново 1-го числа; напоминания начинаются заново и тогда, когда вы повышаете лимит.",
+    "fr": "Un rappel s’affiche dans la capsule après une dictée lorsque les dépenses du mois atteignent {0} % du plafond, puis à nouveau lorsqu’elles l’atteignent. Ce n’est qu’un rappel : aucune dictée n’est arrêtée ni annulée. Seules les requêtes au prix connu comptent : celles d’OpenRouter et celles des modèles d’autres fournisseurs dont vous avez indiqué le prix sur cette page. Les mois suivent votre heure locale et recommencent le 1er, de même que les rappels quand vous relevez le plafond.",
+    "de": "Nach einem Diktat erinnert dich die Kapsel einmal, wenn die Kosten dieses Monats {0} % des Limits erreichen, und noch einmal, wenn sie das Limit erreichen. Es ist nur ein Hinweis: Kein Diktat wird gestoppt oder abgebrochen. Es zählen nur Anfragen mit bekanntem Preis: die von OpenRouter und die von Modellen anderer Anbieter, für die du auf dieser Seite einen Preis eingetragen hast. Monate richten sich nach deiner Ortszeit und beginnen am 1. neu, ebenso die Hinweise, wenn du das Limit erhöhst."
+  },
+  "Limit": {
+    "ja": "上限",
+    "ko": "한도",
+    "es": "Límite",
+    "pt": "Limite",
+    "ru": "Лимит",
+    "fr": "Plafond",
+    "de": "Limit"
+  },
+  "$/month": {
+    "ja": "ドル/月",
+    "ko": "달러/월",
+    "es": "$/mes",
+    "pt": "US$/mês",
+    "ru": "$/мес.",
+    "fr": "$/mois",
+    "de": "$/Monat"
+  },
+  "{0} spent this month": {
+    "ja": "今月の費用 {0}",
+    "ko": "이번 달 {0} 사용",
+    "es": "{0} gastados este mes",
+    "pt": "{0} gastos este mês",
+    "ru": "Потрачено в этом месяце: {0}",
+    "fr": "{0} dépensés ce mois-ci",
+    "de": "{0} diesen Monat ausgegeben"
+  },
+  "{0}% of your {1} limit": {
+    "ja": "上限 {1} の {0}%",
+    "ko": "한도 {1}의 {0}%",
+    "es": "{0}% de tu límite de {1}",
+    "pt": "{0}% do seu limite de {1}",
+    "ru": "{0}% от лимита {1}",
+    "fr": "{0} % de votre plafond de {1}",
+    "de": "{0} % deines Limits von {1}"
+  },
+  "Spent this month": {
+    "ja": "今月の費用",
+    "ko": "이번 달 비용",
+    "es": "Gastado este mes",
+    "pt": "Gasto este mês",
+    "ru": "Расходы за месяц",
+    "fr": "Dépensé ce mois-ci",
+    "de": "Diesen Monat ausgegeben"
+  },
+  "This month's spend is {0}, {1}% of your {2} limit": {
+    "ja": "今月の費用は {0} で、上限 {2} の {1}% に達しました",
+    "ko": "이번 달 비용이 {0}로 한도 {2}의 {1}%에 도달했습니다",
+    "es": "El gasto de este mes es de {0}, el {1}% de tu límite de {2}",
+    "pt": "Os gastos deste mês somam {0}, {1}% do seu limite de {2}",
+    "ru": "Расходы за этот месяц: {0}, это {1}% от лимита {2}",
+    "fr": "Les dépenses du mois s’élèvent à {0}, soit {1} % de votre plafond de {2}",
+    "de": "Die Kosten diesen Monat liegen bei {0}, {1} % deines Limits von {2}"
+  },
+  "You've reached this month's spending limit: {0} of {1}. Dictation keeps working": {
+    "ja": "今月の費用上限に達しました：{0} / {1}。音声入力はそのまま使えます",
+    "ko": "이번 달 비용 한도에 도달했습니다: {0} / {1}. 받아쓰기는 계속 사용할 수 있습니다",
+    "es": "Has alcanzado el límite de gasto de este mes: {0} de {1}. El dictado sigue funcionando",
+    "pt": "Você atingiu o limite de gastos deste mês: {0} de {1}. O ditado continua funcionando",
+    "ru": "Достигнут лимит расходов на этот месяц: {0} из {1}. Диктовка продолжает работать",
+    "fr": "Vous avez atteint le plafond de dépenses du mois : {0} sur {1}. La dictée continue de fonctionner",
+    "de": "Du hast das Kostenlimit dieses Monats erreicht: {0} von {1}. Das Diktieren läuft weiter"
+  },
+  "Add provider": {
+    "ja": "プロバイダを追加",
+    "ko": "제공업체 추가",
+    "es": "Añadir proveedor",
+    "pt": "Adicionar provedor",
+    "ru": "Добавить провайдера",
+    "fr": "Ajouter un fournisseur",
+    "de": "Anbieter hinzufügen"
+  },
+  "Alibaba Cloud Model Studio (Qwen)": {
+    "ja": "Alibaba Cloud Model Studio（Qwen）",
+    "ko": "Alibaba Cloud Model Studio (Qwen)",
+    "es": "Alibaba Cloud Model Studio (Qwen)",
+    "pt": "Alibaba Cloud Model Studio (Qwen)",
+    "ru": "Alibaba Cloud Model Studio (Qwen)",
+    "fr": "Alibaba Cloud Model Studio (Qwen)",
+    "de": "Alibaba Cloud Model Studio (Qwen)"
+  },
+  "Clean-up only": {
+    "ja": "整形のみ",
+    "ko": "정리 전용",
+    "es": "Solo limpieza",
+    "pt": "Somente limpeza",
+    "ru": "Только обработка текста",
+    "fr": "Nettoyage uniquement",
+    "de": "Nur Bereinigung"
+  },
+  "Connected": {
+    "ja": "接続済み",
+    "ko": "연결됨",
+    "es": "Conectado",
+    "pt": "Conectado",
+    "ru": "Подключено",
+    "fr": "Connecté",
+    "de": "Verbunden"
+  },
+  "In use: choose another provider under Models first": {
+    "ja": "使用中です。先に「モデル」で別のプロバイダに切り替えてください",
+    "ko": "사용 중입니다. 먼저 모델에서 다른 제공업체를 선택하세요",
+    "es": "En uso: elige antes otro proveedor en Modelos",
+    "pt": "Em uso: escolha outro provedor em Modelos primeiro",
+    "ru": "Используется: сначала выберите другого провайдера в разделе «Модели»",
+    "fr": "Utilisé : choisissez d’abord un autre fournisseur dans Modèles",
+    "de": "In Verwendung: Wähle zuerst unter Modelle einen anderen Anbieter"
+  },
+  "Moonshot Kimi": {
+    "ja": "Moonshot Kimi",
+    "ko": "Moonshot Kimi",
+    "es": "Moonshot Kimi",
+    "pt": "Moonshot Kimi",
+    "ru": "Moonshot Kimi",
+    "fr": "Moonshot Kimi",
+    "de": "Moonshot Kimi"
+  },
+  "On this computer or your own server": {
+    "ja": "このコンピュータまたは自前のサーバ",
+    "ko": "이 컴퓨터 또는 자체 서버",
+    "es": "En este ordenador o tu propio servidor",
+    "pt": "Neste computador ou no seu próprio servidor",
+    "ru": "На этом компьютере или своём сервере",
+    "fr": "Sur cet ordinateur ou votre propre serveur",
+    "de": "Auf diesem Computer oder eigenem Server"
+  },
+  "Only the providers you've set up are listed; add others with Add provider.": {
+    "ja": "設定済みのプロバイダだけが表示されます。ほかのプロバイダは「プロバイダを追加」から追加できます。",
+    "ko": "설정한 제공업체만 표시됩니다. 다른 제공업체는 제공업체 추가로 추가하세요.",
+    "es": "Solo se muestran los proveedores que has configurado; añade otros con Añadir proveedor.",
+    "pt": "Só aparecem os provedores que você configurou; adicione outros com Adicionar provedor.",
+    "ru": "Показаны только настроенные провайдеры; другие добавьте кнопкой «Добавить провайдера».",
+    "fr": "Seuls les fournisseurs configurés sont affichés ; ajoutez-en d’autres avec Ajouter un fournisseur.",
+    "de": "Nur eingerichtete Anbieter werden angezeigt; weitere fügst du mit Anbieter hinzufügen hinzu."
+  },
+  "Paste your API key": {
+    "ja": "API キーを貼り付け",
+    "ko": "API 키 붙여넣기",
+    "es": "Pega tu clave de API",
+    "pt": "Cole sua chave de API",
+    "ru": "Вставьте API-ключ",
+    "fr": "Collez votre clé API",
+    "de": "API-Schlüssel einfügen"
+  },
+  "Removes this provider and its API key": {
+    "ja": "このプロバイダと API キーを削除します",
+    "ko": "이 제공업체와 API 키를 삭제합니다",
+    "es": "Quita este proveedor y su clave de API",
+    "pt": "Remove este provedor e sua chave de API",
+    "ru": "Удаляет этого провайдера и его API-ключ",
+    "fr": "Retire ce fournisseur et sa clé API",
+    "de": "Entfernt diesen Anbieter und seinen API-Schlüssel"
+  },
+  "Runs on this computer; no API key needed": {
+    "ja": "このコンピュータで動作するため、API キーは不要です",
+    "ko": "이 컴퓨터에서 실행되므로 API 키가 필요 없습니다",
+    "es": "Se ejecuta en este ordenador; no necesita clave de API",
+    "pt": "Roda neste computador; não precisa de chave de API",
+    "ru": "Работает на этом компьютере; API-ключ не нужен",
+    "fr": "Fonctionne sur cet ordinateur ; aucune clé API requise",
+    "de": "Läuft auf diesem Computer; kein API-Schlüssel nötig"
+  },
+  "Speech-to-text and clean-up": {
+    "ja": "音声認識と整形",
+    "ko": "음성 인식 및 정리",
+    "es": "Voz a texto y limpieza",
+    "pt": "Voz para texto e limpeza",
+    "ru": "Распознавание речи и обработка текста",
+    "fr": "Transcription et nettoyage",
+    "de": "Spracherkennung und Bereinigung"
+  },
+  "Speech-to-text only": {
+    "ja": "音声認識のみ",
+    "ko": "음성 인식 전용",
+    "es": "Solo voz a texto",
+    "pt": "Somente voz para texto",
+    "ru": "Только распознавание речи",
+    "fr": "Transcription uniquement",
+    "de": "Nur Spracherkennung"
+  },
+  "Volcengine Ark (Doubao)": {
+    "ja": "Volcengine Ark（Doubao）",
+    "ko": "Volcengine Ark (Doubao)",
+    "es": "Volcengine Ark (Doubao)",
+    "pt": "Volcengine Ark (Doubao)",
+    "ru": "Volcengine Ark (Doubao)",
+    "fr": "Volcengine Ark (Doubao)",
+    "de": "Volcengine Ark (Doubao)"
+  },
+  "Zhipu GLM": {
+    "ja": "Zhipu GLM",
+    "ko": "Zhipu GLM",
+    "es": "Zhipu GLM",
+    "pt": "Zhipu GLM",
+    "ru": "Zhipu GLM",
+    "fr": "Zhipu GLM",
+    "de": "Zhipu GLM"
+  },
+  "Layout": {
+    "ja": "レイアウト",
+    "ko": "레이아웃",
+    "es": "Formato",
+    "pt": "Formatação",
+    "ru": "Оформление",
+    "fr": "Mise en forme",
+    "de": "Layout"
+  },
+  "Natural": {
+    "ja": "自然",
+    "ko": "자연스럽게",
+    "es": "Natural",
+    "pt": "Natural",
+    "ru": "Обычное",
+    "fr": "Naturelle",
+    "de": "Natürlich"
+  },
+  "Chat": {
+    "ja": "チャット",
+    "ko": "채팅",
+    "es": "Chat",
+    "pt": "Chat",
+    "ru": "Чат",
+    "fr": "Discussion",
+    "de": "Chat"
+  },
+  "Light structure": {
+    "ja": "軽い構造化",
+    "ko": "가벼운 구조화",
+    "es": "Estructura ligera",
+    "pt": "Estrutura leve",
+    "ru": "Лёгкая структура",
+    "fr": "Structure légère",
+    "de": "Leichte Struktur"
+  },
+  "Email": {
+    "ja": "メール",
+    "ko": "이메일",
+    "es": "Correo",
+    "pt": "E-mail",
+    "ru": "Письмо",
+    "fr": "E-mail",
+    "de": "E-Mail"
+  },
+  "How the cleaned-up text is laid out. Chat: one block, no lists, no full stop at the end. Natural: short text stays one paragraph, a list only for three or more items you enumerate. Light structure (prompts for an AI, documents): more paragraphs, and a list for two or more parallel items. Email: a greeting and sign-off you dictate go on lines of their own. Only the layout changes, never your words. Common chat, AI and mail apps use their layout by default.": {
+    "ja": "整えた文章の段落分けと箇条書きの使い方です。チャット：ひとまとまりで、箇条書きにせず、文末に句点を付けません。自然：短い文は段落に分けず、3 つ以上をはっきり列挙したときだけ箇条書きにします。軽い構造化（AI へのプロンプトや文書）：段落を多めに分け、並列する 2 つ以上の項目を箇条書きにします。メール：口述した宛名と結びの言葉をそれぞれ独立した行にします。変わるのはレイアウトだけで、話した言葉は変わりません。よく使われるチャット、AI、メールのアプリには最初から対応するレイアウトが使われます。",
+    "ko": "정리된 글의 문단 나누기와 목록 사용 방식입니다. 채팅: 한 덩어리로, 목록 없이, 끝에 마침표를 붙이지 않습니다. 자연스럽게: 짧은 글은 문단을 나누지 않고, 세 가지 이상을 분명히 나열할 때만 목록으로 만듭니다. 가벼운 구조화(AI 프롬프트, 문서): 문단을 더 자주 나누고, 나란한 항목이 두 개 이상이면 목록으로 만듭니다. 이메일: 말한 인사말과 맺음말을 각각 따로 한 줄에 둡니다. 바뀌는 것은 배치뿐이며 말한 내용은 바뀌지 않습니다. 자주 쓰는 채팅, AI, 메일 앱은 기본으로 해당 레이아웃을 씁니다.",
+    "es": "Cómo se organiza el texto limpio. Chat: un solo bloque, sin listas y sin punto final. Natural: un texto corto queda en un párrafo, y solo hay lista cuando enumeras tres o más elementos. Estructura ligera (prompts para una IA, documentos): más párrafos, y una lista para dos o más elementos paralelos. Correo: el saludo y la despedida que dictes van en líneas propias. Solo cambia el formato, nunca tus palabras. Las apps de chat, IA y correo más comunes usan su formato por defecto.",
+    "pt": "Como o texto limpo é organizado. Chat: um bloco só, sem listas e sem ponto final. Natural: um texto curto fica em um parágrafo, e só vira lista quando você enumera três ou mais itens. Estrutura leve (prompts para uma IA, documentos): mais parágrafos, e uma lista para dois ou mais itens paralelos. E-mail: a saudação e a despedida que você ditar ficam em linhas próprias. Só muda a formatação, nunca as suas palavras. Os apps de chat, IA e e-mail mais comuns usam a formatação deles por padrão.",
+    "ru": "Как оформляется очищенный текст. Чат: один блок, без списков и без точки в конце. Обычное: короткий текст остаётся одним абзацем, список — только когда вы перечисляете три пункта или больше. Лёгкая структура (промпты для ИИ, документы): больше абзацев и список для двух и более однородных пунктов. Письмо: продиктованные приветствие и подпись стоят на отдельных строках. Меняется только оформление, а не ваши слова. Распространённые чаты, ИИ-приложения и почтовые программы по умолчанию используют своё оформление.",
+    "fr": "La mise en forme du texte nettoyé. Discussion : un seul bloc, sans liste ni point final. Naturelle : un texte court reste en un paragraphe, et une liste n'apparaît que si vous énumérez trois éléments ou plus. Structure légère (prompts pour une IA, documents) : davantage de paragraphes, et une liste dès deux éléments parallèles. E-mail : la formule d'appel et la formule de politesse que vous dictez vont chacune sur leur ligne. Seule la mise en forme change, jamais vos mots. Les applications courantes de discussion, d'IA et de messagerie utilisent leur mise en forme par défaut.",
+    "de": "Wie der bereinigte Text gegliedert wird. Chat: ein Block, keine Listen, kein Punkt am Ende. Natürlich: kurzer Text bleibt ein Absatz, eine Liste nur, wenn du drei oder mehr Punkte aufzählst. Leichte Struktur (Prompts für eine KI, Dokumente): mehr Absätze und eine Liste schon ab zwei gleichrangigen Punkten. E-Mail: eine diktierte Anrede und Grußformel stehen jeweils in einer eigenen Zeile. Nur das Layout ändert sich, nie deine Worte. Gängige Chat-, KI- und Mail-Apps verwenden standardmäßig ihr Layout."
   }
 }
 

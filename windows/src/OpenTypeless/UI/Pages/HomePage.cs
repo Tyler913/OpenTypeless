@@ -76,7 +76,7 @@ public sealed class HomePage : PageBase
         var spend = new StackPanel();
         spend.Children.Add(SpendLine(L("今天", "Today"), todayTotals));
         spend.Children.Add(new CardDivider());
-        spend.Children.Add(SpendLine(L("本月", "This month"), month));
+        spend.Children.Add(SpendLine(L("本月", "This month"), month, limit: _settings.ActiveSpendLimit));
         spend.Children.Add(new CardDivider());
         spend.Children.Add(SpendLine(L("累计", "All time"), all, showsSplit: true));
         // A new heatmap on every render: XAML refuses (E_INVALIDARG) to put an element into a second card, and one
@@ -158,7 +158,8 @@ public sealed class HomePage : PageBase
     };
 
     /// One line of the Spend card: label and amount, with the split between the two steps on a tooltip, or under it.
-    private static StackPanel SpendLine(string title, UsageTotals totals, bool showsSplit = false)
+    /// With the monthly spending limit (this month's line), how much of it is spent, as a bar.
+    private static StackPanel SpendLine(string title, UsageTotals totals, bool showsSplit = false, double? limit = null)
     {
         var amount = Ui.Text(UsageFormat.Money(totals.Cost), 15, FontWeights.SemiBold);
         amount.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -171,12 +172,41 @@ public sealed class HomePage : PageBase
         figures.Children.Add(label);
         figures.Children.Add(amount);
         var line = new StackPanel { Spacing = 2, Padding = new Thickness(14, 9, 14, 9), Children = { figures } };
+        if (limit is { } cap) line.Children.Add(LimitBar(totals.Cost, cap, new Thickness(0, 4, 0, 0)));
         if (totals.Cost <= 0) return line;
         var split = L($"转写 {UsageFormat.Money(totals.TranscriptionCost)} · 整理 {UsageFormat.Money(totals.CleanupCost)}",
                       $"Speech {UsageFormat.Money(totals.TranscriptionCost)} · Clean-up {UsageFormat.Money(totals.CleanupCost)}");
         if (showsSplit) line.Children.Add(Ui.Text(split, 10.5, foreground: Ui.Tertiary, wrap: true));
         else ToolTipService.SetToolTip(line, split);
         return line;
+    }
+
+    /// <summary>
+    /// This month's spend against the monthly limit: a bar that turns orange at the reminder's share and red at the limit,
+    /// and how much of the limit that is. The tray panel shows the same.
+    /// </summary>
+    internal static StackPanel LimitBar(double spent, double limit, Thickness margin)
+    {
+        var level = SpendLimit.LevelOf(spent, limit);
+        var percent = SpendLimit.Percent(spent, limit);
+        var cap = UsageFormat.Money(limit);
+        var bar = new ProgressBar
+        {
+            Minimum = 0,
+            Maximum = 1,
+            Value = SpendLimit.Progress(spent, limit),
+            Foreground = level switch
+            {
+                SpendLimit.Level.Reached => Palette.Brush(Tint.Red),
+                SpendLimit.Level.Warning => Palette.Brush(Tint.Orange),
+                _ => Palette.Brush(Tint.Accent),
+            },
+        };
+        var caption = Ui.Text(L($"上限 {cap} 的 {percent}%", $"{percent}% of your {cap} limit"), 10.5, foreground: Ui.Secondary);
+        caption.TextTrimming = TextTrimming.CharacterEllipsis;
+        var panel = new StackPanel { Spacing = 4, Margin = margin, Children = { bar, caption } };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(bar, caption.Text);
+        return panel;
     }
 
     private string SpendHelp()

@@ -47,7 +47,7 @@ import Testing
     @Test func roundTripsThroughJSON() throws {
         let profiles = [
             AppProfile(id: "A", app: "com.tinyspeck.slackmacgap", name: "Slack", instructions: "Short messages\nNo lists",
-                       polish: false, pressEnter: true, language: ""),
+                       polish: false, pressEnter: true, language: "", layout: .natural),
             AppProfile(id: "B", app: "com.apple.mail", name: "Mail"),
         ]
         let data = try JSONEncoder().encode(profiles)
@@ -56,7 +56,9 @@ import Testing
         let objects = try JSONSerialization.jsonObject(with: data) as! [[String: Any]]
         #expect(objects[0]["language"] as? String == "")
         #expect(objects[0]["polish"] as? Bool == false)
+        #expect(objects[0]["layout"] as? String == "natural")
         #expect(objects[1]["polish"] == nil && objects[1]["pressEnter"] == nil && objects[1]["language"] == nil)
+        #expect(objects[1]["layout"] == nil)
     }
 
     @Test func decodesWhatOtherVersionsWrote() throws {

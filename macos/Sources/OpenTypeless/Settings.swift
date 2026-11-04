@@ -54,10 +54,18 @@ final class AppSettings: ObservableObject {
     @AppStorage("keepMicrophoneWarm") var keepMicrophoneWarm: Bool = false
     /// Show what's being said above the capsule while recording, recognised on this Mac (see LivePreview).
     @AppStorage("livePreview") var livePreview: Bool = false
+    /// Where the recording capsule shows (see `HUDPlacement`): the bottom of the screen, as it always was, unless the user
+    /// picks another; a choice this version can't read is the bottom too.
+    @AppStorage("hudPosition") var hudPosition: HUDPosition = .bottom
     /// Open the Home page when the app starts at login (a manual launch always shows it).
     @AppStorage("showHomeAtLogin") var showHomeAtLogin: Bool = false
     /// The typing speed "time saved" on the Home page is measured against.
     @AppStorage("typingWordsPerMinute") var typingWordsPerMinute: Int = UsageTotals.defaultTypingWordsPerMinute
+    /// Remind when this month's spend nears and reaches `monthlySpendLimit` (see `SpendLimit`). Off by default; it never
+    /// stops a dictation.
+    @AppStorage("spendLimitEnabled") var spendLimitEnabled: Bool = false
+    /// The monthly spending limit, in USD.
+    @AppStorage("spendLimit") var monthlySpendLimit: Double = 10
     /// Clean up the transcript of a file transcribed from History (the switch in its import sheet), when clean-up is on.
     @AppStorage("fileCleanUp") var fileCleanUp: Bool = true
 
@@ -92,6 +100,9 @@ final class AppSettings: ObservableObject {
     /// The saved keys only: OPENROUTER_API_KEY overrides one in `apiKey(for:)` but never lands in here.
     @Published private(set) var apiKeys: [String: String]
     @Published private(set) var baseURLs: [String: String]
+    /// Providers added on the Providers page that have no key or address of their own yet (a local server, say), by raw
+    /// value, so the page keeps showing them.
+    @Published private(set) var addedProviders: [String]
     /// Prices the user entered for models of providers other than OpenRouter (whose prices are live), by `ModelPrice.key`.
     @Published private(set) var modelPrices: [String: ModelPrice]
     /// The OpenRouter host the user picked for a clean-up model (endpoint tag, by model ID); none means automatic.
@@ -110,6 +121,7 @@ final class AppSettings: ObservableObject {
         // with it still needs the others (and must not save over them when one is edited).
         apiKeys = Credentials.load()
         baseURLs = (UserDefaults.standard.dictionary(forKey: "baseURLs") as? [String: String]) ?? [:]
+        addedProviders = UserDefaults.standard.stringArray(forKey: "addedProviders") ?? []
         learnedTerms = UserDefaults.standard.data(forKey: "learnedVocabulary")
             .flatMap { try? JSONDecoder().decode([LearnedTerm].self, from: $0) } ?? []
         forgottenTerms = Set(UserDefaults.standard.stringArray(forKey: "forgottenVocabulary") ?? [])
@@ -236,6 +248,33 @@ final class AppSettings: ObservableObject {
         endpoint(for: id) != nil && (!id.requiresKey || !apiKey(for: id).isEmpty)
     }
 
+    /// Whether a step uses this provider: speech to text, clean-up, or either's backup (while switched on).
+    func isInUse(_ id: ProviderID) -> Bool {
+        sttProvider == id || (polishEnabled && polishProvider == id) || (sttBackupEnabled && sttBackupProvider == id)
+            || (polishEnabled && polishBackupEnabled && polishBackupProvider == id)
+    }
+
+    /// Whether the Providers page lists this provider: one in use, with a key or an address of its own, or added there.
+    func isSetUp(_ id: ProviderID) -> Bool {
+        isInUse(id) || !apiKey(for: id).isEmpty || baseURLs[id.rawValue] != nil || addedProviders.contains(id.rawValue)
+    }
+
+    /// Lists a provider on the Providers page, to fill in its key or address.
+    func addProvider(_ id: ProviderID) {
+        guard !addedProviders.contains(id.rawValue) else { return }
+        addedProviders.append(id.rawValue)
+        UserDefaults.standard.set(addedProviders, forKey: "addedProviders")
+    }
+
+    /// Takes a provider off the Providers page, forgetting its key and address. Not one a step uses.
+    func removeProvider(_ id: ProviderID) {
+        guard !isInUse(id) else { return }
+        setAPIKey("", for: id)
+        setBaseURL("", for: id)
+        addedProviders.removeAll { $0 == id.rawValue }
+        UserDefaults.standard.set(addedProviders, forKey: "addedProviders")
+    }
+
     var sttEndpoint: ProviderEndpoint? { endpoint(for: sttProvider) }
     var polishEndpoint: ProviderEndpoint? { endpoint(for: polishProvider) }
 
@@ -304,7 +343,7 @@ final class AppSettings: ObservableObject {
 
     /// What a dictation started in the app with this bundle ID runs with.
     func dictationSettings(forApp bundleID: String?) -> DictationSettings {
-        globalDictationSettings.applying(AppProfile.matching(bundleID, in: appProfiles))
+        globalDictationSettings.applying(AppProfile.matching(bundleID, in: appProfiles), app: bundleID)
     }
 
     /// What a retry of a dictation made with the profile `id` runs with: that profile's settings while it still exists,
@@ -359,6 +398,20 @@ final class AppSettings: ObservableObject {
         let key = ModelPrice.key(provider, model)
         if let price, !price.isEmpty { modelPrices[key] = price } else { modelPrices[key] = nil }
         UserDefaults.standard.set(try? JSONEncoder().encode(modelPrices), forKey: "modelPrices")
+    }
+
+    // MARK: Spending limit
+
+    /// The monthly spending limit in USD while it's on and a positive amount; nil otherwise.
+    var activeSpendLimit: Double? {
+        spendLimitEnabled && monthlySpendLimit.isFinite && monthlySpendLimit > 0 ? monthlySpendLimit : nil
+    }
+
+    /// Which of this month's spending reminders were shown, so each comes once (see `SpendLimit.State`). Not published:
+    /// nothing on screen shows it.
+    var spendReminderState: SpendLimit.State {
+        get { SpendLimit.State(stored: UserDefaults.standard.string(forKey: "spendReminder") ?? "") }
+        set { UserDefaults.standard.set(newValue.stored, forKey: "spendReminder") }
     }
 
     // MARK: Learned vocabulary

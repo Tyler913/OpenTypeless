@@ -47,7 +47,7 @@ public class AppProfileTests
     {
         List<AppProfile> profiles =
         [
-            new() { Id = "A", App = "slack.exe", Name = "Slack", Instructions = "Short messages\nNo lists", Polish = false, PressEnter = true, Language = "" },
+            new() { Id = "A", App = "slack.exe", Name = "Slack", Instructions = "Short messages\nNo lists", Polish = false, PressEnter = true, Language = "", Layout = TextLayout.Natural },
             new() { Id = "B", App = "outlook.exe", Name = "Outlook" },
         ];
         // Through text, as the settings file stores it.
@@ -57,6 +57,8 @@ public class AppProfileTests
         // Unset overrides aren't written, so "follow the global setting" survives as such (and "" stays auto-detect).
         Assert.Equal("", (string?)json[0]!["language"]);
         Assert.False((bool?)json[0]!["polish"]);
+        Assert.Equal("natural", (string?)json[0]!["layout"]);
+        Assert.Null(json[1]!["layout"]);
         Assert.Null(json[1]!["polish"]);
         Assert.Null(json[1]!["pressEnter"]);
         Assert.Null(json[1]!["language"]);

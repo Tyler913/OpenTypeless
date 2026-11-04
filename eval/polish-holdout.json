@@ -321,5 +321,768 @@
     "mustNotContain": [
       "请"
     ]
+  },
+  {
+    "id": "h-en-tone-though",
+    "input": "yeah so the build is green now, um, the flaky test is still there though",
+    "mustContain": [
+      "though"
+    ],
+    "mustNotContain": [
+      "um"
+    ],
+    "length": [
+      0.75,
+      1.2
+    ]
+  },
+  {
+    "id": "h-en-emphasis",
+    "input": "this is really really important, um, we cannot ship without the migration",
+    "mustContain": [
+      "really really",
+      "migration"
+    ],
+    "mustNotContain": [
+      "um"
+    ],
+    "length": [
+      0.8,
+      1.2
+    ]
+  },
+  {
+    "id": "h-en-list",
+    "input": "for the release I need three things, first the changelog, second uh the version bump, and third the signed installers",
+    "mustContain": [
+      "changelog",
+      "version bump",
+      "signed installers"
+    ],
+    "mustNotContain": [
+      "uh"
+    ],
+    "paragraphs": [
+      1,
+      2
+    ],
+    "listItems": [
+      3,
+      3
+    ]
+  },
+  {
+    "id": "h-en-chat",
+    "input": "hey um are you free at three, actually make it four, for a quick call",
+    "layout": "chat",
+    "mustContain": [
+      "four"
+    ],
+    "mustNotContain": [
+      "three",
+      "um"
+    ],
+    "paragraphs": [
+      1,
+      1
+    ],
+    "listItems": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "h-en-no-stock-phrases",
+    "input": "so basically the cache is too small and we should make it bigger, that's it",
+    "mustContain": [
+      "cache"
+    ],
+    "mustNotContain": [
+      "that's it"
+    ],
+    "length": [
+      0.75,
+      1.15
+    ]
+  },
+  {
+    "id": "h-en-paragraphs",
+    "input": "so the onboarding is done, the new screens are in and the copy is final. we tested it on iOS and Android last week and it looked fine. there's one bug left on small screens where the button gets cut off. I'll fix that tomorrow. separately, um, the billing migration is blocked. we're waiting on finance to sign off on the new prices. once they do, it's about two days of work. so I think we can still make the end of the month",
+    "mustContain": [
+      "iOS",
+      "Android",
+      "billing migration",
+      "two days"
+    ],
+    "mustNotContain": [
+      "um"
+    ],
+    "paragraphs": [
+      2,
+      4
+    ],
+    "listItems": [
+      0,
+      0
+    ],
+    "length": [
+      0.85,
+      1.15
+    ]
+  },
+  {
+    "id": "h-zh-tone",
+    "input": "这个方案我觉得还行吧，呃，就是成本有点高啊",
+    "mustContain": [
+      "吧",
+      "高啊"
+    ],
+    "mustNotContain": [
+      "呃"
+    ],
+    "length": [
+      0.8,
+      1.2
+    ]
+  },
+  {
+    "id": "h-zh-emphasis",
+    "input": "这个真的真的很重要，嗯，周五之前一定要上线",
+    "mustContain": [
+      "真的真的",
+      "周五"
+    ],
+    "mustNotContain": [
+      "嗯"
+    ]
+  },
+  {
+    "id": "h-zh-no-stock-phrases",
+    "input": "缓存那块要改一下，然后日志也太多了，就这样",
+    "mustContain": [
+      "缓存",
+      "日志"
+    ],
+    "mustNotContain": [
+      "就这样"
+    ],
+    "length": [
+      0.75,
+      1.15
+    ]
+  },
+  {
+    "id": "h-zh-run-on",
+    "input": "然后那个服务我昨天重启了一下然后就好了但是今天早上又挂了然后日志里也没看到什么报错",
+    "mustContain": [
+      "重启",
+      "挂了",
+      "报错"
+    ],
+    "paragraphs": [
+      1,
+      1
+    ],
+    "length": [
+      0.75,
+      1.15
+    ]
+  },
+  {
+    "id": "h-zh-tasks-natural",
+    "input": "你帮我看一下登录页的代码，顺便把支付的测试补上，再更新一下 README",
+    "mustContain": [
+      "登录页",
+      "支付",
+      "README"
+    ],
+    "paragraphs": [
+      1,
+      1
+    ],
+    "listItems": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "h-zh-tasks-structured",
+    "input": "你帮我看一下登录页的代码，顺便把支付的测试补上，再更新一下 README",
+    "layout": "structured",
+    "mustContain": [
+      "登录页",
+      "支付",
+      "README"
+    ],
+    "listItems": [
+      3,
+      3
+    ]
+  },
+  {
+    "id": "h-zh-enumeration-natural",
+    "input": "我们周五要做三件事，第一发版，第二写周报，第三约客户",
+    "mustContain": [
+      "发版",
+      "周报",
+      "客户"
+    ],
+    "listItems": [
+      3,
+      3
+    ]
+  },
+  {
+    "id": "h-zh-enumeration-chat",
+    "input": "我们周五要做三件事，第一发版，第二写周报，第三约客户",
+    "layout": "chat",
+    "mustContain": [
+      "发版",
+      "周报",
+      "客户"
+    ],
+    "paragraphs": [
+      1,
+      1
+    ],
+    "listItems": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "h-zh-email",
+    "input": "王总好，呃，附件是这周的周报，请您查收，有问题随时找我，谢谢，小李",
+    "layout": "email",
+    "mustContain": [
+      "王总好",
+      "周报",
+      "谢谢",
+      "小李"
+    ],
+    "mustNotContain": [
+      "呃"
+    ],
+    "paragraphs": [
+      3,
+      4
+    ],
+    "listItems": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "h-ja-correction",
+    "input": "えーと、来週の打ち合わせは火曜日、いや、水曜日の十時からでお願いします",
+    "mustContain": [
+      "水曜"
+    ],
+    "anyOf": [
+      [
+        "十時",
+        "10時",
+        "10 時"
+      ]
+    ],
+    "mustNotContain": [
+      "火曜",
+      "えーと",
+      "いや"
+    ]
+  },
+  {
+    "id": "h-ja-tone",
+    "input": "あのー、このバグなんですけど、たぶん、キャッシュのせいだと思うんですよね",
+    "mustContain": [
+      "キャッシュ",
+      "思う",
+      "よね"
+    ],
+    "mustNotContain": [
+      "あのー"
+    ],
+    "length": [
+      0.8,
+      1.2
+    ]
+  },
+  {
+    "id": "h-ja-list",
+    "input": "やることは三つあって、一つ目はログイン画面の修正、二つ目は、えー、決済の追加、三つ目はテストを書くことです",
+    "mustContain": [
+      "ログイン画面",
+      "決済",
+      "テスト"
+    ],
+    "mustNotContain": [
+      "えー"
+    ],
+    "listItems": [
+      3,
+      3
+    ]
+  },
+  {
+    "id": "h-ja-english-terms",
+    "input": "そのー、リアクトのユーズエフェクトが二回走るんですけど、これって正常ですか",
+    "mustContain": [
+      "React",
+      "useEffect"
+    ],
+    "anyOf": [
+      [
+        "二回",
+        "2回",
+        "2 回"
+      ]
+    ],
+    "mustNotContain": [
+      "そのー"
+    ]
+  },
+  {
+    "id": "h-ja-chat",
+    "input": "了解です、えっと、明日の朝までに送りますね",
+    "layout": "chat",
+    "mustContain": [
+      "送りますね"
+    ],
+    "mustNotContain": [
+      "えっと"
+    ],
+    "paragraphs": [
+      1,
+      1
+    ],
+    "listItems": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "h-ko-correction",
+    "input": "음, 마감은 금요일, 아니 아니, 다음 주 월요일로 해 주세요",
+    "mustContain": [
+      "월요일"
+    ],
+    "mustNotContain": [
+      "금요일",
+      "음,"
+    ]
+  },
+  {
+    "id": "h-ko-filler",
+    "input": "어, 그 API가 가끔 오백 에러를 내는데요, 아마 타임아웃 때문인 것 같아요",
+    "mustContain": [
+      "API",
+      "타임아웃",
+      "같아요"
+    ],
+    "anyOf": [
+      [
+        "500",
+        "오백"
+      ]
+    ],
+    "mustNotContain": [
+      "어,"
+    ]
+  },
+  {
+    "id": "h-ko-list",
+    "input": "할 일이 세 가지 있어요. 첫째 로그인 화면 고치기, 둘째, 음, 결제 기능 추가, 셋째 테스트 작성이에요",
+    "mustContain": [
+      "로그인",
+      "결제",
+      "테스트"
+    ],
+    "mustNotContain": [
+      "음,"
+    ],
+    "listItems": [
+      3,
+      3
+    ]
+  },
+  {
+    "id": "h-ko-emphasis",
+    "input": "이거 진짜 진짜 중요한 거라서, 어, 오늘 안에 꼭 확인해 주세요",
+    "mustContain": [
+      "진짜 진짜",
+      "오늘"
+    ],
+    "mustNotContain": [
+      "어,"
+    ]
+  },
+  {
+    "id": "h-ko-email",
+    "input": "김 팀장님 안녕하세요. 어, 요청하신 보고서 첨부드립니다. 검토 부탁드립니다. 감사합니다. 이민수 드림",
+    "layout": "email",
+    "mustContain": [
+      "김 팀장님",
+      "보고서",
+      "감사합니다",
+      "이민수"
+    ],
+    "mustNotContain": [
+      "어,"
+    ],
+    "paragraphs": [
+      3,
+      4
+    ],
+    "listItems": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "h-es-correction",
+    "input": "eh, el presupuesto es de cinco mil, no, espera, de seis mil euros",
+    "anyOf": [
+      [
+        "seis mil",
+        "6000",
+        "6.000",
+        "6 000"
+      ]
+    ],
+    "mustNotContain": [
+      "cinco",
+      "espera"
+    ]
+  },
+  {
+    "id": "h-es-tone",
+    "input": "o sea, el deploy falló otra vez, ¿sabes? creo que es la config",
+    "mustContain": [
+      "¿sabes?",
+      "deploy"
+    ],
+    "mustNotContain": [
+      "o sea"
+    ]
+  },
+  {
+    "id": "h-es-list",
+    "input": "necesito tres cosas, primero el changelog, segundo, eh, subir la versión, y tercero los instaladores firmados",
+    "mustContain": [
+      "changelog",
+      "versión",
+      "instaladores"
+    ],
+    "mustNotContain": [
+      "eh,"
+    ],
+    "listItems": [
+      3,
+      3
+    ]
+  },
+  {
+    "id": "h-es-tasks-natural",
+    "input": "quiero que revises el código del login, que mires los tests de pagos y que actualices el README",
+    "mustContain": [
+      "login",
+      "pagos",
+      "README"
+    ],
+    "paragraphs": [
+      1,
+      1
+    ],
+    "listItems": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "h-es-tasks-structured",
+    "input": "quiero que revises el código del login, que mires los tests de pagos y que actualices el README",
+    "layout": "structured",
+    "mustContain": [
+      "login",
+      "pagos",
+      "README"
+    ],
+    "listItems": [
+      3,
+      3
+    ]
+  },
+  {
+    "id": "h-pt-correction",
+    "input": "a reunião é na terça, não, pera, na quarta às dez",
+    "mustContain": [
+      "quarta"
+    ],
+    "mustNotContain": [
+      "terça",
+      "pera"
+    ]
+  },
+  {
+    "id": "h-pt-tone",
+    "input": "então, tipo, eu acho que o problema é a API, né, ela demora demais",
+    "mustContain": [
+      "né",
+      "API"
+    ],
+    "mustNotContain": [
+      "tipo"
+    ]
+  },
+  {
+    "id": "h-pt-emphasis",
+    "input": "isso é muito muito importante, é, a gente não pode esquecer do backup",
+    "mustContain": [
+      "muito muito",
+      "backup"
+    ],
+    "mustNotContain": [
+      "é, a gente"
+    ]
+  },
+  {
+    "id": "h-pt-list",
+    "input": "preciso de três coisas, primeiro o changelog, segundo o número da versão, e terceiro os instaladores assinados",
+    "mustContain": [
+      "changelog",
+      "versão",
+      "instaladores"
+    ],
+    "listItems": [
+      3,
+      3
+    ]
+  },
+  {
+    "id": "h-pt-chat",
+    "input": "beleza, eu te mando o arquivo amanhã cedo, tá?",
+    "layout": "chat",
+    "mustContain": [
+      "tá?",
+      "amanhã"
+    ],
+    "paragraphs": [
+      1,
+      1
+    ],
+    "listItems": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "h-fr-correction",
+    "input": "euh, on livre jeudi, non attends, vendredi matin",
+    "mustContain": [
+      "vendredi"
+    ],
+    "mustNotContain": [
+      "jeudi",
+      "attends",
+      "euh"
+    ]
+  },
+  {
+    "id": "h-fr-tone",
+    "input": "du coup le build passe pas sur la CI, c'est bizarre quoi",
+    "mustContain": [
+      "quoi",
+      "CI"
+    ],
+    "mustNotContain": [
+      "du coup"
+    ]
+  },
+  {
+    "id": "h-fr-list",
+    "input": "il me faut trois choses, premièrement le changelog, deuxièmement, euh, le numéro de version, et troisièmement les installeurs signés",
+    "mustContain": [
+      "changelog",
+      "version",
+      "installeurs"
+    ],
+    "mustNotContain": [
+      "euh"
+    ],
+    "listItems": [
+      3,
+      3
+    ]
+  },
+  {
+    "id": "h-fr-english-terms",
+    "input": "je pense que le problème vient du, euh, du cache redis, il expire au bout de dix minutes",
+    "mustContain": [
+      "Redis"
+    ],
+    "mustNotContain": [
+      "euh",
+      "du, du"
+    ]
+  },
+  {
+    "id": "h-fr-email",
+    "input": "bonjour Claire, euh, je vous envoie le devis en pièce jointe, n'hésitez pas si vous avez des questions, bien cordialement, Paul",
+    "layout": "email",
+    "mustContain": [
+      "Claire",
+      "devis",
+      "Paul"
+    ],
+    "mustNotContain": [
+      "euh"
+    ],
+    "paragraphs": [
+      3,
+      4
+    ],
+    "listItems": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "h-de-correction",
+    "input": "ähm, wir treffen uns am Montag, ach nee, am Dienstag um neun",
+    "mustContain": [
+      "Dienstag"
+    ],
+    "mustNotContain": [
+      "Montag",
+      "ähm",
+      "ach nee"
+    ]
+  },
+  {
+    "id": "h-de-modal-particles",
+    "input": "das ist ja eigentlich doch ganz einfach, äh, wir müssen nur den Cache leeren",
+    "mustContain": [
+      "ist ja",
+      "doch",
+      "Cache"
+    ],
+    "mustNotContain": [
+      "äh,"
+    ]
+  },
+  {
+    "id": "h-de-list",
+    "input": "ich brauche drei Sachen, erstens das Changelog, zweitens, ähm, die neue Versionsnummer, und drittens die signierten Installer",
+    "mustContain": [
+      "Changelog",
+      "Versionsnummer",
+      "Installer"
+    ],
+    "mustNotContain": [
+      "ähm"
+    ],
+    "listItems": [
+      3,
+      3
+    ]
+  },
+  {
+    "id": "h-de-emphasis",
+    "input": "das ist wirklich wirklich wichtig, also bitte bis Freitag erledigen",
+    "mustContain": [
+      "wirklich wirklich",
+      "Freitag"
+    ]
+  },
+  {
+    "id": "h-de-chat",
+    "input": "alles klar, ähm, ich schick dir den Link gleich",
+    "layout": "chat",
+    "mustContain": [
+      "Link"
+    ],
+    "mustNotContain": [
+      "ähm"
+    ],
+    "paragraphs": [
+      1,
+      1
+    ],
+    "listItems": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "h-ru-correction",
+    "input": "ну, дедлайн в пятницу, нет, подожди, в понедельник",
+    "mustContain": [
+      "понедельник"
+    ],
+    "mustNotContain": [
+      "пятниц",
+      "подожди"
+    ]
+  },
+  {
+    "id": "h-ru-filler",
+    "input": "короче, я думаю, что, э-э, проблема в базе данных, она тормозит под нагрузкой",
+    "mustContain": [
+      "базе данных",
+      "нагрузкой"
+    ],
+    "mustNotContain": [
+      "короче",
+      "э-э"
+    ]
+  },
+  {
+    "id": "h-ru-list",
+    "input": "мне нужно три вещи, во-первых, чейнджлог, во-вторых, номер версии, и в-третьих, подписанные установщики",
+    "mustContain": [
+      "версии",
+      "установщики"
+    ],
+    "anyOf": [
+      [
+        "чейнджлог",
+        "Чейнджлог",
+        "changelog",
+        "Changelog"
+      ]
+    ],
+    "listItems": [
+      3,
+      3
+    ]
+  },
+  {
+    "id": "h-ru-english-terms",
+    "input": "проверь, пожалуйста, ну, гитхаб экшнс, там падает билд на маке",
+    "mustContain": [
+      "билд"
+    ],
+    "anyOf": [
+      [
+        "GitHub Actions",
+        "гитхаб экшнс"
+      ]
+    ],
+    "mustNotContain": [
+      "ну,"
+    ]
+  },
+  {
+    "id": "h-ru-structured",
+    "input": "в промпте попроси его прочитать весь код, потом составить план и только после этого писать тесты",
+    "layout": "structured",
+    "mustContain": [
+      "план",
+      "тесты"
+    ],
+    "listItems": [
+      3,
+      3
+    ]
   }
 ]

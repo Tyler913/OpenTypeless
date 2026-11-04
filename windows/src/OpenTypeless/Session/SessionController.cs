@@ -1595,12 +1595,13 @@ public sealed class SessionController
         {
             throw ApiException.MissingApiKey(_settings.PolishProvider.DisplayName());
         }
-        var instructions = (dictation ?? _settings.GlobalDictationSettings).ExtraInstructions;
+        var settings = dictation ?? _settings.GlobalDictationSettings;
+        var instructions = settings.ExtraInstructions;
         var primary = Route(endpoint, _settings.PolishModel, instructions, translation, context, sent, forFile,
-                            dictatedLineBreaks: dictatedLineBreaks);
+                            dictatedLineBreaks: dictatedLineBreaks, layout: settings.Layout, spokenLanguage: settings.Language);
         var backup = _settings.PolishBackupEndpoint is { } backupEndpoint
             ? Route(backupEndpoint, _settings.PolishBackupModel, instructions, translation, context, sent, forFile,
-                    dictatedLineBreaks: dictatedLineBreaks)
+                    dictatedLineBreaks: dictatedLineBreaks, layout: settings.Layout, spokenLanguage: settings.Language)
             : null;
         return await SegmentedPolish.Run(raw, primary, backup, onPartial, token,
                                          forFile ? FileTranscription.CleanUpConcurrency : null, holdWhile);
@@ -1611,7 +1612,7 @@ public sealed class SessionController
 
     private PolishRoute Route(ProviderEndpoint endpoint, string model, string instructions, TranslationTarget? translation,
                               string? context = null, ContextSent? sent = null, bool forFile = false, string? selection = null,
-                              bool dictatedLineBreaks = false)
+                              bool dictatedLineBreaks = false, TextLayout layout = TextLayout.Natural, string spokenLanguage = "")
     {
         model = model.Trim();
         return new PolishRoute(Client(endpoint, forFile), new PolishOptions(
@@ -1625,7 +1626,9 @@ public sealed class SessionController
             Selection: selection,
             Context: context,
             OnContextSent: sent is null ? null : sent.Mark,
-            DictatedLineBreaks: dictatedLineBreaks));
+            DictatedLineBreaks: dictatedLineBreaks,
+            Layout: layout,
+            SpokenLanguage: spokenLanguage));
     }
 
     /// <summary>
@@ -1666,7 +1669,13 @@ public sealed class SessionController
         }
         if (transcription + cleanup > 0) record.Cost = (record.Cost ?? 0) + transcription + cleanup;
         Note($"cost: transcription ${transcription:0.######}, clean-up ${cleanup:0.######}, unpriced requests {unpriced}");
-        UsageStore.Shared.Record(record, transcription, cleanup, unpriced);
+        // This month's spend reached part of the monthly limit, or all of it: a reminder once the capsule is free, after
+        // the text (or the notice about it). Only a reminder: nothing is held back or cancelled for it.
+        if (UsageStore.Shared.Record(record, transcription, cleanup, unpriced) is { } reminder)
+        {
+            Note($"spending reminder: {reminder.Level.Name()} (${reminder.Spent:0.####} of ${reminder.Limit:0.##} this month)");
+            Hud.ShowWhenFree(new HudPhase.Spending(reminder), 4);
+        }
     }
 
     /// <summary>Notes in History that a clean-up request of this run carried the text around the cursor; the text isn't kept.</summary>

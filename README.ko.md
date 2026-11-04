@@ -86,7 +86,7 @@ OpenTypeless는 바로 이 문제를 중심으로 만들어졌습니다.
 - **커서 위치에 붙여넣기.** 텍스트 입력란에서는 붙여넣은 뒤 클립보드를 원래대로 돌려놓고, 입력란에 포커스가 없으면 클립보드에 넣습니다. 브라우저와 Electron 앱, Windows의 터미널에서도 동작합니다.
 - **커서 앞뒤 텍스트에 맞춰 넣기**(기본으로 켜짐): 기존 텍스트 중간에 받아쓰면 빠진 띄어쓰기를 넣고("Hello there. Next sentence", "用 SwiftUI 写"), 문장 중간의 첫 대문자를 소문자로 바꾸며("I", 약어, 이름, 어휘 목록의 단어는 그대로), 문장을 일찍 끝내 버리는 마침표를 뺍니다. 커서 양쪽의 글자를 보고 판단하며, 읽을 수 없으면(비밀번호 입력란, 일부 앱) 그대로 삽입합니다.
 - **앱별 설정**(선택): **설정 → 앱**에서 받아쓰는 앱마다 다듬기 켜기/끄기, 삽입 후 Return(Windows에서는 Enter), 말하는 언어, 추가 다듬기 선호 설정(예: 메일 앱에서는 더 격식 있는 어조)을 따로 정할 수 있습니다. 녹음을 시작할 때 맨 앞에 있는 앱이 기준이며, ‘기본값’으로 둔 항목은 평소 설정을 따릅니다.
-- **원하는 제공업체 사용.** OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek 또는 OpenAI 호환 엔드포인트. 음성 인식, 다듬기, 백업 다듬기 모델에 각각 다른 제공업체를 쓸 수 있습니다. **테스트**는 키를 확인하고 제공업체의 왕복 지연 시간(세 번의 중앙값)을 보여 줍니다.
+- **원하는 제공업체 사용.** OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek, Google Gemini, Anthropic, Mistral, xAI, Alibaba Cloud Model Studio(Qwen), Zhipu GLM, Moonshot Kimi, Volcengine Ark(Doubao), Deepgram, ElevenLabs가 기본으로 들어 있고, 내 컴퓨터에서 돌아가는 Ollama와 LM Studio(키 불필요), OpenAI 호환 엔드포인트도 쓸 수 있습니다. 음성 인식, 다듬기, 백업 다듬기 모델에 각각 다른 제공업체를 쓸 수 있으며, 각 단계에는 그 일을 할 수 있는 제공업체만 표시됩니다(Deepgram과 ElevenLabs는 음성 인식만, Gemini, Anthropic, xAI, Qwen, Kimi, Doubao는 다듬기만). **설정 → 제공업체**에는 설정한 것만 나오고, 나머지는 **제공업체 추가**에 있습니다. **테스트**는 키를 확인하고 제공업체의 왕복 지연 시간(세 번의 중앙값)을 보여 줍니다.
 - **백업 음성 인식**(선택): 어떤 구간이 그 길이에 비해 평소보다 훨씬 오래 걸리거나 실패하면 두 번째 제공업체에도 요청하고 먼저 온 답을 사용합니다.
 - **사용자 어휘와 스타일 선호**로 이름, 제품, 전문 용어를 지정할 수 있습니다. 어휘는 CSV나 텍스트 파일에서 가져오거나, 학습한 단어의 잘못 인식된 형태와 함께 CSV로 내보낼 수 있습니다(잘못 인식된 형태는 참고용이며 가져올 때는 단어만 읽습니다).
 - **여러분의 수정에서 학습합니다.** 붙여넣은 뒤 잘못 인식된 단어를 고치면(TypeList → Typeless) 어떻게 잘못 들었는지와 함께 자동으로 어휘에 추가됩니다. 발음이 비슷한 수정만 학습하며, 고쳐 쓰기, 숫자 변경, 일반 단어 교체는 학습하지 않습니다. 삭제한 단어는 다시 학습하지 않습니다.
@@ -207,7 +207,7 @@ Windows 앱을 개발하는 데 Windows PC는 필요 없습니다. 변경할 때
 
 | 단계 | 기본값 | 참고 |
 |---|---|---|
-| 음성 인식 | `microsoft/mai-transcribe-2`(OpenRouter) | OpenRouter의 모든 변환 모델, 또는 다른 곳의 Whisper 호환 `/audio/transcriptions`. |
+| 음성 인식 | `microsoft/mai-transcribe-2`(OpenRouter) | OpenRouter의 모든 변환 모델, 다른 곳의 Whisper 호환 `/audio/transcriptions`(Mistral `voxtral-mini-transcribe-3`, Zhipu `glm-asr-2512`, Ollama), 또는 자체 API를 쓰는 Deepgram(`nova-3`)과 ElevenLabs(`scribe_v2`). |
 | 다듬기 | `google/gemini-3.8-flash`(OpenRouter) | 저희 테스트에서 다듬기 품질이 가장 좋았고, 긴 받아쓰기 한 번에 약 0.005달러입니다. 더 저렴한 선택지: `qwen/qwen3.7-flash`, `google/gemini-3.1-flash-lite`. |
 | 백업 다듬기 | `deepseek/deepseek-v4.1-flash`(OpenRouter) | 기본 모델이 느리게 시작하거나 실패할 때만 요청합니다. 다른 회사의 빠른 모델을 고르세요. |
 
@@ -216,7 +216,7 @@ Windows 앱을 개발하는 데 Windows PC는 필요 없습니다. 변경할 때
 ## 개인정보 보호
 
 - 오디오와 텍스트는 여러분이 설정한 제공업체에만 전송됩니다. **실시간 미리보기**를 켜면 macOS는 Mac에서 음성을 인식합니다. Windows는 자체 음성 인식을 사용하며, 온라인 음성 인식이 켜져 있으면 음성이 Microsoft로 전송됩니다(설정에 안내되어 있습니다).
-- API 키는 macOS 키체인 또는 Windows 자격 증명 관리자(항목 하나, `OpenTypeless/credentials`)에 저장됩니다.
+- API 키는 macOS 키체인 또는 Windows 자격 증명 관리자(`OpenTypeless/credentials`, 한 항목에 다 들어가지 않으면 `OpenTypeless/credentials/2` 등에 이어서 저장)에 저장됩니다.
 - 홈 화면용 사용량(하루 단위 단어 수, 말한 시간, 비용이며 텍스트는 없음)은 설정과 기록이 있는 폴더의 `usage.json`에 저장됩니다. OpenRouter 가격표는 공개 모델 목록에서 하루에 몇 번 다운로드합니다(키 불필요, 여러분에 대한 정보 없음).
 - 기록(오디오 + 변환 결과)은 macOS에서는 `~/Library/Application Support/OpenTypeless/Sessions/`, Windows에서는 `%LOCALAPPDATA%\OpenTypeless\`에 있습니다. 녹음은 기본적으로 한 달간 보관됩니다(기록 페이지에서 보관 안 함, 1일, 1주, 1개월, 1년, 영구 중 선택). 그 뒤에도 텍스트는 최신 200개 항목 안에 남습니다. 실패한 받아쓰기는 다시 시도할 수 있도록 최소 한 달 동안 오디오를 보관합니다. 녹음은 모두 합쳐 1GB까지 보관하며, 넘으면 가장 오래된 것부터 오디오를 지웁니다(텍스트는 남습니다).
 - 업데이트 확인은 하루에 한 번 `api.github.com`에 요청을 보냅니다(계정 불필요, 여러분이나 받아쓰기에 대한 정보 없음). **설정 → 일반 → 업데이트**에서 끌 수 있습니다.

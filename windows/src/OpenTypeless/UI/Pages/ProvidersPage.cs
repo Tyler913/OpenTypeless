@@ -9,23 +9,28 @@ using TypelessCore;
 
 namespace OpenTypeless.UI;
 
+/// <summary>
+/// The providers that are set up (in use, or with a key or address of their own), and an Add button with the rest, grouped
+/// by what they do, so the page stays short however many providers there are.
+/// </summary>
 public sealed class ProvidersPage : PageBase
 {
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly List<ProviderCard> _cards = new();
+    private readonly StackPanel _stack = new() { Spacing = 8 };
+    private readonly HashSet<ProviderId> _expanded;
+    /// <summary>Shown since the page opened, so a provider whose key was just cleared doesn't vanish under the pointer.</summary>
+    private readonly HashSet<ProviderId> _shown;
 
     public ProvidersPage() : base(SettingsPage.Providers, help: L("填写 API Key。语音转文字和文字整理可以使用不同的服务商。",
-                                                                  "Add API keys. Speech-to-text and clean-up can use different providers."))
+                                                                  "Add API keys. Speech-to-text and clean-up can use different providers.")
+                                                                + "\n\n" + L("这里只列出已经设置的服务商，其他的在「添加服务商」里。",
+                                                                             "Only the providers you've set up are listed; add others with Add provider."))
     {
-        var expanded = new HashSet<ProviderId> { _settings.SttProvider, _settings.PolishProvider };
-        var stack = new StackPanel { Spacing = 8 };
-        foreach (var id in ProviderIdExtensions.All)
-        {
-            var card = new ProviderCard(id, expanded.Contains(id));
-            _cards.Add(card);
-            stack.Children.Add(card);
-        }
-        Body.Children.Add(stack);
+        _expanded = [_settings.SttProvider, _settings.PolishProvider];
+        _shown = ProviderIdExtensions.All.Where(_settings.IsSetUp).ToHashSet();
+        Body.Children.Add(_stack);
+        Render();
         _settings.PropertyChanged += OnSettingsChanged;
     }
 
@@ -33,6 +38,74 @@ public sealed class ProvidersPage : PageBase
 
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e) =>
         DispatcherQueue.TryEnqueue(() => _cards.ForEach(c => c.RefreshHeader()));
+
+    private void Render()
+    {
+        _stack.Children.Clear();
+        _cards.Clear();
+        foreach (var id in ProviderIdExtensions.All.Where(p => _shown.Contains(p) || _settings.IsSetUp(p)))
+        {
+            var card = new ProviderCard(id, _expanded.Contains(id),
+                expanded =>
+                {
+                    if (expanded) _expanded.Add(id); else _expanded.Remove(id);
+                },
+                () =>
+                {
+                    _shown.Remove(id);
+                    _expanded.Remove(id);
+                    Render();
+                });
+            _cards.Add(card);
+            _stack.Children.Add(card);
+        }
+        var available = ProviderIdExtensions.All.Where(p => !_cards.Any(c => c.Id == p)).ToList();
+        if (available.Count == 0) return;
+        var label = L("添加服务商", "Add provider");
+        var add = new DropDownButton
+        {
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Children = { Ui.Icon(Glyphs.Add, 12), new TextBlock { Text = label } },
+            },
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(add, label);
+        var flyout = new MenuFlyout { Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedLeft };
+        foreach (var group in Enum.GetValues<ProviderGroup>())
+        {
+            var ids = available.Where(p => p.Group() == group).ToList();
+            if (ids.Count == 0) continue;
+            var sub = new MenuFlyoutSubItem { Text = GroupTitle(group) };
+            foreach (var id in ids)
+            {
+                var item = new MenuFlyoutItem { Text = id.DisplayName() };
+                item.Click += (_, _) =>
+                {
+                    _settings.AddProvider(id);
+                    _shown.Add(id);
+                    _expanded.Add(id);
+                    Render();
+                };
+                sub.Items.Add(item);
+            }
+            flyout.Items.Add(sub);
+        }
+        add.Flyout = flyout;
+        _stack.Children.Add(add);
+    }
+
+    /// <summary>The heading of the providers of this group in the Add menu.</summary>
+    internal static string GroupTitle(ProviderGroup group) => group switch
+    {
+        ProviderGroup.Both => L("语音转文字和文字整理", "Speech-to-text and clean-up"),
+        ProviderGroup.Chat => L("文字整理", "Clean-up"),
+        ProviderGroup.Speech => L("语音转文字", "Speech to text"),
+        _ => L("本机或自建服务", "On this computer or your own server"),
+    };
 }
 
 internal sealed class ProviderCard : UserControl
@@ -46,6 +119,10 @@ internal sealed class ProviderCard : UserControl
     private readonly StackPanel _details = new() { Spacing = 12, Padding = new Thickness(14) };
     private readonly Button _reset = new();
     private readonly Button _test = new();
+    private readonly Button _remove = new();
+    private readonly Border _footerDivider = new() { Height = 1 };
+    private readonly Grid _footer = new() { Padding = new Thickness(14, 10, 14, 10) };
+    private readonly Action<bool> _onExpanded;
     private readonly StackPanel _testResult = new() { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
     /// <summary>Shown while Credential Manager refuses the key, which then only lasts until the app quits.</summary>
     private readonly TextBlock _keyError = Ui.Text(L("无法保存到 Windows 凭据管理器，应用退出后需要重新填写这个 Key",
@@ -54,10 +131,15 @@ internal sealed class ProviderCard : UserControl
     private bool _expanded;
     private bool _testing;
 
-    public ProviderCard(ProviderId id, bool expanded)
+    public ProviderId Id => _id;
+
+    /// <param name="onExpanded">Told when the card is opened or closed, so the page keeps it that way when it's rebuilt.</param>
+    /// <param name="onRemoved">Called once Remove has taken the provider off the page.</param>
+    public ProviderCard(ProviderId id, bool expanded, Action<bool> onExpanded, Action onRemoved)
     {
         _id = id;
         _expanded = expanded;
+        _onExpanded = onExpanded;
 
         // Header (the whole row toggles the card).
         var name = new StackPanel
@@ -95,12 +177,15 @@ internal sealed class ProviderCard : UserControl
         toggle.Click += (_, _) =>
         {
             _expanded = !_expanded;
+            _onExpanded(_expanded);
             UpdateExpansion();
         };
 
         _divider.Background = Palette.Theme("DividerStrokeColorDefaultBrush");
+        _footerDivider.Background = Palette.Theme("DividerStrokeColorDefaultBrush");
         BuildDetails();
-        Content = Card.Make(new StackPanel { Children = { toggle, _divider, _details } });
+        BuildFooter(onRemoved);
+        Content = Card.Make(new StackPanel { Children = { toggle, _divider, _details, _footerDivider, _footer } });
         RefreshHeader();
         UpdateExpansion();
     }
@@ -113,7 +198,8 @@ internal sealed class ProviderCard : UserControl
 
     private void UpdateExpansion()
     {
-        _divider.Visibility = _details.Visibility = _expanded ? Visibility.Visible : Visibility.Collapsed;
+        _divider.Visibility = _details.Visibility = _footerDivider.Visibility = _footer.Visibility =
+            _expanded ? Visibility.Visible : Visibility.Collapsed;
         _chevron.RenderTransform = new RotateTransform { Angle = _expanded ? 90 : 0 };
     }
 
@@ -136,6 +222,40 @@ internal sealed class ProviderCard : UserControl
         _status.Tint = configured ? Tint.Green : Tint.Secondary;
         _reset.Visibility = _id != ProviderId.Custom && _settings.BaseUrl(_id) != _id.DefaultBaseUrl() ? Visibility.Visible : Visibility.Collapsed;
         _test.IsEnabled = !_testing && _settings.Endpoint(_id) != null;
+        // A provider a step uses stays: switch the step to another one first.
+        var inUse = _settings.IsInUse(_id);
+        _remove.IsEnabled = !inUse;
+        ToolTipService.SetToolTip(_remove, inUse
+            ? L("正在使用，先在「模型」里换成别的服务商", "In use: choose another provider under Models first")
+            : L("移除这个服务商和它的 API Key", "Removes this provider and its API key"));
+    }
+
+    /// <summary>What the provider can do here, and Remove.</summary>
+    private void BuildFooter(Action onRemoved)
+    {
+        var steps = _id.SupportsStt() && _id.SupportsChat() ? ProvidersPage.GroupTitle(ProviderGroup.Both)
+            : _id.SupportsStt() ? L("仅语音转文字", "Speech-to-text only") : L("仅文字整理", "Clean-up only");
+        var text = Ui.Text(steps, 12, foreground: Ui.Secondary);
+        text.VerticalAlignment = VerticalAlignment.Center;
+        _footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _footer.Children.Add(text);
+        var removeLabel = L("移除", "Remove");
+        _remove.Content = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children = { Ui.Icon(Glyphs.Delete, 12), new TextBlock { Text = removeLabel } },
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_remove, removeLabel);
+        _remove.Click += (_, _) =>
+        {
+            if (_settings.IsInUse(_id)) return;
+            _settings.RemoveProvider(_id);
+            onRemoved();
+        };
+        Grid.SetColumn(_remove, 1);
+        _footer.Children.Add(_remove);
     }
 
     private IEnumerable<string> UsageTags()
@@ -217,8 +337,11 @@ internal sealed class ProviderCard : UserControl
         }
         else
         {
-            bottom.Children.Add(Ui.Text(L("任何兼容 OpenAI 接口的服务：/audio/transcriptions 与 /chat/completions",
-                                          "Any OpenAI-compatible server: /audio/transcriptions and /chat/completions"), 12, foreground: Ui.Secondary, wrap: true));
+            bottom.Children.Add(Ui.Text(_id.IsLocal()
+                                            ? L("运行在这台电脑上，不需要 API Key", "Runs on this computer; no API key needed")
+                                            : L("任何兼容 OpenAI 接口的服务：/audio/transcriptions 与 /chat/completions",
+                                                "Any OpenAI-compatible server: /audio/transcriptions and /chat/completions"),
+                                        12, foreground: Ui.Secondary, wrap: true));
         }
         _testResult.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(_testResult, 1);

@@ -100,6 +100,9 @@ final class AppSettings: ObservableObject {
     /// The saved keys only: OPENROUTER_API_KEY overrides one in `apiKey(for:)` but never lands in here.
     @Published private(set) var apiKeys: [String: String]
     @Published private(set) var baseURLs: [String: String]
+    /// Providers added on the Providers page that have no key or address of their own yet (a local server, say), by raw
+    /// value, so the page keeps showing them.
+    @Published private(set) var addedProviders: [String]
     /// Prices the user entered for models of providers other than OpenRouter (whose prices are live), by `ModelPrice.key`.
     @Published private(set) var modelPrices: [String: ModelPrice]
     /// The OpenRouter host the user picked for a clean-up model (endpoint tag, by model ID); none means automatic.
@@ -118,6 +121,7 @@ final class AppSettings: ObservableObject {
         // with it still needs the others (and must not save over them when one is edited).
         apiKeys = Credentials.load()
         baseURLs = (UserDefaults.standard.dictionary(forKey: "baseURLs") as? [String: String]) ?? [:]
+        addedProviders = UserDefaults.standard.stringArray(forKey: "addedProviders") ?? []
         learnedTerms = UserDefaults.standard.data(forKey: "learnedVocabulary")
             .flatMap { try? JSONDecoder().decode([LearnedTerm].self, from: $0) } ?? []
         forgottenTerms = Set(UserDefaults.standard.stringArray(forKey: "forgottenVocabulary") ?? [])
@@ -242,6 +246,33 @@ final class AppSettings: ObservableObject {
 
     func isConfigured(_ id: ProviderID) -> Bool {
         endpoint(for: id) != nil && (!id.requiresKey || !apiKey(for: id).isEmpty)
+    }
+
+    /// Whether a step uses this provider: speech to text, clean-up, or either's backup (while switched on).
+    func isInUse(_ id: ProviderID) -> Bool {
+        sttProvider == id || (polishEnabled && polishProvider == id) || (sttBackupEnabled && sttBackupProvider == id)
+            || (polishEnabled && polishBackupEnabled && polishBackupProvider == id)
+    }
+
+    /// Whether the Providers page lists this provider: one in use, with a key or an address of its own, or added there.
+    func isSetUp(_ id: ProviderID) -> Bool {
+        isInUse(id) || !apiKey(for: id).isEmpty || baseURLs[id.rawValue] != nil || addedProviders.contains(id.rawValue)
+    }
+
+    /// Lists a provider on the Providers page, to fill in its key or address.
+    func addProvider(_ id: ProviderID) {
+        guard !addedProviders.contains(id.rawValue) else { return }
+        addedProviders.append(id.rawValue)
+        UserDefaults.standard.set(addedProviders, forKey: "addedProviders")
+    }
+
+    /// Takes a provider off the Providers page, forgetting its key and address. Not one a step uses.
+    func removeProvider(_ id: ProviderID) {
+        guard !isInUse(id) else { return }
+        setAPIKey("", for: id)
+        setBaseURL("", for: id)
+        addedProviders.removeAll { $0 == id.rawValue }
+        UserDefaults.standard.set(addedProviders, forKey: "addedProviders")
     }
 
     var sttEndpoint: ProviderEndpoint? { endpoint(for: sttProvider) }

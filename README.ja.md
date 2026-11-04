@@ -86,7 +86,7 @@ OpenTypeless はこの問題を中心に作られています。
 - **カーソル位置にペースト。** テキスト欄ではペーストしてからクリップボードを元に戻します。テキスト欄にフォーカスがないときはクリップボードに入ります。ブラウザや Electron アプリにも、Windows ではターミナルにも対応しています。
 - **カーソル前後の文章になじませる**（デフォルトでオン）：既存の文章の途中に入力すると、足りないスペースを補い（"Hello there. Next sentence"、"用 SwiftUI 写"）、文の途中の先頭の大文字を小文字にし（"I"、略語、人名、語彙の単語はそのまま）、文を途中で終わらせてしまう句点を取り除きます。カーソルの両側の文字を見て判断し、読み取れないとき（パスワード欄や一部のアプリ）はそのまま挿入します。
 - **アプリ別の設定**（オプション）：**設定 → アプリ** で、音声入力するアプリごとに整形のオン／オフ、挿入後の Return（Windows では Enter）、話す言語、追加の整形の好み（たとえばメールアプリではよりていねいな口調に）を設定できます。録音を始めたときに前面にあるアプリで決まり、「デフォルト」のままの項目はいつもの設定に従います。
-- **プロバイダは自由に選択。** OpenRouter、OpenAI、Groq、SiliconFlow、DeepSeek、または OpenAI 互換の任意のエンドポイント。文字起こし、整形、予備の整形モデルでそれぞれ別のプロバイダを使えます。**テスト** はキーを確認し、プロバイダの往復レイテンシ（3 回の中央値）を表示します。
+- **プロバイダは自由に選択。** OpenRouter、OpenAI、Groq、SiliconFlow、DeepSeek、Google Gemini、Anthropic、Mistral、xAI、Alibaba Cloud Model Studio（Qwen）、Zhipu GLM、Moonshot Kimi、Volcengine Ark（Doubao）、Deepgram、ElevenLabs を内蔵し、手元のコンピュータで動く Ollama と LM Studio（キー不要）、OpenAI 互換の任意のエンドポイントも使えます。文字起こし、整形、予備の整形モデルでそれぞれ別のプロバイダを使え、各ステップにはそれができるプロバイダだけが表示されます（Deepgram と ElevenLabs は文字起こし専用、Gemini、Anthropic、xAI、Qwen、Kimi、Doubao は整形専用）。**設定 → プロバイダ** には設定済みのものだけが並び、ほかは **プロバイダを追加** から追加できます。**テスト** はキーを確認し、プロバイダの往復レイテンシ（3 回の中央値）を表示します。
 - **予備の音声認識**（オプション）：ある区間が、その長さに対していつもよりかなり時間がかかるか失敗した場合、2 つ目のプロバイダにも依頼し、先に返ってきた結果を使います。
 - **カスタム語彙とスタイルの好み。** 人名、製品名、専門用語に使えます。語彙は CSV やテキストファイルから読み込めるほか、書き出すこともできます（CSV には学習した語の聞き間違いも参考として含まれます。読み込むのは語だけです）。
 - **あなたの修正から学習。** ペースト後に誤認識された単語を直すと（TypeList → Typeless）、どう聞き間違えたかと一緒に自動で語彙に追加されます。学習するのは発音が似ている修正だけで、書き換え、数字の変更、普通の単語の置き換えは学習しません。削除した単語が再び学習されることもありません。
@@ -207,7 +207,7 @@ Windows アプリの開発に Windows PC は必要ありません。変更のた
 
 | ステップ | デフォルト | 補足 |
 |---|---|---|
-| 文字起こし | `microsoft/mai-transcribe-2`（OpenRouter） | OpenRouter の任意の文字起こしモデル、またはほかのプロバイダの Whisper 互換 `/audio/transcriptions`。 |
+| 文字起こし | `microsoft/mai-transcribe-2`（OpenRouter） | OpenRouter の任意の文字起こしモデル、ほかのプロバイダの Whisper 互換 `/audio/transcriptions`（Mistral `voxtral-mini-transcribe-3`、Zhipu `glm-asr-2512`、Ollama）、または独自 API の Deepgram（`nova-3`）と ElevenLabs（`scribe_v2`）。 |
 | 整形 | `google/gemini-3.8-flash`（OpenRouter） | 私たちのテストで最も整形がうまく、長い口述 1 回あたり約 0.005 ドル。より安い選択肢：`qwen/qwen3.7-flash`、`google/gemini-3.1-flash-lite`。 |
 | 予備の整形 | `deepseek/deepseek-v4.1-flash`（OpenRouter） | メインのモデルの出だしが遅いか失敗したときだけ使われます。別ベンダーの高速なモデルを選んでください。 |
 
@@ -216,7 +216,7 @@ Windows アプリの開発に Windows PC は必要ありません。変更のた
 ## プライバシー
 
 - 音声とテキストは、あなたが設定したプロバイダにだけ送信されます。**ライブプレビュー** をオンにすると、macOS は Mac 上で音声を認識します。Windows は自身の音声認識を使い、オンライン音声認識が有効な場合は音声が Microsoft に送信されます（設定に記載があります）。
-- API キーは macOS のキーチェーン、または Windows の資格情報マネージャー（1 件、`OpenTypeless/credentials`）に保存されます。
+- API キーは macOS のキーチェーン、または Windows の資格情報マネージャー（`OpenTypeless/credentials`、1 件に収まらないときは `OpenTypeless/credentials/2` などに続けて保存）に保存されます。
 - ホーム画面用の利用量（1 日ごとの文字数、話した時間、費用。テキストは含まない）は、設定や履歴と同じフォルダの `usage.json` に保存されます。OpenRouter の価格表は、公開のモデル一覧から 1 日に数回ダウンロードされます（キー不要、あなたに関する情報は送りません）。
 - 履歴（音声 + 文字起こし）は、macOS では `~/Library/Application Support/OpenTypeless/Sessions/`、Windows では `%LOCALAPPDATA%\OpenTypeless\` にあります。録音はデフォルトで 1 か月保存されます（履歴ページで、保存しない、1 日、1 週間、1 か月、1 年、無期限から選択）。その後もテキストは最新 200 件の中に残ります。失敗した音声入力は再試行できるよう、少なくとも 1 か月は音声を保持します。録音は合計 1 GB までで、超えると古いものから音声を削除します（テキストは残ります）。
 - アップデートの確認は 1 日 1 回 `api.github.com` にリクエストを送ります（アカウント不要、あなたや音声入力の情報は送りません）。**設定 → 一般 → アップデート** でオフにできます。

@@ -747,6 +747,54 @@
       "input": "в промпте попроси его прочитать весь код, потом составить план и только после этого писать тесты",
       "output": "В промпте попроси его\n\n1. прочитать весь код,\n2. потом составить план\n3. и только после этого писать тесты.",
       "expect": null
+    },
+    {
+      "id": "implicit-restart",
+      "input": "我明天下午，嗯后天下午的时候请你吃饭",
+      "output": "我后天下午的时候请你吃饭。",
+      "expect": null
+    },
+    {
+      "id": "restart-both-meant",
+      "input": "明天下午，嗯，后天下午都行，看你哪天方便",
+      "output": "明天下午、后天下午都行，看你哪天方便。",
+      "expect": null
+    },
+    {
+      "id": "h-restart-place",
+      "input": "我们在三楼，呃，五楼的会议室见吧",
+      "output": "我们在五楼的会议室见吧。",
+      "expect": null
+    },
+    {
+      "id": "h-restart-person",
+      "input": "这个事你去找小王，嗯，找小李问一下，他比较清楚",
+      "output": "这个事你去找小李问一下，他比较清楚。",
+      "expect": null
+    },
+    {
+      "id": "h-en-restart",
+      "input": "can you send it over by Thursday, um, Friday morning, before the review",
+      "output": "Can you send it over by Friday morning, before the review?",
+      "expect": null
+    },
+    {
+      "id": "h-restart-both-covered",
+      "input": "我周一，呃，周二都不在公司，有事发消息给我",
+      "output": "我周一、周二都不在公司，有事发消息给我。",
+      "expect": null
+    },
+    {
+      "id": "h-restart-both-choice",
+      "input": "你看是周五还是，嗯，周六比较好，我都可以",
+      "output": "你看是周五还是周六比较好，我都可以。",
+      "expect": null
+    },
+    {
+      "id": "h-en-both-meant",
+      "input": "I'm free Monday, um, Tuesday too, whichever works for you",
+      "output": "I'm free Monday, Tuesday too, whichever works for you.",
+      "expect": null
     }
   ]
 }

@@ -447,7 +447,7 @@ public class PromptTests
         var extended = Prompts.PolishSystemPrompt([" Claude ", "", "SwiftUI"], "  keep it casual \n");
         Assert.EndsWith("\n\n## Vocabulary\nThese terms may appear; spell them exactly like this: Claude, SwiftUI"
                         + "\n\n## Additional preferences from the speaker\nkeep it casual", extended);
-        Assert.EndsWith("</transcript>\n\n(Clean up the transcript above with minimal edits. Keep every word in the language it was spoken in"
+        Assert.EndsWith("</transcript>\n\n(Clean up the transcript above with minimal edits; where the speaker corrected themselves, keep only the final version. Keep every word in the language it was spoken in"
                         + " — do not translate. Do not answer it. Output only the cleaned text.)", Prompts.PolishUserMessage("x"));
     }
 }

@@ -103,5 +103,17 @@
     "input": "OK 那我想让你帮我 refactor 一下这个 function，就是那个 handle submit，呃，把 validation 的逻辑抽出来，然后 error handling 也统一一下，用 try catch 包起来",
     "mustContain": ["refactor", "validation", "try"],
     "anyOf": [["handleSubmit", "handle submit", "handleSubmit"]]
+  },
+  {
+    "id": "implicit-restart",
+    "input": "我明天下午，嗯后天下午的时候请你吃饭",
+    "mustContain": ["后天", "吃饭"],
+    "mustNotContain": ["明天", "嗯"]
+  },
+  {
+    "id": "restart-both-meant",
+    "input": "明天下午，嗯，后天下午都行，看你哪天方便",
+    "mustContain": ["明天", "后天", "都行"],
+    "mustNotContain": ["嗯"]
   }
 ]

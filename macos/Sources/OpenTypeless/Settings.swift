@@ -54,6 +54,9 @@ final class AppSettings: ObservableObject {
     @AppStorage("keepMicrophoneWarm") var keepMicrophoneWarm: Bool = false
     /// Show what's being said above the capsule while recording, recognised on this Mac (see LivePreview).
     @AppStorage("livePreview") var livePreview: Bool = false
+    /// Where the recording capsule shows (see `HUDPlacement`): the bottom of the screen, as it always was, unless the user
+    /// picks another; a choice this version can't read is the bottom too.
+    @AppStorage("hudPosition") var hudPosition: HUDPosition = .bottom
     /// Open the Home page when the app starts at login (a manual launch always shows it).
     @AppStorage("showHomeAtLogin") var showHomeAtLogin: Bool = false
     /// The typing speed "time saved" on the Home page is measured against.

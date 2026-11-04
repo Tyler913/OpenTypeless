@@ -110,6 +110,7 @@ ICONS = [
     ("Shield", "shield_checkmark"),
     ("Cloud", "cloud"),
     ("DataUsage", "data_usage"),
+    ("Placement", "panel_bottom"),
 ]
 
 FIRST = 0xE000

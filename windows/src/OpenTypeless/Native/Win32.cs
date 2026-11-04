@@ -450,6 +450,14 @@ public static partial class Win32
     public static extern nint MonitorFromPoint(POINT pt, uint dwFlags);
 
     [DllImport("user32.dll")]
+    public static extern nint MonitorFromWindow(nint hwnd, uint dwFlags);
+
+    public delegate bool MonitorEnumProc(nint hMonitor, nint hdcMonitor, ref RECT lprcMonitor, nint dwData);
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumDisplayMonitors(nint hdc, nint lprcClip, MonitorEnumProc lpfnEnum, nint dwData);
+
+    [DllImport("user32.dll")]
     public static extern bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
 
     [DllImport("shcore.dll")]

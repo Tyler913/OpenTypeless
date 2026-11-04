@@ -1,0 +1,193 @@
+{
+  "_comment": "Where the recording capsule goes (HUDPlacement / HudPlacement), shared by the macOS and Windows tests so both apps place it the same way. Rectangles are [x, y, width, height] with y growing downwards from the top of the main screen; points [x, y]. anchor: position (bottom, top, caret), the screen's visible frame (area), the most room the capsule takes from its edge (extent), the platform's metrics (named below) and the text cursor (caret, null when unknown) give the capsule's centre, the y of the edge that stays put, and whether it grows downwards (preview below) or upwards (preview above). screen: the screens' frames, the cursor, the focused window and the mouse (each null when unknown) give the index of the screen it goes on, null for none. saved: what a saved value reads as.",
+  "metrics": {
+    "mac": { "inset": 46, "gap": 8, "margin": 0 },
+    "plain": { "inset": 20, "gap": 10, "margin": 10 },
+    "windows100": { "inset": 28, "gap": 8, "margin": 8 },
+    "windows150": { "inset": 42, "gap": 12, "margin": 12 }
+  },
+  "anchor": [
+    {
+      "id": "bottom-centre-above-the-dock",
+      "position": "bottom", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": null,
+      "expect": { "centerX": 756, "edgeY": 866, "growsDown": false }
+    },
+    {
+      "id": "top-centre-below-the-menu-bar",
+      "position": "top", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": null,
+      "expect": { "centerX": 756, "edgeY": 79, "growsDown": true }
+    },
+    {
+      "id": "the-bottom-ignores-the-cursor",
+      "position": "bottom", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": [400, 300, 2, 18],
+      "expect": { "centerX": 756, "edgeY": 866, "growsDown": false }
+    },
+    {
+      "id": "the-top-ignores-the-cursor",
+      "position": "top", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": [400, 300, 2, 18],
+      "expect": { "centerX": 756, "edgeY": 79, "growsDown": true }
+    },
+    {
+      "id": "just-below-the-line",
+      "position": "caret", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": [400, 300, 2, 18],
+      "expect": { "centerX": 401, "edgeY": 326, "growsDown": true }
+    },
+    {
+      "id": "kept-on-screen-at-the-left",
+      "position": "caret", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": [20, 300, 2, 18],
+      "expect": { "centerX": 230, "edgeY": 326, "growsDown": true }
+    },
+    {
+      "id": "kept-on-screen-at-the-right",
+      "position": "caret", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": [1500, 300, 1, 18],
+      "expect": { "centerX": 1282, "edgeY": 326, "growsDown": true }
+    },
+    {
+      "id": "above-a-line-near-the-bottom",
+      "position": "caret", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": [600, 850, 2, 20],
+      "expect": { "centerX": 601, "edgeY": 842, "growsDown": false }
+    },
+    {
+      "id": "below-the-focused-field",
+      "position": "caret", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": [300, 120, 900, 24],
+      "expect": { "centerX": 750, "edgeY": 152, "growsDown": true }
+    },
+    {
+      "id": "no-cursor-falls-back-to-the-bottom",
+      "position": "caret", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": null,
+      "expect": { "centerX": 756, "edgeY": 866, "growsDown": false }
+    },
+    {
+      "id": "cursor-on-another-screen",
+      "position": "caret", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": [2000, 300, 2, 18],
+      "expect": { "centerX": 756, "edgeY": 866, "growsDown": false }
+    },
+    {
+      "id": "an-empty-answer-is-no-cursor",
+      "position": "caret", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": [0, 0, 0, 0],
+      "expect": { "centerX": 756, "edgeY": 866, "growsDown": false }
+    },
+    {
+      "id": "a-field-as-tall-as-the-screen",
+      "position": "caret", "area": [0, 33, 1512, 879], "extent": [460, 100], "metrics": "mac", "caret": [100, 40, 1300, 860],
+      "expect": { "centerX": 756, "edgeY": 866, "growsDown": false }
+    },
+    {
+      "id": "just-fits-below",
+      "position": "caret", "area": [0, 0, 1000, 800], "extent": [400, 100], "metrics": "plain", "caret": [500, 660, 2, 20],
+      "expect": { "centerX": 501, "edgeY": 690, "growsDown": true }
+    },
+    {
+      "id": "a-point-short-below-goes-above",
+      "position": "caret", "area": [0, 0, 1000, 800], "extent": [400, 100], "metrics": "plain", "caret": [500, 661, 2, 20],
+      "expect": { "centerX": 501, "edgeY": 651, "growsDown": false }
+    },
+    {
+      "id": "screen-narrower-than-the-capsule",
+      "position": "caret", "area": [0, 0, 300, 800], "extent": [400, 100], "metrics": "plain", "caret": [50, 100, 2, 20],
+      "expect": { "centerX": 150, "edgeY": 130, "growsDown": true }
+    },
+    {
+      "id": "second-monitor-at-150-percent-bottom",
+      "position": "bottom", "area": [1920, 0, 2560, 1392], "extent": [630, 120], "metrics": "windows150", "caret": null,
+      "expect": { "centerX": 3200, "edgeY": 1350, "growsDown": false }
+    },
+    {
+      "id": "second-monitor-at-150-percent-top",
+      "position": "top", "area": [1920, 0, 2560, 1392], "extent": [630, 120], "metrics": "windows150", "caret": null,
+      "expect": { "centerX": 3200, "edgeY": 42, "growsDown": true }
+    },
+    {
+      "id": "second-monitor-at-150-percent-cursor-near-its-left-edge",
+      "position": "caret", "area": [1920, 0, 2560, 1392], "extent": [630, 120], "metrics": "windows150", "caret": [2000, 100, 3, 30],
+      "expect": { "centerX": 2247, "edgeY": 142, "growsDown": true }
+    },
+    {
+      "id": "monitor-left-of-the-main-one",
+      "position": "bottom", "area": [-1920, 0, 1920, 1040], "extent": [420, 80], "metrics": "windows100", "caret": null,
+      "expect": { "centerX": -960, "edgeY": 1012, "growsDown": false }
+    },
+    {
+      "id": "monitor-left-of-the-main-one-cursor-above-the-taskbar",
+      "position": "caret", "area": [-1920, 0, 1920, 1040], "extent": [420, 80], "metrics": "windows100", "caret": [-1000, 1000, 2, 20],
+      "expect": { "centerX": -999, "edgeY": 992, "growsDown": false }
+    }
+  ],
+  "screen": [
+    {
+      "id": "the-cursor-decides",
+      "screens": [[0, 0, 1512, 982], [1512, -200, 2560, 1440], [-1920, 0, 1920, 1080]],
+      "caret": [2000, 300, 2, 18], "window": [0, 0, 800, 600], "mouse": [100, 100],
+      "expect": 1
+    },
+    {
+      "id": "the-cursor-before-the-window",
+      "screens": [[0, 0, 1512, 982], [1512, -200, 2560, 1440], [-1920, 0, 1920, 1080]],
+      "caret": [-1000, 500, 2, 18], "window": [1600, 0, 800, 600], "mouse": null,
+      "expect": 2
+    },
+    {
+      "id": "most-of-the-focused-window",
+      "screens": [[0, 0, 1512, 982], [1512, -200, 2560, 1440], [-1920, 0, 1920, 1080]],
+      "caret": null, "window": [1400, 100, 800, 600], "mouse": [100, 100],
+      "expect": 1
+    },
+    {
+      "id": "a-window-off-every-screen-leaves-it-to-the-mouse",
+      "screens": [[0, 0, 1512, 982], [1512, -200, 2560, 1440], [-1920, 0, 1920, 1080]],
+      "caret": null, "window": [-32000, -32000, 160, 28], "mouse": [-500, 500],
+      "expect": 2
+    },
+    {
+      "id": "an-empty-window-is-ignored",
+      "screens": [[0, 0, 1512, 982], [1512, -200, 2560, 1440], [-1920, 0, 1920, 1080]],
+      "caret": null, "window": [100, 100, 0, 0], "mouse": [-10, 10],
+      "expect": 2
+    },
+    {
+      "id": "the-mouse-alone",
+      "screens": [[0, 0, 1512, 982], [1512, -200, 2560, 1440], [-1920, 0, 1920, 1080]],
+      "caret": null, "window": null, "mouse": [700, 400],
+      "expect": 0
+    },
+    {
+      "id": "the-mouse-on-the-shared-edge-is-on-the-right-hand-screen",
+      "screens": [[0, 0, 1512, 982], [1512, -200, 2560, 1440], [-1920, 0, 1920, 1080]],
+      "caret": null, "window": null, "mouse": [1512, 400],
+      "expect": 1
+    },
+    {
+      "id": "an-empty-cursor-is-ignored",
+      "screens": [[0, 0, 1512, 982], [1512, -200, 2560, 1440], [-1920, 0, 1920, 1080]],
+      "caret": [0, 0, 0, 0], "window": null, "mouse": [2000, 0],
+      "expect": 1
+    },
+    {
+      "id": "a-cursor-off-every-screen-leaves-it-to-the-window",
+      "screens": [[0, 0, 1512, 982], [1512, -200, 2560, 1440], [-1920, 0, 1920, 1080]],
+      "caret": [5000, 5000, 2, 18], "window": [0, 0, 800, 600], "mouse": [-500, 500],
+      "expect": 0
+    },
+    {
+      "id": "the-mouse-off-every-screen",
+      "screens": [[0, 0, 1512, 982], [1512, -200, 2560, 1440], [-1920, 0, 1920, 1080]],
+      "caret": null, "window": null, "mouse": [99999, 0],
+      "expect": null
+    },
+    {
+      "id": "nothing-known",
+      "screens": [[0, 0, 1512, 982], [1512, -200, 2560, 1440]],
+      "caret": null, "window": null, "mouse": null,
+      "expect": null
+    }
+  ],
+  "saved": [
+    { "saved": "bottom", "expect": "bottom" },
+    { "saved": "top", "expect": "top" },
+    { "saved": "caret", "expect": "caret" },
+    { "saved": null, "expect": "bottom" },
+    { "saved": "", "expect": "bottom" },
+    { "saved": "Top", "expect": "bottom" },
+    { "saved": "cursor", "expect": "bottom" }
+  ]
+}

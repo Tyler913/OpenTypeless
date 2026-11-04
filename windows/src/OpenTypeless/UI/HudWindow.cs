@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
+using OpenTypeless.Input;
 using OpenTypeless.Native;
 using OpenTypeless.Session;
 using TypelessCore;
@@ -19,14 +20,29 @@ using Windows.UI;
 
 namespace OpenTypeless.UI;
 
+/// <summary>
+/// Where a capsule goes: the chosen position (General → Capsule position), the line being typed into when it's near the
+/// text cursor and known (physical pixels), and the window in front, whose screen it goes on otherwise.
+/// </summary>
+public sealed record HudLocation(HudPosition Position, HudRect? Caret, nint Window);
+
 /// <summary>Shows and hides the recording capsule. UI-thread only.</summary>
 public sealed class HudController
 {
+    /// <summary>How long a recording's capsule near the text cursor waits for UI Automation to say where that is.</summary>
+    private static readonly TimeSpan CaretBudget = TimeSpan.FromMilliseconds(150);
+
     public HudModel Model { get; } = new();
     private HudWindow? _window;
     private DispatcherQueueTimer? _hideTimer;
     /// <summary>A notice waiting for the capsule to be free (see <see cref="ShowWhenFree"/>).</summary>
     private (HudPhase Phase, double HideAfter)? _waiting;
+
+    /// <summary>A recording's capsule waiting to be told where the text cursor is (see <see cref="Locate"/>).</summary>
+    private HudLocation? _pending;
+
+    /// <summary>Where the capsule shows, asked as each recording starts: the setting, or the UI snapshots' own.</summary>
+    internal Func<HudPosition> Position { get; set; } = () => Services.AppSettings.Shared.HudPosition;
 
     public void Show(HudPhase phase, double? autoHideAfter = null)
     {
@@ -35,17 +51,23 @@ public sealed class HudController
         if (phase is HudPhase.Hidden && _waiting is { } next)
         {
             _waiting = null;
+            _pending = null;
             Show(next.Phase, next.HideAfter);
             return;
         }
+        var starts = phase is HudPhase.Recording && Model.Phase is not HudPhase.Recording;
         Model.Phase = phase;
         if (phase is HudPhase.Hidden)
         {
+            _pending = null;
             _window?.HideHud();
             return;
         }
         _window ??= new HudWindow(Model);
-        _window.ShowHud();
+        if (starts) Locate(_window);
+        // On to the next phase (the key let go, an error) before UI Automation answered: shown now, where it goes without it.
+        else if (_pending is { } pending) Reveal(_window, pending);
+        else _window.ShowHud(_window.IsShown ? null : new HudLocation(Position(), null, Win32.GetForegroundWindow()));
 
         if (autoHideAfter is { } seconds) HideAfter(Message(phase) is { } message ? DisplayTime(message, seconds) : seconds);
     }
@@ -59,6 +81,47 @@ public sealed class HudController
     {
         if (Model.Phase is HudPhase.Hidden) Show(phase, autoHideAfter);
         else _waiting = (phase, autoHideAfter);
+    }
+
+    /// <summary>
+    /// Shows a recording's capsule where the user is working: on the screen of the window in front and, near the text
+    /// cursor, by the line being typed into. The system caret is asked at once; UI Automation, which goes into the other
+    /// app, on the thread pool, waited for only briefly. A later answer is dropped, so the capsule never jumps once it's up.
+    /// </summary>
+    private void Locate(HudWindow window)
+    {
+        var foreground = Win32.GetForegroundWindow();
+        var location = new HudLocation(Position(), null, foreground);
+        if (location.Position != HudPosition.Caret || foreground == 0)
+        {
+            Reveal(window, location);
+            return;
+        }
+        if (CaretLocator.SystemCaret(foreground) is { } caret)
+        {
+            Reveal(window, location with { Caret = caret });
+            return;
+        }
+        _pending = location;
+        var dispatcher = DispatcherQueue.GetForCurrentThread();
+        _ = Read();
+
+        async Task Read()
+        {
+            var found = await CaretLocator.FromAutomation(foreground, CaretBudget).ConfigureAwait(false);
+            dispatcher.TryEnqueue(() =>
+            {
+                // Only while this recording's capsule still waits.
+                if (ReferenceEquals(_pending, location)) Reveal(window, location with { Caret = found });
+            });
+        }
+    }
+
+    private void Reveal(HudWindow window, HudLocation location)
+    {
+        _pending = null;
+        if (Model.Phase is HudPhase.Hidden) return;
+        window.ShowHud(location);
     }
 
     /// <summary>The text a notice shows (its length decides how long it stays up).</summary>
@@ -125,16 +188,22 @@ public sealed class HudController
 }
 
 /// <summary>
-/// Small Mica capsule near the bottom of the screen: ✕, a waveform and ↑. Never takes focus, so the
-/// target text field stays focused for the paste. Clicks go through to what's below, except on the capsule while it
-/// shows its ✕ and ↑ / ■ buttons.
+/// Small Mica capsule, at the bottom of the screen unless the user picked the top or the text cursor (General → Capsule
+/// position): ✕, a waveform and ↑. Never takes focus, so the target text field stays focused for the paste. Clicks go
+/// through to what's below, except on the capsule while it shows its ✕ and ↑ / ■ buttons.
 /// </summary>
 public sealed class HudWindow : Window
 {
     private const double HeightDips = 44;
-    /// <summary>Extra height for the live preview line above the waveform.</summary>
+    /// <summary>Extra height for the live preview line above the waveform (below it when the capsule grows downwards).</summary>
     private const double PreviewDips = 26;
-    private const double BottomMarginDips = 28;
+    /// <summary>
+    /// From the taskbar (as it always was) or the top of the work area to the capsule; from the line being typed into;
+    /// and kept clear inside the work area near the text cursor.
+    /// </summary>
+    private const double InsetDips = 28, CaretGapDips = 8, ScreenMarginDips = 8;
+    /// <summary>The largest the capsule gets: as wide as <see cref="Resize"/> lets it, with the preview or three lines of notice.</summary>
+    private const double MaxWidthDips = 420, MaxHeightDips = 80;
     /// <summary>Space above and below a notice that wraps onto more lines.</summary>
     private const double NoticePaddingDips = 11;
     /// <summary>A notice's text: up to three lines this wide, so the end of an error (often what to do) still shows.</summary>
@@ -172,9 +241,14 @@ public sealed class HudWindow : Window
     };
     private readonly Win32.SUBCLASSPROC _subclass; // kept alive for the window's lifetime
     private bool _visible;
-    private int _centerX = int.MinValue;
+    /// <summary>Where the capsule is anchored, in physical pixels, and the DPI scale of that monitor (see <see cref="Anchor"/>).</summary>
+    private HudAnchor? _anchor;
+    private double _scale = 1;
 
     public nint Hwnd { get; }
+    public bool IsShown => _visible;
+    /// <summary>The capsule hangs from its top edge: the preview goes below the controls, and a notice that wraps grows downwards.</summary>
+    private bool GrowsDown => _anchor?.GrowsDown ?? false;
 
     public HudWindow(HudModel model)
     {
@@ -217,10 +291,13 @@ public sealed class HudWindow : Window
         Render();
     }
 
-    public void ShowHud()
+    /// <param name="location">Where to put it (a recording starting, or the capsule shown again); null keeps it where it is.</param>
+    public void ShowHud(HudLocation? location = null)
     {
+        if (location != null) Anchor(location);
+        else if (_anchor == null) Anchor(new HudLocation(HudPosition.Bottom, null, 0));
         Render();
-        Resize(position: !_visible);
+        Resize();
         // The capsule may have just moved to a monitor with a different scale.
         _bars.SetScale(WindowHelpers.Scale(Hwnd));
         if (!_visible)
@@ -271,7 +348,11 @@ public sealed class HudWindow : Window
         if (ShowsPreview)
         {
             _preview.Text = _model.Preview;
-            _root.Children.Add(new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { _preview, row } });
+            // On the side the capsule grows to: above the controls at the bottom of the screen, below them at the top.
+            var stack = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+            stack.Children.Add(GrowsDown ? row : _preview);
+            stack.Children.Add(GrowsDown ? _preview : row);
+            _root.Children.Add(stack);
         }
         else
         {
@@ -279,7 +360,7 @@ public sealed class HudWindow : Window
         }
         SetAnimating(working);
         if (bloom) _bloomPending = true;
-        if (_visible) Resize(position: false);
+        if (_visible) Resize();
     }
 
     private static void Release(Panel panel)
@@ -422,7 +503,7 @@ public sealed class HudWindow : Window
         else if (ShowsPreview)
         {
             _preview.Text = _model.Preview;
-            if (_visible) Resize(position: false);
+            if (_visible) Resize();
         }
     }
 
@@ -523,8 +604,33 @@ public sealed class HudWindow : Window
 
     private void UpdateLevels() => _bars.SetLevels(HudModel.Waveform(_model.Levels), animated: true);
 
-    /// <summary>Sizes the capsule to its content, bottom-centre of the screen under the mouse.</summary>
-    private void Resize(bool position)
+    /// <summary>
+    /// Picks the screen and the anchor for <paramref name="location"/> (see <see cref="HudPlacement"/>): the screen with
+    /// the text cursor, else the one holding most of the window in front, else the one under the mouse.
+    /// </summary>
+    private void Anchor(HudLocation location)
+    {
+        var monitors = WindowHelpers.Monitors();
+        HudRect? window = null;
+        // The desktop spans every screen: it says nothing about which one the user is on.
+        if (location.Window != 0 && Win32.ClassName(location.Window) is not ("Progman" or "WorkerW")
+            && Win32.GetWindowRect(location.Window, out var bounds))
+        {
+            window = Rect(bounds);
+        }
+        Win32.GetCursorPos(out var mouse);
+        var index = HudPlacement.Screen(monitors.Select(m => Rect(m.Monitor)).ToList(), location.Caret, window, new HudPoint(mouse.X, mouse.Y));
+        var (work, _, scale) = index is { } i ? monitors[i] : WindowHelpers.MonitorAtCursor();
+        _scale = scale;
+        _moved = true;
+        _anchor = HudPlacement.Anchor(location.Position, Rect(work), new HudSize(MaxWidthDips * scale, MaxHeightDips * scale), location.Caret,
+                                      new HudPlacement.Metrics(InsetDips * scale, CaretGapDips * scale, ScreenMarginDips * scale));
+    }
+
+    private static HudRect Rect(Win32.RECT rect) => new(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
+
+    /// <summary>Sizes the capsule to its content, its anchored edge where <see cref="Anchor"/> put it.</summary>
+    private void Resize()
     {
         _previewShown = ShowsPreview;
         var heightDips = _previewShown ? HeightDips + PreviewDips : HeightDips;
@@ -539,39 +645,29 @@ public sealed class HudWindow : Window
         }
         // The buttons sit exactly at the ends; a notice gets a little slack.
         var widthDips = HasButtons ? Math.Clamp(Math.Ceiling(contentWidth), 120, 420) : Math.Clamp(contentWidth + 4, 120, 420);
-        // One line keeps the usual height; more lines grow the capsule upwards from its bottom edge.
+        // One line keeps the usual height; more lines grow the capsule away from its anchored edge.
         if (HudController.Message(_model.Phase) != null) heightDips = Math.Max(heightDips, Math.Ceiling(contentHeight) + 2 * NoticePaddingDips);
 
-        if (position || _centerX == int.MinValue)
-        {
-            var (work, _, scale) = WindowHelpers.MonitorAtCursor();
-            var width = (int)Math.Round(widthDips * scale);
-            var height = (int)Math.Round(heightDips * scale);
-            _centerX = (work.Left + work.Right) / 2;
-            _bottom = work.Bottom - (int)Math.Round(BottomMarginDips * scale);
-            _placed = new RectInt32(_centerX - width / 2, _bottom - height, width, height);
-            WindowHelpers.PlaceClient(this, _placed);
-            Shape(width, height, scale);
-            _glow.Follow(_placed, scale);
-        }
-        else
-        {
-            var scale = WindowHelpers.Scale(Hwnd);
-            var width = (int)Math.Round(widthDips * scale);
-            var height = (int)Math.Round(heightDips * scale);
-            var rect = new RectInt32(_centerX - width / 2, _bottom - height, width, height);
-            // The live preview lands here several times a second, mostly without changing the size: moving the window
-            // onto itself would still cost a round of window messages and layout.
-            if (rect.Equals(_placed)) return;
-            _placed = rect;
-            WindowHelpers.PlaceClient(this, rect);
-            Shape(width, height, scale);
-            _glow.Follow(_placed, scale);
-        }
+        if (_anchor is not { } anchor) return;
+        var scale = _scale;
+        var width = (int)Math.Round(widthDips * scale);
+        var height = (int)Math.Round(heightDips * scale);
+        // At the bottom, its bottom edge 28 dips above the taskbar, as it always was; at the top, its top edge as far below.
+        var edge = (int)Math.Round(anchor.EdgeY);
+        var rect = new RectInt32((int)Math.Round(anchor.CenterX) - width / 2, anchor.GrowsDown ? edge : edge - height, width, height);
+        // The live preview lands here several times a second, mostly without changing the size: moving the window
+        // onto itself would still cost a round of window messages and layout.
+        if (rect.Equals(_placed) && !_moved) return;
+        _moved = false;
+        _placed = rect;
+        WindowHelpers.PlaceClient(this, rect);
+        Shape(width, height, scale);
+        _glow.Follow(_placed, scale);
     }
 
-    private int _bottom;
     private RectInt32 _placed;
+    /// <summary>Anchored anew: placed even at the same spot, as a capsule shown again always was.</summary>
+    private bool _moved;
     private (int Width, int Height, int Diameter) _shape;
 
     /// <summary>

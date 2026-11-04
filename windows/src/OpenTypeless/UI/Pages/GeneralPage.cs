@@ -110,6 +110,22 @@ public sealed class GeneralPage : PageBase
             Trailing = Toggle(_settings.LivePreview, on => _settings.LivePreview = on),
         });
         dictation.Body.Add(new CardDivider());
+        var positions = HudPositions.All;
+        var positionPicker = new ComboBox { MinWidth = 150 };
+        foreach (var position in positions) positionPicker.Items.Add(position.Title());
+        positionPicker.SelectedIndex = Math.Max(0, Array.IndexOf(positions, _settings.HudPosition));
+        positionPicker.SelectionChanged += (_, _) =>
+        {
+            if (positionPicker.SelectedIndex >= 0) _settings.HudPosition = positions[positionPicker.SelectedIndex];
+        };
+        dictation.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Placement, Title = L("录音条位置", "Capsule position"),
+            Help = L("录音条显示在你正在用的窗口所在的屏幕上。选「光标附近」时，它出现在正在输入的那一行下方（下方放不下就在上方），不会挡住这一行；读不到光标位置的应用里显示在屏幕底部。",
+                     "The capsule shows on the screen of the window you're working in. Near the text cursor puts it just below the line you're typing in (above it when there's no room below), never over it; in apps that don't say where the cursor is, it shows at the bottom of the screen."),
+            Trailing = positionPicker,
+        });
+        dictation.Body.Add(new CardDivider());
         var minutes = new NumberBox
         {
             Minimum = 1, Maximum = 60, SmallChange = 1, LargeChange = 5,

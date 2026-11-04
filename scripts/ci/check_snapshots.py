@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image
 
 PAGES = ("home", "general", "shortcut", "providers", "models", "style", "apps", "history")
-HUD_STATES = ("recording", "working", "copied", "learned", "spending", "error")
+HUD_STATES = ("recording", "working", "copied", "learned", "spending", "error", "preview", "top")
 
 
 def expected_files(language):

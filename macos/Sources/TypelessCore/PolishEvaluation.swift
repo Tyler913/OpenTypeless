@@ -371,3 +371,128 @@ public enum PolishMetrics {
         String(text.lowercased().unicodeScalars.filter { !ignored.contains($0) }.map(Character.init))
     }
 }
+
+/// One case of an evaluation set (eval/*.json) and the checks its output must pass: the strings it must and must not
+/// contain, and, where the case asks, how it's laid out (paragraphs, list items) and how long it is. Every output is also
+/// checked for stock phrases the speaker didn't say (`PolishChecks.stockPhrases`). The same as the Windows app's, so a
+/// set passes or fails alike on both.
+public struct PolishCase: Codable, Sendable {
+    public let id: String
+    public let input: String
+    public var mustContain: [String]?
+    public var mustNotContain: [String]?
+    public var anyOf: [[String]]?
+    /// Translate into this language (a `TranslationTarget` id) instead of cleaning up, as translation mode does.
+    public var translateTo: String?
+    /// Text around the cursor sent with the transcript (see CursorContext), as the app would.
+    public var context: String?
+    /// The layout of the app it's dictated into (a `TextLayout` raw value); the prompt's own when absent.
+    public var layout: String?
+    /// The speech-to-text language set ("" or absent auto-detects), which picks the examples sent with it.
+    public var language: String?
+    /// How many paragraphs the output may have, [least, most] (see `TextShape`).
+    public var paragraphs: [Int]?
+    /// How many list items the output may have, [least, most]; [0, 0] for none.
+    public var listItems: [Int]?
+    /// The output's length as a share of the input's, [least, most], once the input's fillers and the strings the output
+    /// must not contain are left out (see `PolishChecks.lengthRatio`): [0.8, 1.2] for a clean-up that only mends.
+    public var length: [Double]?
+
+    public var textLayout: TextLayout { layout.flatMap(TextLayout.init(rawValue:)) ?? .natural }
+
+    /// What's wrong with `output` as this case's answer; empty when nothing is.
+    public func failures(_ output: String) -> [String] {
+        var failures: [String] = []
+        for s in mustContain ?? [] where !output.contains(s) { failures.append("missing “\(s)”") }
+        for s in mustNotContain ?? [] where output.contains(s) { failures.append("still has “\(s)”") }
+        for g in anyOf ?? [] where !g.contains(where: output.contains) {
+            failures.append("none of [\(g.joined(separator: ", "))]")
+        }
+        let shape = TextShape.of(output)
+        if let range = paragraphs, range.count == 2, shape.paragraphs < range[0] || shape.paragraphs > range[1] {
+            failures.append("\(shape.paragraphs) paragraphs, not \(range[0])–\(range[1])")
+        }
+        if let range = listItems, range.count == 2, shape.listItems < range[0] || shape.listItems > range[1] {
+            failures.append("\(shape.listItems) list items, not \(range[0])–\(range[1])")
+        }
+        if let range = length, range.count == 2 {
+            let ratio = PolishChecks.lengthRatio(input: input, output: output, removed: mustNotContain ?? [])
+            if ratio < range[0] || ratio > range[1] {
+                failures.append(String(format: "length %.2f of the input, not %.2f–%.2f", ratio, range[0], range[1]))
+            }
+        }
+        for phrase in PolishChecks.addedStockPhrases(input: input, output: output) { failures.append("stock phrase “\(phrase)”") }
+        return failures
+    }
+}
+
+/// How a text is laid out: its paragraphs (blocks between blank lines with any text that isn't a list item) and list items.
+public struct TextShape: Equatable, Sendable {
+    public let paragraphs: Int
+    public let listItems: Int
+
+    public init(paragraphs: Int, listItems: Int) {
+        self.paragraphs = paragraphs
+        self.listItems = listItems
+    }
+
+    public static func of(_ text: String) -> TextShape {
+        var paragraphs = 0, items = 0
+        var prose = false
+        for raw in text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n") + [""] {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.isEmpty {
+                if prose { paragraphs += 1 }
+                prose = false
+            } else if Prompts.listMarkerLength(line) > 0 {
+                items += 1
+            } else {
+                prose = true
+            }
+        }
+        return TextShape(paragraphs: paragraphs, listItems: items)
+    }
+}
+
+/// The evaluation's checks of how a clean-up reads, beyond the strings a case names.
+public enum PolishChecks {
+    /// Stock phrases of written-up text, lower-case, that a clean-up must never add (the prompt names the commonest): one
+    /// in an output and not in its input fails the case, in any language.
+    public static let stockPhrases = [
+        "值得一提的是", "综合来看", "总的来说", "总而言之", "进行优化", "需要注意的是", "值得注意的是",
+        "it's worth noting", "it is worth noting", "in conclusion", "furthermore", "moreover", "overall,",
+        "注目すべき", "総合的に見て", "まとめると",
+        "주목할 만한", "결론적으로", "종합적으로",
+        "cabe destacar", "en conclusión", "en resumen",
+        "vale ressaltar", "vale destacar", "em conclusão", "em resumo",
+        "il convient de noter", "en conclusion", "en résumé",
+        "es ist erwähnenswert", "zusammenfassend", "abschließend",
+        "стоит отметить", "в заключение", "подводя итог",
+    ]
+
+    /// The stock phrases in `output` that weren't in `input`.
+    public static func addedStockPhrases(input: String, output: String) -> [String] {
+        let said = input.lowercased().replacingOccurrences(of: "’", with: "'")
+        let written = output.lowercased().replacingOccurrences(of: "’", with: "'")
+        return stockPhrases.filter { written.contains($0) && !said.contains($0) }
+    }
+
+    /// Fillers that are never words of their own, wherever they stand (in Chinese, Japanese and Korean text they needn't
+    /// be set off by spaces).
+    static let fillerRuns = ["嗯", "呃", "えーと", "えっと", "あのー", "ええと"]
+
+    /// Fillers that count only as words of their own, lower-case ("um", but not the "um" in "summary").
+    static let fillerWords: Set<String> = ["um", "uh", "umm", "uhh", "erm", "ehm", "eh", "euh", "ähm", "äh", "음", "어", "ну", "э"]
+
+    /// The length of `output` as a share of `input`'s, both in letters (see `PolishMetrics.similarity`: white space and
+    /// punctuation don't count), once the input's fillers and every one of `removed` (the strings the output must not
+    /// contain: replaced values, correction phrases) are left out of it: what a clean-up that only mends keeps.
+    public static func lengthRatio(input: String, output: String, removed: [String]) -> Double {
+        var basis = input
+        for s in removed + fillerRuns where !s.isEmpty { basis = basis.replacingOccurrences(of: s, with: "") }
+        let fillers = ExampleLanguage.words(basis).filter(fillerWords.contains)
+            .reduce(0) { $0 + PolishMetrics.normalized($1).unicodeScalars.count }
+        let letters = max(1, PolishMetrics.normalized(basis).unicodeScalars.count - fillers)
+        return Double(PolishMetrics.normalized(output).unicodeScalars.count) / Double(letters)
+    }
+}

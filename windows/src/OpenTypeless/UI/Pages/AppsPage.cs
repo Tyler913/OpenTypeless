@@ -188,6 +188,7 @@ internal sealed class AppProfileCard : UserControl
     private readonly Border _divider = new() { Height = 1 };
     private readonly StackPanel _details = new();
     private readonly TextBox _instructions;
+    private readonly ComboBox _layout;
     private readonly Action<bool> _onExpanded;
     private bool _expanded;
 
@@ -250,6 +251,13 @@ internal sealed class AppProfileCard : UserControl
         {
             Glyph = Glyphs.Translate, Title = L("说话语言", "Spoken language"),
             Trailing = LanguageBox(),
+        });
+        _details.Children.Add(new CardDivider());
+        _layout = LayoutBox();
+        _details.Children.Add(new CardRow
+        {
+            Glyph = Glyphs.Paragraph, Title = L("排版", "Layout"), Help = LayoutHelp,
+            Trailing = _layout,
         });
         _details.Children.Add(new CardDivider());
 
@@ -338,6 +346,7 @@ internal sealed class AppProfileCard : UserControl
         _summary.Text = Summary(_profile);
         // Only used while the text is cleaned up.
         _instructions.IsEnabled = _profile.Polish ?? _settings.PolishEnabled;
+        _layout.IsEnabled = _instructions.IsEnabled;
     }
 
     /// <summary>On, off, or the global setting (named with its current value).</summary>
@@ -370,6 +379,35 @@ internal sealed class AppProfileCard : UserControl
         return box;
     }
 
+    /// <summary>The app's built-in layout (named), or one of the layouts.</summary>
+    private ComboBox LayoutBox()
+    {
+        var box = new ComboBox { MinWidth = 150 };
+        List<TextLayout?> layouts = [null, .. TextLayouts.All.Select(l => (TextLayout?)l)];
+        var builtIn = LayoutName(TextLayouts.BuiltIn(_profile.App) ?? TextLayout.Natural);
+        foreach (var layout in layouts) box.Items.Add(layout is { } chosen ? LayoutName(chosen) : L($"默认（{builtIn}）", $"Default ({builtIn})"));
+        box.SelectedIndex = Math.Max(0, layouts.IndexOf(_profile.Layout));
+        box.SelectionChanged += (_, _) =>
+        {
+            var layout = layouts[Math.Max(0, box.SelectedIndex)];
+            Update(p => p with { Layout = layout });
+        };
+        return box;
+    }
+
+    /// <summary>A layout's name in the picker and the card's summary.</summary>
+    private static string LayoutName(TextLayout layout) => layout switch
+    {
+        TextLayout.Chat => L("聊天", "Chat"),
+        TextLayout.Structured => L("轻结构", "Light structure"),
+        TextLayout.Email => L("邮件", "Email"),
+        _ => L("自然", "Natural"),
+    };
+
+    private static string LayoutHelp =>
+        L("整理后的文字怎么分段、要不要列表。聊天：一整段，不列表，句尾不加句号。自然：短的不分段，明确列举三项以上才列表。轻结构（写给 AI 的提示词、文档）：更积极地分段，两项以上的并列就列表。邮件：说了称呼和落款就各占一行。只改排版，不改你说的话。常见的聊天、AI、邮件应用默认就用对应的排版。",
+          "How the cleaned-up text is laid out. Chat: one block, no lists, no full stop at the end. Natural: short text stays one paragraph, a list only for three or more items you enumerate. Light structure (prompts for an AI, documents): more paragraphs, and a list for two or more parallel items. Email: a greeting and sign-off you dictate go on lines of their own. Only the layout changes, never your words. Common chat, AI and mail apps use their layout by default.");
+
     /// <summary>"Clean-up off · Enter on · English", or that everything follows the usual settings.</summary>
     private static string Summary(AppProfile profile)
     {
@@ -377,6 +415,7 @@ internal sealed class AppProfileCard : UserControl
         if (profile.Polish is { } polish) parts.Add(polish ? L("整理：开", "Clean-up on") : L("整理：关", "Clean-up off"));
         if (profile.PressEnter is { } enter) parts.Add(enter ? L("回车：开", "Enter on") : L("回车：关", "Enter off"));
         if (profile.Language is { } language) parts.Add(LanguageName(language));
+        if (profile.Layout is { } layout) parts.Add(LayoutName(layout));
         if (profile.Instructions.Trim().Length > 0) parts.Add(L("自定义整理偏好", "Own clean-up preferences"));
         return parts.Count == 0 ? L("全部跟随你平时的设置", "Uses your usual settings") : string.Join(" · ", parts);
     }

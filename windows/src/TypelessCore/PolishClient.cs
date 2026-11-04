@@ -38,7 +38,24 @@ public sealed record PolishOptions(
     /// The transcripts' line breaks were dictated (see <see cref="SpokenLayout"/>): the prompt then asks to keep them, for a
     /// transcript (or part of one) that has any.
     /// </summary>
-    bool DictatedLineBreaks = false);
+    bool DictatedLineBreaks = false,
+    /// <summary>How much structure the text gets where it goes (see <see cref="TextLayout"/>); a clean-up's or a translation's.</summary>
+    TextLayout Layout = TextLayout.Natural,
+    /// <summary>
+    /// The speech-to-text language ("" auto-detects): a clean-up in a language with examples of its own gets them (see
+    /// <see cref="ExampleLanguage.Resolve"/>).
+    /// </summary>
+    string SpokenLanguage = "",
+    /// <summary>
+    /// For one part of a long transcript, the ends of the parts around it, as spoken, sent as reference (see
+    /// <see cref="SegmentedPolish"/>); a clean-up's only.
+    /// </summary>
+    SurroundingParts? Surrounding = null,
+    /// <summary>
+    /// Lay the transcript, a cleaned-up text, out again by <see cref="Layout"/> instead of cleaning it up (see
+    /// <see cref="Prompts.RelayoutSystemPrompt"/>): only its line breaks and list markers change.
+    /// </summary>
+    bool Relayout = false);
 
 public static class ReasoningConfig
 {
@@ -193,6 +210,10 @@ public sealed partial class ApiClient
     /// </summary>
     internal static string[] PolishMessages(string transcript, PolishOptions options)
     {
+        if (options.Relayout)
+        {
+            return [Prompts.RelayoutSystemPrompt(options.Layout), Prompts.RelayoutUserMessage(transcript)];
+        }
         if (options.Selection is { } selection)
         {
             return
@@ -205,15 +226,17 @@ public sealed partial class ApiClient
         {
             return
             [
-                options.SystemPromptOverride ?? Prompts.TranslateSystemPrompt(target, options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard),
+                options.SystemPromptOverride ?? Prompts.TranslateSystemPrompt(target, options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard,
+                                                                              options.Layout),
                 Prompts.TranslateUserMessage(transcript, target),
             ];
         }
         return
         [
             options.SystemPromptOverride ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard,
-                                                                       options.DictatedLineBreaks && transcript.Contains('\n')),
-            Prompts.PolishUserMessage(transcript, options.Context),
+                                                                       options.DictatedLineBreaks && transcript.Contains('\n'), options.Layout,
+                                                                       ExampleLanguage.Resolve(options.SpokenLanguage, transcript)),
+            Prompts.PolishUserMessage(transcript, options.Context, options.Surrounding),
         ];
     }
 
@@ -318,7 +341,7 @@ public sealed partial class ApiClient
         request.Headers.TryAddWithoutValidation("Accept", "text/event-stream");
         // Told as the request goes out (not when it's built, nor for one cancelled first), so History says so only when the
         // text around the cursor really went to the provider.
-        var sentContext = options.Translation is null && options.Selection is null && Prompts.ContextBlock(options.Context) != null;
+        var sentContext = !options.Relayout && options.Translation is null && options.Selection is null && Prompts.ContextBlock(options.Context) != null;
         if (sentContext && !cancellationToken.IsCancellationRequested) options.OnContextSent?.Invoke();
 
         return await Timeouts.WithTimeout(limits.Total, async ct =>
@@ -383,7 +406,8 @@ public sealed partial class ApiClient
                     // An edit's answer is cleaned up as an edit's.
                     var cleaned = options.Selection is { } selection
                         ? Prompts.SanitizeCommandOutput(text.ToString(), selection, transcript)
-                        : Prompts.SanitizePolishOutput(text.ToString(), Prompts.Reminder(options.Translation), sentContext);
+                        : Prompts.SanitizePolishOutput(text.ToString(), options.Relayout ? Prompts.RelayoutReminder : Prompts.Reminder(options.Translation),
+                                                       sentContext);
                     if (cleaned.Length == 0) throw ApiException.BadResponse(L("模型返回了空内容", "the model returned nothing"));
                     if (usage is null || (usage.InputTokens == null && usage.OutputTokens == null && usage.Cost == null))
                     {

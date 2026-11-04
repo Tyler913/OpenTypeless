@@ -447,6 +447,306 @@
       "context": "Hi Tyler,\n\nCould you send me the Q3 numbers when you get a chance?\n\nThanks,\nMarcus",
       "output": "Hi Marcus, sounds good, see you then.",
       "expect": "copied"
+    },
+    {
+      "id": "h-en-tone-though",
+      "input": "yeah so the build is green now, um, the flaky test is still there though",
+      "output": "The build is green now, the flaky test is still there though.",
+      "expect": null
+    },
+    {
+      "id": "h-en-emphasis",
+      "input": "this is really really important, um, we cannot ship without the migration",
+      "output": "This is really really important, we cannot ship without the migration.",
+      "expect": null
+    },
+    {
+      "id": "h-en-list",
+      "input": "for the release I need three things, first the changelog, second uh the version bump, and third the signed installers",
+      "output": "For the release I need three things:\n\n1. The changelog.\n2. The version bump.\n3. The signed installers.",
+      "expect": null
+    },
+    {
+      "id": "h-en-chat",
+      "input": "hey um are you free at three, actually make it four, for a quick call",
+      "output": "Hey, are you free at four for a quick call?",
+      "expect": null
+    },
+    {
+      "id": "h-en-no-stock-phrases",
+      "input": "so basically the cache is too small and we should make it bigger, that's it",
+      "output": "The cache is too small and we should make it bigger.",
+      "expect": null
+    },
+    {
+      "id": "h-en-paragraphs",
+      "input": "so the onboarding is done, the new screens are in and the copy is final. we tested it on iOS and Android last week and it looked fine. there's one bug left on small screens where the button gets cut off. I'll fix that tomorrow. separately, um, the billing migration is blocked. we're waiting on finance to sign off on the new prices. once they do, it's about two days of work. so I think we can still make the end of the month",
+      "output": "The onboarding is done, the new screens are in and the copy is final. We tested it on iOS and Android last week and it looked fine. There's one bug left on small screens where the button gets cut off. I'll fix that tomorrow.\n\nSeparately, the billing migration is blocked. We're waiting on finance to sign off on the new prices. Once they do, it's about two days of work, so I think we can still make the end of the month.",
+      "expect": null
+    },
+    {
+      "id": "h-zh-tone",
+      "input": "这个方案我觉得还行吧，呃，就是成本有点高啊",
+      "output": "这个方案我觉得还行吧，就是成本有点高啊。",
+      "expect": null
+    },
+    {
+      "id": "h-zh-emphasis",
+      "input": "这个真的真的很重要，嗯，周五之前一定要上线",
+      "output": "这个真的真的很重要，周五之前一定要上线。",
+      "expect": null
+    },
+    {
+      "id": "h-zh-no-stock-phrases",
+      "input": "缓存那块要改一下，然后日志也太多了，就这样",
+      "output": "缓存那块要改一下，日志也太多了。",
+      "expect": null
+    },
+    {
+      "id": "h-zh-run-on",
+      "input": "然后那个服务我昨天重启了一下然后就好了但是今天早上又挂了然后日志里也没看到什么报错",
+      "output": "那个服务我昨天重启了一下就好了，但是今天早上又挂了，日志里也没看到什么报错。",
+      "expect": null
+    },
+    {
+      "id": "h-zh-tasks-natural",
+      "input": "你帮我看一下登录页的代码，顺便把支付的测试补上，再更新一下 README",
+      "output": "你帮我看一下登录页的代码，顺便把支付的测试补上，再更新一下 README。",
+      "expect": null
+    },
+    {
+      "id": "h-zh-tasks-structured",
+      "input": "你帮我看一下登录页的代码，顺便把支付的测试补上，再更新一下 README",
+      "output": "你帮我：\n\n1. 看一下登录页的代码\n2. 顺便把支付的测试补上\n3. 再更新一下 README",
+      "expect": null
+    },
+    {
+      "id": "h-zh-enumeration-natural",
+      "input": "我们周五要做三件事，第一发版，第二写周报，第三约客户",
+      "output": "我们周五要做三件事：\n\n1. 发版。\n2. 写周报。\n3. 约客户。",
+      "expect": null
+    },
+    {
+      "id": "h-zh-enumeration-chat",
+      "input": "我们周五要做三件事，第一发版，第二写周报，第三约客户",
+      "output": "我们周五要做三件事，第一发版，第二写周报，第三约客户",
+      "expect": null
+    },
+    {
+      "id": "h-zh-email",
+      "input": "王总好，呃，附件是这周的周报，请您查收，有问题随时找我，谢谢，小李",
+      "output": "王总好，\n\n附件是这周的周报，请您查收，有问题随时找我。\n\n谢谢，\n小李",
+      "expect": null
+    },
+    {
+      "id": "h-ja-correction",
+      "input": "えーと、来週の打ち合わせは火曜日、いや、水曜日の十時からでお願いします",
+      "output": "来週の打ち合わせは水曜日の10時からでお願いします。",
+      "expect": null
+    },
+    {
+      "id": "h-ja-tone",
+      "input": "あのー、このバグなんですけど、たぶん、キャッシュのせいだと思うんですよね",
+      "output": "このバグなんですけど、たぶんキャッシュのせいだと思うんですよね。",
+      "expect": null
+    },
+    {
+      "id": "h-ja-list",
+      "input": "やることは三つあって、一つ目はログイン画面の修正、二つ目は、えー、決済の追加、三つ目はテストを書くことです",
+      "output": "やることは三つあって、\n\n1. ログイン画面の修正\n2. 決済の追加\n3. テストを書くこと",
+      "expect": null
+    },
+    {
+      "id": "h-ja-english-terms",
+      "input": "そのー、リアクトのユーズエフェクトが二回走るんですけど、これって正常ですか",
+      "output": "ReactのuseEffectが2回走るんですけど、これって正常ですか？",
+      "expect": null
+    },
+    {
+      "id": "h-ja-chat",
+      "input": "了解です、えっと、明日の朝までに送りますね",
+      "output": "了解です、明日の朝までに送りますね",
+      "expect": null
+    },
+    {
+      "id": "h-ko-correction",
+      "input": "음, 마감은 금요일, 아니 아니, 다음 주 월요일로 해 주세요",
+      "output": "마감은 다음 주 월요일로 해 주세요.",
+      "expect": null
+    },
+    {
+      "id": "h-ko-filler",
+      "input": "어, 그 API가 가끔 오백 에러를 내는데요, 아마 타임아웃 때문인 것 같아요",
+      "output": "그 API가 가끔 500 에러를 내는데요, 아마 타임아웃 때문인 것 같아요.",
+      "expect": null
+    },
+    {
+      "id": "h-ko-list",
+      "input": "할 일이 세 가지 있어요. 첫째 로그인 화면 고치기, 둘째, 음, 결제 기능 추가, 셋째 테스트 작성이에요",
+      "output": "할 일이 세 가지 있어요.\n\n1. 로그인 화면 고치기\n2. 결제 기능 추가\n3. 테스트 작성",
+      "expect": null
+    },
+    {
+      "id": "h-ko-emphasis",
+      "input": "이거 진짜 진짜 중요한 거라서, 어, 오늘 안에 꼭 확인해 주세요",
+      "output": "이거 진짜 진짜 중요한 거라서 오늘 안에 꼭 확인해 주세요.",
+      "expect": null
+    },
+    {
+      "id": "h-ko-email",
+      "input": "김 팀장님 안녕하세요. 어, 요청하신 보고서 첨부드립니다. 검토 부탁드립니다. 감사합니다. 이민수 드림",
+      "output": "김 팀장님 안녕하세요.\n\n요청하신 보고서 첨부드립니다. 검토 부탁드립니다.\n\n감사합니다.\n이민수 드림",
+      "expect": null
+    },
+    {
+      "id": "h-es-correction",
+      "input": "eh, el presupuesto es de cinco mil, no, espera, de seis mil euros",
+      "output": "El presupuesto es de 6.000 euros.",
+      "expect": null
+    },
+    {
+      "id": "h-es-tone",
+      "input": "o sea, el deploy falló otra vez, ¿sabes? creo que es la config",
+      "output": "El deploy falló otra vez, ¿sabes? Creo que es la config.",
+      "expect": null
+    },
+    {
+      "id": "h-es-list",
+      "input": "necesito tres cosas, primero el changelog, segundo, eh, subir la versión, y tercero los instaladores firmados",
+      "output": "Necesito tres cosas:\n\n1. El changelog.\n2. Subir la versión.\n3. Los instaladores firmados.",
+      "expect": null
+    },
+    {
+      "id": "h-es-tasks-natural",
+      "input": "quiero que revises el código del login, que mires los tests de pagos y que actualices el README",
+      "output": "Quiero que revises el código del login, que mires los tests de pagos y que actualices el README.",
+      "expect": null
+    },
+    {
+      "id": "h-es-tasks-structured",
+      "input": "quiero que revises el código del login, que mires los tests de pagos y que actualices el README",
+      "output": "Quiero que:\n\n- revises el código del login,\n- mires los tests de pagos\n- y actualices el README.",
+      "expect": null
+    },
+    {
+      "id": "h-pt-correction",
+      "input": "a reunião é na terça, não, pera, na quarta às dez",
+      "output": "A reunião é na quarta às dez.",
+      "expect": null
+    },
+    {
+      "id": "h-pt-tone",
+      "input": "então, tipo, eu acho que o problema é a API, né, ela demora demais",
+      "output": "Eu acho que o problema é a API, né, ela demora demais.",
+      "expect": null
+    },
+    {
+      "id": "h-pt-emphasis",
+      "input": "isso é muito muito importante, é, a gente não pode esquecer do backup",
+      "output": "Isso é muito muito importante, a gente não pode esquecer do backup.",
+      "expect": null
+    },
+    {
+      "id": "h-pt-list",
+      "input": "preciso de três coisas, primeiro o changelog, segundo o número da versão, e terceiro os instaladores assinados",
+      "output": "Preciso de três coisas:\n\n1. O changelog.\n2. O número da versão.\n3. Os instaladores assinados.",
+      "expect": null
+    },
+    {
+      "id": "h-pt-chat",
+      "input": "beleza, eu te mando o arquivo amanhã cedo, tá?",
+      "output": "Beleza, eu te mando o arquivo amanhã cedo, tá?",
+      "expect": null
+    },
+    {
+      "id": "h-fr-correction",
+      "input": "euh, on livre jeudi, non attends, vendredi matin",
+      "output": "On livre vendredi matin.",
+      "expect": null
+    },
+    {
+      "id": "h-fr-tone",
+      "input": "du coup le build passe pas sur la CI, c'est bizarre quoi",
+      "output": "Le build passe pas sur la CI, c'est bizarre, quoi.",
+      "expect": null
+    },
+    {
+      "id": "h-fr-list",
+      "input": "il me faut trois choses, premièrement le changelog, deuxièmement, euh, le numéro de version, et troisièmement les installeurs signés",
+      "output": "Il me faut trois choses :\n\n1. Le changelog.\n2. Le numéro de version.\n3. Les installeurs signés.",
+      "expect": null
+    },
+    {
+      "id": "h-fr-english-terms",
+      "input": "je pense que le problème vient du, euh, du cache redis, il expire au bout de dix minutes",
+      "output": "Je pense que le problème vient du cache Redis, il expire au bout de dix minutes.",
+      "expect": null
+    },
+    {
+      "id": "h-fr-email",
+      "input": "bonjour Claire, euh, je vous envoie le devis en pièce jointe, n'hésitez pas si vous avez des questions, bien cordialement, Paul",
+      "output": "Bonjour Claire,\n\nJe vous envoie le devis en pièce jointe. N'hésitez pas si vous avez des questions.\n\nBien cordialement,\nPaul",
+      "expect": null
+    },
+    {
+      "id": "h-de-correction",
+      "input": "ähm, wir treffen uns am Montag, ach nee, am Dienstag um neun",
+      "output": "Wir treffen uns am Dienstag um neun.",
+      "expect": null
+    },
+    {
+      "id": "h-de-modal-particles",
+      "input": "das ist ja eigentlich doch ganz einfach, äh, wir müssen nur den Cache leeren",
+      "output": "Das ist ja eigentlich doch ganz einfach, wir müssen nur den Cache leeren.",
+      "expect": null
+    },
+    {
+      "id": "h-de-list",
+      "input": "ich brauche drei Sachen, erstens das Changelog, zweitens, ähm, die neue Versionsnummer, und drittens die signierten Installer",
+      "output": "Ich brauche drei Sachen:\n\n1. Das Changelog.\n2. Die neue Versionsnummer.\n3. Die signierten Installer.",
+      "expect": null
+    },
+    {
+      "id": "h-de-emphasis",
+      "input": "das ist wirklich wirklich wichtig, also bitte bis Freitag erledigen",
+      "output": "Das ist wirklich wirklich wichtig, bitte bis Freitag erledigen.",
+      "expect": null
+    },
+    {
+      "id": "h-de-chat",
+      "input": "alles klar, ähm, ich schick dir den Link gleich",
+      "output": "Alles klar, ich schick dir den Link gleich",
+      "expect": null
+    },
+    {
+      "id": "h-ru-correction",
+      "input": "ну, дедлайн в пятницу, нет, подожди, в понедельник",
+      "output": "Дедлайн в понедельник.",
+      "expect": null
+    },
+    {
+      "id": "h-ru-filler",
+      "input": "короче, я думаю, что, э-э, проблема в базе данных, она тормозит под нагрузкой",
+      "output": "Я думаю, что проблема в базе данных, она тормозит под нагрузкой.",
+      "expect": null
+    },
+    {
+      "id": "h-ru-list",
+      "input": "мне нужно три вещи, во-первых, чейнджлог, во-вторых, номер версии, и в-третьих, подписанные установщики",
+      "output": "Мне нужно три вещи:\n\n1. Чейнджлог.\n2. Номер версии.\n3. Подписанные установщики.",
+      "expect": null
+    },
+    {
+      "id": "h-ru-english-terms",
+      "input": "проверь, пожалуйста, ну, гитхаб экшнс, там падает билд на маке",
+      "output": "Проверь, пожалуйста, GitHub Actions, там падает билд на маке.",
+      "expect": null
+    },
+    {
+      "id": "h-ru-structured",
+      "input": "в промпте попроси его прочитать весь код, потом составить план и только после этого писать тесты",
+      "output": "В промпте попроси его\n\n1. прочитать весь код,\n2. потом составить план\n3. и только после этого писать тесты.",
+      "expect": null
     }
   ]
 }

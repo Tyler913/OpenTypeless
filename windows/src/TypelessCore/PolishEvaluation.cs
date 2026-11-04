@@ -529,3 +529,139 @@ public static class PolishMetrics
         }
     }
 }
+
+/// <summary>
+/// One case of an evaluation set (eval/*.json) and the checks its output must pass: the strings it must and must not
+/// contain, and, where the case asks, how it's laid out (paragraphs, list items) and how long it is. Every output is also
+/// checked for stock phrases the speaker didn't say (<see cref="PolishChecks.StockPhrases"/>). The same as the macOS
+/// app's, so a set passes or fails alike on both.
+/// </summary>
+public sealed class PolishCase
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("input")] public string Input { get; set; } = "";
+    [JsonPropertyName("mustContain")] public List<string>? MustContain { get; set; }
+    [JsonPropertyName("mustNotContain")] public List<string>? MustNotContain { get; set; }
+    [JsonPropertyName("anyOf")] public List<List<string>>? AnyOf { get; set; }
+    /// <summary>Translate into this language (a <see cref="TranslationTarget"/> id) instead of cleaning up, as translation mode does.</summary>
+    [JsonPropertyName("translateTo")] public string? TranslateTo { get; set; }
+    /// <summary>Text around the cursor sent with the transcript (see <see cref="CursorContext"/>), as the app would.</summary>
+    [JsonPropertyName("context")] public string? Context { get; set; }
+    /// <summary>The layout of the app it's dictated into (a <see cref="TextLayout"/> id); the prompt's own when absent.</summary>
+    [JsonPropertyName("layout")] public string? Layout { get; set; }
+    /// <summary>The speech-to-text language set ("" or absent auto-detects), which picks the examples sent with it.</summary>
+    [JsonPropertyName("language")] public string? Language { get; set; }
+    /// <summary>How many paragraphs the output may have, [least, most] (see <see cref="TextShape"/>).</summary>
+    [JsonPropertyName("paragraphs")] public List<int>? Paragraphs { get; set; }
+    /// <summary>How many list items the output may have, [least, most]; [0, 0] for none.</summary>
+    [JsonPropertyName("listItems")] public List<int>? ListItems { get; set; }
+    /// <summary>
+    /// The output's length as a share of the input's, [least, most], once the input's fillers and the strings the output
+    /// must not contain are left out (see <see cref="PolishChecks.LengthRatio"/>): [0.8, 1.2] for a clean-up that only
+    /// mends.
+    /// </summary>
+    [JsonPropertyName("length")] public List<double>? Length { get; set; }
+
+    [JsonIgnore] public TextLayout TextLayout => TextLayouts.From(Layout) ?? TextLayout.Natural;
+
+    /// <summary>What's wrong with <paramref name="output"/> as this case's answer; empty when nothing is.</summary>
+    public List<string> Failures(string output)
+    {
+        var failures = new List<string>();
+        foreach (var s in MustContain ?? []) if (!output.Contains(s, StringComparison.Ordinal)) failures.Add($"missing “{s}”");
+        foreach (var s in MustNotContain ?? []) if (output.Contains(s, StringComparison.Ordinal)) failures.Add($"still has “{s}”");
+        foreach (var g in AnyOf ?? []) if (!g.Any(s => output.Contains(s, StringComparison.Ordinal))) failures.Add($"none of [{string.Join(", ", g)}]");
+        var shape = TextShape.Of(output);
+        if (Paragraphs is [var least, var most] && (shape.Paragraphs < least || shape.Paragraphs > most))
+        {
+            failures.Add($"{shape.Paragraphs} paragraphs, not {least}–{most}");
+        }
+        if (ListItems is [var fewest, var mostItems] && (shape.ListItems < fewest || shape.ListItems > mostItems))
+        {
+            failures.Add($"{shape.ListItems} list items, not {fewest}–{mostItems}");
+        }
+        if (Length is [var shortest, var longest])
+        {
+            var ratio = PolishChecks.LengthRatio(Input, output, MustNotContain ?? []);
+            if (ratio < shortest || ratio > longest)
+            {
+                failures.Add(string.Create(CultureInfo.InvariantCulture, $"length {ratio:0.00} of the input, not {shortest:0.00}–{longest:0.00}"));
+            }
+        }
+        foreach (var phrase in PolishChecks.AddedStockPhrases(Input, output)) failures.Add($"stock phrase “{phrase}”");
+        return failures;
+    }
+}
+
+/// <summary>How a text is laid out: its paragraphs (blocks between blank lines with any text that isn't a list item) and list items.</summary>
+public readonly record struct TextShape(int Paragraphs, int ListItems)
+{
+    public static TextShape Of(string text)
+    {
+        int paragraphs = 0, items = 0;
+        var prose = false;
+        foreach (var raw in text.Replace("\r\n", "\n").Split('\n').Append(""))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0)
+            {
+                if (prose) paragraphs++;
+                prose = false;
+            }
+            else if (Prompts.ListMarkerLength(line) > 0) items++;
+            else prose = true;
+        }
+        return new TextShape(paragraphs, items);
+    }
+}
+
+/// <summary>The evaluation's checks of how a clean-up reads, beyond the strings a case names.</summary>
+public static class PolishChecks
+{
+    /// <summary>
+    /// Stock phrases of written-up text, lower-case, that a clean-up must never add (the prompt names the commonest): one
+    /// in an output and not in its input fails the case, in any language.
+    /// </summary>
+    public static readonly string[] StockPhrases =
+    [
+        "值得一提的是", "综合来看", "总的来说", "总而言之", "进行优化", "需要注意的是", "值得注意的是",
+        "it's worth noting", "it is worth noting", "in conclusion", "furthermore", "moreover", "overall,",
+        "注目すべき", "総合的に見て", "まとめると",
+        "주목할 만한", "결론적으로", "종합적으로",
+        "cabe destacar", "en conclusión", "en resumen",
+        "vale ressaltar", "vale destacar", "em conclusão", "em resumo",
+        "il convient de noter", "en conclusion", "en résumé",
+        "es ist erwähnenswert", "zusammenfassend", "abschließend",
+        "стоит отметить", "в заключение", "подводя итог",
+    ];
+
+    /// <summary>The stock phrases in <paramref name="output"/> that weren't in <paramref name="input"/>.</summary>
+    public static List<string> AddedStockPhrases(string input, string output)
+    {
+        var said = input.ToLowerInvariant().Replace('’', '\'');
+        var written = output.ToLowerInvariant().Replace('’', '\'');
+        return StockPhrases.Where(p => written.Contains(p, StringComparison.Ordinal) && !said.Contains(p, StringComparison.Ordinal)).ToList();
+    }
+
+    /// <summary>Fillers that are never words of their own, wherever they stand (in Chinese, Japanese and Korean text they needn't be set off by spaces).</summary>
+    internal static readonly string[] FillerRuns = ["嗯", "呃", "えーと", "えっと", "あのー", "ええと"];
+
+    /// <summary>Fillers that count only as words of their own, lower-case ("um", but not the "um" in "summary").</summary>
+    internal static readonly HashSet<string> FillerWords =
+        ["um", "uh", "umm", "uhh", "erm", "ehm", "eh", "euh", "ähm", "äh", "음", "어", "ну", "э"];
+
+    /// <summary>
+    /// The length of <paramref name="output"/> as a share of <paramref name="input"/>'s, both in letters (see
+    /// <see cref="PolishMetrics.Similarity"/>: white space and punctuation don't count), once the input's fillers and
+    /// every one of <paramref name="removed"/> (the strings the output must not contain: replaced values, correction
+    /// phrases) are left out of it: what a clean-up that only mends keeps.
+    /// </summary>
+    public static double LengthRatio(string input, string output, IEnumerable<string> removed)
+    {
+        var basis = input;
+        foreach (var s in removed.Concat(FillerRuns)) if (s.Length > 0) basis = basis.Replace(s, "", StringComparison.Ordinal);
+        var fillers = ExampleLanguage.Words(basis).Where(FillerWords.Contains).Sum(w => PolishMetrics.Normalized(w).Count);
+        var letters = Math.Max(1, PolishMetrics.Normalized(basis).Count - fillers);
+        return (double)PolishMetrics.Normalized(output).Count / letters;
+    }
+}

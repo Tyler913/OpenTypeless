@@ -420,9 +420,13 @@ public class PipelineTests
             return (200, MockOpenRouter.Utf8("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n"));
         };
         var client = new ApiClient(Endpoint(ProviderId.DeepSeek), MockOpenRouter.Client());
-        var result = await client.Polish("x", new PolishOptions("m"));
+        var result = await client.Polish("x", new PolishOptions("rejects-temperature"));
         Assert.Equal("ok", result.Text);
         Assert.Equal(2, bodies.Count);
+        // The next clean-up with that model goes out bare at once, without paying for the refusal again.
+        Assert.Equal("ok", (await client.Polish("y", new PolishOptions("rejects-temperature"))).Text);
+        Assert.Equal(3, bodies.Count);
+        Assert.Null(bodies[2]["temperature"]);
     }
 
     [Fact]

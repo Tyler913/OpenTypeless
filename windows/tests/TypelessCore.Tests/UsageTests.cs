@@ -134,7 +134,7 @@ public class UsageTests
             if (json["stream_options"] != null) return (400, MockOpenRouter.Utf8("""{"error":{"message":"Unrecognized request argument supplied: stream_options"}}"""));
             return (200, MockOpenRouter.Utf8("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n"));
         };
-        var result = await new ApiClient(Endpoint(ProviderId.OpenAI), MockOpenRouter.Client()).Polish("x", new PolishOptions("m"));
+        var result = await new ApiClient(Endpoint(ProviderId.OpenAI), MockOpenRouter.Client()).Polish("x", new PolishOptions("rejects-stream-options"));
         Assert.Equal("ok", result.Text);
         Assert.Equal(2, bodies.Count);
         Assert.Null(bodies[1]["stream_options"]);

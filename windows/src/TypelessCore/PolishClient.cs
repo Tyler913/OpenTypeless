@@ -317,19 +317,31 @@ public sealed partial class ApiClient
     {
         // An edit streams out its selection rewritten, so that is what takes time.
         var limits = new StreamLimits(idleTimeout, totalTimeout ?? PolishTimeout((options.Selection ?? "") + transcript), firstTokenTimeout);
+        var bareKey = BareKey(options.Model);
+        if (BareOnly.ContainsKey(bareKey))
+            return await StreamPolish(transcript, options, false, limits, onPartial, cancellationToken).ConfigureAwait(false);
         try
         {
             return await StreamPolish(transcript, options, true, limits, onPartial, cancellationToken).ConfigureAwait(false);
         }
         catch (ApiException error) when (error.Kind == ApiErrorKind.Http && error.Status is 400 or 422)
         {
-            // A server rejecting an optional parameter: retry with the bare minimum request.
+            // A server rejecting an optional parameter: retry with the bare minimum request, and send that from now on.
             var lower = error.Detail.ToLowerInvariant();
             if (!new[] { "temperature", "max_tokens", "reasoning", "thinking", "provider", "stream_options", "include_usage", "unsupported", "unrecognized", "unknown" }
                     .Any(lower.Contains)) throw;
+            BareOnly.TryAdd(bareKey, 0);
             return await StreamPolish(transcript, options, false, limits, onPartial, cancellationToken).ConfigureAwait(false);
         }
     }
+
+    /// <summary>
+    /// Endpoints and models that turned an optional parameter down (a reasoning switch the model doesn't take, say): their
+    /// later clean-ups go out bare at once, instead of each one paying for the refusal first. Kept until the app quits.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> BareOnly = new();
+
+    private string BareKey(string model) => Endpoint.BaseUrl.AbsoluteUri.TrimEnd('/') + "\n" + model;
 
     private sealed record StreamLimits(double Idle, double Total, double FirstToken);
 

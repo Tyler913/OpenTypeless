@@ -274,18 +274,42 @@ extension APIClient {
         let limits = StreamLimits(idle: idleTimeout,
                                   total: totalTimeout ?? Self.polishTimeout(for: (options.selection ?? "") + transcript),
                                   firstToken: firstTokenTimeout)
+        let bareKey = Self.bareKey(endpoint.baseURL, options.model)
+        if Self.bareOnly.contains(bareKey) {
+            return try await streamPolish(transcript: transcript, options: options, includeOptional: false,
+                                          limits: limits, onPartial: onPartial)
+        }
         do {
             return try await streamPolish(transcript: transcript, options: options, includeOptional: true,
                                           limits: limits, onPartial: onPartial)
         } catch let APIError.http(status, message) where status == 400 || status == 422 {
-            // A server rejecting an optional parameter: retry with the bare minimum request.
+            // A server rejecting an optional parameter: retry with the bare minimum request, and send that from now on.
             let lower = message.lowercased()
             guard ["temperature", "max_tokens", "reasoning", "thinking", "provider", "stream_options", "include_usage",
                    "unsupported", "unrecognized", "unknown"]
                 .contains(where: lower.contains) else { throw APIError.http(status: status, message: message) }
+            Self.bareOnly.insert(bareKey)
             return try await streamPolish(transcript: transcript, options: options, includeOptional: false,
                                           limits: limits, onPartial: onPartial)
         }
+    }
+
+    /// Endpoints and models that turned an optional parameter down (a reasoning switch the model doesn't take, say): their
+    /// later clean-ups go out bare at once, instead of each one paying for the refusal first. Kept until the app quits.
+    static let bareOnly = BareRequests()
+
+    static func bareKey(_ baseURL: URL, _ model: String) -> String {
+        var base = baseURL.absoluteString
+        while base.hasSuffix("/") { base.removeLast() }
+        return base + "\n" + model
+    }
+
+    /// The set behind `bareOnly`, safe to use from any task.
+    final class BareRequests: @unchecked Sendable {
+        private let lock = NSLock()
+        private var keys: Set<String> = []
+        func contains(_ key: String) -> Bool { lock.withLock { keys.contains(key) } }
+        func insert(_ key: String) { lock.withLock { _ = keys.insert(key) } }
     }
 
     private struct StreamLimits: Sendable {

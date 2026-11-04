@@ -87,9 +87,9 @@ OpenTypeless 就是围绕这个问题做的。
 - **口述换行**（可选）：单独说“换行”或“新段落”（前后稍作停顿；英文 new line / new paragraph 和其他支持的语言也可以），就会换行或空一行，开不开 AI 整理都有效。在一句话中间说到这些词时照原样保留。在 **设置 → 通用** 里打开；在列举里单独说出这些词（“空格，换行，制表符”）时也会变成换行。
 - **录音时静音**（可选）：录音期间把扬声器静音，音乐和视频不会打扰你说话，结束后自动恢复。
 - **按应用设置**（可选）：在 **设置 → 应用** 里给你常用的应用单独设置是否整理、插入后是否自动回车、说话语言，以及额外的整理偏好，比如在邮件里用更正式的语气。开始录音时在最前面的应用决定用哪个配置；设为「默认」的项目跟随你平时的设置。
-- **自带服务商。** OpenRouter、OpenAI、Groq、硅基流动 SiliconFlow、DeepSeek，或任何兼容 OpenAI 接口的服务。语音转文字、文字整理和备用整理模型可以各用不同的服务商。**测试** 会检查 Key，并显示服务商的往返延迟（三次取中位数）。
+- **自带服务商。** 内置 OpenRouter、OpenAI、Groq、硅基流动 SiliconFlow、DeepSeek、Google Gemini、Anthropic、Mistral、xAI、阿里云百炼（通义千问）、智谱 GLM、月之暗面 Kimi、火山方舟（豆包）、Deepgram 和 ElevenLabs，以及在本机运行的 Ollama 和 LM Studio（不需要 Key），也可以用任何兼容 OpenAI 接口的服务。语音转文字、文字整理和备用整理模型可以各用不同的服务商，每一步只列出能做这一步的服务商（Deepgram 和 ElevenLabs 只做转写；Gemini、Anthropic、xAI、通义千问、Kimi 和豆包只做整理）。**设置 → 服务商** 只列出你已经设置的服务商，其他的在 **添加服务商** 里。**测试** 会检查 Key，并显示服务商的往返延迟（三次取中位数）。
 - **备用语音转文字**（可选）：某一段比这条线路按长度通常需要的时间慢很多，或者失败时，同时请求第二个服务商，用先返回的结果。
-- **自定义词汇表和风格偏好**，用于人名、产品名和专业术语。支持的语音模型（Microsoft MAI-Transcribe、OpenAI 的转写模型和 Whisper、AssemblyAI）还会把词汇表当作拼写提示，少见的名字在整理之前就能写对。词汇表可以从 CSV 或文本文件导入，也可以导出（CSV 里附带学到的词被听成的样子，仅供参考：导入时只读取词本身）。
+- **自定义词汇表和风格偏好**，用于人名、产品名和专业术语。支持的语音模型（Microsoft MAI-Transcribe、OpenAI 的转写模型和 Whisper、AssemblyAI、Mistral Voxtral、Deepgram Nova-3、ElevenLabs Scribe）还会把词汇表当作拼写提示，少见的名字在整理之前就能写对。词汇表可以从 CSV 或文本文件导入，也可以导出（CSV 里附带学到的词被听成的样子，仅供参考：导入时只读取词本身）。
 - **从你的修改中学习。** 粘贴后把识别错的词改过来（TypeList → Typeless），它就会连同被听成的样子自动加进词汇表。读不到输入框的应用（微信、Firefox、Claude、Discord、Slack 这类 Electron 应用）会改为跟随你粘贴后按的键。只学发音相近的修改，不学改写、改数字或普通的换词；你删掉的词不会再被学回来。
 - **快捷短语。** 说出一个触发词，比如「我的邮箱」或「PR 模板」，插入时就会换成你存好的内容，一字不改；在句子中间说也行，中文不需要空格（「发到我的邮箱吧」里的「我的邮箱」也能认出）。快捷短语在整理之后由应用自己替换，不交给模型，所以很长的模板也会原样插入。在 **设置 → 词汇与风格** 里添加。
 - **按屏幕上的写法拼名字**（可选）：光标附近输入框里已有的名字和术语（你正在回复的消息里同事的名字、产品名、代码里的标识符）会作为拼写参考交给整理模型，识别错的地方就按那里的写法改正。开始说话时通过辅助功能 / UI Automation 读取，从不读取密码框，也不会把其中的内容抄进你的文字：整理结果照搬了其中的内容时，改为插入原文。在 **词汇与风格** 里打开。
@@ -225,7 +225,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Package   # 生成 w
 
 | 步骤 | 默认 | 说明 |
 |---|---|---|
-| 语音转文字 | `microsoft/mai-transcribe-2`（OpenRouter） | 任何 OpenRouter 转写模型，或其他服务商兼容 Whisper 的 `/audio/transcriptions`。 |
+| 语音转文字 | `microsoft/mai-transcribe-2`（OpenRouter） | 任何 OpenRouter 转写模型，其他服务商兼容 Whisper 的 `/audio/transcriptions`（Mistral `voxtral-mini-transcribe-3`、智谱 `glm-asr-2512`、Ollama），或通过各自接口的 Deepgram（`nova-3`）和 ElevenLabs（`scribe_v2`）。 |
 | 文字整理 | `google/gemini-3.8-flash`（OpenRouter） | 我们测试中整理效果最好，一段长口述约 0.005 美元。更便宜的可以试试：`qwen/qwen3.7-flash`、`google/gemini-3.1-flash-lite`（最快，首次启动引导里填 OpenRouter Key 时用的就是它）。 |
 | 备用整理 | `deepseek/deepseek-v4.1-flash`（OpenRouter） | 只有主模型启动慢或失败时才会请求。选一个其他厂商的快速模型。 |
 
@@ -234,7 +234,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Package   # 生成 w
 ## 隐私
 
 - 音频和文字只会发送给你配置的服务商。打开 **实时预览** 时，macOS 在本机识别语音；Windows 使用系统自带的语音识别，开启在线语音识别时语音会发送给微软（设置里有说明）。
-- API Key 在 macOS 上保存在 `~/Library/Application Support/OpenTypeless/credentials.json`，仅当前用户可读（不用钥匙串：自签名的 app 每次更新后钥匙串都会再要一次密码），或 Windows 凭据管理器（一条记录，`OpenTypeless/credentials`）。
+- API Key 在 macOS 上保存在 `~/Library/Application Support/OpenTypeless/credentials.json`，仅当前用户可读（不用钥匙串：自签名的 app 每次更新后钥匙串都会再要一次密码），或 Windows 凭据管理器（`OpenTypeless/credentials`，一条放不下时接着存在 `OpenTypeless/credentials/2` 等记录里）。
 - 主页的使用统计（每天的字数、说话时长和花费，不含文字）保存在 `usage.json` 里，和设置、历史在同一个文件夹。OpenRouter 价格表每天从它公开的模型列表下载几次（不需要 Key，不含任何关于你的信息）。
 - 历史（音频 + 转写）在 macOS 上位于 `~/Library/Application Support/OpenTypeless/Sessions/`，在 Windows 上位于 `%LOCALAPPDATA%\OpenTypeless\`。录音默认保存一个月（在历史页面可选：不保存、一天、一周、一个月、一年或永久）；之后文字仍保留在最新的 200 条记录里。转写失败的听写至少保留一个月音频，方便重试。所有录音合计不超过 1 GB，超出时先删除最早的录音（文字保留）。
 - 检查更新每天向 `api.github.com` 发送一次请求（不需要账号，不含任何关于你或你的听写的信息）；可以在 **设置 → 通用 → 更新** 里关闭。

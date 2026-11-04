@@ -5010,7 +5010,7 @@ extension Translations {
     "de": "{0} Tage in Folge · Rekord {1}"
   },
   "Add provider": {
-    "ja": "サービスを追加",
+    "ja": "プロバイダを追加",
     "ko": "제공업체 추가",
     "es": "Añadir proveedor",
     "pt": "Adicionar provedor",
@@ -5046,7 +5046,7 @@ extension Translations {
     "de": "Verbunden"
   },
   "In use: choose another provider under Models first": {
-    "ja": "使用中です。先に「モデル」で別のサービスに切り替えてください",
+    "ja": "使用中です。先に「モデル」で別のプロバイダに切り替えてください",
     "ko": "사용 중입니다. 먼저 모델에서 다른 제공업체를 선택하세요",
     "es": "En uso: elige antes otro proveedor en Modelos",
     "pt": "Em uso: escolha outro provedor em Modelos primeiro",
@@ -5073,7 +5073,7 @@ extension Translations {
     "de": "Auf diesem Computer oder eigenem Server"
   },
   "Only the providers you've set up are listed; add others with Add provider.": {
-    "ja": "設定済みのサービスだけが表示されます。ほかのサービスは「サービスを追加」から追加できます。",
+    "ja": "設定済みのプロバイダだけが表示されます。ほかのプロバイダは「プロバイダを追加」から追加できます。",
     "ko": "설정한 제공업체만 표시됩니다. 다른 제공업체는 제공업체 추가로 추가하세요.",
     "es": "Solo se muestran los proveedores que has configurado; añade otros con Añadir proveedor.",
     "pt": "Só aparecem os provedores que você configurou; adicione outros com Adicionar provedor.",
@@ -5091,7 +5091,7 @@ extension Translations {
     "de": "API-Schlüssel einfügen"
   },
   "Removes this provider and its API key": {
-    "ja": "このサービスと API キーを削除します",
+    "ja": "このプロバイダと API キーを削除します",
     "ko": "이 제공업체와 API 키를 삭제합니다",
     "es": "Quita este proveedor y su clave de API",
     "pt": "Remove este provedor e sua chave de API",

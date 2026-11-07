@@ -106,7 +106,7 @@ Windows 10（2004 以降）または Windows 11、x64 または ARM64 が必要�
 
 ## 謝辞
 
-Typeless に着想を得ています。システム連携の手法は、オープンソースの [VoiceInk](https://github.com/Beingpax/VoiceInk)、[OpenLess](https://github.com/Open-Less/openless)、[OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless) から学びました。本プロジェクトは独立しており、これらのいずれとも関係はありません。
+Typeless に着想を得ています。システム連携の手法は、オープンソースの [VoiceInk](https://github.com/Beingpax/VoiceInk)、[OpenLess](https://github.com/Open-Less/openless)、[OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless) から学びました。本プロジェクトは独立しており、これらのいずれとも関係はありません。Windows のオンデバイス認識は [SenseVoice Small](https://github.com/FunAudioLLM/SenseVoice)（FunASR Model License）を [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)（Apache-2.0）で動かしています。
 
 ## ライセンス
 

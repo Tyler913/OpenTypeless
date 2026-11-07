@@ -106,7 +106,7 @@ xattr -dr com.apple.quarantine /Applications/OpenTypeless.app
 
 ## Благодарности
 
-Вдохновлено Typeless. Подход к интеграции с системой взят из открытых проектов [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless) и [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless). Этот проект независим и не связан ни с одним из них.
+Вдохновлено Typeless. Подход к интеграции с системой взят из открытых проектов [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless) и [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless). Этот проект независим и не связан ни с одним из них. Распознавание на устройстве в Windows использует [SenseVoice Small](https://github.com/FunAudioLLM/SenseVoice) (FunASR Model License) и [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0).
 
 ## Лицензия
 

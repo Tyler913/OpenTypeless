@@ -106,7 +106,7 @@ Two native apps in one repository: [`macos/`](macos) in Swift / SwiftUI and [`wi
 
 ## Acknowledgements
 
-Inspired by Typeless. The system-integration approach learned from the open-source [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless) and [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless). This project is independent and not affiliated with any of them.
+Inspired by Typeless. The system-integration approach learned from the open-source [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless) and [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless). This project is independent and not affiliated with any of them. On-device recognition on Windows runs [SenseVoice Small](https://github.com/FunAudioLLM/SenseVoice) (FunASR Model License) with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0).
 
 ## License
 

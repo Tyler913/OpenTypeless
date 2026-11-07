@@ -106,7 +106,7 @@ xattr -dr com.apple.quarantine /Applications/OpenTypeless.app
 
 ## 致谢
 
-灵感来自 Typeless。系统集成的做法借鉴了开源的 [VoiceInk](https://github.com/Beingpax/VoiceInk)、[OpenLess](https://github.com/Open-Less/openless) 和 [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless)。本项目独立开发，与它们均无关联。
+灵感来自 Typeless。系统集成的做法借鉴了开源的 [VoiceInk](https://github.com/Beingpax/VoiceInk)、[OpenLess](https://github.com/Open-Less/openless) 和 [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless)。本项目独立开发，与它们均无关联。Windows 上的本机识别使用 [SenseVoice Small](https://github.com/FunAudioLLM/SenseVoice)（FunASR Model License）和 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)（Apache-2.0）。
 
 ## 许可证
 

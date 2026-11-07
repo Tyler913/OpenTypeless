@@ -106,7 +106,7 @@ Windows 10(2004 이상) 또는 Windows 11, x64 또는 ARM64가 필요합니다.
 
 ## 감사의 말
 
-Typeless에서 영감을 받았습니다. 시스템 연동 방식은 오픈 소스인 [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless), [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless)에서 배웠습니다. 이 프로젝트는 독립적이며 이들 중 어느 것과도 관련이 없습니다.
+Typeless에서 영감을 받았습니다. 시스템 연동 방식은 오픈 소스인 [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless), [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless)에서 배웠습니다. 이 프로젝트는 독립적이며 이들 중 어느 것과도 관련이 없습니다. Windows의 온디바이스 인식은 [SenseVoice Small](https://github.com/FunAudioLLM/SenseVoice)(FunASR Model License)를 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)(Apache-2.0)로 실행합니다.
 
 ## 라이선스
 

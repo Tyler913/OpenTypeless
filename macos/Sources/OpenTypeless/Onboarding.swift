@@ -12,7 +12,7 @@ enum Onboarding {
     /// setup, so for them it's marked as seen instead.
     static func shouldShow(_ settings: AppSettings) -> Bool {
         guard !UserDefaults.standard.bool(forKey: shownKey) else { return false }
-        if settings.isConfigured(settings.sttProvider) {
+        if settings.speechReady {
             markShown()
             return false
         }
@@ -20,6 +20,16 @@ enum Onboarding {
     }
 
     static func markShown() { UserDefaults.standard.set(true, forKey: shownKey) }
+
+    /// Starts without a key: speech-to-text on this Mac, its model fetched now for the spoken language. The clean-up
+    /// stays as it is, and runs once its provider has a key.
+    @MainActor static func useOnDevice(_ settings: AppSettings) {
+        settings.speechEngine = .onDevice
+        let language = settings.sttLanguage
+        Task { @MainActor in
+            if let locale = await OnDeviceModels.locale(for: language) { OnDeviceModels.shared.install(locale) }
+        }
+    }
 
     /// The providers offered, recommended first. Each of them does both steps; the rest are in Settings → Providers.
     static let providers: [ProviderID] = [.openrouter, .openai, .groq, .siliconflow]
@@ -34,6 +44,7 @@ enum Onboarding {
     static func apply(_ id: ProviderID, key: String, to settings: AppSettings) {
         let models = models(for: id)
         settings.setAPIKey(key, for: id)
+        settings.speechEngine = .provider
         settings.sttProvider = id
         settings.sttModel = models.stt
         settings.polishProvider = id
@@ -123,7 +134,8 @@ struct OnboardingView: View {
             Group {
                 switch step {
                 case .welcome: WelcomeStep(next: { go(.provider) })
-                case .provider: ProviderStep(settings: settings, provider: $provider, key: $key, save: saveKey)
+                case .provider: ProviderStep(settings: settings, provider: $provider, key: $key, save: saveKey,
+                                             useOnDevice: { Onboarding.useOnDevice(settings); go(.tryIt) })
                 case .tryIt: TryStep(settings: settings, controller: controller, addKey: { go(.provider) }, next: { go(.done) })
                 case .done: DoneStep(settings: settings)
                 }
@@ -309,6 +321,7 @@ private struct ProviderStep: View {
     @Binding var provider: ProviderID
     @Binding var key: String
     let save: () -> Void
+    let useOnDevice: () -> Void
 
     var body: some View {
         VStack(spacing: 22) {
@@ -346,6 +359,15 @@ private struct ProviderStep: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                 }
+            }
+
+            // Starting with no key at all: the recognizer on this Mac.
+            HStack(spacing: 10) {
+                Button(L("使用设备端识别", "Use on-device recognition"), action: useOnDevice)
+                Text(L("免费、离线；准确率不如云端模型。", "Free and offline; less accurate than cloud models."))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                Spacer()
             }
 
             ModelSummary(provider: provider)
@@ -461,7 +483,7 @@ private struct TryStep: View {
                         }
                     }
                 }
-            } else if !settings.isConfigured(settings.sttProvider) {
+            } else if !settings.speechReady {
                 Banner(symbol: "key.fill", color: .orange,
                        text: L("还没有填写 API Key，听写暂时用不了。", "There's no API key yet, so dictation can't work.")) {
                     Button(L("填写 API Key", "Add a key"), action: addKey).controlSize(.small)

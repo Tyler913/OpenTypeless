@@ -113,7 +113,7 @@ public struct PipelineFailure: Error, LocalizedError, Sendable {
 public final class TranscriptionPipeline: @unchecked Sendable {
     public typealias ChunkObserver = @Sendable (_ index: Int, _ state: ChunkState) -> Void
 
-    private let client: APIClient
+    private let client: any SpeechToTextRoute
     private let options: APIClient.TranscriptionOptions
     /// Another provider/model, asked too when the primary is late for a chunk or fails (see `transcribe`).
     private let backup: (client: APIClient, options: APIClient.TranscriptionOptions)?
@@ -201,6 +201,10 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         lock.withLock { answeredByBackup.max { $0.key < $1.key }?.value }
     }
 
+    /// Whether speech-to-text runs on this Mac (`OnDeviceRoute`): nothing to pay for, see `transcriptionCost`.
+    public var isOnDevice: Bool { client is OnDeviceRoute }
+
+    /// `client`: where each chunk's transcript comes from, a provider's API or the recognizer on this Mac.
     /// `preset` lets a retry reuse transcripts that already succeeded (keyed by chunk index).
     /// `maxConcurrentRequests`: how many chunks are transcribed at once (a file being transcribed asks for fewer than a
     /// dictation, see `FileTranscription`).
@@ -211,7 +215,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     /// because the speaker went on. Lets the caller start cleaning the text up before the key is released. It is called
     /// one call at a time and never with a stale transcript after a newer one, so it mustn't call back into the pipeline.
     public init(
-        client: APIClient,
+        client: any SpeechToTextRoute,
         options: APIClient.TranscriptionOptions,
         chunkConfig: Chunker.Config = Chunker.Config(),
         policy: RetryPolicy = RetryPolicy(),
@@ -357,6 +361,14 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     /// What the requests so far used, one entry per successful request.
     public func requestUsages() -> [RequestUsage] {
         lock.withLock { usages }
+    }
+
+    /// What the main route's requests cost, and how many of them had no price: priced by `price` (USD per minute or per
+    /// token of the main route's model; `preferReported` lets a cost the server reported win, as OpenRouter's does),
+    /// except on this Mac, where nothing is billed.
+    public func transcriptionCost(price: ModelPrice?, preferReported: Bool) -> (cost: Double, unpriced: Int) {
+        if isOnDevice { return CostEstimator.transcriptions(requestUsages(), price: nil, preferReported: true) }
+        return CostEstimator.transcriptions(requestUsages(), price: price, preferReported: preferReported)
     }
 
     /// Usage of the requests the backup route answered (priced with the backup's model).
@@ -560,7 +572,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         case late
     }
 
-    private func attempt(_ route: APIClient, _ options: APIClient.TranscriptionOptions, _ chunk: AudioChunk,
+    private func attempt(_ route: any SpeechToTextRoute, _ options: APIClient.TranscriptionOptions, _ chunk: AudioChunk,
                          report: Bool) async throws -> APIClient.TranscriptionResult {
         try await route.transcribeDetailedWithRetry(
             samples: chunk.samples, options: options, policy: policy,

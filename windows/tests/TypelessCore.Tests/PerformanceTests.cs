@@ -31,21 +31,23 @@ public class PerformanceTests
         MockOpenRouter.Handler = (_, _) => (200, MockOpenRouter.Utf8(new JsonObject { ["text"] = "ok" }.ToJsonString()));
         // Twice, keeping the better result: a block that is slow by nature is slow both times, while a hiccup of a
         // shared CI machine rarely hits twice.
-        double slowest = double.MaxValue, total = double.MaxValue;
+        double behind = double.MaxValue, total = double.MaxValue;
         for (var run = 0; run < 2; run++)
         {
-            var (runSlowest, runTotal, chunks) = Dictate(audio);
+            var (runBehind, runTotal, chunks) = Dictate(audio);
             Assert.True(chunks >= 40);
-            slowest = Math.Min(slowest, runSlowest);
+            behind = Math.Min(behind, runBehind);
             total = Math.Min(total, runTotal);
         }
-        // Everything the thread does per block is in here, so the bound is the block itself: the microphone fills the next
-        // one 40 ms later. (Cutting a chunk or starting a speculation copies about 1 MB, which a busy 2-core runner can
-        // stretch past 20 ms; the capture buffers hold 200 ms, so that loses nothing.)
-        Performance.Check("Live audio: slowest 40 ms block", slowest, budget: 40);
+        // Everything the thread does per block is in here, and the microphone fills the next block 40 ms after the last.
+        // What loses audio is falling further behind than the capture buffers hold (200 ms), not one slow block: cutting a
+        // chunk or starting a speculation copies about 1 MB, which a busy 2-core runner can stretch past 40 ms, and the
+        // blocks waiting meanwhile are caught up at once. So the bound is how far the thread ever falls behind the
+        // microphone, kept to one block; the total keeps the blocks' usual cost small.
+        Performance.Check("Live audio: furthest behind the microphone", behind, budget: 40);
         Performance.Check("Live audio: 20 minutes, all blocks", total, budget: 1500);
 
-        static (double Slowest, double Total, int Chunks) Dictate(short[] audio)
+        static (double Behind, double Total, int Chunks) Dictate(short[] audio)
         {
             var block = AudioFormat.SampleCount(0.04);
             var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
@@ -60,24 +62,28 @@ public class PerformanceTests
                     writer.Append(samples);
                     pipeline.Append(samples);
                 });
-                var slowest = 0.0;
+                // How far the thread is behind the microphone after each block: a block's time past its 40 ms adds to it,
+                // time to spare takes it back down to none.
+                double lag = 0, behind = 0;
                 Performance.CollectGarbage();
                 var total = Performance.Time(() =>
                 {
                     for (var offset = 0; offset + block <= audio.Length; offset += block)
                     {
                         var samples = audio.AsSpan(offset, block).ToArray();
-                        slowest = Math.Max(slowest, Performance.Time(() =>
+                        var took = Performance.Time(() =>
                         {
                             sink.Deliver(samples);
                             AudioLevel.Rms(samples);
-                        }));
+                        });
+                        lag = Math.Max(0, lag + took - 40);
+                        behind = Math.Max(behind, lag);
                     }
                 });
                 sink.End();
                 writer.Close();
                 pipeline.Finish().GetAwaiter().GetResult();
-                return (slowest, total, pipeline.CompletedTranscripts().Count);
+                return (behind, total, pipeline.CompletedTranscripts().Count);
             }
             finally
             {

@@ -133,8 +133,8 @@ public class ExportTests
             var input = item!["base64"] is { } base64 ? VocabularyTransfer.Decode(Convert.FromBase64String((string)base64!))! : (string)item["input"]!;
             Assert.Equal(Strings(item["terms"]), VocabularyTransfer.TermsFromFile(input, (string)item["kind"]!));
         }
-        Assert.Equal((int)vocabulary["maxTermLength"]!, VocabularyTransfer.MaxTermLength);
-        Assert.Equal((int)vocabulary["maxTerms"]!, VocabularyTransfer.MaxTerms);
+        Assert.Equal(VocabularyTransfer.MaxTermLength, (int)vocabulary["maxTermLength"]!);
+        Assert.Equal(VocabularyTransfer.MaxTerms, (int)vocabulary["maxTerms"]!);
         foreach (var item in vocabulary["plans"]!.AsArray())
         {
             var limit = item!["limit"] is { } given ? (int)given : VocabularyTransfer.MaxTerms;

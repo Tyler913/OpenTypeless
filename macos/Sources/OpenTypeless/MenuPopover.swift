@@ -198,7 +198,7 @@ struct MenuPopoverView: View {
 
     private var setupIssues: [Issue] {
         var issues: [Issue] = []
-        if !settings.isConfigured(settings.sttProvider) {
+        if !settings.speechReady {
             issues.append(Issue(text: L("还没有配置 \(settings.sttProvider.displayName) 的 API Key",
                                         "No API key for \(settings.sttProvider.displayName)"), page: .providers))
         }

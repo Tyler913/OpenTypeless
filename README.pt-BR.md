@@ -44,6 +44,7 @@ A maioria dos apps de ditado vai bem com uma frase e falha em dois minutos de fa
 - **Ajustes por app.** Enter depois de inserir no Slack, tom formal no Mail, sem limpeza no Terminal.
 - **Histórico e arquivos.** Todo ditado pode ser buscado e exportado, e arquivos de áudio ou vídeo também podem ser transcritos.
 - **Saiba quanto gasta.** Palavras, tempo economizado e custo na tela Início, com um limite mensal opcional.
+- **No dispositivo, sem chave.** A transcrição também pode rodar no seu computador: gratuita, offline e privada, um pouco menos precisa que os modelos na nuvem.
 - **Prévia ao vivo (beta).** Veja suas palavras acima da cápsula enquanto fala.
 - **Nove idiomas, atualizações automáticas.** English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch, Русский.
 
@@ -87,7 +88,7 @@ Depois disso, o app se atualiza sozinho.
 ## Primeiros passos
 
 1. Abra o OpenTypeless. Ele fica na barra de menus (macOS) ou na área de notificação (Windows).
-2. O guia de boas-vindas pede uma chave de API. O [OpenRouter](https://openrouter.ai/keys) é o mais fácil: uma chave serve para tudo.
+2. O guia de boas-vindas pede uma chave de API. O [OpenRouter](https://openrouter.ai/keys) é o mais fácil: uma chave serve para tudo. Ou escolha **Usar o reconhecimento no dispositivo** para começar sem nenhuma chave.
 3. No macOS, permita o **Microfone** e a **Acessibilidade** quando for pedido.
 4. Segure o atalho, fale e solte. O texto aparece no cursor.
 

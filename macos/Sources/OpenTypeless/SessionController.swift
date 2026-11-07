@@ -103,6 +103,8 @@ final class SessionController: ObservableObject {
     private var preRollSeconds: Double = 0
     /// On-device recognition shown above the capsule while recording, when Live preview is on.
     private var preview: LivePreview?
+    /// Shows the on-device speech model's download in the capsule while recording (see `watchSpeechModel`).
+    private var modelWatch: Task<Void, Never>?
 
     private var pipeline: TranscriptionPipeline?
     private var writer: WAVFileWriter?
@@ -536,11 +538,9 @@ final class SessionController: ObservableObject {
         isLocked = false
         // The new dictation is what the user is after now.
         dropPendingPasteLast("a dictation started")
-        guard let sttEndpoint = settings.sttEndpoint, settings.isConfigured(settings.sttProvider) else {
+        guard settings.speechReady else {
             note("not started — speech-to-text provider not configured")
-            hud.show(.error(L("请先在设置里配置语音转文字服务商（\(settings.sttProvider.displayName)）",
-                              "Set up the speech-to-text provider (\(settings.sttProvider.displayName)) in Settings first")),
-                     autoHideAfter: 3)
+            hud.show(.error(settings.speechSetupMessage), autoHideAfter: 3)
             NotificationCenter.default.post(name: .openSettings, object: nil, userInfo: ["page": "providers"])
             return
         }
@@ -579,7 +579,7 @@ final class SessionController: ObservableObject {
         }
 
         let recordID = record.id
-        let pipeline = makePipeline(endpoint: sttEndpoint, preset: [:], language: dictation.language, onSpeculation: { [weak self] raw in
+        let pipeline = makePipeline(preset: [:], language: dictation.language, onSpeculation: { [weak self] raw in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self, self.record?.id == recordID else { return }
@@ -643,6 +643,7 @@ final class SessionController: ObservableObject {
         hud.model.badge = nil
         hud.show(.recording)
         playSound("Tink")
+        if settings.speechEngine == .onDevice { watchSpeechModel(language: dictation.language) }
         // Read now, while the field holds only what the speaker typed: the dictation goes in at the end.
         if dictation.polishEnabled, settings.useCursorContext { startCursorContextRead() }
         // After the start sound, which muting would cut off.
@@ -656,6 +657,29 @@ final class SessionController: ObservableObject {
         // A long dictation keeps the clean-up's connection (idle while speech-to-text works) from timing out.
         warmTimer = Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.warmConnections(polishes: dictation.polishEnabled) }
+        }
+    }
+
+    /// On-device speech-to-text in a language used for the first time: its model is fetched now, while the speaker
+    /// talks, and the capsule says how far along it is (where the live preview would be), since the text waits for it.
+    private func watchSpeechModel(language: String) {
+        modelWatch?.cancel()
+        let hudModel = hud.model
+        modelWatch = Task { @MainActor [weak self] in
+            guard let locale = await OnDeviceModels.locale(for: language), !(await OnDeviceModels.isInstalled(locale)) else {
+                return
+            }
+            let models = OnDeviceModels.shared
+            models.install(locale)
+            while !Task.isCancelled, let self, self.state == .recording {
+                switch models.statuses[locale] {
+                case nil: break
+                case let .downloading(fraction)?:
+                    hudModel.preview = L("正在下载语音模型… \(Int(fraction * 100))%", "Downloading the speech model… \(Int(fraction * 100))%")
+                default: return
+                }
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
         }
     }
 
@@ -684,7 +708,8 @@ final class SessionController: ObservableObject {
     /// ahead of them, so the first request after the key is released doesn't wait for DNS, TCP and TLS. Each host once.
     /// `polishes`: whether this dictation is cleaned up (its app profile can say otherwise than the global setting).
     private func warmConnections(polishes: Bool) {
-        var endpoints: [ProviderEndpoint?] = [settings.sttEndpoint, settings.sttBackupEndpoint]
+        var endpoints: [ProviderEndpoint?] = settings.speechEngine == .provider
+            ? [settings.sttEndpoint, settings.sttBackupEndpoint] : []
         if polishes || settings.translationTarget != nil || settings.commandModeEnabled {
             endpoints += [settings.polishEndpoint, settings.polishBackupEndpoint]
         }
@@ -697,10 +722,26 @@ final class SessionController: ObservableObject {
     /// `language`: the dictation's spoken-language hint, "" to auto-detect; nil for the global setting (a file's).
     /// `forFile`: for a file being transcribed (see FileTranscriber), which sends fewer requests at once on a session of
     /// its own, has no speculative tail, and keeps its own idea of how long requests take (its chunks are mostly long).
-    func makePipeline(endpoint: ProviderEndpoint, preset: [Int: String], language: String? = nil, forFile: Bool = false,
+    /// Speech-to-text runs on this Mac when the settings say so (see `OnDeviceRoute`), with no backup route: there's
+    /// nothing to hedge against. Callers check `settings.speechReady` first.
+    func makePipeline(preset: [Int: String], language: String? = nil, forFile: Bool = false,
                       onSpeculation: (@Sendable (String?) -> Void)? = nil) -> TranscriptionPipeline {
         let spoken = language ?? settings.sttLanguage
         let language = spoken.isEmpty ? nil : spoken
+        if settings.speechEngine == .onDevice {
+            return TranscriptionPipeline(
+                client: OnDeviceRoute(recognizer: AppleSpeechRecognizer.shared),
+                options: .init(model: "", language: language, vocabulary: settings.dictationVocabulary),
+                policy: OnDeviceRoute.policy,
+                preset: preset,
+                // The recognizer works one chunk at a time faster than it would two at once.
+                maxConcurrentRequests: 1,
+                speculate: !forFile,
+                onSpeculation: onSpeculation
+            )
+        }
+        // Not configured (callers check first): the request fails for want of a key, without being sent.
+        let endpoint = settings.sttEndpoint ?? .openRouter(apiKey: "")
         let backup = settings.sttBackupEndpoint.map {
             (client: forFile ? APIClient.forFiles(endpoint: $0) : APIClient(endpoint: $0),
              options: APIClient.TranscriptionOptions(model: settings.sttBackupModel.trimmingCharacters(in: .whitespaces), language: language,
@@ -736,6 +777,8 @@ final class SessionController: ObservableObject {
         sink.end()
         preview?.stop()
         preview = nil
+        modelWatch?.cancel()
+        modelWatch = nil
         hud.model.preview = ""
         writer?.close()
         // The dictation went on from the audio in memory; only a retry from History would miss what didn't reach the file.
@@ -1497,9 +1540,8 @@ final class SessionController: ObservableObject {
                  discarded: [SegmentedPolishResult], context: ContextSent? = nil) {
         if let context { noteContext(&record, context) }
         let prices = PriceStore.shared
-        let transcription = CostEstimator.transcriptions(pipeline.requestUsages(),
-                                                         price: prices.price(settings.sttProvider, settings.sttModel),
-                                                         preferReported: settings.sttProvider == .openrouter)
+        let transcription = pipeline.transcriptionCost(price: prices.price(settings.sttProvider, settings.sttModel),
+                                                       preferReported: settings.sttProvider == .openrouter)
         // Chunks the backup speech-to-text route answered are priced with its model.
         let backup = CostEstimator.transcriptions(pipeline.backupRequestUsages(),
                                                   price: prices.price(settings.sttBackupProvider, settings.sttBackupModel),
@@ -1667,7 +1709,10 @@ final class SessionController: ObservableObject {
             hud.show(.error(L("编辑选中文字的记录不能重试", "An edit of a selection can't be retried")), autoHideAfter: 3)
             return
         }
-        guard let endpoint = settings.sttEndpoint else { return }
+        guard settings.speechReady else {
+            hud.show(.error(settings.speechSetupMessage), autoHideAfter: 3)
+            return
+        }
         guard saved.hasAudio, let data = try? Data(contentsOf: saved.audioURL),
               let samples = WAV.decodeSamples(data) else {
             hud.show(.error(L("找不到这条记录的录音文件", "The recording for this entry is gone")), autoHideAfter: 3)
@@ -1700,7 +1745,7 @@ final class SessionController: ObservableObject {
         hud.model.badge = record.translation?.badge
         hud.showWorking(polishes: dictation.polishEnabled || record.translation != nil)
 
-        let pipeline = makePipeline(endpoint: endpoint, preset: preset, language: dictation.language)
+        let pipeline = makePipeline(preset: preset, language: dictation.language)
         self.pipeline = pipeline
         let generation = self.generation
         processingTask = Task { [weak self] in

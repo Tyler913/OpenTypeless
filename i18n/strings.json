@@ -5317,5 +5317,113 @@
     "ru": "Как оформляется очищенный текст. Чат: один блок, без списков и без точки в конце. Обычное: короткий текст остаётся одним абзацем, список — только когда вы перечисляете три пункта или больше. Лёгкая структура (промпты для ИИ, документы): больше абзацев и список для двух и более однородных пунктов. Письмо: продиктованные приветствие и подпись стоят на отдельных строках. Меняется только оформление, а не ваши слова. Распространённые чаты, ИИ-приложения и почтовые программы по умолчанию используют своё оформление.",
     "fr": "La mise en forme du texte nettoyé. Discussion : un seul bloc, sans liste ni point final. Naturelle : un texte court reste en un paragraphe, et une liste n'apparaît que si vous énumérez trois éléments ou plus. Structure légère (prompts pour une IA, documents) : davantage de paragraphes, et une liste dès deux éléments parallèles. E-mail : la formule d'appel et la formule de politesse que vous dictez vont chacune sur leur ligne. Seule la mise en forme change, jamais vos mots. Les applications courantes de discussion, d'IA et de messagerie utilisent leur mise en forme par défaut.",
     "de": "Wie der bereinigte Text gegliedert wird. Chat: ein Block, keine Listen, kein Punkt am Ende. Natürlich: kurzer Text bleibt ein Absatz, eine Liste nur, wenn du drei oder mehr Punkte aufzählst. Leichte Struktur (Prompts für eine KI, Dokumente): mehr Absätze und eine Liste schon ab zwei gleichrangigen Punkten. E-Mail: eine diktierte Anrede und Grußformel stehen jeweils in einer eigenen Zeile. Nur das Layout ändert sich, nie deine Worte. Gängige Chat-, KI- und Mail-Apps verwenden standardmäßig ihr Layout."
+  },
+  "On-device": {
+    "ja": "オンデバイス",
+    "ko": "온디바이스",
+    "es": "En el dispositivo",
+    "pt": "No dispositivo",
+    "ru": "На устройстве",
+    "fr": "Sur l’appareil",
+    "de": "Auf dem Gerät"
+  },
+  "Free and offline; less accurate than cloud models.": {
+    "ja": "無料でオフライン。クラウドのモデルより精度は低めです。",
+    "ko": "무료이며 오프라인으로 작동하지만 클라우드 모델보다 정확도가 낮습니다.",
+    "es": "Gratis y sin conexión; menos preciso que los modelos en la nube.",
+    "pt": "Gratuito e offline; menos preciso que os modelos na nuvem.",
+    "ru": "Бесплатно и офлайн; точность ниже, чем у облачных моделей.",
+    "fr": "Gratuit et hors ligne ; moins précis que les modèles dans le cloud.",
+    "de": "Kostenlos und offline; ungenauer als Cloud-Modelle."
+  },
+  "Use on-device recognition": {
+    "ja": "オンデバイス認識を使う",
+    "ko": "온디바이스 인식 사용",
+    "es": "Usar el reconocimiento en el dispositivo",
+    "pt": "Usar o reconhecimento no dispositivo",
+    "ru": "Распознавать на устройстве",
+    "fr": "Utiliser la reconnaissance sur l’appareil",
+    "de": "Erkennung auf dem Gerät verwenden"
+  },
+  "Downloading the speech model… {0}%": {
+    "ja": "音声モデルをダウンロード中… {0}%",
+    "ko": "음성 모델 다운로드 중… {0}%",
+    "es": "Descargando el modelo de voz… {0}%",
+    "pt": "Baixando o modelo de fala… {0}%",
+    "ru": "Загрузка речевой модели… {0}%",
+    "fr": "Téléchargement du modèle vocal… {0} %",
+    "de": "Sprachmodell wird geladen … {0} %"
+  },
+  "On-device recognition doesn't support this language.": {
+    "ja": "オンデバイス認識はこの言語に対応していません。",
+    "ko": "온디바이스 인식은 이 언어를 지원하지 않습니다.",
+    "es": "El reconocimiento en el dispositivo no admite este idioma.",
+    "pt": "O reconhecimento no dispositivo não é compatível com este idioma.",
+    "ru": "Распознавание на устройстве не поддерживает этот язык.",
+    "fr": "La reconnaissance sur l’appareil ne prend pas en charge cette langue.",
+    "de": "Die Erkennung auf dem Gerät unterstützt diese Sprache nicht."
+  },
+  "Engine": {
+    "ja": "エンジン",
+    "ko": "엔진",
+    "es": "Motor",
+    "pt": "Mecanismo",
+    "ru": "Движок",
+    "fr": "Moteur",
+    "de": "Engine"
+  },
+  "Couldn't download the speech model": {
+    "ja": "音声モデルをダウンロードできませんでした",
+    "ko": "음성 모델을 다운로드하지 못했습니다",
+    "es": "No se pudo descargar el modelo de voz",
+    "pt": "Não foi possível baixar o modelo de fala",
+    "ru": "Не удалось загрузить речевую модель",
+    "fr": "Impossible de télécharger le modèle vocal",
+    "de": "Das Sprachmodell konnte nicht geladen werden"
+  },
+  "Couldn't convert the audio for the recognizer": {
+    "ja": "認識用に音声を変換できませんでした",
+    "ko": "인식을 위해 오디오를 변환하지 못했습니다",
+    "es": "No se pudo convertir el audio para el reconocedor",
+    "pt": "Não foi possível converter o áudio para o reconhecedor",
+    "ru": "Не удалось преобразовать звук для распознавания",
+    "fr": "Impossible de convertir l’audio pour la reconnaissance",
+    "de": "Das Audio konnte für die Erkennung nicht umgewandelt werden"
+  },
+  "On-device recognition failed: ": {
+    "ja": "オンデバイス認識に失敗しました: ",
+    "ko": "온디바이스 인식 실패: ",
+    "es": "Falló el reconocimiento en el dispositivo: ",
+    "pt": "O reconhecimento no dispositivo falhou: ",
+    "ru": "Ошибка распознавания на устройстве: ",
+    "fr": "Échec de la reconnaissance sur l’appareil : ",
+    "de": "Erkennung auf dem Gerät fehlgeschlagen: "
+  },
+  "Clean-up has no provider set up": {
+    "ja": "整形のプロバイダが設定されていません",
+    "ko": "정리 제공업체가 설정되지 않았습니다",
+    "es": "La limpieza no tiene un proveedor configurado",
+    "pt": "A limpeza não tem um provedor configurado",
+    "ru": "Для обработки текста не настроен провайдер",
+    "fr": "Aucun fournisseur n’est configuré pour le nettoyage",
+    "de": "Für die Bereinigung ist kein Anbieter eingerichtet"
+  },
+  "{0} in all, recognised on this Mac at no cost.": {
+    "ja": "合計 {0}。この Mac 上で無料で認識します。",
+    "ko": "총 {0}, 이 Mac에서 무료로 인식합니다.",
+    "es": "{0} en total, reconocido en este Mac sin coste.",
+    "pt": "{0} no total, reconhecido neste Mac sem custo.",
+    "ru": "Всего {0}; распознаётся на этом Mac бесплатно.",
+    "fr": "{0} au total, reconnu sur ce Mac sans frais.",
+    "de": "Insgesamt {0}, kostenlos auf diesem Mac erkannt."
+  },
+  "On-device uses the speech recognition built into macOS, on this Mac: no API key, and your recording never leaves it. A language's speech model is downloaded the first time you use it. Clean-up still uses its provider below; without one, the text goes in as recognised.": {
+    "ja": "「オンデバイス」は macOS に組み込まれた音声認識をこの Mac 上で使います。API キーは不要で、録音が Mac の外に出ることはありません。言語ごとの音声モデルは初めて使うときにダウンロードされます。整形には引き続き下のプロバイダを使い、設定がなければ認識結果がそのまま入力されます。",
+    "ko": "‘온디바이스’는 macOS에 내장된 음성 인식을 이 Mac에서 사용합니다. API 키가 필요 없고 녹음이 Mac 밖으로 나가지 않습니다. 언어별 음성 모델은 처음 사용할 때 다운로드됩니다. 정리는 계속 아래 제공업체를 사용하며, 설정이 없으면 인식된 텍스트가 그대로 입력됩니다.",
+    "es": "«En el dispositivo» usa el reconocimiento de voz integrado en macOS, en este Mac: sin clave de API, y la grabación nunca sale de él. El modelo de voz de cada idioma se descarga la primera vez que lo usas. La limpieza sigue usando su proveedor de abajo; sin él, el texto se inserta tal como se reconoció.",
+    "pt": "“No dispositivo” usa o reconhecimento de fala integrado ao macOS, neste Mac: sem chave de API, e a gravação nunca sai dele. O modelo de fala de cada idioma é baixado na primeira vez que você o usa. A limpeza continua usando o provedor abaixo; sem ele, o texto entra como foi reconhecido.",
+    "ru": "«На устройстве» — это встроенное в macOS распознавание речи прямо на этом Mac: без API-ключа, и запись никуда не уходит. Речевая модель языка загружается при первом использовании. Для обработки текста по-прежнему нужен провайдер ниже; без него текст вставляется как распознан.",
+    "fr": "« Sur l’appareil » utilise la reconnaissance vocale intégrée à macOS, sur ce Mac : aucune clé API, et votre enregistrement ne le quitte jamais. Le modèle vocal d’une langue est téléchargé la première fois que vous l’utilisez. Le nettoyage utilise toujours son fournisseur ci-dessous ; sans lui, le texte est inséré tel que reconnu.",
+    "de": "„Auf dem Gerät“ nutzt die in macOS integrierte Spracherkennung auf diesem Mac: kein API-Schlüssel, und deine Aufnahme verlässt ihn nie. Das Sprachmodell einer Sprache wird beim ersten Gebrauch geladen. Die Bereinigung nutzt weiterhin ihren Anbieter unten; ohne ihn wird der Text so eingefügt, wie er erkannt wurde."
   }
 }

@@ -3,349 +3,105 @@
 </p>
 
 <p align="center">
-  <img src="macos/Resources/AppIcon.png" width="128" alt="Ícone do OpenTypeless">
+  <img src="macos/Resources/AppIcon.png" width="112" alt="OpenTypeless">
 </p>
 
 <h1 align="center">OpenTypeless</h1>
 
 <p align="center">
-  <b>Digitação por voz nativa para macOS e Windows que não quebra em ditados longos.</b><br>
-  Segure uma tecla, fale o quanto precisar e receba um texto limpo e organizado no cursor.
+  <b>Segure uma tecla, fale e receba texto limpo no cursor.</b><br>
+  Ditado nativo para macOS e Windows, feito para ditados longos.
 </p>
 
 <p align="center">
-  <img src="docs/images/recording.png" width="380" alt="A cápsula de gravação exibida enquanto você fala">
+  <a href="https://github.com/Tyler913/OpenTypeless/releases/latest"><b>Baixar</b></a> · <a href="#instalar">Instalar</a> · <a href="docs/DEVELOPMENT.md">Compilar do código-fonte</a>
 </p>
 
 <p align="center">
-  <img src="docs/images/menu-bar.png" width="330" alt="O painel da barra de menus: ditados recentes, a um clique de copiar">
+  <img src="docs/images/recording.png" width="420" alt="A cápsula de gravação, com a prévia das suas palavras acima dela">
 </p>
+
+## Por que OpenTypeless
+
+A maioria dos apps de ditado vai bem com uma frase e falha em dois minutos de fala: tempo esgotado, resultado vazio, texto perdido. O OpenTypeless foi feito exatamente para isso.
+
+- **Fale o quanto quiser.** O áudio é cortado nas suas pausas e transcrito enquanto você fala, então até um ditado longo fica pronto logo depois de soltar a tecla.
+- **Nenhuma palavra se perde.** Cada trecho tenta de novo por conta própria, um modelo lento ganha um reserva e toda gravação é salva para poder ser refeita.
+- **Parece digitado por você.** Vícios de linguagem e recomeços somem, “quarta, não, quinta” vira quinta e listas viram listas. Suas palavras, números e idiomas ficam.
+- **Use sua própria chave.** OpenRouter, OpenAI, Groq, Gemini, Anthropic, DeepSeek e outros, ou modelos locais com Ollama e LM Studio. Sem conta e sem servidor próprio.
 
 <p align="center">
-  Dois apps nativos, um só design: <b>macOS</b> (Swift / SwiftUI) e <b>Windows</b> (C# / WinUI 3).<br>
-  O mesmo processo, o mesmo prompt de limpeza, as mesmas configurações e o mesmo tratamento de falhas; só mudam a integração com o sistema e a aparência.
+  <img src="docs/images/menu-bar.png" width="300" alt="O painel da barra de menus: como ditar, o gasto do mês e os ditados recentes">
 </p>
-
----
-
-## Por que ele existe
-
-Falar é a forma mais rápida de escrever prompts longos para ferramentas de IA. Isso também significa ditados longos: pensar em voz alta por um a três minutos é normal.
-
-A maioria dos apps de digitação por voz, livres e comerciais, funciona bem com uma frase e **falha justamente nesses ditados longos**. Gravar 40 s, 1 min ou 2 min termina em tempo esgotado, resultado vazio ou texto perdido. Lendo o código de várias alternativas livres, as mesmas causas apareciam sempre:
-
-- **A gravação inteira é enviada como uma única solicitação de voz para texto.** Os provedores estouram o tempo depois de uns 60 s de processamento (o OpenRouter documenta isso explicitamente), então quanto mais você fala, maior a chance de a solicitação morrer.
-- **A chamada ao LLM de limpeza tem um tempo *total* curto.** Um limite de 30 s que inclui o streaming corta uma resposta longa no meio.
-- **Uma falha joga tudo fora.** Dois minutos de fala se perdem e você precisa dizer tudo de novo.
-
-O OpenTypeless foi construído em torno desse problema.
-
-## Como ele lida com ditados longos
-
-| | O que acontece |
-|---|---|
-| **Corta nas pausas** | Enquanto você fala, o áudio é cortado na sua próxima pausa assim que se acumulam 8 s (sem pausa, na janela de 0,4 s mais silenciosa antes de 28 s), então nenhuma palavra é cortada ao meio, sobra pouco para enviar ao soltar a tecla e nenhuma solicitação chega perto do limite de 60 s do provedor. |
-| **Transcreve enquanto você fala** | Cada trecho é transcrito em segundo plano assim que é cortado. Depois de um ditado de dois minutos, só os últimos segundos ficam para processar quando você solta a tecla. |
-| **Tenta de novo por trecho** | Quedas de rede, 429 e erros 5xx são repetidos com espera progressiva. Chaves inválidas e problemas de cobrança falham na hora. Um trecho com falha nunca afeta os outros, e os trechos com falha ganham mais uma rodada completa no final. |
-| **Modelo reserva para inícios lentos** | Se o modelo de limpeza não começar a responder em 0,55 s, ou falhar, um modelo reserva de outro fornecedor também é consultado e vence quem responder primeiro. Um provedor lento custa menos de um segundo a mais, não a espera inteira. |
-| **Tempo ocioso, não tempo total** | A limpeza recebe a resposta por streaming e só é considerada travada quando *nenhum* dado chega por 25 s, então saídas longas nunca são cortadas. |
-| **Nunca perde palavras** | O áudio é gravado em disco enquanto você fala. Todo ditado fica no Histórico; um que falhou pode ser repetido depois, e só os trechos com falha são reenviados. Se a limpeza falhar, a transcrição bruta é inserida no lugar. |
-
-Um ditado sintético de 121 s, por exemplo, é dividido em 6 trechos em pausas naturais. Quando a pessoa para de falar, 5 deles já estão transcritos.
-
-## Uma limpeza que parece digitada por você
-
-A transcrição bruta é bagunçada: vícios de linguagem, recomeços, "não, espera, quero dizer…", pensar em voz alta. A limpeza transforma isso no que você teria digitado:
-
-- **Autocorreções resolvidas.** Vale a versão final ("quarta, não, quinta" → quinta). Isso inclui correções feitas bem depois, implícitas ("50 mil, hã, 60 mil por segurança") e pontos retirados por completo ("…o terceiro, esquece").
-- **Vícios de linguagem e pensamentos em voz alta removidos.** um / uh / 嗯 / 那个 / "deixa eu pensar" / "é isso" somem.
-- **Nada real se perde.** Números, versões, nomes e comparações são mantidos exatamente. O modelo é avisado de que produtos mais novos do que ele conhece são reais, então "Gemini 3.5" nunca vira "Gemini 2.5".
-- **Estrutura quando ajuda.** Três ou mais pontos paralelos viram uma lista numerada; o resto fica em parágrafos normais.
-- **Nunca responde a você.** Prompts ditados ("você pode explicar por que…") são limpos, não respondidos nem executados.
-- **Suas palavras, seus idiomas.** As edições são mínimas: palavras, ordem e tom continuam seus. Quando você mistura chinês e inglês, cada palavra fica no idioma em que foi dita, inclusive as do dia a dia ("shortcut", "dark mode"), com espaço entre o texto CJK e o latino.
-
-<p align="center">
-  <img src="docs/images/history.png" width="720" alt="Histórico: ditados agrupados por dia e pesquisáveis, com o texto limpo e o custo">
-</p>
-
-O prompt é ajustado com conjuntos de desenvolvimento e de teste reservados (veja [eval/](eval/)), incluindo ditados reais.
 
 ## Recursos
 
-- **Atalho global.** Segure **Fn** (macOS) ou **Alt direito** (Windows) por padrão, ou grave qualquer modificador sozinho (⌘ direito, ⌥ direito, Ctrl direito…) ou uma combinação (⌥ Espaço, Alt + Espaço, F5…).
-- **Segurar para falar ou mãos livres.** Segure para falar; toque uma vez para continuar gravando com as mãos livres e toque de novo para terminar. **Esc** cancela. Depois de 10 segundos falando, um ditado cancelado não se perde: é transcrito (sem ser inserido) e fica no Histórico por 24 horas.
-- **Colar o último ditado** (opcional): defina um atalho em **Configurações → Atalho**, ou clique no botão do painel da barra de menus ou da bandeja, para inserir de novo o seu último ditado. Se ele falhou, é transcrito novamente antes.
-- **Modo de tradução** (opcional): segure o atalho e pressione também **Shift** (Fn + ⇧ no macOS, Alt direito + Shift no Windows) para falar em qualquer idioma e inserir o texto no idioma escolhido em **Configurações → Vocabulário e estilo** (English, 简体中文, 日本語 e mais seis, ou qualquer outro que você nomear). Uma única requisição ao modelo faz a limpeza e a tradução juntas, então é tão rápido quanto um ditado normal; se a tradução não puder ser usada, o original limpo é inserido no lugar.
-- **Editar o texto selecionado por voz** (opcional, ative em **Configurações → Atalho**): selecione texto em qualquer app, segure o atalho, pressione também **Ctrl** (Fn + ⌃ no macOS, Alt direito + Ctrl no Windows) e diga o que fazer — “mais formal”, “traduza para o inglês”, “corrija a gramática”, “transforme em uma lista”. A seleção é substituída pelo resultado (Desfazer a traz de volta); se você perguntar sobre ela (“o que isso significa?”), a resposta é mostrada e copiada. A seleção vai para o modelo só como dados, então instruções dentro dela não são seguidas; sem a tecla nada é lido, campos de senha e terminais nunca são lidos, e a edição só volta para a mesma janela e a mesma seleção.
-- **Terminar e enviar** (opcional): escolha uma tecla de envio em **Configurações → Atalho** (Return, ⇧ Return ou ⌘ Return; Enter, Shift + Enter ou Ctrl + Enter no Windows). Pressione-a durante a gravação para terminar o ditado; quando o texto é colado, a mesma tecla é pressionada nesse app para enviá-lo. Nada é enviado quando o texto vai só para a área de transferência, depois de Esc ou quando a tela é bloqueada.
-- **Quebras de linha ditadas** (opcional): diga “nova linha” ou “novo parágrafo” (ou new line / new paragraph, 换行 / 新段落 e os outros idiomas suportados) sozinho, com uma pausa curta, para quebrar a linha ou deixar uma linha em branco, com ou sem limpeza. Ditas no meio de uma frase, as palavras ficam. Ative em **Configurações → Geral**; ditas sozinhas numa lista (“espaços, nova linha, tabulações”), também viram uma quebra.
-- **Escolha seu microfone** em **Configurações → Geral**, com um medidor de nível ao vivo para conferir que ele ouve você. Dispositivos virtuais (apps de reunião e streaming) aparecem marcados, e se o escolhido for desconectado o padrão do sistema é usado.
-- **Manter o microfone pronto** (opcional): a gravação começa no instante em que você pressiona a tecla e inclui o momento anterior, então a primeira palavra não é cortada. O microfone fica ligado e fones Bluetooth passam para o modo de chamada.
-- **Prévia ao vivo (beta)**: veja as palavras acima da cápsula de gravação enquanto fala, reconhecidas no dispositivo (SpeechAnalyzer no macOS; reconhecimento de fala do Windows). O texto inserido continua vindo do seu provedor.
-- **A cápsula onde você quiser**: a cápsula de gravação aparece na parte de baixo da tela (o padrão), na de cima ou perto do cursor de texto, logo abaixo da linha em que você digita (acima dela quando não há espaço embaixo), então nunca a cobre. Ela aparece na tela da janela em que você está trabalhando; escolha em **Configurações → Geral**.
-- **Cola onde está o cursor.** Em um campo de texto, o texto é colado e sua área de transferência é restaurada; sem campo de texto em foco, ele vai para a área de transferência. Funciona também em navegadores e apps Electron, e em terminais no Windows.
-- **Encaixa no texto em volta do cursor** (ativado por padrão): ao ditar no meio de um texto existente, entra o espaço que faltaria ("Hello there. Next sentence", "用 SwiftUI 写"), a primeira palavra fica em minúscula no meio da frase (nunca "I", siglas, nomes ou seu vocabulário) e sai o ponto final que encerraria a frase antes da hora. A decisão vem dos caracteres de cada lado do cursor; quando não dá para lê-los (campos de senha, alguns apps), o texto entra como está.
-- **Perfis por app** (opcional): dê aos apps em que você dita configurações próprias em **Configurações → Apps**: limpeza ligada ou desligada, Return após inserir (Enter no Windows), o idioma falado e preferências de limpeza extras, como um tom mais formal no seu app de e-mail. Vale o app em primeiro plano quando você começa a gravar; o que um perfil deixa em Padrão segue suas configurações de sempre.
-- **Use seu próprio provedor.** Já vêm incluídos OpenRouter, OpenAI, Groq, SiliconFlow, DeepSeek, Google Gemini, Anthropic, Mistral, xAI, Alibaba Cloud Model Studio (Qwen), Zhipu GLM, Moonshot Kimi, Volcengine Ark (Doubao), Deepgram e ElevenLabs, além de Ollama e LM Studio no seu próprio computador (sem chave) e qualquer endpoint compatível com a OpenAI. Voz para texto, limpeza e o modelo reserva de limpeza podem usar provedores diferentes, e cada etapa só oferece os provedores que conseguem fazê-la (Deepgram e ElevenLabs transcrevem; Gemini, Anthropic, xAI, Qwen, Kimi e Doubao limpam). **Configurações → Provedores** lista os que você configurou; **Adicionar provedor** tem o resto. **Testar** verifica uma chave e mostra a latência de ida e volta do provedor (mediana de três).
-- **Fala para texto de reserva** (opcional): quando um trecho demora muito mais do que essa rota costuma levar para a duração dele, ou falha, um segundo provedor também é chamado e vale a primeira resposta.
-- **Vocabulário personalizado e preferências de estilo** para nomes, produtos e jargões. Importe o vocabulário de um arquivo CSV ou de texto, ou exporte-o (em CSV com como os termos aprendidos foram ouvidos errado, para referência: a importação lê só os termos).
-- **Aprende com suas correções.** Corrija uma palavra mal reconhecida depois de colada (TypeList → Typeless) e ela é adicionada automaticamente ao seu vocabulário, junto com como foi ouvida errado. Só correções de som parecido são aprendidas, nunca reescritas, números alterados ou trocas de palavras comuns, e uma palavra que você remover nunca é aprendida de novo.
-- **Atalhos de texto.** Diga um gatilho curto como “meu e-mail” ou “modelo de PR” e o texto que você salvou entra no lugar, palavra por palavra, mesmo no meio de uma frase e em chinês, sem espaços em volta. O app expande os atalhos ele mesmo depois da limpeza, em vez de pedir ao modelo, então um modelo longo sai exatamente como você escreveu. Configure em **Configurações → Vocabulário e estilo**.
-- **Grafa nomes como estão na tela** (opcional): nomes e termos que já estão no campo ao redor do cursor (o nome de um colega na conversa que você responde, um produto, um identificador de código) vão para o modelo de limpeza como referência de grafia, então o que o reconhecimento de voz ouviu errado sai escrito como está ali. É lido via Acessibilidade / UI Automation quando você começa a falar, nunca de campos de senha, e nada é copiado dali: uma limpeza que copia texto desse campo é descartada e o ditado entra como foi falado. Ative em **Vocabulário e estilo**.
-- **Página Início** com o que a digitação por voz fez por você: palavras ditadas, tempo economizado em relação a digitar (100 ppm por padrão, ajustável), sua velocidade de fala, quanto custou hoje, neste mês e no total, e um mapa de atividade no estilo do GitHub com sequências. Ela abre quando você mesmo abre o app; no login ela não atrapalha, a menos que você ative **Mostrar o Início ao abrir no login**.
-- **Saiba quanto você gasta.** Solicitações ao OpenRouter contam exatamente o que o OpenRouter cobrou, e a tabela de preços ao vivo aparece ao lado de cada modelo. Para qualquer outro provedor ou endpoint personalizado, informe o preço do modelo em **Modelos** (por milhão de tokens, ou por minuto de áudio para voz para texto). Ali também dá para definir um **limite de gastos mensal** (desativado por padrão): a cápsula de gravação avisa uma vez quando os gastos do mês chegam a 80% do limite e outra quando chegam ao limite, e a página Início e o painel da barra de menus ou da bandeja mostram quanto já foi usado. É só um aviso: o ditado nunca para. Só contam as solicitações com preço conhecido.
-- **Histórico** de todos os ditados, agrupado por dia e pesquisável, com texto bruto e limpo, tempos, custo, copiar e transcrever de novo. Escolha por quanto tempo as gravações ficam guardadas: nada, um dia, uma semana, um mês, um ano ou para sempre. Exporte o que a lista mostra para CSV (abre no Excel, inclusive com caracteres chineses), JSON ou Markdown, e salve qualquer gravação como arquivo WAV.
-- **Transcreva arquivos de áudio e vídeo.** **Transcrever arquivo…** no histórico, ou soltar arquivos nele, transforma uma nota de voz, a gravação de uma reunião ou um vídeo em texto com seu provedor de voz para texto, cortado nas pausas como um ditado longo e, se quiser, limpo. Antes de começar você vê a duração de cada arquivo e, quando o modelo tem preço por minuto, quanto deve custar. O texto fica no histórico (nunca é colado), os arquivos ficam fora das estatísticas de ditado e nunca atrasam um ditado: um arquivo envia menos requisições ao mesmo tempo e espera enquanto você dita.
-- **Nove idiomas de interface**: English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch e Русский. O app segue o idioma do sistema, ou escolha um em **Configurações → Geral → Idioma**.
-- **Design nativo.** Liquid Glass no macOS 26+ com um painel na barra de menus; Mica e Acrylic no Windows 11 com um painel na bandeja. Ambos mostram uma pequena cápsula de gravação enquanto você fala. As configurações são curtas, com os detalhes em um **?** que você pode apontar ou clicar.
-- **Abre ao iniciar sessão.**
-- **Atualiza sozinho.** Verifica o GitHub Releases uma vez por dia, baixa a nova versão em segundo plano e instala quando você clica em **Reiniciar para atualizar**, nunca no meio de um ditado. Os downloads são conferidos com o SHA-256 do GitHub antes de qualquer substituição. Desative, ou verifique manualmente, em **Configurações → Geral → Atualizações**.
-- **Pequeno e nativo.** Um app Swift/SwiftUI de ~3 MB no macOS e um app WinUI 3 independente no Windows. Sem Electron, sem conta e sem servidor próprio.
-
-<p align="center">
-  <img src="docs/images/home.png" width="720" alt="Início: palavras ditadas, tempo economizado, velocidade de fala, gastos e um mapa de atividade no estilo do GitHub">
-</p>
+- **Segurar para falar ou mãos livres.** Segure **Fn** (macOS) ou **Alt direito** (Windows), ou toque uma vez para continuar falando. Qualquer tecla ou combinação serve.
+- **Traduza enquanto fala.** Adicione **Shift** e suas palavras saem no idioma escolhido.
+- **Edite com a voz.** Selecione um texto, adicione **Ctrl** e diga “deixe mais formal” ou “transforme numa lista”.
+- **Vocabulário que aprende.** Adicione nomes e jargões; palavras que você corrige depois de colar são aprendidas sozinhas.
+- **Trechos prontos.** Diga “meu e-mail” e o texto salvo entra, palavra por palavra.
+- **Ajustes por app.** Enter depois de inserir no Slack, tom formal no Mail, sem limpeza no Terminal.
+- **Histórico e arquivos.** Todo ditado pode ser buscado e exportado, e arquivos de áudio ou vídeo também podem ser transcritos.
+- **Saiba quanto gasta.** Palavras, tempo economizado e custo na tela Início, com um limite mensal opcional.
+- **Prévia ao vivo (beta).** Veja suas palavras acima da cápsula enquanto fala.
+- **Nove idiomas, atualizações automáticas.** English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch, Русский.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/models.png" alt="Modelos: um provedor e um modelo para cada etapa, com preços ao vivo e uma reserva"></td>
-    <td width="50%"><img src="docs/images/vocabulary.png" alt="Vocabulário: seus termos, incluindo os aprendidos com suas correções"></td>
+    <td width="50%" align="center"><img src="docs/images/home.png" alt="Início: palavras, tempo economizado, gasto e atividade"><br><sub>Início: palavras, tempo economizado, gasto e atividade</sub></td>
+    <td width="50%" align="center"><img src="docs/images/history.png" alt="Histórico: todo ditado, com busca"><br><sub>Histórico: todo ditado, com busca</sub></td>
   </tr>
   <tr>
-    <td align="center">Escolha um provedor e um modelo para cada etapa, com preços ao vivo e uma reserva</td>
-    <td align="center">Vocabulário, incluindo palavras aprendidas com suas correções</td>
+    <td width="50%" align="center"><img src="docs/images/models.png" alt="Modelos: um provedor e um modelo para cada etapa"><br><sub>Modelos: um provedor e um modelo para cada etapa</sub></td>
+    <td width="50%" align="center"><img src="docs/images/vocabulary.png" alt="Vocabulário, incluindo palavras aprendidas com suas correções"><br><sub>Vocabulário, incluindo palavras aprendidas com suas correções</sub></td>
   </tr>
 </table>
 
+<sub>As capturas são do macOS. O Windows tem as mesmas páginas, com a aparência nativa dele.</sub>
 
-## Requisitos
-
-- **macOS:** macOS 26 ou posterior, Apple Silicon.
-- **Windows:** Windows 10 (versão 2004 ou posterior) ou Windows 11, x64 ou ARM64.
-- Uma chave de API de pelo menos um provedor (o [OpenRouter](https://openrouter.ai/keys) é o mais fácil: uma chave cobre as duas etapas).
-
-## Instalar no macOS
-
-### Download
-
-1. Baixe `OpenTypeless-<version>-macOS-arm64.zip` em [Releases](https://github.com/Tyler913/OpenTypeless/releases) e descompacte.
-2. Mova o **OpenTypeless.app** para a pasta **Aplicativos**.
-3. O app não é notarizado pela Apple (isso exige uma conta de desenvolvedor paga), então o macOS o bloqueia na primeira abertura e pode até dizer que ele "está danificado e não pode ser aberto". Remova uma vez a marca de quarentena do download no Terminal:
-
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/OpenTypeless.app
-   ```
-
-   Depois abra normalmente:
-
-   ```bash
-   open /Applications/OpenTypeless.app
-   ```
-
-   Outra opção: tente abri-lo uma vez, depois vá em **Ajustes do Sistema → Privacidade e Segurança** e clique em **Abrir Mesmo Assim**.
-
-O OpenTypeless fica na barra de menus (ícone de forma de onda), não no Dock.
-
-As próximas versões são instaladas de dentro do app (**Configurações → Geral → Atualizações**), sem passar pelo Terminal: o macOS só pergunta sobre apps baixados por um navegador.
-
-### Compilar a partir do código
-
-Precisa do Xcode 26+ instalado (as Command Line Tools bastam para compilar, mas a compilação usa o plugin de macros do SwiftUI de `/Applications/Xcode.app`).
-
-```bash
-git clone https://github.com/Tyler913/OpenTypeless.git
-cd OpenTypeless/macos
-scripts/create-signing-cert.sh   # opcional, mas recomendado, uma única vez
-scripts/build-app.sh             # compila, assina e instala /Applications/OpenTypeless.app
-```
-
-`create-signing-cert.sh` cria uma identidade local de assinatura de código. Sem ela, o app é assinado ad hoc, e o macOS pede de novo as permissões de Acessibilidade e Microfone após cada recompilação.
-
-Para gerar um zip de lançamento em vez de instalar: `scripts/build-app.sh --package` grava `macos/dist/OpenTypeless-<version>-macOS-arm64.zip` (assinado ad hoc) e mostra seu SHA-256.
-
-`build-app.sh` mantém exatamente uma cópia do app na máquina. Ele monta o pacote em uma pasta temporária oculta, move para `/Applications`, remove o registro de cópias antigas no LaunchServices e apaga entradas de privacidade desatualizadas quando a assinatura muda.
-
-### Primeira execução
-
-1. Conceda acesso ao **Microfone** e à **Acessibilidade** (a Acessibilidade é usada para detectar o atalho e colar o texto).
-2. Adicione uma chave de API em **Configurações → Provedores**.
-3. Recomendado se você usa Fn: defina **Ajustes do Sistema → Teclado → "Pressionar a tecla 🌐 para"** como **Não Fazer Nada**, para que tocar em Fn não abra o seletor de emojis.
-
-## Instalar no Windows
-
-### Download
-
-1. Baixe `OpenTypeless-<version>-windows-x64.zip` (ou `-arm64`) em [Releases](https://github.com/Tyler913/OpenTypeless/releases) e descompacte onde quiser (por exemplo, `%LOCALAPPDATA%\Programs`).
-2. Execute o **OpenTypeless.exe**. Ele é independente: não há mais nada para instalar.
-3. O app não tem assinatura de código, então o SmartScreen pode dizer "O Windows protegeu o computador": clique em **Mais informações → Executar assim mesmo**.
-
-As próximas versões são instaladas de dentro do app (**Configurações → Geral → Atualizações**) na mesma pasta, sem aviso do SmartScreen. Descompacte em um lugar onde você possa gravar, como `%LOCALAPPDATA%\Programs`; em `Program Files`, o app só consegue mostrar o link para o download.
-
-O OpenTypeless fica na **área de notificação** (ícone de forma de onda ao lado do relógio). No começo, o Windows esconde ícones novos no menu de estouro (^); arraste-o para a barra de tarefas ou ative-o em **Configurações → Personalização → Barra de Tarefas → Outros ícones da bandeja do sistema**.
-
-### Compilar a partir do código
-
-Precisa do [SDK do .NET 10](https://dotnet.microsoft.com/download). O Visual Studio é opcional.
-
-```powershell
-# a partir de windows\ em um clone deste repositório
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1            # testa, compila e instala em %LOCALAPPDATA%\Programs\OpenTypeless
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -Package   # grava windows\dist\OpenTypeless-<version>-windows-x64.zip
-```
-
-`build.ps1` mantém exatamente uma cópia instalada: para o app em execução, substitui a pasta de instalação, atualiza o atalho do menu Iniciar e abre a nova versão. Adicione `-Arch arm64` para Windows em ARM.
-
-Não é preciso um PC com Windows para desenvolver o app do Windows: o GitHub Actions o compila a cada alteração (veja [Integração contínua](#integração-contínua)).
-
-### Primeira execução
-
-1. Adicione uma chave de API em **Configurações → Provedores**.
-2. Confirme que **Configurações → Privacidade e segurança → Microfone → Permitir que aplicativos da área de trabalho acessem seu microfone** está ativado.
-3. Segure o Alt direito e fale (Alt direito em vez de Ctrl direito, que os PCs Copilot+ trocam pela tecla Copilot; em layouts onde o Alt direito é AltGr, como o ABNT2, escolha outra tecla em **Configurações → Atalho**). O Windows não precisa de permissão de acessibilidade; o único limite é que ele não permite colar em apps executados como administrador, então nesses casos o texto vai para a área de transferência.
-
-## Modelos padrão
-
-| Etapa | Padrão | Observações |
-|---|---|---|
-| Voz para texto | `microsoft/mai-transcribe-2` (OpenRouter) | Qualquer modelo de transcrição do OpenRouter, um `/audio/transcriptions` compatível com Whisper em outro lugar (Mistral `voxtral-mini-transcribe-3`, Zhipu `glm-asr-2512`, Ollama), ou Deepgram (`nova-3`) e ElevenLabs (`scribe_v2`) pelas próprias APIs. |
-| Limpeza | `google/gemini-3.8-flash` (OpenRouter) | A melhor limpeza nos nossos testes, por cerca de US$ 0,005 por ditado longo. Opções mais baratas para testar: `qwen/qwen3.7-flash`, `google/gemini-3.1-flash-lite`. |
-| Limpeza reserva | `deepseek/deepseek-v4.1-flash` (OpenRouter) | Só é consultado quando o modelo principal demora a começar ou falha. Escolha um modelo rápido de outro fornecedor. |
-
-O raciocínio (reasoning) do modelo de limpeza é desligado ou reduzido ao mínimo automaticamente, para manter a latência baixa.
-
-## Privacidade
-
-- Áudio e texto só são enviados aos provedores que você configurar. Com a **Prévia ao vivo** ligada, o macOS reconhece a fala no Mac; o Windows usa o próprio reconhecimento de fala, que envia sua voz à Microsoft quando o reconhecimento de fala online está ativado (a configuração avisa).
-- As chaves de API ficam, no macOS, em `~/Library/Application Support/OpenTypeless/credentials.json`, legível só pelo seu usuário (não no Keychain, que pediria a senha a cada atualização de um app autoassinado), ou no Gerenciador de Credenciais do Windows (`OpenTypeless/credentials`, continuando em `OpenTypeless/credentials/2` e seguintes quando as chaves não cabem em uma entrada).
-- Os totais de uso da página Início (palavras, tempo de fala e custo por dia, sem texto) ficam em `usage.json`, na mesma pasta das configurações e do histórico. A tabela de preços do OpenRouter é baixada da lista pública de modelos (sem chave, nada sobre você) algumas vezes por dia.
-- O histórico (áudio + transcrições) fica em `~/Library/Application Support/OpenTypeless/Sessions/` no macOS e em `%LOCALAPPDATA%\OpenTypeless\` no Windows. As gravações ficam guardadas por um mês por padrão (na página Histórico: nada, um dia, uma semana, um mês, um ano ou para sempre); depois disso, o texto continua entre as 200 entradas mais recentes. Ditados com falha mantêm o áudio por pelo menos um mês para que possam ser repetidos. As gravações somadas ficam abaixo de 1 GB: acima disso, as mais antigas perdem o áudio primeiro (o texto fica).
-- A verificação de atualizações envia uma solicitação por dia para `api.github.com` (sem conta, nada sobre você ou seus ditados); desative em **Configurações → Geral → Atualizações**.
-- Aprender com suas correções lê o campo de texto em que você ditou, só no seu computador, por no máximo dois minutos após colar. Campos de senha são ignorados. Pode ser desativado em **Vocabulário e estilo**.
-- Com **Usar o texto ao redor do cursor para grafar nomes** ativado (desativado por padrão), ao começar a gravar até 1.500 caracteres ao redor do cursor no campo em que você dita são lidos e enviados com a transcrição aos seus modelos de limpeza. Campos de senha nunca são lidos, e o texto não é salvo (o histórico só registra que foi usado).
-
-## Desenvolvimento
-
-O repositório contém os dois apps. Eles compartilham o design, os conjuntos de avaliação e este README; cada um tem seu próprio código, testes e scripts de compilação.
-
-```
-macos/                      O app para macOS (Swift Package)
-  Sources/TypelessCore/       Lógica do processo, sem interface: divisão, WAV, cliente de provedores, novas tentativas, prompt de limpeza
-  Sources/OpenTypeless/       O app: atalho, gravação, HUD, configurações, histórico, colagem, ferramentas CLI
-  Tests/                      Testes com swift-testing
-  scripts/                    Scripts de compilação, assinatura e testes
-windows/                    O app para Windows (solução .NET)
-  src/TypelessCore/           A mesma lógica do processo, portada linha a linha
-  src/OpenTypeless/           O app WinUI: hook de teclado, gravação WASAPI, HUD, bandeja, configurações, histórico, colagem
-  src/OpenTypeless.Cli/       Ferramentas de linha de comando (transcrever um arquivo, análise da divisão, avaliação de prompts)
-  tests/                      Testes com xUnit
-  scripts/                    Scripts de compilação, testes e ícone
-eval/                       Conjuntos de teste da limpeza e o guia de avaliação, compartilhados pelos dois apps
-i18n/                       Traduções da interface (exceto chinês e inglês), compartilhadas pelos dois apps
-docs/DESIGN.md              Arquitetura e decisões de design
-docs/WINDOWS-PORT.md        Como cada arquivo e API de sistema do macOS corresponde no Windows
-docs/images/                Capturas de tela do README
-docs/brand/                 O logotipo: originais vetoriais e como usá-los
-scripts/make_icon.py        Desenha o logotipo e gera a partir dele todos os ícones do app
-```
-
-O prompt de limpeza (`Prompts.swift` / `Prompts.cs`) é idêntico byte a byte nos dois apps; altere os dois juntos e confira o resultado com [eval/](eval/).
-
-### Traduções
-
-Todo texto visível ao usuário é escrito no próprio código com a versão em chinês e em inglês: `L("有新版本 \(version)", "Version \(version) is available")` em Swift, `L($"有新版本 {version}", $"Version {version} is available")` em C#. Os demais idiomas ficam em [`i18n/strings.json`](i18n/strings.json), com o texto em inglês como chave e cada interpolação numerada em ordem:
-
-```json
-"Version {0} is available": { "ja": "バージョン {0} が利用可能です", "ko": "버전 {0} 사용 가능", … }
-```
-
-Os dois apps incorporam o arquivo na compilação, e um texto sem tradução aparece em inglês. Uma tradução pode mudar a posição dos marcadores, mas precisa manter todos. Depois de adicionar ou alterar um texto, adicione as traduções e execute `python3 i18n/check.py`: ele lista entradas ausentes, não usadas e malformadas, e a CI o executa em todo pull request. Para revisar um idioma no contexto, renderize a interface com `--snapshot-ui` e `--lang pt` (ou qualquer outro código de idioma).
+## Instalar
 
 ### macOS
 
+Requer macOS 26 ou posterior, com Apple silicon ou Intel.
+
 ```bash
-cd macos
-swift build
-scripts/test.sh                  # testes unitários, incluindo um servidor simulado que injeta falhas em uma gravação de 130 s
-scripts/perf.sh                  # orçamentos de desempenho em um build de release (caminho do áudio, trabalho na thread principal); a CI também os executa
+brew install --cask tyler913/tap/opentypeless
 ```
 
-Modos úteis de linha de comando do binário compilado (a partir de `macos/`):
+Ou baixe o `.dmg` em [Releases](https://github.com/Tyler913/OpenTypeless/releases) (`arm64` para Apple silicon, `x64` para Intel) e arraste o app para Aplicativos. Ele não é notarizado pela Apple, então se o macOS disser que não pode abri-lo ou que ele “está danificado”, rode isto uma vez:
 
 ```bash
-# Processo completo em um arquivo de áudio; --realtime envia o áudio na velocidade da fala, como um microfone ao vivo
-.build/debug/OpenTypeless --transcribe-file speech.m4a --realtime
-
-# Mostra onde a divisão corta
-.build/debug/OpenTypeless --transcribe-file speech.m4a --chunks-only
-
-# Avalia prompts e modelos de limpeza (veja eval/README.md)
-.build/debug/OpenTypeless --eval-polish ../eval/polish-holdout.json --model google/gemini-3.8-flash ...
-
-# Renderiza as páginas de configurações, o painel da barra de menus e o HUD em PNG (--live mostra na tela, com Liquid Glass de verdade).
-# As capturas do README usam um histórico de exemplo e --demo, que trata as permissões como concedidas.
-OPENTYPELESS_SUPPORT_DIR=/path/to/sample-data .build/debug/OpenTypeless --snapshot-ui /tmp/shots --live --demo --dark --lang en
+xattr -dr com.apple.quarantine /Applications/OpenTypeless.app
 ```
 
 ### Windows
 
-```powershell
-cd windows
-dotnet build OpenTypeless.slnx
-scripts\test.ps1       # testes unitários, incluindo um servidor simulado que injeta falhas em uma gravação de 130 s
-scripts\perf.ps1       # orçamentos de desempenho em um build Release (caminho do áudio, trabalho na thread da interface); a CI também os executa
-```
+Requer Windows 10 (2004 ou posterior) ou Windows 11, x64 ou ARM64.
 
-Ferramentas de linha de comando (`OpenTypeless.Cli.exe`, distribuída junto com o app; usa as configurações e chaves do app):
+Baixe `OpenTypeless-<version>-windows-x64-setup.exe` (`arm64` para Windows em ARM) em [Releases](https://github.com/Tyler913/OpenTypeless/releases) e execute; não precisa de permissão de administrador. Se o SmartScreen aparecer, clique em **Mais informações → Executar assim mesmo**. O `.zip` é uma versão portátil.
 
-```powershell
-# Processo completo em um arquivo de áudio (WAV, MP3, M4A, WMA, FLAC…); --realtime envia o áudio na velocidade da fala
-OpenTypeless.Cli --transcribe-file speech.m4a --realtime
+Depois disso, o app se atualiza sozinho.
 
-# Mostra onde a divisão corta
-OpenTypeless.Cli --transcribe-file speech.m4a --chunks-only
+## Primeiros passos
 
-# Avalia prompts e modelos de limpeza (veja eval/README.md)
-OpenTypeless.Cli --eval-polish ..\eval\polish-holdout.json --models google/gemini-3.8-flash --out ...
+1. Abra o OpenTypeless. Ele fica na barra de menus (macOS) ou na área de notificação (Windows).
+2. O guia de boas-vindas pede uma chave de API. O [OpenRouter](https://openrouter.ai/keys) é o mais fácil: uma chave serve para tudo.
+3. No macOS, permita o **Microfone** e a **Acessibilidade** quando for pedido.
+4. Segure o atalho, fale e solte. O texto aparece no cursor.
 
-# Renderiza todas as páginas de configurações, o painel da bandeja e os estados do HUD em PNG
-# (--lang en|zh|ja|… para um só idioma, --demo trata as permissões como concedidas; use com OPENTYPELESS_DATA_DIR e um histórico de exemplo)
-OpenTypeless --snapshot-ui C:\temp\snapshots
-```
+> No macOS, defina **Ajustes do Sistema → Teclado → "Pressionar a tecla 🌐 para"** como **Não Fazer Nada**, para que tocar em Fn não abra o seletor de emojis.
 
-Variáveis de ambiente para desenvolvimento (Windows):
+## Privacidade
 
-| Variável | Efeito |
-|---|---|
-| `OPENROUTER_API_KEY` | Substitui a chave do OpenRouter salva. |
-| `OPENTYPELESS_DATA_DIR` | Usa outra pasta para configurações e histórico (útil em testes). |
-| `OPENTYPELESS_DEBUG` | Grava eventos de atalho / sessão / foco em `debug.log`, na pasta de dados. |
-| `OPENTYPELESS_TEST_AUDIO` | Transmite em tempo real um WAV mono de 16 kHz no lugar do microfone, para testes de ponta a ponta. |
+- Áudio e texto vão só para os provedores que você configurar. Fora isso, o app só procura atualizações no GitHub uma vez por dia e baixa a lista pública de preços do OpenRouter. A prévia ao vivo no Windows usa o reconhecimento de fala do Windows, que segue a configuração online dele.
+- Chaves, ajustes e histórico ficam no seu computador. As gravações ficam guardadas por um mês por padrão; você escolhe por quanto tempo.
+- Campos de senha nunca são lidos. Usar o texto perto do cursor para acertar nomes fica desligado até você ativar.
 
-### Como contribuir
+## Desenvolvimento
 
-A `main` é protegida: toda alteração passa por um pull request. Trabalhe em um branch, abra um pull request para a `main` e faça o merge quando a verificação **CI passed** estiver verde.
-
-### Integração contínua
-
-O GitHub Actions ([`.github/workflows/`](.github/workflows/)) só compila o app que você alterou:
-
-| Se você alterar | O que roda |
-|---|---|
-| `macos/**` | **macOS build** em um runner macOS: os testes e depois o zip do app. |
-| `windows/**` | **Windows build** em um runner Windows: os testes e depois os zips x64 e ARM64. |
-| `testdata/**` | As duas compilações: os casos de teste compartilhados (contagem de palavras, preços, tempo economizado) que as duas suítes leem, para que os dois apps concordem. |
-| `i18n/**` | As duas compilações: as traduções que os dois apps incorporam. |
-| Só `docs/`, `eval/`, `README*.md` | Nada para compilar. |
-
-Toda execução também verifica as traduções (**Translations**, `python3 i18n/check.py`).
-
-Baixe os zips na seção **Artifacts** de uma execução na aba Actions. **Actions → macOS build / Windows build → Run workflow** inicia uma compilação manualmente.
-
-Para lançar uma versão, aumente a versão nos dois apps (`macos/scripts/build-app.sh`, `windows/Directory.Build.props`) e envie uma tag, `1.0.2` (ou `V1.0.2`). Ela compila os dois apps e cria um lançamento em **rascunho**, "OpenTypeless V1.0.2", com o zip do macOS (assinado com o certificado de lançamento) e os zips x64 e ARM64 do Windows. A compilação falha se a versão de um zip não bater com a tag.
-
-Revise o rascunho e publique manualmente; ele passa a ser o lançamento mais recente. As cópias instaladas o encontram em até um dia: o atualizador do app procura o lançamento publicado mais recente, que não seja pré-lançamento, com um zip para a sua plataforma (`OpenTypeless-<version>-macOS-arm64.zip`, `-windows-x64.zip`, `-windows-arm64.zip`). Marque um lançamento como pré-lançamento para que ele não seja oferecido.
-
-**Assinatura de lançamentos no macOS (uma única vez).** O macOS vincula as permissões de Acessibilidade e Microfone à assinatura do app, então os lançamentos devem sempre ser assinados com o mesmo certificado; caso contrário, os usuários precisam conceder as duas permissões de novo a cada atualização. Execute `macos/scripts/create-release-cert.sh`, guarde em um lugar privado o `.p12` gerado e adicione os dois segredos do repositório que ele mostra (`MACOS_SIGNING_CERTIFICATE`, `MACOS_SIGNING_CERTIFICATE_PASSWORD`). A partir daí, as compilações de lançamento são assinadas com ele; sem os segredos, são assinadas ad hoc, com um aviso na execução.
+Dois apps nativos em um repositório: [`macos/`](macos) em Swift / SwiftUI e [`windows/`](windows) em C# / WinUI 3, com o mesmo processamento, o mesmo prompt de limpeza e os mesmos ajustes. Veja [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) para compilar e testar, e [docs/DESIGN.md](docs/DESIGN.md) para saber como funcionam.
 
 ## Agradecimentos
 

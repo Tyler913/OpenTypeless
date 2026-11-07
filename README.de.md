@@ -44,6 +44,7 @@ Die meisten Diktier-Apps schaffen einen Satz und scheitern an zwei Minuten am St
 - **Einstellungen pro App.** Eingabetaste nach dem Einfügen in Slack, förmlicher Ton in Mail, keine Bereinigung im Terminal.
 - **Verlauf und Dateien.** Jedes Diktat ist durchsuchbar und exportierbar, und Audio- oder Videodateien lassen sich auch transkribieren.
 - **Kosten im Blick.** Wörter, gesparte Zeit und Kosten auf der Startseite, mit optionalem Monatslimit.
+- **Auf dem Gerät, ohne Schlüssel.** Die Spracherkennung kann auch auf deinem Computer laufen: kostenlos, offline und privat, etwas ungenauer als Cloud-Modelle.
 - **Live-Vorschau (Beta).** Sieh deine Worte über der Kapsel, während du sprichst.
 - **Neun Sprachen, automatische Updates.** English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch, Русский.
 
@@ -87,7 +88,7 @@ Danach aktualisiert sich die App selbst.
 ## Erste Schritte
 
 1. Öffne OpenTypeless. Es sitzt in der Menüleiste (macOS) bzw. im Infobereich (Windows).
-2. Der Willkommensassistent fragt nach einem API-Schlüssel. [OpenRouter](https://openrouter.ai/keys) ist am einfachsten: Ein Schlüssel deckt alles ab.
+2. Der Willkommensassistent fragt nach einem API-Schlüssel. [OpenRouter](https://openrouter.ai/keys) ist am einfachsten: Ein Schlüssel deckt alles ab. Oder wähle **Erkennung auf dem Gerät verwenden**, um ganz ohne Schlüssel zu starten.
 3. Erlaube auf macOS **Mikrofon** und **Bedienungshilfen**, wenn danach gefragt wird.
 4. Kürzel halten, sprechen, loslassen. Der Text erscheint am Cursor.
 

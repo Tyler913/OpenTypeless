@@ -18,20 +18,32 @@ enum CLI {
             printChunks(samples)
             return 0
         }
-        guard let sttEndpoint = settings.sttEndpoint else {
-            log("❌ The speech-to-text provider's base URL is invalid")
-            return 1
+        let onDevice = settings.speechEngine == .onDevice || CommandLine.arguments.contains("--on-device")
+        let language = settings.sttLanguage.isEmpty ? nil : settings.sttLanguage
+        let client: any SpeechToTextRoute
+        if onDevice {
+            let route = OnDeviceRoute(recognizer: AppleSpeechRecognizer.shared)
+            log("🎧 \(url.lastPathComponent): \(String(format: "%.1f", duration)) s")
+            log("   STT: on this Mac (\(await route.locale(for: language) ?? "no model for this language"))"
+                + (polish ? "; clean-up: \(settings.polishProvider.displayName) / \(settings.polishModel)" : ""))
+            client = route
+        } else {
+            guard let sttEndpoint = settings.sttEndpoint else {
+                log("❌ The speech-to-text provider's base URL is invalid")
+                return 1
+            }
+            log("🎧 \(url.lastPathComponent): \(String(format: "%.1f", duration)) s")
+            log("   STT: \(settings.sttProvider.displayName) / \(settings.sttModel)"
+                + (polish ? "; clean-up: \(settings.polishProvider.displayName) / \(settings.polishModel)" : ""))
+            client = APIClient(endpoint: sttEndpoint)
         }
-        let client = APIClient(endpoint: sttEndpoint)
-        log("🎧 \(url.lastPathComponent): \(String(format: "%.1f", duration)) s")
-        log("   STT: \(settings.sttProvider.displayName) / \(settings.sttModel)"
-            + (polish ? "; clean-up: \(settings.polishProvider.displayName) / \(settings.polishModel)" : ""))
 
         let start = Date()
         let pipeline = TranscriptionPipeline(
             client: client,
-            options: .init(model: settings.sttModel, language: settings.sttLanguage.isEmpty ? nil : settings.sttLanguage,
-                           vocabulary: settings.dictationVocabulary),
+            options: .init(model: settings.sttModel, language: language, vocabulary: settings.dictationVocabulary),
+            policy: onDevice ? OnDeviceRoute.policy : RetryPolicy(),
+            maxConcurrentRequests: onDevice ? 1 : 3,
             observer: { index, state in
                 let t = String(format: "%5.1fs", Date().timeIntervalSince(start))
                 switch state {

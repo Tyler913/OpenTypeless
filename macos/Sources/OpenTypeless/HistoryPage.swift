@@ -591,7 +591,7 @@ private struct FileImportSheet: View {
     /// Each file's length, or why it can't be transcribed, once looked at.
     @State private var probes: [URL: Result<Double, FileTranscriptionError>] = [:]
 
-    private var configured: Bool { settings.sttEndpoint != nil && settings.isConfigured(settings.sttProvider) }
+    private var configured: Bool { settings.speechReady }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -614,16 +614,15 @@ private struct FileImportSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             Card {
                 CardRow(title: L("整理文字", "Clean up text"),
-                        subtitle: settings.polishEnabled
+                        subtitle: settings.cleansUp
                             ? L("用整理模型分段整理转写结果，另行计费", "Runs the transcript through the clean-up model, in parts (billed on top)")
+                            : settings.polishEnabled ? L("文字整理还没有配置服务商", "Clean-up has no provider set up")
                             : L("文字整理已在设置里关闭", "Clean-up is turned off in Settings"),
-                        isOn: Binding(get: { settings.polishEnabled && settings.fileCleanUp }, set: { settings.fileCleanUp = $0 }))
-                    .disabled(!settings.polishEnabled)
+                        isOn: Binding(get: { settings.cleansUp && settings.fileCleanUp }, set: { settings.fileCleanUp = $0 }))
+                    .disabled(!settings.cleansUp)
             }
             if !configured {
-                Banner(symbol: "exclamationmark.triangle.fill", color: .orange,
-                       text: L("请先在设置里配置语音转文字服务商（\(settings.sttProvider.displayName)）",
-                               "Set up the speech-to-text provider (\(settings.sttProvider.displayName)) in Settings first")) { EmptyView() }
+                Banner(symbol: "exclamationmark.triangle.fill", color: .orange, text: settings.speechSetupMessage) { EmptyView() }
             }
             HStack {
                 Text(L("结果保存在历史记录里，不会粘贴。", "The text is kept in History; nothing is pasted."))
@@ -675,6 +674,9 @@ private struct FileImportSheet: View {
             return sum
         }
         let total = UsageFormat.duration(seconds)
+        if settings.speechEngine == .onDevice {
+            return L("共 \(total)，在这台 Mac 上识别，不收费。", "\(total) in all, recognised on this Mac at no cost.")
+        }
         let model = settings.sttModel
         let price = PriceStore.shared.price(settings.sttProvider, settings.sttModel)
         if let cost = FileTranscription.estimatedCost(seconds: seconds, price: price), let perMinute = price?.perMinute {

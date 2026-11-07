@@ -88,6 +88,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SystemStatus.shared.refresh()
         PriceStore.shared.refreshIfStale()
         LaunchAtLogin.enableByDefaultOnce()
+        // Speech-to-text on this Mac: the spoken language's model is fetched now if it isn't there yet.
+        if settings.speechEngine == .onDevice {
+            let language = settings.sttLanguage
+            Task { @MainActor in
+                if let locale = await OnDeviceModels.locale(for: language) { OnDeviceModels.shared.install(locale) }
+            }
+        }
         updater.canInstallNow = { [weak self] in self?.controller.state == .idle }
         updater.start()
 
@@ -101,7 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !Permissions.accessibilityGranted {
             Permissions.promptAccessibility()
             settingsWindow.show(page: .general)
-        } else if !settings.isConfigured(settings.sttProvider) {
+        } else if !settings.speechReady {
             settingsWindow.show(page: .providers)
         } else if !(launchedAtLogin || LaunchAtLogin.wasLaunchedAtLogin()) || settings.showHomeAtLogin {
             // A manual launch opens Home; starting at login stays in the menu bar unless the user asked for Home then too.
@@ -119,7 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showSetupOrHome() {
         if !Permissions.accessibilityGranted {
             settingsWindow.show(page: .general)
-        } else if !settings.isConfigured(settings.sttProvider) {
+        } else if !settings.speechReady {
             settingsWindow.show(page: .providers)
         } else {
             settingsWindow.show(page: .home)

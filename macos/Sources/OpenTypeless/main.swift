@@ -1,7 +1,8 @@
 import AppKit
 
 // `OpenTypeless --transcribe-file <audio>` runs the full STT + polish pipeline on a file and prints
-// the result, without the UI. Useful for testing long recordings end to end.
+// the result, without the UI. Useful for testing long recordings end to end. `--on-device` transcribes on this Mac
+// whatever the settings say.
 if let index = CommandLine.arguments.firstIndex(of: "--transcribe-file"),
    CommandLine.arguments.count > index + 1 {
     let path = CommandLine.arguments[index + 1]

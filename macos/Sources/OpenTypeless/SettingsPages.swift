@@ -877,7 +877,7 @@ private struct ProviderCard: View {
 
     private var usageTags: [String] {
         var tags: [String] = []
-        if settings.sttProvider == id { tags.append(L("转写中使用", "Speech-to-text")) }
+        if settings.speechEngine == .provider, settings.sttProvider == id { tags.append(L("转写中使用", "Speech-to-text")) }
         if settings.polishEnabled, settings.polishProvider == id { tags.append(L("整理中使用", "Clean-up")) }
         return tags
     }
@@ -930,29 +930,49 @@ struct ModelsPage: View {
     @State private var chatModels: [APIClient.ModelInfo] = []
     @State private var backupChatModels: [APIClient.ModelInfo] = []
     @State private var backupSTTModels: [APIClient.ModelInfo] = []
+    /// The on-device recognizer's locale for the spoken language (see `OnDeviceModelRow`).
+    @State private var onDeviceLocale: String?
 
     var body: some View {
         PageScaffold(page: .models) {
             CardSection(title: L("语音转文字", "Speech to text"),
                         help: L("长语音会在停顿处自动切成 ≤28 秒的片段，边录边转，每片失败会自动重试。",
                                 "Long recordings are split at pauses into ≤28 s segments that are transcribed while you talk, each retried on failure.")) {
-                CardRow(title: L("服务商", "Provider")) {
-                    ProviderPicker(selection: settings.sttProvider, options: ProviderID.allCases.filter(\.supportsSTT),
-                                   settings: settings) { settings.selectSTTProvider($0) }
+                CardRow(title: L("转写方式", "Engine"),
+                        subtitle: settings.speechEngine == .onDevice
+                            ? L("免费、离线；准确率不如云端模型。", "Free and offline; less accurate than cloud models.") : nil,
+                        help: L("「设备端」用 macOS 自带的语音识别在这台 Mac 上转写：不需要 API Key，录音不会离开电脑。第一次用某种语言时会先下载它的语音模型。文字整理仍然用下面的服务商；没有配置时，文字按识别结果直接插入。",
+                                "On-device uses the speech recognition built into macOS, on this Mac: no API key, and your recording never leaves it. A language's speech model is downloaded the first time you use it. Clean-up still uses its provider below; without one, the text goes in as recognised.")) {
+                    Picker(L("转写方式", "Engine"), selection: $settings.speechEngine) {
+                        Text(L("服务商", "Provider")).tag(SpeechEngine.provider)
+                        Text(L("设备端", "On-device")).tag(SpeechEngine.onDevice)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                 }
                 CardDivider()
-                CardRow(title: L("模型", "Model"),
-                        help: VocabularyHints.style(provider: settings.sttProvider, model: settings.sttModel) != nil
-                            ? L("你的词汇表会作为拼写提示一起发给这个模型", "Your vocabulary is sent to this model as spelling hints")
-                            : L("这个模型不接收词汇提示，词汇表只用于文字整理", "This model takes no vocabulary hints; your vocabulary is used in clean-up only")) {
-                    ModelField(text: $settings.sttModel, models: sttModels)
+                if settings.speechEngine == .onDevice {
+                    OnDeviceModelRow(locale: onDeviceLocale)
+                } else {
+                    CardRow(title: L("服务商", "Provider")) {
+                        ProviderPicker(selection: settings.sttProvider, options: ProviderID.allCases.filter(\.supportsSTT),
+                                       settings: settings) { settings.selectSTTProvider($0) }
+                    }
+                    CardDivider()
+                    CardRow(title: L("模型", "Model"),
+                            help: VocabularyHints.style(provider: settings.sttProvider, model: settings.sttModel) != nil
+                                ? L("你的词汇表会作为拼写提示一起发给这个模型", "Your vocabulary is sent to this model as spelling hints")
+                                : L("这个模型不接收词汇提示，词汇表只用于文字整理", "This model takes no vocabulary hints; your vocabulary is used in clean-up only")) {
+                        ModelField(text: $settings.sttModel, models: sttModels)
+                    }
+                    if settings.sttProvider == .openrouter {
+                        SpeechHostRow(settings: settings, model: settings.sttModel)
+                    }
+                    CardDivider()
+                    PriceRow(settings: settings, provider: settings.sttProvider, model: settings.sttModel, speech: true)
+                    CardDivider()
                 }
-                if settings.sttProvider == .openrouter {
-                    SpeechHostRow(settings: settings, model: settings.sttModel)
-                }
-                CardDivider()
-                PriceRow(settings: settings, provider: settings.sttProvider, model: settings.sttModel, speech: true)
-                CardDivider()
                 CardRow(title: L("说话语言", "Spoken language"),
                         help: L("固定语言可以提高准确率；中英混说请选自动", "Fixing it can help accuracy; use Auto for mixed speech")) {
                     Picker(L("说话语言", "Spoken language"), selection: $settings.sttLanguage) {
@@ -964,6 +984,7 @@ struct ModelsPage: View {
                     .labelsHidden()
                     .fixedSize()
                 }
+                if settings.speechEngine == .provider {
                 CardDivider()
                 CardRow(title: L("备用语音转文字", "Backup speech-to-text"),
                         subtitle: L("太慢或失败时同时请求备用，用先返回的", "Asked too when a request is slow or fails"),
@@ -984,8 +1005,11 @@ struct ModelsPage: View {
                     CardDivider()
                     PriceRow(settings: settings, provider: settings.sttBackupProvider, model: settings.sttBackupModel, speech: true)
                 }
+                }
             }
-            if !settings.isConfigured(settings.sttProvider) {
+            if settings.speechEngine == .onDevice {
+                // Nothing to set up for speech-to-text.
+            } else if !settings.isConfigured(settings.sttProvider) {
                 setupBanner(for: settings.sttProvider)
             } else if settings.sttBackupEnabled, !settings.isConfigured(settings.sttBackupProvider) {
                 setupBanner(for: settings.sttBackupProvider)
@@ -1059,6 +1083,13 @@ struct ModelsPage: View {
             backupChatModels = await loadModels(settings.polishBackupProvider, speech: false)
         }
         .task { PriceStore.shared.refreshIfStale() }
+        // As soon as on-device is picked, or the language changes: fetch its model (nothing to do once it's there).
+        .task(id: settings.speechEngine == .onDevice ? settings.sttLanguage : nil) {
+            guard settings.speechEngine == .onDevice else { return }
+            let found = await OnDeviceModels.locale(for: settings.sttLanguage)
+            onDeviceLocale = found ?? ""
+            if let found { OnDeviceModels.shared.install(found) }
+        }
         .task(id: settings.sttProvider == .openrouter ? settings.sttModel : "") {
             if settings.sttProvider == .openrouter { await OpenRouterHosts.shared.load(settings.sttModel, settings: settings) }
         }
@@ -1093,6 +1124,54 @@ struct ModelsPage: View {
         // Other providers list every model together; split them by name.
         let filtered = models.filter { $0.looksLikeSpeechModel == speech }
         return (filtered.isEmpty ? models : filtered).sorted { $0.id < $1.id }
+    }
+}
+
+/// The speech model of the recognizer on this Mac for the spoken language: shown only while it needs noticing (being
+/// downloaded, failed to download, or no model for the language); fetched as soon as on-device is picked.
+private struct OnDeviceModelRow: View {
+    /// The spoken language's locale: nil until looked up, "" when there's no model for the language.
+    let locale: String?
+    @ObservedObject private var models = OnDeviceModels.shared
+
+    var body: some View {
+        Group {
+            if locale == "" {
+                notice(symbol: "exclamationmark.triangle.fill", text: OnDeviceRoute.unsupportedLanguageMessage)
+            } else if let locale, let status = models.statuses[locale] {
+                switch status {
+                case let .downloading(fraction):
+                    HStack(spacing: 10) {
+                        Text(L("正在下载语音模型… \(Int(fraction * 100))%", "Downloading the speech model… \(Int(fraction * 100))%"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                        Spacer()
+                        ProgressView(value: fraction).frame(width: 120)
+                    }
+                    .padding(.vertical, 2)
+                case let .failed(message):
+                    HStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        Text(L("语音模型下载失败", "Couldn't download the speech model"))
+                            .font(.system(size: 12))
+                            .help(message)
+                        Spacer()
+                        Button(L("重试", "Retry")) { models.install(locale) }.controlSize(.small)
+                    }
+                case .ready:
+                    EmptyView()
+                }
+            }
+        }
+    }
+
+    private func notice(symbol: String, text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol).foregroundStyle(.orange)
+            Text(text).font(.system(size: 12))
+            Spacer()
+        }
     }
 }
 

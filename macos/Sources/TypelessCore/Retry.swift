@@ -7,6 +7,10 @@ public enum APIError: Error, LocalizedError, Equatable {
     case timeout(seconds: Double)
     case badResponse(String)
     case cancelled
+    /// The speech recognizer on this Mac can't do this at all (a language it has no model for): not worth retrying.
+    case unavailable(String)
+    /// The speech recognizer on this Mac failed this time; the message is shown as it is.
+    case recognition(String)
 
     public var errorDescription: String? {
         switch self {
@@ -22,6 +26,7 @@ public enum APIError: Error, LocalizedError, Equatable {
         case let .timeout(seconds): return L("请求超时（\(Int(seconds)) 秒）", "Timed out after \(Int(seconds))s")
         case let .badResponse(message): return L("返回内容无法解析：", "Unexpected response: ") + message
         case .cancelled: return L("已取消", "Cancelled")
+        case let .unavailable(message), let .recognition(message): return message
         }
     }
 
@@ -30,7 +35,7 @@ public enum APIError: Error, LocalizedError, Equatable {
     /// just this one: a file being transcribed stops at the first such failure rather than sending the rest.
     public var refusesEveryRequest: Bool {
         switch self {
-        case .missingAPIKey: return true
+        case .missingAPIKey, .unavailable: return true
         case let .http(status, _): return [401, 402, 403, 404].contains(status)
         default: return false
         }
@@ -38,8 +43,8 @@ public enum APIError: Error, LocalizedError, Equatable {
 
     public var isRetryable: Bool {
         switch self {
-        case .missingAPIKey, .cancelled: return false
-        case .network, .timeout: return true
+        case .missingAPIKey, .cancelled, .unavailable: return false
+        case .network, .timeout, .recognition: return true
         case .badResponse: return true
         case let .http(status, _):
             return status == 408 || status == 409 || status == 425 || status == 429 || status >= 500

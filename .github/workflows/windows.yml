@@ -99,6 +99,27 @@ jobs:
           python ../scripts/ci/run_dictation.py $cli "$env:RUNNER_TEMP\dictation\听写 测试"
           if ($LASTEXITCODE) { throw 'Dictation through the packaged app failed' }
 
+      # The on-device speech model (240 MB, pinned by commit and SHA-256), kept between runs so it's downloaded once
+      # rather than on every push. Both architectures use the same files.
+      - name: Restore the on-device speech model
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ runner.temp }}/ondevice/Models
+            ${{ runner.temp }}/ondevice/samples
+          key: ondevice-sense-voice-small-int8-2024-07-17
+
+      # On-device speech-to-text with the real model on this architecture's CPU, and no API key anywhere: the packaged
+      # OpenTypeless.Cli.exe downloads the model (or finds it cached), checks its SHA-256, loads it with sherpa-onnx's
+      # native runtime and transcribes the model's own English and Chinese samples (scripts/ci/run_ondevice.py).
+      - name: Transcribe on-device through the packaged app
+        timeout-minutes: 10 # under a minute with the model cached
+        shell: pwsh
+        run: |
+          $cli = Join-Path $env:RUNNER_TEMP 'OpenTypeless 便携版\OpenTypeless\OpenTypeless.Cli.exe'
+          python ../scripts/ci/run_ondevice.py $cli "$env:RUNNER_TEMP\ondevice" "$env:RUNNER_TEMP\dictation\本机识别"
+          if ($LASTEXITCODE) { throw 'On-device transcription through the packaged app failed' }
+
       - uses: actions/upload-artifact@v7
         if: always()
         with:

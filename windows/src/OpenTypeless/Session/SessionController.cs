@@ -579,12 +579,14 @@ public sealed class SessionController
         _isLocked = false;
         // The new dictation is what the user is after now.
         DropPendingPasteLast("a dictation started");
-        if (_settings.SttEndpoint is not { } sttEndpoint || !_settings.IsConfigured(_settings.SttProvider))
+        // On-device needs its model and no key; a provider needs its key.
+        if (SpeechModel.SetupIssue(_settings) is { } issue)
         {
-            Note("not started — speech-to-text provider not configured");
-            var name = _settings.SttProvider.DisplayName();
-            Hud.Show(new HudPhase.Error(L($"请先在设置里配置语音转文字服务商（{name}）", $"Set up the speech-to-text provider ({name}) in Settings first")), 3);
-            OpenSettingsRequested?.Invoke("providers");
+            Note(_settings.SpeechEngine == SpeechEngine.OnDevice
+                     ? "not started — the on-device speech model isn't downloaded"
+                     : "not started — speech-to-text provider not configured");
+            Hud.Show(new HudPhase.Error(issue.Message), 3);
+            OpenSettingsRequested?.Invoke(issue.Page);
             return;
         }
         if (!Permissions.MicrophoneGranted)
@@ -619,7 +621,7 @@ public sealed class SessionController
         }
 
         TranscriptionPipeline? pipeline = null;
-        pipeline = MakePipeline(sttEndpoint, new Dictionary<int, string>(), dictation.Language, onSpeculation: raw => _dispatcher.TryEnqueue(() =>
+        pipeline = MakePipeline(new Dictionary<int, string>(), dictation.Language, onSpeculation: raw => _dispatcher.TryEnqueue(() =>
         {
             if (_pipeline == pipeline) SpeculationChanged(raw);
         }));
@@ -742,7 +744,10 @@ public sealed class SessionController
     /// <param name="polishes">Whether this dictation is cleaned up (its app profile can say otherwise than the global setting).</param>
     private void WarmConnections(bool polishes)
     {
-        var endpoints = new List<ProviderEndpoint?> { _settings.SttEndpoint, _settings.SttBackupEndpoint };
+        var onDevice = _settings.SpeechEngine == SpeechEngine.OnDevice;
+        // On-device has no connection to open, but a model to load (about a second, the first time).
+        if (onDevice) SpeechModel.Shared.Transcriber.Warm();
+        var endpoints = onDevice ? new List<ProviderEndpoint?>() : new List<ProviderEndpoint?> { _settings.SttEndpoint, _settings.SttBackupEndpoint };
         if (polishes || _settings.TranslationTarget != null || _settings.CommandModeEnabled)
         {
             endpoints.Add(_settings.PolishEndpoint);
@@ -754,16 +759,29 @@ public sealed class SessionController
     /// <summary>How long each speech-to-text route takes, kept while the app runs, so the backup is asked when a chunk is late.</summary>
     private readonly Dictionary<string, TranscriptionLatency> _latencies = new();
 
+    /// <summary>
+    /// A pipeline for the speech engine chosen: the model on this PC, or the speech-to-text provider (with its backup).
+    /// Only once <see cref="SpeechModel.SetupIssue"/> found nothing missing.
+    /// </summary>
     /// <param name="language">The dictation's spoken-language hint, "" to auto-detect; null for the global setting (a file's).</param>
     /// <param name="forFile">
     /// For a file being transcribed (see <see cref="FileTranscriber"/>), which sends fewer requests at once on a client of
     /// its own, has no speculative tail, and keeps its own idea of how long requests take (its chunks are mostly long).
     /// </param>
-    internal TranscriptionPipeline MakePipeline(ProviderEndpoint endpoint, IReadOnlyDictionary<int, string> preset, string? language = null,
+    internal TranscriptionPipeline MakePipeline(IReadOnlyDictionary<int, string> preset, string? language = null,
                                                 Action<string?>? onSpeculation = null, bool forFile = false)
     {
         var spoken = language ?? _settings.SttLanguage;
         var hint = spoken.Length == 0 ? null : spoken;
+        if (_settings.SpeechEngine == SpeechEngine.OnDevice)
+        {
+            // No backup, hedging or latency model: nothing on the network to be late. The transcriber runs one chunk at a
+            // time on the thread pool, a dictation's and a file's alike.
+            return new TranscriptionPipeline(SpeechModel.Shared.Transcriber, OnDeviceTranscriber.Options(hint), preset: preset,
+                                             speculate: !forFile, onSpeculation: onSpeculation,
+                                             maxConcurrentRequests: forFile ? FileTranscription.MaxConcurrentRequests : 3);
+        }
+        var endpoint = _settings.SttEndpoint ?? throw ApiException.MissingApiKey(_settings.SttProvider.DisplayName());
         var backup = _settings.SttBackupEndpoint is { } backupEndpoint
             ? new TranscriptionRoute(Client(backupEndpoint, forFile), new TranscriptionOptions(_settings.SttBackupModel.Trim(), hint, _settings.DictationVocabulary))
             : null;
@@ -933,10 +951,13 @@ public sealed class SessionController
             Account(record, pipeline, null, TakeDiscardedPolishes(), sent);
             _history.Update(record);
             LastError = failure.Message;
-            // An edit can't be retried: its selection isn't kept.
+            // An edit can't be retried: its selection isn't kept. A language the on-device model doesn't know is said as
+            // such: retrying in it would fail again (the dictation is kept, to retry once the language is changed).
             Finish(new HudPhase.Error(record.IsCommand
                                           ? L("转写失败，选中的文字没有改动", "Transcription failed — your text is unchanged")
-                                          : L("转写失败，可在托盘菜单重试", "Failed — retry from the tray menu")), 4);
+                                          : failure.Underlying == ApiException.UnsupportedLanguage().Message
+                                              ? failure.Underlying
+                                              : L("转写失败，可在托盘菜单重试", "Failed — retry from the tray menu")), 4);
         }
         catch (Exception error)
         {
@@ -1828,7 +1849,11 @@ public sealed class SessionController
             Hud.Show(new HudPhase.Error(L("编辑选中文字的记录不能重试", "An edit of a selection can't be retried")), 3);
             return;
         }
-        if (_settings.SttEndpoint is not { } endpoint) return;
+        if (SpeechModel.SetupIssue(_settings) is { } issue)
+        {
+            Hud.Show(new HudPhase.Error(issue.Message), 3);
+            return;
+        }
         short[]? samples = null;
         try
         {
@@ -1867,7 +1892,7 @@ public sealed class SessionController
         Hud.Model.Badge = record.Translation?.Badge;
         Hud.ShowWorking(dictation.PolishEnabled || record.Translation != null);
 
-        var pipeline = MakePipeline(endpoint, preset, dictation.Language);
+        var pipeline = MakePipeline(preset, dictation.Language);
         _pipeline = pipeline;
         var processing = new CancellationTokenSource();
         _processing = processing;

@@ -22,6 +22,7 @@ from coverage_summary import dotnet_rows, swift_rows
 import dictation_audio
 import fake_provider
 import run_dictation
+import run_ondevice
 import run_snapshots
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -334,6 +335,33 @@ class DictationChecks(unittest.TestCase):
         self.assertIn("-baseURLs", arguments)
         self.assertEqual(arguments[arguments.index("-baseURLs") + 1], '{"openrouter" = "http://127.0.0.1:1/api/v1";}')
         self.assertEqual(arguments[arguments.index("-sttBackupEnabled") + 1], "NO")
+
+
+class OnDeviceChecks(unittest.TestCase):
+    """scripts/ci/run_ondevice.py: what it reads from the CLI and what it takes for a right transcript."""
+
+    def test_the_raw_transcript_is_read_from_the_output(self):
+        stdout = "\n===== Raw transcript (12 chars) =====\n开饭时间早上9点至下午5点。\n\n"
+        self.assertEqual(run_ondevice.raw_transcript(stdout), "开饭时间早上9点至下午5点。")
+        self.assertIsNone(run_ondevice.raw_transcript("nothing"))
+
+    def test_the_models_answers_pass_and_others_fail(self):
+        answers = {
+            "en.wav": "The tribal chieftain called for the boy and presented him with 50 pieces of code.",
+            "zh.wav": "开饭时间早上9点至下午5点。",
+        }
+        for name, (_, expected) in run_ondevice.SAMPLES.items():
+            text = run_ondevice.compact(answers[name])
+            self.assertTrue(all(word in text for word in expected), name)
+            self.assertFalse(all(word in run_ondevice.compact("hello there") for word in expected), name)
+
+    def test_settings_choose_on_device_with_no_clean_up(self):
+        with tempfile.TemporaryDirectory() as folder:
+            run_ondevice.settings(Path(folder), "fr")
+            values = json.loads((Path(folder) / "settings.json").read_text(encoding="utf-8"))
+        self.assertEqual(values["speechEngine"], "onDevice")
+        self.assertFalse(values["polishEnabled"])
+        self.assertEqual(values["language"], "fr")
 
 
 if __name__ == "__main__":

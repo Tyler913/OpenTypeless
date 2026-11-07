@@ -9,7 +9,7 @@ using System.Text.Json.Nodes;
 namespace TypelessCore;
 
 /// <summary>Talks to OpenRouter or any OpenAI-compatible server for speech-to-text, chat and model lists.</summary>
-public sealed partial class ApiClient
+public sealed partial class ApiClient : ISpeechTranscriber
 {
     public ProviderEndpoint Endpoint { get; }
     private readonly HttpClient _http;

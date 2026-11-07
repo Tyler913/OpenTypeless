@@ -30,4 +30,7 @@ public static class AppPaths
     }
 
     public static string SettingsFile => Path.Combine(Support, "settings.json");
+
+    /// <summary>Downloaded speech models for on-device recognition, a folder each (see <see cref="SpeechModel"/>).</summary>
+    public static string Models => Path.Combine(Support, "Models");
 }

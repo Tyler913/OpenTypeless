@@ -137,6 +137,16 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetNode("hotkey", JsonSerializer.SerializeToNode(value));
     }
 
+    /// <summary>
+    /// What turns speech into text: the speech-to-text provider below (the default) or the model on this PC, which
+    /// needs no API key (see <see cref="SpeechModel"/>). The same key and values as on macOS.
+    /// </summary>
+    public SpeechEngine SpeechEngine
+    {
+        get => SpeechEngines.Parse(GetString("speechEngine", ""));
+        set => SetValue("speechEngine", value.RawValue());
+    }
+
     public ProviderId SttProvider
     {
         get => ProviderIdExtensions.Parse(GetString("sttProvider", "")) ?? ProviderId.OpenRouter;
@@ -788,18 +798,30 @@ public sealed class AppSettings : INotifyPropertyChanged
     public void ShowSampleAppProfiles(IEnumerable<AppProfile> profiles) => _sampleProfiles = profiles.ToList();
 
     /// <summary>What a dictation runs with when no profile applies.</summary>
-    public DictationSettings GlobalDictationSettings => new(PolishEnabled, PressEnterAfterInsert, SttLanguage, ExtraInstructions);
+    public DictationSettings GlobalDictationSettings => Reachable(new(PolishEnabled, PressEnterAfterInsert, SttLanguage, ExtraInstructions));
 
     /// <summary>What a dictation started in the app with this executable name ("slack.exe") runs with.</summary>
     public DictationSettings DictationSettingsForApp(string? executable) =>
-        GlobalDictationSettings.Applying(AppProfile.Matching(executable, AppProfiles), executable);
+        Reachable(GlobalDictationSettings.Applying(AppProfile.Matching(executable, AppProfiles), executable));
 
     /// <summary>
     /// What a retry of a dictation made with the profile <paramref name="id"/> runs with: that profile's settings while it
     /// still exists, the global ones otherwise.
     /// </summary>
     public DictationSettings DictationSettingsForProfile(string? id) =>
-        GlobalDictationSettings.Applying(AppProfiles.FirstOrDefault(p => p.Id == id));
+        Reachable(GlobalDictationSettings.Applying(AppProfiles.FirstOrDefault(p => p.Id == id)));
+
+    /// <summary>
+    /// Whether clean-up runs (a file's, and a dictation's where no app profile says otherwise): switched on, and, with
+    /// on-device recognition, a provider set up for it. With no key at all, on-device dictations go in as spoken.
+    /// </summary>
+    public bool CleansUp => SpeechSetup.CleansUp(PolishEnabled, SpeechEngine, IsConfigured(PolishProvider));
+
+    /// <summary>Clean-up off where it has nowhere to go (see <see cref="CleansUp"/>), whatever a profile says.</summary>
+    private DictationSettings Reachable(DictationSettings settings) =>
+        settings.PolishEnabled && !SpeechSetup.CleansUp(true, SpeechEngine, IsConfigured(PolishProvider))
+            ? settings with { PolishEnabled = false }
+            : settings;
 
     /// <summary>Adds a profile for an app, following the global settings until it's edited; an app that has one already keeps it.</summary>
     public AppProfile AddAppProfile(string executable, string name)

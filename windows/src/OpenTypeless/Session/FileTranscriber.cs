@@ -166,11 +166,10 @@ public sealed class FileTranscriber
     private async Task Run(Job job, CancellationToken token)
     {
         if (_history.Records.FirstOrDefault(r => r.Id == job.RecordId)?.Copy() is not { } record) return;
-        if (_settings.SttEndpoint is not { } endpoint || !_settings.IsConfigured(_settings.SttProvider))
+        if (SpeechModel.SetupIssue(_settings) is { } issue)
         {
-            var name = _settings.SttProvider.DisplayName();
             record.Status = DictationStatus.Failed;
-            record.Error = L($"请先在设置里配置语音转文字服务商（{name}）", $"Set up the speech-to-text provider ({name}) in Settings first");
+            record.Error = issue.Message;
             Store(record);
             return;
         }
@@ -238,7 +237,7 @@ public sealed class FileTranscriber
         record.ChunkTexts = new Dictionary<int, string>(preset);
         record.ChunkLayout = Chunker.Layout;
         Store(record);
-        var pipeline = _controller.MakePipeline(endpoint, preset, forFile: true);
+        var pipeline = _controller.MakePipeline(preset, forFile: true);
         _pipeline = pipeline;
         var started = Stopwatch.StartNew();
         Report(id, new FileTranscription.Progress.Transcribing(Math.Min(pipeline.ChunkCounts().Answered, total), total));
@@ -294,7 +293,7 @@ public sealed class FileTranscriber
             record.Status = DictationStatus.Done;
             record.Error = L("没有识别到语音", "No speech detected");
         }
-        else if (job.CleanUp && _settings.PolishEnabled)
+        else if (job.CleanUp && _settings.CleansUp)
         {
             Report(id, new FileTranscription.Progress.CleaningUp());
             // Saved while the clean-up runs, so the transcript survives a crash.

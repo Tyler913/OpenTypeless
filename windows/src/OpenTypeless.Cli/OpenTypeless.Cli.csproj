@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
     The command-line modes of the macOS binary (a WinUI app has no console, so they live in this sibling exe):
-      transcribe-file, chunks-only, realtime, no-polish, eval-polish.
+      transcribe-file, chunks-only, realtime, no-polish, eval-polish; and download-model, for on-device recognition.
     Shares settings and API keys with the app.
   -->
   <PropertyGroup>
@@ -22,7 +22,14 @@
     <Compile Include="..\OpenTypeless\Services\AppSettings.cs" Link="Shared\AppSettings.cs" />
     <Compile Include="..\OpenTypeless\Services\Credentials.cs" Link="Shared\Credentials.cs" />
     <Compile Include="..\OpenTypeless\Audio\AudioLoader.cs" Link="Shared\AudioLoader.cs" />
+    <Compile Include="..\OpenTypeless\Services\SpeechModel.cs" Link="Shared\SpeechModel.cs" />
+    <Compile Include="..\OpenTypeless\Services\SenseVoiceRecognizer.cs" Link="Shared\SenseVoiceRecognizer.cs" />
     <Using Include="TypelessCore.Localization" Static="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- On-device speech-to-text, as in the app (and the same native runtime, published into the same folder). -->
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.8" />
   </ItemGroup>
 
   <ItemGroup>

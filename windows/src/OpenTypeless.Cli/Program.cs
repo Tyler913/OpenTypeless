@@ -19,6 +19,7 @@ public static class Program
             return await Cli.Transcribe(args[transcribe + 1], polish: !args.Contains("--no-polish"),
                                         realtime: args.Contains("--realtime"), chunksOnly: args.Contains("--chunks-only"));
         }
+        if (args.Contains("--download-model")) return await Cli.DownloadModel();
         var polishText = Array.IndexOf(args, "--polish-text");
         if (polishText >= 0 && polishText + 1 < args.Length) return await Cli.PolishText(args[polishText + 1]);
         if (args.Contains("--eval-polish")) return await PolishEval.Run(args);
@@ -30,12 +31,15 @@ public static class Program
                   Full pipeline on an audio file (WAV, MP3, M4A, WMA, FLAC…); --realtime feeds audio at speaking speed.
               OpenTypeless.Cli --transcribe-file <audio> --chunks-only
                   Shows where the chunker cuts.
+              OpenTypeless.Cli --download-model
+                  Downloads the on-device speech model (as Settings → Models does) and checks it.
               OpenTypeless.Cli --polish-text <file>
                   Only the clean-up, as the app does it, on a transcript saved as text.
               OpenTypeless.Cli --eval-polish <cases.json> --models <ids> --out <path> [...]
                   Evaluates clean-up prompts and models (see eval/README.md).
 
-            Uses the providers, models and API keys configured in the app (OPENROUTER_API_KEY overrides the OpenRouter key).
+            Uses the providers, models and API keys configured in the app (OPENROUTER_API_KEY overrides the OpenRouter key),
+            or the on-device model when the app is set to recognise speech on this PC.
             """);
         return 64;
     }
@@ -62,21 +66,40 @@ public static class Cli
             return 0;
         }
         var settings = AppSettings.Shared;
-        if (settings.SttEndpoint is not { } sttEndpoint)
+        var onDevice = settings.SpeechEngine == SpeechEngine.OnDevice;
+        ISpeechTranscriber client;
+        TranscriptionOptions options;
+        if (onDevice)
         {
-            Log("❌ The speech-to-text provider's base URL is invalid");
-            return 1;
+            if (!SpeechModel.Shared.IsReady)
+            {
+                Log("❌ The on-device speech model isn't downloaded (OpenTypeless.Cli --download-model)");
+                return 1;
+            }
+            client = SpeechModel.Shared.Transcriber;
+            options = OnDeviceTranscriber.Options(settings.SttLanguage);
         }
-        var client = new ApiClient(sttEndpoint);
+        else
+        {
+            if (settings.SttEndpoint is not { } sttEndpoint)
+            {
+                Log("❌ The speech-to-text provider's base URL is invalid");
+                return 1;
+            }
+            client = new ApiClient(sttEndpoint);
+            options = new TranscriptionOptions(settings.SttModel, settings.SttLanguage.Length == 0 ? null : settings.SttLanguage, settings.DictationVocabulary);
+        }
+        // Without a key for it, on-device dictation goes in as spoken (see SpeechSetup.CleansUp), and so does this.
+        polish = polish && SpeechSetup.CleansUp(true, settings.SpeechEngine, settings.IsConfigured(settings.PolishProvider));
         Log($"🎧 {Path.GetFileName(path)}: {duration:0.0} s");
-        Log($"   STT: {settings.SttProvider.DisplayName()} / {settings.SttModel}"
+        Log($"   STT: {(onDevice ? $"on-device / {SpeechModel.Shared.Store.Model.DisplayName}" : $"{settings.SttProvider.DisplayName()} / {settings.SttModel}")}"
             + (polish ? $"; clean-up: {settings.PolishProvider.DisplayName()} / {settings.PolishModel}" : "")
             + (polish && settings.PolishBackupEndpoint != null ? $" (backup {settings.PolishBackupProvider.DisplayName()} / {settings.PolishBackupModel})" : ""));
 
         var start = Stopwatch.StartNew();
         var pipeline = new TranscriptionPipeline(
             client,
-            new TranscriptionOptions(settings.SttModel, settings.SttLanguage.Length == 0 ? null : settings.SttLanguage, settings.DictationVocabulary),
+            options,
             observer: (index, state) =>
             {
                 var t = $"{start.Elapsed.TotalSeconds,5:0.0}s";
@@ -121,6 +144,53 @@ public static class Cli
 
         if (!polish) return 0;
         return await CleanUp(raw);
+    }
+
+    /// <summary>
+    /// <c>--download-model</c>: downloads the on-device speech model into the app's folder (resuming one that stopped),
+    /// checks its SHA-256 and loads it once, printing the progress. Exit code 0 once it's ready.
+    /// </summary>
+    public static async Task<int> DownloadModel()
+    {
+        var model = SpeechModel.Shared;
+        var store = model.Store;
+        Log($"📦 {store.Model.DisplayName}: {store.Model.TotalBytes / 1_048_576.0:0} MB into {store.Folder}");
+        var clock = Stopwatch.StartNew();
+        var last = -1;
+        store.Changed += () =>
+        {
+            if (store.State is ModelState.Downloading d && d.Percent / 10 != last)
+            {
+                last = d.Percent / 10;
+                Log($"   {d.Percent,3}%  {clock.Elapsed.TotalSeconds:0} s");
+            }
+        };
+        if (!store.IsReady) await store.Download();
+        if (store.State is ModelState.Failed failed)
+        {
+            Log($"❌ {failed.Message}");
+            return 1;
+        }
+        if (!store.IsReady)
+        {
+            Log("❌ The download stopped");
+            return 1;
+        }
+        Log($"✅ Downloaded and checked in {clock.Elapsed.TotalSeconds:0.0} s");
+        // Loads it, so a model the runtime can't open fails here rather than at the first dictation.
+        var load = Stopwatch.StartNew();
+        try
+        {
+            var silence = new short[AudioFormat.SampleCount(1)];
+            await model.Transcriber.TranscribeDetailedWithRetry(silence, OnDeviceTranscriber.Options(null));
+        }
+        catch (Exception error)
+        {
+            Log($"❌ The model doesn't load: {error.Message}");
+            return 1;
+        }
+        Log($"✅ Loaded in {load.Elapsed.TotalSeconds:0.0} s");
+        return 0;
     }
 
     /// <summary><c>--polish-text &lt;file&gt;</c>: the clean-up alone, on a transcript in a text file.</summary>

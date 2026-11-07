@@ -185,7 +185,8 @@ public sealed partial class SettingsWindow : Window
 
     private void UpdateReadyPill()
     {
-        var ready = _settings.IsConfigured(_settings.SttProvider) && Permissions.MicrophoneGranted;
+        // On-device needs its model, not a key.
+        var ready = SpeechModel.SetupIssue(_settings) == null && Permissions.MicrophoneGranted;
         ReadyPill.Text = L("需要完成设置", "Setup needed");
         ReadyPill.Tint = Tint.Orange;
         ReadyPill.Visibility = ready ? Visibility.Collapsed : Visibility.Visible;

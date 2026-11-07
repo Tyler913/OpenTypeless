@@ -5407,10 +5407,10 @@ extension Translations {
   },
   "Clean-up has no provider set up": {
     "ja": "整形のプロバイダが設定されていません",
-    "ko": "정리 제공업체가 설정되지 않았습니다",
-    "es": "La limpieza no tiene un proveedor configurado",
-    "pt": "A limpeza não tem um provedor configurado",
-    "ru": "Для обработки текста не настроен провайдер",
+    "ko": "다듬기 제공업체가 설정되지 않았습니다",
+    "es": "La limpieza no tiene proveedor configurado",
+    "pt": "A limpeza não tem provedor configurado",
+    "ru": "Для очистки не настроен провайдер",
     "fr": "Aucun fournisseur n’est configuré pour le nettoyage",
     "de": "Für die Bereinigung ist kein Anbieter eingerichtet"
   },
@@ -5431,6 +5431,123 @@ extension Translations {
     "ru": "«На устройстве» — это встроенное в macOS распознавание речи прямо на этом Mac: без API-ключа, и запись никуда не уходит. Речевая модель языка загружается при первом использовании. Для обработки текста по-прежнему нужен провайдер ниже; без него текст вставляется как распознан.",
     "fr": "« Sur l’appareil » utilise la reconnaissance vocale intégrée à macOS, sur ce Mac : aucune clé API, et votre enregistrement ne le quitte jamais. Le modèle vocal d’une langue est téléchargé la première fois que vous l’utilisez. Le nettoyage utilise toujours son fournisseur ci-dessous ; sans lui, le texte est inséré tel que reconnu.",
     "de": "„Auf dem Gerät“ nutzt die in macOS integrierte Spracherkennung auf diesem Mac: kein API-Schlüssel, und deine Aufnahme verlässt ihn nie. Das Sprachmodell einer Sprache wird beim ersten Gebrauch geladen. Die Bereinigung nutzt weiterhin ihren Anbieter unten; ohne ihn wird der Text so eingefügt, wie er erkannt wurde."
+  },
+  "Download the speech model in Settings → Models first": {
+    "ja": "先に 設定 → モデル で音声モデルをダウンロードしてください",
+    "ko": "먼저 설정 → 모델에서 음성 모델을 다운로드하세요",
+    "es": "Descarga primero el modelo de voz en Ajustes → Modelos",
+    "pt": "Baixe primeiro o modelo de voz em Configurações → Modelos",
+    "ru": "Сначала скачайте речевую модель в разделе Настройки → Модели",
+    "fr": "Téléchargez d’abord le modèle vocal dans Réglages → Modèles",
+    "de": "Lade zuerst das Sprachmodell unter Einstellungen → Modelle"
+  },
+  "Downloaded once from Hugging Face, checked and kept on this PC; remove it any time. Model: SenseVoice Small by FunAudioLLM (Alibaba), FunASR Model License.": {
+    "ja": "Hugging Face から一度だけダウンロードし、検証してこの PC に保存します。いつでも削除できます。モデル：SenseVoice Small（FunAudioLLM / Alibaba、FunASR モデルライセンス）。",
+    "ko": "Hugging Face에서 한 번 다운로드해 검증한 뒤 이 PC에 보관합니다. 언제든 삭제할 수 있습니다. 모델: SenseVoice Small(FunAudioLLM / Alibaba, FunASR 모델 라이선스).",
+    "es": "Se descarga una vez de Hugging Face, se verifica y se guarda en este PC; puedes quitarlo cuando quieras. Modelo: SenseVoice Small de FunAudioLLM (Alibaba), licencia de modelos FunASR.",
+    "pt": "Baixado uma vez do Hugging Face, verificado e guardado neste PC; remova quando quiser. Modelo: SenseVoice Small da FunAudioLLM (Alibaba), licença de modelos FunASR.",
+    "ru": "Скачивается один раз с Hugging Face, проверяется и хранится на этом ПК; удалить можно в любой момент. Модель: SenseVoice Small от FunAudioLLM (Alibaba), лицензия моделей FunASR.",
+    "fr": "Téléchargé une fois depuis Hugging Face, vérifié et conservé sur ce PC ; supprimez-le quand vous voulez. Modèle : SenseVoice Small de FunAudioLLM (Alibaba), licence des modèles FunASR.",
+    "de": "Einmal von Hugging Face geladen, geprüft und auf diesem PC gespeichert; jederzeit entfernbar. Modell: SenseVoice Small von FunAudioLLM (Alibaba), FunASR-Modelllizenz."
+  },
+  "No key": {
+    "ja": "キー不要",
+    "ko": "키 불필요",
+    "es": "Sin clave",
+    "pt": "Sem chave",
+    "ru": "Без ключа",
+    "fr": "Sans clé",
+    "de": "Ohne Schlüssel"
+  },
+  "Not enough disk space: {0} needed, {1} free": {
+    "ja": "ディスクの空き容量が足りません：{0} 必要、空きは {1}",
+    "ko": "디스크 공간 부족: {0} 필요, 여유 공간 {1}",
+    "es": "No hay espacio suficiente en el disco: se necesitan {0}, quedan {1}",
+    "pt": "Espaço em disco insuficiente: {0} necessários, {1} livres",
+    "ru": "Недостаточно места на диске: нужно {0}, свободно {1}",
+    "fr": "Espace disque insuffisant : {0} nécessaires, {1} libres",
+    "de": "Nicht genug Speicherplatz: {0} benötigt, {1} frei"
+  },
+  "Recognises Chinese, English, Japanese, Korean and Cantonese on this PC: no API key, and your recordings never leave it. Clean-up still uses the provider below; without one, your words go in as spoken.": {
+    "ja": "中国語・英語・日本語・韓国語・広東語をこの PC 上で認識します。API キーは不要で、録音が PC の外に出ることはありません。整形には引き続き下のプロバイダを使います。設定がなければ、話したとおりに入力されます。",
+    "ko": "중국어, 영어, 일본어, 한국어, 광둥어를 이 PC에서 인식합니다. API 키가 필요 없고 녹음이 PC 밖으로 나가지 않습니다. 다듬기는 계속 아래 제공업체를 사용하며, 없으면 말한 그대로 입력됩니다.",
+    "es": "Reconoce chino, inglés, japonés, coreano y cantonés en este PC: sin clave de API, y tus grabaciones nunca salen de él. La limpieza sigue usando el proveedor de abajo; si no hay ninguno, el texto entra tal como lo dijiste.",
+    "pt": "Reconhece chinês, inglês, japonês, coreano e cantonês neste PC: sem chave de API, e suas gravações nunca saem dele. A limpeza continua usando o provedor abaixo; sem ele, o texto entra como foi dito.",
+    "ru": "Распознаёт китайский, английский, японский, корейский и кантонский прямо на этом ПК: без API-ключа, и записи никогда его не покидают. Для очистки по-прежнему нужен провайдер ниже; без него текст вставляется как сказан.",
+    "fr": "Reconnaît le chinois, l’anglais, le japonais, le coréen et le cantonais sur ce PC : sans clé API, et vos enregistrements ne le quittent jamais. Le nettoyage utilise toujours le fournisseur ci-dessous ; sans lui, vos mots sont insérés tels quels.",
+    "de": "Erkennt Chinesisch, Englisch, Japanisch, Koreanisch und Kantonesisch auf diesem PC: ohne API-Schlüssel, und deine Aufnahmen verlassen ihn nie. Die Bereinigung nutzt weiter den Anbieter unten; ohne ihn wird der Text so eingefügt, wie er gesprochen wurde."
+  },
+  "Speech is recognised on this PC; your recordings never leave it. Clean-up still needs a provider; without one, your words go in as spoken.": {
+    "ja": "音声はこの PC 上で認識され、録音が PC の外に出ることはありません。整形にはプロバイダが必要です。なければ、話したとおりに入力されます。",
+    "ko": "음성은 이 PC에서 인식되며 녹음이 PC 밖으로 나가지 않습니다. 다듬기에는 여전히 제공업체가 필요하며, 없으면 말한 그대로 입력됩니다.",
+    "es": "La voz se reconoce en este PC; tus grabaciones nunca salen de él. La limpieza sigue necesitando un proveedor; sin él, el texto entra tal como lo dijiste.",
+    "pt": "A voz é reconhecida neste PC; suas gravações nunca saem dele. A limpeza ainda precisa de um provedor; sem ele, o texto entra como foi dito.",
+    "ru": "Речь распознаётся на этом ПК, и записи никогда его не покидают. Для очистки по-прежнему нужен провайдер; без него текст вставляется как сказан.",
+    "fr": "La parole est reconnue sur ce PC ; vos enregistrements ne le quittent jamais. Le nettoyage a toujours besoin d’un fournisseur ; sans lui, vos mots sont insérés tels quels.",
+    "de": "Die Sprache wird auf diesem PC erkannt; deine Aufnahmen verlassen ihn nie. Die Bereinigung braucht weiterhin einen Anbieter; ohne ihn wird der Text so eingefügt, wie er gesprochen wurde."
+  },
+  "Speech model": {
+    "ja": "音声モデル",
+    "ko": "음성 모델",
+    "es": "Modelo de voz",
+    "pt": "Modelo de voz",
+    "ru": "Речевая модель",
+    "fr": "Modèle vocal",
+    "de": "Sprachmodell"
+  },
+  "The download was damaged (checksum mismatch). Try again.": {
+    "ja": "ダウンロードしたファイルが破損しています（チェックサム不一致）。もう一度お試しください。",
+    "ko": "다운로드한 파일이 손상되었습니다(체크섬 불일치). 다시 시도하세요.",
+    "es": "La descarga llegó dañada (la suma de comprobación no coincide). Inténtalo de nuevo.",
+    "pt": "O download veio corrompido (soma de verificação diferente). Tente de novo.",
+    "ru": "Загруженный файл повреждён (контрольная сумма не совпадает). Попробуйте ещё раз.",
+    "fr": "Le téléchargement est endommagé (somme de contrôle différente). Réessayez.",
+    "de": "Der Download ist beschädigt (Prüfsumme stimmt nicht). Versuche es noch einmal."
+  },
+  "The speech model isn't downloaded yet": {
+    "ja": "音声モデルはまだダウンロードされていません",
+    "ko": "음성 모델이 아직 다운로드되지 않았습니다",
+    "es": "El modelo de voz aún no está descargado",
+    "pt": "O modelo de voz ainda não foi baixado",
+    "ru": "Речевая модель ещё не скачана",
+    "fr": "Le modèle vocal n’est pas encore téléchargé",
+    "de": "Das Sprachmodell ist noch nicht geladen"
+  },
+  "the download was cut short": {
+    "ja": "ダウンロードが途中で切れました",
+    "ko": "다운로드가 중간에 끊겼습니다",
+    "es": "la descarga se interrumpió",
+    "pt": "o download foi interrompido",
+    "ru": "загрузка прервалась",
+    "fr": "le téléchargement a été interrompu",
+    "de": "der Download wurde abgebrochen"
+  },
+  "the file is larger than expected": {
+    "ja": "ファイルが想定より大きいです",
+    "ko": "파일이 예상보다 큽니다",
+    "es": "el archivo es más grande de lo esperado",
+    "pt": "o arquivo é maior do que o esperado",
+    "ru": "файл больше ожидаемого",
+    "fr": "le fichier est plus gros que prévu",
+    "de": "die Datei ist größer als erwartet"
+  },
+  "the speech model couldn't be loaded": {
+    "ja": "音声モデルを読み込めませんでした",
+    "ko": "음성 모델을 불러올 수 없습니다",
+    "es": "no se pudo cargar el modelo de voz",
+    "pt": "não foi possível carregar o modelo de voz",
+    "ru": "не удалось загрузить речевую модель",
+    "fr": "impossible de charger le modèle vocal",
+    "de": "das Sprachmodell konnte nicht geladen werden"
+  },
+  "{0} in all, recognised on this PC for free. Silence is skipped.": {
+    "ja": "合計 {0}。この PC 上で無料で認識します。無音部分はスキップします。",
+    "ko": "총 {0}. 이 PC에서 무료로 인식합니다. 무음 구간은 건너뜁니다.",
+    "es": "{0} en total, reconocido gratis en este PC. El silencio se omite.",
+    "pt": "{0} no total, reconhecido de graça neste PC. O silêncio é ignorado.",
+    "ru": "Всего {0}; распознаётся бесплатно на этом ПК. Тишина пропускается.",
+    "fr": "{0} au total, reconnu gratuitement sur ce PC. Les silences sont ignorés.",
+    "de": "Insgesamt {0}, kostenlos auf diesem PC erkannt. Stille wird übersprungen."
   }
 }
 

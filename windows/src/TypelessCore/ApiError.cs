@@ -3,7 +3,11 @@ using System.Net.Sockets;
 
 namespace TypelessCore;
 
-public enum ApiErrorKind { MissingApiKey, Http, Network, Timeout, BadResponse, Cancelled }
+/// <summary>
+/// The last three are on-device recognition's own (see <see cref="OnDeviceTranscriber"/>): a spoken language its model
+/// doesn't know, a model that isn't downloaded, and a recognition that failed. None of them is worth a retry.
+/// </summary>
+public enum ApiErrorKind { MissingApiKey, Http, Network, Timeout, BadResponse, Cancelled, UnsupportedLanguage, ModelMissing, OnDevice }
 
 /// <summary>Every failure the pipeline reports. Mirrors the macOS <c>APIError</c> enum case for case.</summary>
 public sealed class ApiException : Exception, IEquatable<ApiException>
@@ -29,6 +33,9 @@ public sealed class ApiException : Exception, IEquatable<ApiException>
     public static ApiException TimedOut(double seconds) => new(ApiErrorKind.Timeout, seconds: seconds);
     public static ApiException BadResponse(string message) => new(ApiErrorKind.BadResponse, message);
     public static ApiException Cancelled() => new(ApiErrorKind.Cancelled);
+    public static ApiException UnsupportedLanguage() => new(ApiErrorKind.UnsupportedLanguage);
+    public static ApiException ModelMissing() => new(ApiErrorKind.ModelMissing);
+    public static ApiException OnDevice(string message) => new(ApiErrorKind.OnDevice, message);
 
     /// <summary>Localised at the moment it's read, so a language switch applies to old errors too.</summary>
     public override string Message => Kind switch
@@ -44,13 +51,17 @@ public sealed class ApiException : Exception, IEquatable<ApiException>
         ApiErrorKind.Network => L("网络错误：", "Network error: ") + Detail,
         ApiErrorKind.Timeout => L($"请求超时（{(int)Seconds} 秒）", $"Timed out after {(int)Seconds}s"),
         ApiErrorKind.BadResponse => L("返回内容无法解析：", "Unexpected response: ") + Detail,
+        ApiErrorKind.UnsupportedLanguage => L("本机识别不支持这种语言。", "On-device recognition doesn't support this language."),
+        ApiErrorKind.ModelMissing => L("语音模型还没有下载", "The speech model isn't downloaded yet"),
+        ApiErrorKind.OnDevice => L("本机识别失败：", "On-device recognition failed: ") + Detail,
         _ => L("已取消", "Cancelled"),
     };
 
     /// <summary>Transient failures worth retrying. Auth, billing and malformed requests are not.</summary>
     public bool IsRetryable => Kind switch
     {
-        ApiErrorKind.MissingApiKey or ApiErrorKind.Cancelled => false,
+        ApiErrorKind.MissingApiKey or ApiErrorKind.Cancelled or ApiErrorKind.UnsupportedLanguage or ApiErrorKind.ModelMissing
+            or ApiErrorKind.OnDevice => false,
         ApiErrorKind.Network or ApiErrorKind.Timeout or ApiErrorKind.BadResponse => true,
         _ => Status is 408 or 409 or 425 or 429 or >= 500,
     };
@@ -61,7 +72,8 @@ public sealed class ApiException : Exception, IEquatable<ApiException>
     /// The provider turns every request down this way (no key or a bad one, no credit, no such model or endpoint), not
     /// just this one: a file being transcribed stops at the first such failure rather than sending the rest.
     /// </summary>
-    public bool RefusesEveryRequest => Kind == ApiErrorKind.MissingApiKey || (Kind == ApiErrorKind.Http && Status is 401 or 402 or 403 or 404);
+    public bool RefusesEveryRequest => Kind is ApiErrorKind.MissingApiKey or ApiErrorKind.UnsupportedLanguage or ApiErrorKind.ModelMissing
+                                       || (Kind == ApiErrorKind.Http && Status is 401 or 402 or 403 or 404);
 
     public bool IsTimeout => Kind == ApiErrorKind.Timeout;
 

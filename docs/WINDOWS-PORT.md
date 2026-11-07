@@ -45,6 +45,7 @@ failure handling. Only the system-integration layer and the look differ.
 | `VocabularyTransfer.swift` | `VocabularyTransfer.cs` | Vocabulary export (CSV with learned terms' misheard forms for reference, or a term per line) and import (UTF-8 / UTF-16 with BOM; first CSV column, comma / semicolon / tab sniffed, a tab in a text file's first line makes it a table; header skipped; terms over 64 UTF-16 units left out, at most 1,000 terms; merged ignoring case). |
 | `AudioSink.swift` | `AudioSink.cs` | Pre-roll while the microphone is kept warm, handed over first when a dictation starts. |
 | `TranscriptionLatency.swift` | `TranscriptionLatency.cs` | Fitted wait-vs-length line, shifted by the route's median residual, and the delay before the backup speech-to-text route is asked (only once the recording has ended). `TranscriptionPipeline` races the two routes with a task group on macOS, `Task.WhenAny` on Windows. |
+| On-device speech-to-text (the `speechEngine` setting, see DESIGN.md) | `OnDevice.cs`, `ModelDownload.cs` | `speechEngine` is `"provider"` (also when missing) or `"onDevice"`, as on macOS; it isn't a `ProviderId`, so `testdata/provider-cases.json` is untouched. `TranscriptionPipeline` takes any `ISpeechTranscriber`: `ApiClient`, or `OnDeviceTranscriber`, which runs one recognition at a time on the thread pool, loads the model on first use (warmed when the key goes down), returns no usage (so $0), and fails a language its model doesn't know at once and permanently (`ApiErrorKind.UnsupportedLanguage`), keeping the dictation for a retry. `SpeechSetup`: on-device needs the model, not a key, and with no clean-up key a dictation goes in as spoken. `ModelStore`: the model's pinned files, SHA-256, resume, free space, cancel, remove. |
 | `LivePreviewText.swift` | `LivePreviewText.cs` | The end of the live preview on one line (grapheme-safe: `Character` / `StringInfo`). |
 | `AppProfiles.swift` | `AppProfiles.cs` | A profile's app compared case-insensitively, with or without `.exe`; its overrides laid over the global settings (`DictationSettings`), the app's clean-up preferences after the global ones; whether the app in front at delivery gets the same settings; whether saved transcripts fit a retry's language; lenient JSON with the same keys, IDs repaired once on load. Both suites run `testdata/app-profile-cases.json`. |
 | `CursorContext.swift` | `CursorContext.cs` | The excerpt of the text around the cursor sent to the clean-up: 1,500 characters centred on the selection, whitespace squeezed, cut words dropped, grapheme-safe (`StringInfo.GetNextTextElementLength`). Both suites run `testdata/cursor-context-cases.json`. |
@@ -63,6 +64,7 @@ failure handling. Only the system-integration layer and the look differ.
 | Default hotkey | Fn | **Right Alt** (Windows keyboards don't expose Fn to software, and Copilot+ PCs have the Copilot key where Right Ctrl was). Installs from before 1.4.0 keep Right Ctrl. See the Hotkey section for presets. |
 | Microphone choice | CoreAudio device list, by UID; `kAudioOutputUnitProperty_CurrentDevice` on the engine's input unit | WASAPI `EnumAudioEndpoints(eCapture)`, by endpoint ID (friendly name from the property store; root-enumerated drivers marked virtual); `GetDevice` when opening, default endpoint when the choice is missing. Default-device changes are only followed when no device is chosen. |
 | Live preview | `SpeechAnalyzer` + `SpeechTranscriber` on the recorded samples | `Windows.Media.SpeechRecognition` continuous dictation (listens to the default microphone itself; needs the speech language pack and online speech recognition). |
+| On-device speech-to-text | Apple's `SpeechTranscriber` (built into macOS, its assets managed by the system) | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 1.13.8 (NuGet `org.k2fsa.sherpa.onnx`, Apache-2.0; its native runtime and ONNX Runtime for win-x64 and win-arm64, ~22 MB next to the app) running SenseVoice Small int8, downloaded on first use (see below). `Services/SenseVoiceRecognizer.cs` (the model; language set per recognition, punctuation on), `Services/SpeechModel.cs` (the shared download and transcriber). |
 | Recording | `AVAudioEngine` → 16 kHz, rebuilt on route change; inputs with more than two channels averaged to mono first, and automatic gain for abnormally quiet input (the raw 3-channel mic macOS gives other apps during calls) → Int16 | WASAPI shared-mode capture with `AUTOCONVERTPCM` (system resampler → 16 kHz mono Int16), event-driven thread; rebuilt on default-device change or device loss so long dictations survive a headset connecting. |
 | Keys | `credentials.json` (0600, excluded from backups) in Application Support, moved from the old Keychain item once a read of it succeeds | Windows Credential Manager, a generic credential `OpenTypeless/credentials` holding the keys (JSON), continued in `OpenTypeless/credentials/2`, `/3`… when they pass the 2,560 bytes one credential holds (`TypelessCore/CredentialBlobs.cs`; the original providers' keys stay in the first, which is written byte for byte as before), legacy import not needed; a refused write is shown on the Providers page. On both, `OPENROUTER_API_KEY` overrides the OpenRouter key without hiding the saved keys or ever being saved, and a change is merged into what's stored before it's written. |
 | Preferences | `UserDefaults` | `%LOCALAPPDATA%\OpenTypeless\settings.json` with the same keys and defaults. |
@@ -125,6 +127,41 @@ failure handling. Only the system-integration layer and the look differ.
   Enter let go (`HeldKeys`, as the swallowed Enter never reaches `GetAsyncKeyState`). The keypad's Enter has the same
   virtual key.
 
+## On-device speech-to-text on Windows
+
+Windows' own `Windows.Media.SpeechRecognition` (the live preview's) isn't accurate enough for the text itself, so the
+on-device engine is a local model:
+
+- **Engine: sherpa-onnx 1.13.8 + SenseVoice Small (int8).** SenseVoice is non-autoregressive: with two threads it
+  transcribed the model's 7 s English sample in 0.17 s (sherpa-onnx 1.13.8 on an Apple-silicon Mac; CI times it on
+  the x64 and ARM64 Windows runners), so a 28 s chunk takes well under a second; it covers Chinese, English, Japanese,
+  Korean and Cantonese with punctuation (inverse text normalisation on). Whisper (MIT, whisper.cpp / Whisper.net) is
+  autoregressive, several times slower on a CPU, and its multilingual models that do Chinese well are larger; Parakeet
+  has no Chinese. sherpa-onnx ships native win-x64 and win-arm64 builds in its NuGet package, so both architectures
+  run it without a separate download.
+- **Licences.** sherpa-onnx: Apache-2.0. The model: FunASR Model License 1.1 (free use, copying and sharing, with the
+  source and model name attributed: the Models page's **?** tip names it). The app never redistributes the model.
+- **Model download** (`ModelStore`): never in the installer. On first use it's downloaded from the sherpa-onnx authors'
+  Hugging Face repository at a pinned commit
+  (`csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17@2365baea…`: `model.int8.onnx`, 239,233,841 bytes,
+  and `tokens.txt`), with hf-mirror.com as a second source for where huggingface.co can't be reached; each file must
+  match its pinned SHA-256 before anything uses it, whichever source it came from. It goes to
+  `%LOCALAPPDATA%\OpenTypeless\Models\sense-voice-small-int8-2024-07-17\`, each file as `<name>.partial` until it's
+  checked, so a cancelled, dropped or quit download resumes with a Range request (a source that answers with the whole
+  file starts it over); a damaged one is deleted and starts over. The free space is checked first (the download plus
+  64 MB). A `verified` file lists the checked hashes, so later launches see the model is ready without hashing it again.
+  Remove frees the model's memory and deletes the folder.
+- **Integration.** On-device is a route the existing pipeline uses instead of the HTTP client (chunking at pauses, the
+  speculative tail, the extra round for failed chunks, partial text, History, Retry, Re-transcribe and files all work
+  as with a provider), with no backup route, hedging, latency model or preconnect. Chunks are recognised one at a time
+  on the thread pool, never on the capture or UI thread. The spoken-language hint (global or an app profile's) is
+  passed to the model; another language fails the dictation with "On-device recognition doesn't support this
+  language." and keeps it for a retry. With `speechEngine = onDevice` a missing speech-to-text key isn't "Setup
+  needed" (the model not being there is); clean-up needs its own provider, and without a key for it the text goes in
+  as spoken, without an error. On-device dictations cost $0 and still count words and time on Home.
+- **CLI.** `OpenTypeless.Cli --download-model` downloads and checks the model and loads it once; `--transcribe-file`
+  uses it when `speechEngine` is `onDevice`.
+
 ## Deliberate platform differences
 
 These follow from how Windows works rather than from missing features:
@@ -158,6 +195,10 @@ These follow from how Windows works rather than from missing features:
   (Alt + Space, keystrokes swallowed), a 35 s dictation whose first chunk was transcribed during recording, a failure
   while the provider was down followed by Retry from the tray panel, paste with the clipboard restored afterwards, and
   recording a new shortcut on the Shortcut page.
+- On-device speech-to-text: xUnit tests with a fake model and a fake downloader (engine and language resolution,
+  setup rules with no key, the transcriber as a pipeline route costing $0, the download's checksum, resume, sources,
+  free space, cancel and remove), and in CI on both x64 and ARM64 the packaged CLI downloads the real model (cached
+  between runs) and transcribes the model's own English and Chinese samples (`scripts/ci/run_ondevice.py`).
 - `OpenTypeless.Cli`: chunk analysis on an 86 s speech file (4 chunks, every cut at a true pause), the full pipeline
   with injected 503s, 44.1 kHz stereo input through the Media Foundation transcoder, and an evaluation dry run.
 - UI: every page in Chinese and English (or one language with `--lang`), the tray panel and each HUD state via `--snapshot-ui`, and live on-screen captures.
@@ -168,7 +209,7 @@ These follow from how Windows works rather than from missing features:
 - **General**: permissions, language (System or one of the nine UI languages), open at login (+ error / approval footer), restore clipboard, fit spacing and capitalisation to the surrounding text, press Return / Enter after inserting, spoken line breaks, sounds, maximum recording (1–60 min).
 - **Shortcut**: current keys (large key caps), record / cancel, presets, how it works (with "Hold + Shift: translate" while translation mode is on, "Hold + Ctrl: edit the selection" while command mode is), edit selected text by voice (switch; switch key picker, with the clash with translation's named), finish and send (send key picker), more shortcuts (record / change / clear per action, refusal reason), warnings.
 - **Providers**: an expandable card for each provider set up (in use, with a key or address, or added): usage tags, configured pill, API key (password box + Paste), Base URL (+ Reset), get-a-key link, Test connection, what it does and Remove; **Add provider** under the cards, its flyout grouped by what the providers do.
-- **Models**: STT provider / model (free text + browse, grouped by vendor when > 40) / spoken language; clean-up toggle / provider / model; backup model toggle / provider / model; missing-key banners.
+- **Models**: STT provider (or On-device, with the speech model's Download / progress and Cancel / Remove) / model (free text + browse, grouped by vendor when > 40) / spoken language; clean-up toggle / provider / model; backup model toggle / provider / model; missing-key banners.
 - **Vocabulary & Style**: vocabulary editor with Import… (CSV or text, previewing what it adds) and Export (CSV or text), "Learn from my corrections" with the learned terms (heard as…, date, remove = never learn again), preferences editor, snippets (an example when there are none; each row edits in place with a trigger box and a multi-line expansion box, or is deleted; a trigger already used can't be saved), translation (switch; target language picker with "Other…" and its name field; switch key picker).
 - **Apps**: empty state with Add app; a card per profile (summary when closed; opened: Default / On / Off for clean-up and for Return or Enter, spoken language, the app's own clean-up preferences, what it matches, Remove); Add from the running apps, or a program picked from disk (an app from /Applications on macOS, an .exe on Windows).
 - **History**: recording retention picker with the space used; Export (CSV / JSON / Markdown of what the list shows); **Transcribe File…** and dropping files (a dialog with each file's length, the estimate and the Clean up switch); list + detail (status, error, timing, "Translation → …" for a translation, "Edited a selection (N characters)" for an edit, which keeps only its instruction and has no Re-transcribe, inserted text, the text before snippets and the raw text behind expanders, a file's name and progress, Copy, Cancel, Re-transcribe, Show in Explorer with Save recording… in its menu, Delete). Windows' `FileSavePicker` / `FileOpenPicker` are initialised with the window handle and refuse to open when the app runs as administrator, which is explained in a dialog.

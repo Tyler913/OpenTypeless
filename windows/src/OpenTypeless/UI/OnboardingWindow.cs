@@ -29,7 +29,7 @@ public static class Onboarding
     public static bool ShouldShow(AppSettings settings)
     {
         if (settings.DidShowOnboarding) return false;
-        if (settings.IsConfigured(settings.SttProvider))
+        if (SpeechModel.SetupIssue(settings) == null)
         {
             settings.DidShowOnboarding = true;
             return false;
@@ -47,11 +47,22 @@ public static class Onboarding
     public static (string Stt, string Chat) Models(ProviderId id) =>
         id == ProviderId.OpenRouter ? ("microsoft/mai-transcribe-2", "google/gemini-3.1-flash-lite") : (id.DefaultSttModel(), id.DefaultChatModel());
 
+    /// <summary>
+    /// Recognises speech on this PC, with no key at all, and starts downloading the model. Clean-up stays as it is: with
+    /// no provider for it, the text goes in as spoken (see <see cref="SpeechSetup.CleansUp"/>).
+    /// </summary>
+    public static void UseOnDevice(AppSettings settings)
+    {
+        settings.SpeechEngine = SpeechEngine.OnDevice;
+        _ = SpeechModel.Shared.Store.Download();
+    }
+
     /// <summary>Uses this provider and key for both speech-to-text and clean-up.</summary>
     public static void Apply(ProviderId id, string key, AppSettings settings)
     {
         var (stt, chat) = Models(id);
         settings.SetApiKey(key, id);
+        settings.SpeechEngine = SpeechEngine.Provider;
         settings.SttProvider = id;
         settings.SttModel = stt;
         settings.PolishProvider = id;
@@ -82,6 +93,8 @@ public sealed class OnboardingWindow : Window
 
     // Provider step
     private ProviderId _provider = ProviderId.OpenRouter;
+    /// <summary>The on-device chip is chosen instead of a provider.</summary>
+    private bool _onDevice;
     private string _key = "";
     private Button? _continue;
 
@@ -91,6 +104,8 @@ public sealed class OnboardingWindow : Window
     private DateTimeOffset _tryStarted = DateTimeOffset.Now;
     private TextBox? _tryBox;
     private TextBlock? _tryStatus;
+    /// <summary>The on-device model's download, on the try step while it's under way.</summary>
+    private NoticeBar? _modelNotice;
     private bool _micGranted = Permissions.MicrophoneGranted;
 
     public nint Hwnd { get; }
@@ -168,11 +183,13 @@ public sealed class OnboardingWindow : Window
 
         _controller.StateChanged += OnSessionChanged;
         _history.Changed += OnSessionChanged;
+        SpeechModel.Shared.Store.Changed += OnModelChanged;
         Closed += (_, _) =>
         {
             _permissionTimer.Stop();
             _controller.StateChanged -= OnSessionChanged;
             _history.Changed -= OnSessionChanged;
+            SpeechModel.Shared.Store.Changed -= OnModelChanged;
             if (!_closingForExit) _onClose();
         };
         Render(animated: false);
@@ -243,8 +260,10 @@ public sealed class OnboardingWindow : Window
                 break;
             case OnboardingStep.Provider:
                 _footer.Children.Add(SkipButton(L("稍后设置", "Set up later"), () => Go(OnboardingStep.TryIt), HorizontalAlignment.Left));
-                _continue = PrimaryButton(L("继续", "Continue"), SaveKey);
-                _continue.IsEnabled = _key.Trim().Length > 0;
+                _continue = _onDevice
+                    ? PrimaryButton(L("使用本机识别", "Use on-device recognition"), UseOnDevice)
+                    : PrimaryButton(L("继续", "Continue"), SaveKey);
+                _continue.IsEnabled = _onDevice || _key.Trim().Length > 0;
                 _footer.Children.Add(_continue);
                 break;
             case OnboardingStep.TryIt:
@@ -370,13 +389,13 @@ public sealed class OnboardingWindow : Window
             L("录音会用你自己的 API Key 发给你选的服务商转写和整理。推荐 OpenRouter：一个 Key 就能同时用于两步。",
               "Your recording goes to a provider you choose, with your own API key. OpenRouter is recommended: one key covers both transcription and clean-up.")));
 
-        // Provider chips
+        // Provider chips, and on-device recognition last: no key at all.
         var chips = new Grid { ColumnSpacing = 8 };
         for (var i = 0; i < Onboarding.Providers.Length; i++)
         {
             var id = Onboarding.Providers[i];
             chips.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var selected = id == _provider;
+            var selected = !_onDevice && id == _provider;
             var chip = new Button
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -396,14 +415,46 @@ public sealed class OnboardingWindow : Window
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, id.DisplayName());
             chip.Click += (_, _) =>
             {
-                if (_provider == id) return;
+                if (!_onDevice && _provider == id) return;
                 _provider = id;
+                _onDevice = false;
                 Render(animated: false);
             };
             Grid.SetColumn(chip, i);
             chips.Children.Add(chip);
         }
+        chips.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var local = new Button
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Padding = new Thickness(8),
+            CornerRadius = new CornerRadius(8),
+            Content = new StackPanel
+            {
+                Spacing = 3,
+                Children =
+                {
+                    Centered(Ui.Text(L("本机", "On-device"), 13.5, FontWeights.SemiBold)),
+                    Centered(Ui.Text(L("不用 Key", "No key"), 11, foreground: _onDevice ? null : Ui.Secondary)),
+                },
+            },
+        };
+        if (_onDevice) local.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(local, L("本机", "On-device"));
+        local.Click += (_, _) =>
+        {
+            if (_onDevice) return;
+            _onDevice = true;
+            Render(animated: false);
+        };
+        Grid.SetColumn(local, Onboarding.Providers.Length);
+        chips.Children.Add(local);
         panel.Children.Add(chips);
+        if (_onDevice)
+        {
+            panel.Children.Add(OnDeviceCard());
+            return panel;
+        }
 
         // Key
         var key = new PasswordBox { PlaceholderText = _provider.KeyPlaceholder(), Password = _key };
@@ -488,6 +539,35 @@ public sealed class OnboardingWindow : Window
         return panel;
     }
 
+    /// <summary>What on-device recognition is, in place of the key and models when its chip is chosen.</summary>
+    private static FrameworkElement OnDeviceCard()
+    {
+        var model = SpeechModel.Shared.Store.Model;
+        var size = Formatting.Bytes(model.TotalBytes);
+        return Card.Make(new StackPanel
+        {
+            Children =
+            {
+                new CardRow
+                {
+                    Glyph = Glyphs.Shield, Title = L("本机", "On-device"),
+                    Subtitle = L("免费、离线，但不如云端模型准确。", "Free and offline; less accurate than cloud models."),
+                    Help = L("语音在这台电脑上识别，录音不会离开电脑。文字整理仍然需要一个服务商；没有的话，文字会按原话插入。",
+                             "Speech is recognised on this PC; your recordings never leave it. Clean-up still needs a provider; without one, your words go in as spoken."),
+                },
+                new CardDivider { Inset = 50 },
+                ModelRow(Glyphs.Download, L("语音模型", "Speech model"), $"{model.DisplayName} · {size}"),
+            },
+        });
+    }
+
+    /// <summary>On-device recognition: no key, the model downloading while the user tries it out.</summary>
+    private void UseOnDevice()
+    {
+        Onboarding.UseOnDevice(_settings);
+        Go(OnboardingStep.TryIt);
+    }
+
     private static CardRow ModelRow(string glyph, string title, string model)
     {
         var text = Ui.Text(model, 12, foreground: Ui.Secondary);
@@ -509,6 +589,7 @@ public sealed class OnboardingWindow : Window
 
     private FrameworkElement TryStep()
     {
+        _modelNotice = null;
         var hotkey = _settings.Hotkey;
         var panel = StepPanel(18);
         panel.Children.Add(Header(L("试一试", "Try it out"),
@@ -525,6 +606,16 @@ public sealed class OnboardingWindow : Window
                 Glyph = Glyphs.Microphone, Title = L("麦克风", "Microphone"),
                 Subtitle = L("用来录下你的语音", "To record your voice"), Trailing = grant,
             }));
+        }
+        else if (_settings.SpeechEngine == SpeechEngine.OnDevice)
+        {
+            if (SpeechModel.SetupIssue(_settings) is { } issue)
+            {
+                var downloadFailed = SpeechModel.Shared.Store.State as ModelState.Failed;
+                _modelNotice = new NoticeBar(Glyphs.Download, downloadFailed != null ? Tint.Orange : Tint.Blue,
+                                             downloadFailed?.Message ?? issue.Message, ModelRetryButton());
+                panel.Children.Add(_modelNotice);
+            }
         }
         else if (!_settings.IsConfigured(_settings.SttProvider))
         {
@@ -569,6 +660,31 @@ public sealed class OnboardingWindow : Window
         }
         return panel;
     }
+
+    /// <summary>"Try again" for a download that failed or stopped; none while it runs.</summary>
+    private static Button? ModelRetryButton()
+    {
+        var store = SpeechModel.Shared.Store;
+        if (store.IsDownloading || store.IsReady) return null;
+        var retry = new Button { Content = L("下载", "Download") };
+        retry.Click += (_, _) => _ = store.Download();
+        return retry;
+    }
+
+    /// <summary>The model's download moved on: the try step's notice follows it, and goes once the model is ready.</summary>
+    private void OnModelChanged() => DispatcherQueue.TryEnqueue(() =>
+    {
+        if (_step != OnboardingStep.TryIt || _modelNotice == null) return;
+        if (SpeechModel.SetupIssue(_settings) is not { } issue)
+        {
+            Render(animated: false);
+            return;
+        }
+        _modelNotice.Text = issue.Message;
+        _modelNotice.Tint = SpeechModel.Shared.Store.State is ModelState.Failed ? Tint.Orange : Tint.Blue;
+        if (SpeechModel.Shared.Store.State is ModelState.Failed failed) _modelNotice.Text = failed.Message;
+        _modelNotice.Trailing = ModelRetryButton();
+    });
 
     private void OnSessionChanged() => DispatcherQueue.TryEnqueue(() =>
     {

@@ -44,6 +44,7 @@
 - **按应用设置。** 在 Slack 里插入后按回车，在邮件里语气正式些，在终端里不整理。
 - **历史和文件。** 每次听写都能搜索和导出，也能转写音频和视频文件。
 - **花费心里有数。** 首页显示字数、节省的时间和花费，还可以设每月上限。
+- **设备端识别，不用 Key。** 语音转文字也可以在你的电脑上完成：免费、离线、录音不出电脑，准确率比云端模型略低。
 - **实时预览（测试版）。** 说话时在胶囊上方看到你说的话。
 - **九种界面语言，自动更新。** English、简体中文、日本語、한국어、Español、Português、Français、Deutsch、Русский。
 
@@ -87,7 +88,7 @@ xattr -dr com.apple.quarantine /Applications/OpenTypeless.app
 ## 开始使用
 
 1. 打开 OpenTypeless。它在菜单栏（macOS）或通知区域（Windows）里。
-2. 欢迎引导会让你填一个 API Key。[OpenRouter](https://openrouter.ai/keys) 最省事：一个 Key 全部搞定。
+2. 欢迎引导会让你填一个 API Key。[OpenRouter](https://openrouter.ai/keys) 最省事：一个 Key 全部搞定。也可以选「使用设备端识别」，不填 Key 直接开始。
 3. 在 macOS 上，按提示允许 **麦克风** 和 **辅助功能**。
 4. 按住快捷键，说话，松开。文字就出现在光标处。
 
@@ -105,7 +106,7 @@ xattr -dr com.apple.quarantine /Applications/OpenTypeless.app
 
 ## 致谢
 
-灵感来自 Typeless。系统集成的做法借鉴了开源的 [VoiceInk](https://github.com/Beingpax/VoiceInk)、[OpenLess](https://github.com/Open-Less/openless) 和 [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless)。本项目独立开发，与它们均无关联。
+灵感来自 Typeless。系统集成的做法借鉴了开源的 [VoiceInk](https://github.com/Beingpax/VoiceInk)、[OpenLess](https://github.com/Open-Less/openless) 和 [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless)。本项目独立开发，与它们均无关联。Windows 上的本机识别使用 [SenseVoice Small](https://github.com/FunAudioLLM/SenseVoice)（FunASR Model License）和 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)（Apache-2.0）。
 
 ## 许可证
 

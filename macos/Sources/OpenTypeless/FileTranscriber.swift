@@ -162,10 +162,9 @@ final class FileTranscriber: ObservableObject {
 
     private func run(_ job: Job) async {
         guard var record = history.records.first(where: { $0.id == job.recordID }) else { return }
-        guard let endpoint = settings.sttEndpoint, settings.isConfigured(settings.sttProvider) else {
+        guard settings.speechReady else {
             record.status = .failed
-            record.error = L("请先在设置里配置语音转文字服务商（\(settings.sttProvider.displayName)）",
-                             "Set up the speech-to-text provider (\(settings.sttProvider.displayName)) in Settings first")
+            record.error = settings.speechSetupMessage
             store(record)
             return
         }
@@ -219,7 +218,7 @@ final class FileTranscriber: ObservableObject {
         record.chunkTexts = preset
         record.chunkLayout = Chunker.layout
         store(record)
-        let pipeline = controller.makePipeline(endpoint: endpoint, preset: preset, forFile: true)
+        let pipeline = controller.makePipeline(preset: preset, forFile: true)
         self.pipeline = pipeline
         let started = ProcessInfo.processInfo.systemUptime
         report(id, .transcribing(done: min(pipeline.chunkCounts().answered, total), total: total))
@@ -279,7 +278,7 @@ final class FileTranscriber: ObservableObject {
         if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             record.status = .done
             record.error = L("没有识别到语音", "No speech detected")
-        } else if job.cleanUp, settings.polishEnabled {
+        } else if job.cleanUp, settings.cleansUp {
             report(id, .cleaningUp)
             // Saved while the clean-up runs, so the transcript survives a crash.
             store(record)

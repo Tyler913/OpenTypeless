@@ -103,7 +103,7 @@ struct SettingsSidebar: View {
     @ObservedObject var permissions = PermissionsMonitor.shared
 
     private var ready: Bool {
-        settings.isConfigured(settings.sttProvider) && permissions.microphoneGranted && permissions.accessibilityGranted
+        settings.speechReady && permissions.microphoneGranted && permissions.accessibilityGranted
     }
 
     var body: some View {

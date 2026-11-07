@@ -44,6 +44,7 @@
 - **Настройки для приложений.** Enter после вставки в Slack, деловой тон в Почте, без обработки в Терминале.
 - **История и файлы.** Любую диктовку можно найти и экспортировать, а ещё можно расшифровать аудио- и видеофайлы.
 - **Расходы под контролем.** Слова, сэкономленное время и стоимость на главной, с необязательным месячным лимитом.
+- **На устройстве, без ключа.** Распознавание речи может работать прямо на компьютере: бесплатно, офлайн и приватно, но чуть менее точно, чем облачные модели.
 - **Живой предпросмотр (бета).** Слова видны над капсулой, пока вы говорите.
 - **Девять языков, автообновление.** English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch, Русский.
 
@@ -87,7 +88,7 @@ xattr -dr com.apple.quarantine /Applications/OpenTypeless.app
 ## Начало работы
 
 1. Откройте OpenTypeless. Оно живёт в строке меню (macOS) или в области уведомлений (Windows).
-2. Приветственный мастер попросит API-ключ. Проще всего [OpenRouter](https://openrouter.ai/keys): одного ключа хватает на всё.
+2. Приветственный мастер попросит API-ключ. Проще всего [OpenRouter](https://openrouter.ai/keys): одного ключа хватает на всё. Или выберите **Распознавать на устройстве**, чтобы начать вообще без ключа.
 3. В macOS разрешите доступ к **Микрофону** и **Универсальному доступу**, когда появится запрос.
 4. Удерживайте сочетание, говорите и отпустите. Текст появится у курсора.
 
@@ -105,7 +106,7 @@ xattr -dr com.apple.quarantine /Applications/OpenTypeless.app
 
 ## Благодарности
 
-Вдохновлено Typeless. Подход к интеграции с системой взят из открытых проектов [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless) и [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless). Этот проект независим и не связан ни с одним из них.
+Вдохновлено Typeless. Подход к интеграции с системой взят из открытых проектов [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless) и [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless). Этот проект независим и не связан ни с одним из них. Распознавание на устройстве в Windows использует [SenseVoice Small](https://github.com/FunAudioLLM/SenseVoice) (FunASR Model License) и [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0).
 
 ## Лицензия
 

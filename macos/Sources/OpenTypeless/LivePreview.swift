@@ -12,8 +12,7 @@ final class LivePreview: @unchecked Sendable {
     private let lock = NSLock()
     private let onText: @Sendable (String) -> Void
     private let log = Logger(subsystem: "local.opentypeless.app", category: "preview")
-    private let sourceFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(AudioFormat.sampleRate),
-                                             channels: 1, interleaved: true)!
+    private let sourceFormat = AppleSpeechRecognizer.sourceFormat
     private var continuation: AsyncStream<AnalyzerInput>.Continuation?
     private var converter: AVAudioConverter?
     private var analyzerFormat: AVAudioFormat?
@@ -52,46 +51,26 @@ final class LivePreview: @unchecked Sendable {
         }
         guard let state else { return }
         let (audioConverter, format, stream) = state
-        guard let input = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: AVAudioFrameCount(samples.count)),
-              let channel = input.int16ChannelData else { return }
-        samples.withUnsafeBufferPointer { channel[0].update(from: $0.baseAddress!, count: samples.count) }
-        input.frameLength = AVAudioFrameCount(samples.count)
-        let capacity = AVAudioFrameCount(Double(samples.count) * format.sampleRate / sourceFormat.sampleRate) + 32
-        guard let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return }
-        var consumed = false
-        var error: NSError?
-        audioConverter.convert(to: output, error: &error) { _, status in
-            if consumed {
-                status.pointee = .noDataNow
-                return nil
-            }
-            consumed = true
-            status.pointee = .haveData
-            return input
+        guard let output = AppleSpeechRecognizer.convert(samples, with: audioConverter, to: format, endOfStream: false) else {
+            return
         }
-        guard error == nil, output.frameLength > 0 else { return }
         stream.yield(AnalyzerInput(buffer: output))
     }
 
     private func run(language: String) async {
-        let wanted = language.isEmpty ? Locale.current : Locale(identifier: language)
-        // The exact locale when there's a model for it, otherwise another variant of the same language.
-        let supported = await SpeechTranscriber.supportedLocales
-        let match = supported.first { $0.identifier(.bcp47) == wanted.identifier(.bcp47) }
-            ?? supported.first { $0.language.languageCode == wanted.language.languageCode }
-        guard let locale = match else {
-            log.debug("no on-device speech model for \(wanted.identifier, privacy: .public)")
+        // The same locale on-device speech-to-text would pick (see OnDeviceLocale).
+        guard let locale = await OnDeviceModels.locale(for: language) else {
+            log.debug("no on-device speech model for \(language, privacy: .public)")
             return
         }
-        let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [.volatileResults],
-                                            attributeOptions: [])
+        guard await OnDeviceModels.isInstalled(locale) else {
+            // First use of this language: fetch the model in the background; the preview starts next time.
+            await OnDeviceModels.shared.install(locale)
+            return
+        }
+        let transcriber = SpeechTranscriber(locale: Locale(identifier: locale), transcriptionOptions: [],
+                                            reportingOptions: [.volatileResults], attributeOptions: [])
         do {
-            if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-                // First use of this language: fetch the model in the background; the preview starts next time.
-                log.debug("downloading the speech model for \(locale.identifier, privacy: .public)")
-                Task.detached { try? await request.downloadAndInstall() }
-                return
-            }
             guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]),
                   let converter = AVAudioConverter(from: sourceFormat, to: format) else { return }
             let analyzer = SpeechAnalyzer(modules: [transcriber])

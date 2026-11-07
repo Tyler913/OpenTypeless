@@ -44,6 +44,7 @@
 - **アプリごとの設定。** Slack では入力後に Return、メールでは丁寧な口調、ターミナルでは整形なし。
 - **履歴とファイル。** すべての口述を検索・書き出しでき、音声や動画ファイルの文字起こしもできます。
 - **利用額がわかる。** ホームに語数、節約した時間、費用を表示。月の上限も設定できます。
+- **オンデバイス、キー不要。** 音声の文字起こしをこのコンピュータ上で行うこともできます。無料・オフラインで録音は外に出ません。精度はクラウドのモデルより少し低めです。
 - **ライブプレビュー（ベータ）。** 話している間、カプセルの上に言葉が表示されます。
 - **9 言語、自動アップデート。** English、简体中文、日本語、한국어、Español、Português、Français、Deutsch、Русский。
 
@@ -87,7 +88,7 @@ Windows 10（2004 以降）または Windows 11、x64 または ARM64 が必要�
 ## はじめに
 
 1. OpenTypeless を開きます。メニューバー（macOS）または通知領域（Windows）に常駐します。
-2. ようこそガイドで API キーを入力します。[OpenRouter](https://openrouter.ai/keys) が一番簡単で、キー 1 つですべてまかなえます。
+2. ようこそガイドで API キーを入力します。[OpenRouter](https://openrouter.ai/keys) が一番簡単で、キー 1 つですべてまかなえます。「オンデバイス認識を使う」を選べば、キーなしで始められます。
 3. macOS では、求められたら **マイク** と **アクセシビリティ** を許可します。
 4. ショートカットを押したまま話し、離します。カーソル位置にテキストが入ります。
 
@@ -105,7 +106,7 @@ Windows 10（2004 以降）または Windows 11、x64 または ARM64 が必要�
 
 ## 謝辞
 
-Typeless に着想を得ています。システム連携の手法は、オープンソースの [VoiceInk](https://github.com/Beingpax/VoiceInk)、[OpenLess](https://github.com/Open-Less/openless)、[OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless) から学びました。本プロジェクトは独立しており、これらのいずれとも関係はありません。
+Typeless に着想を得ています。システム連携の手法は、オープンソースの [VoiceInk](https://github.com/Beingpax/VoiceInk)、[OpenLess](https://github.com/Open-Less/openless)、[OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless) から学びました。本プロジェクトは独立しており、これらのいずれとも関係はありません。Windows のオンデバイス認識は [SenseVoice Small](https://github.com/FunAudioLLM/SenseVoice)（FunASR Model License）を [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)（Apache-2.0）で動かしています。
 
 ## ライセンス
 

@@ -11,7 +11,7 @@ namespace OpenTypeless.UI;
 public sealed class ModelsPage : PageBase
 {
     private static readonly HashSet<string> StructuralProperties =
-        [nameof(AppSettings.SttProvider), nameof(AppSettings.PolishProvider), nameof(AppSettings.PolishEnabled),
+        [nameof(AppSettings.SpeechEngine), nameof(AppSettings.SttProvider), nameof(AppSettings.PolishProvider), nameof(AppSettings.PolishEnabled),
          nameof(AppSettings.PolishBackupEnabled), nameof(AppSettings.PolishBackupProvider), "ApiKeys", "BaseUrls",
          nameof(AppSettings.SttBackupEnabled), nameof(AppSettings.SttBackupProvider), nameof(AppSettings.SpendLimitEnabled)];
 
@@ -31,6 +31,10 @@ public sealed class ModelsPage : PageBase
     private readonly HostPicker _sttHost = new(speech: true);
     private readonly HostPicker _chatHost = new(speech: false);
     private readonly HostPicker _backupHost = new(speech: false);
+    /// <summary>The on-device model's row (while on-device is chosen), its progress bar while it downloads, and the state it shows.</summary>
+    private CardRow? _modelRow;
+    private ProgressBar? _modelBar;
+    private Type? _modelShown;
 
     public ModelsPage(SettingsWindow window, SessionController controller) : base(SettingsPage.Models)
     {
@@ -64,6 +68,7 @@ public sealed class ModelsPage : PageBase
         };
         _settings.PropertyChanged += OnSettingsChanged;
         PriceStore.Shared.Changed += OnPricesChanged;
+        SpeechModel.Shared.Store.Changed += OnModelChanged;
         Render();
         PriceStore.Shared.RefreshIfStale();
     }
@@ -72,7 +77,10 @@ public sealed class ModelsPage : PageBase
     {
         _settings.PropertyChanged -= OnSettingsChanged;
         PriceStore.Shared.Changed -= OnPricesChanged;
+        SpeechModel.Shared.Store.Changed -= OnModelChanged;
     }
+
+    private void OnModelChanged() => DispatcherQueue.TryEnqueue(ShowModel);
 
     private void OnPricesChanged() => DispatcherQueue.TryEnqueue(ShowPrices);
 
@@ -124,19 +132,49 @@ public sealed class ModelsPage : PageBase
             Help = L("长语音会在停顿处自动切成 ≤28 秒的片段，边录边转，每片失败会自动重试。",
                      "Long recordings are split at pauses into ≤28 s segments that are transcribed while you talk, each retried on failure."),
         };
+        // On-device recognition is a choice beside the providers: no key, no model ID, price or backup.
+        var onDevice = _settings.SpeechEngine == SpeechEngine.OnDevice;
+        _modelRow = null;
+        _modelBar = null;
+        _modelShown = null;
         stt.Body.Add(new CardRow
         {
-            Glyph = Glyphs.Cloud, Title = L("服务商", "Provider"),
-            Trailing = ProviderPicker(_settings.SttProvider, ProviderIdExtensions.All.Where(p => p.SupportsStt()), _settings.SelectSttProvider),
+            Glyph = onDevice ? Glyphs.Shield : Glyphs.Cloud, Title = L("服务商", "Provider"),
+            Subtitle = onDevice ? L("免费、离线，但不如云端模型准确。", "Free and offline; less accurate than cloud models.") : null,
+            Help = onDevice
+                ? L("在这台电脑上识别中文、英语、日语、韩语和粤语：不需要 API Key，录音不会离开电脑。文字整理仍然用下面的服务商；没有配置的话，文字按原话插入。",
+                    "Recognises Chinese, English, Japanese, Korean and Cantonese on this PC: no API key, and your recordings never leave it. Clean-up still uses the provider below; without one, your words go in as spoken.")
+                : null,
+            Trailing = ProviderPicker(_settings.SttProvider, ProviderIdExtensions.All.Where(p => p.SupportsStt()), id =>
+            {
+                _settings.SpeechEngine = SpeechEngine.Provider;
+                _settings.SelectSttProvider(id);
+                // The model's memory is freed until on-device is chosen again.
+                _ = SpeechModel.Shared.Transcriber.Unload();
+            }, (L("本机", "On-device"), onDevice, new Action(() => _settings.SpeechEngine = SpeechEngine.OnDevice))),
         });
         stt.Body.Add(new CardDivider());
-        _sttRow = new CardRow { Glyph = Glyphs.Brain, Title = L("模型", "Model"), Help = VocabularyHintNote(), Trailing = _sttField };
-        stt.Body.Add(_sttRow);
-        _sttHost.AddTo(stt.Body);
-        stt.Body.Add(new CardDivider());
-        var sttPriceRow = PriceRow(_sttPrice);
-        _sttPrice.Row = sttPriceRow;
-        stt.Body.Add(sttPriceRow);
+        if (onDevice)
+        {
+            _modelRow = new CardRow
+            {
+                Glyph = Glyphs.Download, Title = L("语音模型", "Speech model"),
+                Help = L("第一次使用前从 Hugging Face 下载一次，校验后保存在这台电脑上，随时可以移除。模型：SenseVoice Small（FunAudioLLM / 阿里巴巴，FunASR 模型许可）。",
+                         "Downloaded once from Hugging Face, checked and kept on this PC; remove it any time. Model: SenseVoice Small by FunAudioLLM (Alibaba), FunASR Model License."),
+            };
+            ShowModel();
+            stt.Body.Add(_modelRow);
+        }
+        else
+        {
+            _sttRow = new CardRow { Glyph = Glyphs.Brain, Title = L("模型", "Model"), Help = VocabularyHintNote(), Trailing = _sttField };
+            stt.Body.Add(_sttRow);
+            _sttHost.AddTo(stt.Body);
+            stt.Body.Add(new CardDivider());
+            var sttPriceRow = PriceRow(_sttPrice);
+            _sttPrice.Row = sttPriceRow;
+            stt.Body.Add(sttPriceRow);
+        }
         stt.Body.Add(new CardDivider());
         var language = new ComboBox { MinWidth = 140 };
         (string Code, string Name)[] languages =
@@ -146,17 +184,27 @@ public sealed class ModelsPage : PageBase
         ];
         foreach (var (_, name) in languages) language.Items.Add(name);
         language.SelectedIndex = Math.Max(0, Array.FindIndex(languages, l => l.Code == _settings.SttLanguage));
-        language.SelectionChanged += (_, _) => _settings.SttLanguage = languages[Math.Max(0, language.SelectedIndex)].Code;
-        stt.Body.Add(new CardRow
+        var languageRow = new CardRow
         {
             Glyph = Glyphs.Translate, Title = L("说话语言", "Spoken language"),
             Help = L("固定语言可以提高准确率；中英混说请选自动", "Fixing it can help accuracy; use Auto for mixed speech"),
             Trailing = language,
-        });
-        stt.Body.Add(new CardDivider());
+        };
+        // Said here already, not only when a dictation fails: the on-device model knows five languages.
+        void NoteLanguage() => languageRow.Subtitle = onDevice && OnDeviceLanguages.ModelLanguage(_settings.SttLanguage) == null
+            ? L("本机识别不支持这种语言。", "On-device recognition doesn't support this language.")
+            : null;
+        NoteLanguage();
+        language.SelectionChanged += (_, _) =>
+        {
+            _settings.SttLanguage = languages[Math.Max(0, language.SelectedIndex)].Code;
+            NoteLanguage();
+        };
+        stt.Body.Add(languageRow);
+        if (!onDevice) stt.Body.Add(new CardDivider());
         var sttBackup = new ToggleSwitch { IsOn = _settings.SttBackupEnabled, OnContent = "", OffContent = "", MinWidth = 0 };
         sttBackup.Toggled += (_, _) => _settings.SttBackupEnabled = sttBackup.IsOn;
-        stt.Body.Add(new CardRow
+        if (!onDevice) stt.Body.Add(new CardRow
         {
             Glyph = Glyphs.Backup, Title = L("备用语音转文字", "Backup speech-to-text"),
             Subtitle = L("太慢或失败时同时请求备用，用先返回的", "Asked too when a request is slow or fails"),
@@ -164,7 +212,7 @@ public sealed class ModelsPage : PageBase
                      "If a segment takes much longer than usual (judged by its length and recent speed) or fails, the backup is asked too and the first answer wins"),
             Trailing = sttBackup,
         });
-        if (_settings.SttBackupEnabled)
+        if (_settings.SttBackupEnabled && !onDevice)
         {
             stt.Body.Add(new CardDivider());
             stt.Body.Add(new CardRow
@@ -186,7 +234,8 @@ public sealed class ModelsPage : PageBase
             stt.Body.Add(sttBackupPriceRow);
         }
         Body.Children.Add(stt);
-        if (!_settings.IsConfigured(_settings.SttProvider)) Body.Children.Add(SetupBanner(_settings.SttProvider));
+        if (onDevice) { }
+        else if (!_settings.IsConfigured(_settings.SttProvider)) Body.Children.Add(SetupBanner(_settings.SttProvider));
         else if (_settings.SttBackupEnabled && !_settings.IsConfigured(_settings.SttBackupProvider)) Body.Children.Add(SetupBanner(_settings.SttBackupProvider));
 
         var polish = new CardSection { Title = L("文字整理", "Clean-up") };
@@ -346,9 +395,19 @@ public sealed class ModelsPage : PageBase
         return new NoticeBar(Glyphs.Warning, Tint.Orange, L($"{id.DisplayName()} 还没有配置 API Key", $"{id.DisplayName()} has no API key yet"), button);
     }
 
-    private DropDownButton ProviderPicker(ProviderId selection, IEnumerable<ProviderId> options, Action<ProviderId> onSelect)
+    /// <param name="extra">A choice above the providers (on-device recognition), and whether it's the one made.</param>
+    private DropDownButton ProviderPicker(ProviderId selection, IEnumerable<ProviderId> options, Action<ProviderId> onSelect,
+                                          (string Label, bool Chosen, Action Choose)? extra = null)
     {
         var flyout = new MenuFlyout();
+        if (extra is { } choice)
+        {
+            var first = new ToggleMenuFlyoutItem { Text = choice.Label, IsChecked = choice.Chosen };
+            first.Click += (_, _) => choice.Choose();
+            flyout.Items.Add(first);
+            flyout.Items.Add(new MenuFlyoutSeparator());
+        }
+        var providerChosen = extra is not { Chosen: true };
         // The providers set up on the Providers page first; the others, which need a key, after them.
         var list = options.ToList();
         var setUp = list.Where(id => id == selection || _settings.IsSetUp(id)).ToList();
@@ -359,12 +418,71 @@ public sealed class ModelsPage : PageBase
             var item = new ToggleMenuFlyoutItem
             {
                 Text = id == selection || _settings.IsConfigured(id) ? id.DisplayName() : id.DisplayName() + L("（未配置）", " (not set)"),
-                IsChecked = id == selection,
+                IsChecked = providerChosen && id == selection,
             };
             item.Click += (_, _) => onSelect(id);
             flyout.Items.Add(item);
         }
-        return new DropDownButton { Content = selection.DisplayName(), Flyout = flyout };
+        return new DropDownButton { Content = extra is { Chosen: true } made ? made.Label : selection.DisplayName(), Flyout = flyout };
+    }
+
+    /// <summary>
+    /// The on-device model's row as its download stands: Download, the progress with Cancel, Remove once it's there, or
+    /// why it failed with Retry. During a download only the bar and the percentage change.
+    /// </summary>
+    private void ShowModel()
+    {
+        if (_modelRow is not { } row) return;
+        var store = SpeechModel.Shared.Store;
+        var state = store.State;
+        var size = Formatting.Bytes(store.Model.TotalBytes);
+        if (SpeechModel.DownloadPercent(state) is { } percent)
+        {
+            row.Subtitle = L($"正在下载语音模型… {percent}%", $"Downloading the speech model… {percent}%");
+            var bar = _modelShown == typeof(ModelState.Downloading) ? _modelBar : null;
+            if (bar == null)
+            {
+                _modelShown = typeof(ModelState.Downloading);
+                bar = new ProgressBar { Width = 120, Maximum = 100, VerticalAlignment = VerticalAlignment.Center };
+                _modelBar = bar;
+                var cancel = new Button { Content = L("取消", "Cancel") };
+                cancel.Click += (_, _) => store.Cancel();
+                row.Trailing = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { bar, cancel } };
+            }
+            bar.Value = percent;
+            bar.IsIndeterminate = state is ModelState.Verifying;
+            return;
+        }
+        _modelBar = null;
+        _modelShown = state.GetType();
+        switch (state)
+        {
+            case ModelState.Ready:
+                row.Subtitle = $"{store.Model.DisplayName} · {size}";
+                var remove = new Button { Content = L("移除", "Remove") };
+                remove.Click += async (_, _) =>
+                {
+                    remove.IsEnabled = false;
+                    if (!await SpeechModel.Shared.Remove()) AppLog.Debug("model", "some of the model's files couldn't be deleted");
+                };
+                row.Trailing = remove;
+                break;
+            case ModelState.Failed failed:
+                row.Subtitle = failed.Message;
+                row.Trailing = DownloadButton(L("重试", "Retry"));
+                break;
+            default:
+                row.Subtitle = $"{store.Model.DisplayName} · {size}";
+                row.Trailing = DownloadButton(L("下载", "Download"));
+                break;
+        }
+
+        Button DownloadButton(string text)
+        {
+            var button = new Button { Content = text };
+            button.Click += (_, _) => _ = store.Download();
+            return button;
+        }
     }
 
     private void LoadModelsIfNeeded()

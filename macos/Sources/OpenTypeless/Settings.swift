@@ -12,6 +12,8 @@ final class AppSettings: ObservableObject {
     @AppStorage(AppLanguage.defaultsKey) var appLanguage: AppLanguage = .system
 
     @AppStorage("hotkeyV2") private var hotkeyData = Data()
+    /// Who does the speech-to-text: the provider below, or the recognizer on this Mac (see `OnDeviceRoute`).
+    @AppStorage(SpeechEngine.defaultsKey) var speechEngine: SpeechEngine = .provider
     @AppStorage("sttProvider") var sttProvider: ProviderID = .openrouter
     @AppStorage("sttModel") var sttModel: String = ProviderID.openrouter.defaultSTTModel
     @AppStorage("polishProvider") var polishProvider: ProviderID = .openrouter
@@ -248,10 +250,29 @@ final class AppSettings: ObservableObject {
         endpoint(for: id) != nil && (!id.requiresKey || !apiKey(for: id).isEmpty)
     }
 
-    /// Whether a step uses this provider: speech to text, clean-up, or either's backup (while switched on).
+    /// Whether a step uses this provider: speech to text (unless it runs on this Mac), clean-up, or either's backup
+    /// (while switched on).
     func isInUse(_ id: ProviderID) -> Bool {
-        sttProvider == id || (polishEnabled && polishProvider == id) || (sttBackupEnabled && sttBackupProvider == id)
+        let speech = speechEngine == .provider
+        return (speech && sttProvider == id) || (polishEnabled && polishProvider == id)
+            || (speech && sttBackupEnabled && sttBackupProvider == id)
             || (polishEnabled && polishBackupEnabled && polishBackupProvider == id)
+    }
+
+    /// Whether a dictation can be transcribed: on this Mac always, by a provider once it's configured.
+    var speechReady: Bool {
+        SpeechSetup.ready(engine: speechEngine, providerConfigured: isConfigured(sttProvider))
+    }
+
+    /// Whether dictations are cleaned up, as far as the global settings go (see `SpeechSetup.cleansUp`).
+    var cleansUp: Bool {
+        SpeechSetup.cleansUp(enabled: polishEnabled, engine: speechEngine, providerConfigured: isConfigured(polishProvider))
+    }
+
+    /// What the speech-to-text step reports when it can't run (see `speechReady`).
+    var speechSetupMessage: String {
+        L("请先在设置里配置语音转文字服务商（\(sttProvider.displayName)）",
+          "Set up the speech-to-text provider (\(sttProvider.displayName)) in Settings first")
     }
 
     /// Whether the Providers page lists this provider: one in use, with a key or an address of its own, or added there.
@@ -281,7 +302,7 @@ final class AppSettings: ObservableObject {
     /// The backup speech-to-text route, when switched on, configured, and actually different from the primary.
     var sttBackupEndpoint: ProviderEndpoint? {
         let model = sttBackupModel.trimmingCharacters(in: .whitespaces)
-        guard sttBackupEnabled, !model.isEmpty, sttBackupProvider.supportsSTT, isConfigured(sttBackupProvider),
+        guard speechEngine == .provider, sttBackupEnabled, !model.isEmpty, sttBackupProvider.supportsSTT, isConfigured(sttBackupProvider),
               sttBackupProvider != sttProvider || model != sttModel.trimmingCharacters(in: .whitespaces) else { return nil }
         return endpoint(for: sttBackupProvider)
     }
@@ -343,13 +364,21 @@ final class AppSettings: ObservableObject {
 
     /// What a dictation started in the app with this bundle ID runs with.
     func dictationSettings(forApp bundleID: String?) -> DictationSettings {
-        globalDictationSettings.applying(AppProfile.matching(bundleID, in: appProfiles), app: bundleID)
+        runnable(globalDictationSettings.applying(AppProfile.matching(bundleID, in: appProfiles), app: bundleID))
     }
 
     /// What a retry of a dictation made with the profile `id` runs with: that profile's settings while it still exists,
     /// the global ones otherwise.
     func dictationSettings(profileID id: String?) -> DictationSettings {
-        globalDictationSettings.applying(appProfiles.first { $0.id == id })
+        runnable(globalDictationSettings.applying(appProfiles.first { $0.id == id }))
+    }
+
+    /// `dictation` without a clean-up it can't have (see `SpeechSetup.cleansUp`).
+    private func runnable(_ dictation: DictationSettings) -> DictationSettings {
+        var dictation = dictation
+        dictation.polishEnabled = SpeechSetup.cleansUp(enabled: dictation.polishEnabled, engine: speechEngine,
+                                                       providerConfigured: isConfigured(polishProvider))
+        return dictation
     }
 
     /// Adds a profile for an app, following the global settings until it's edited; an app that has one already keeps it.

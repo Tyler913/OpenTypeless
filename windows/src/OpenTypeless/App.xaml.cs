@@ -130,7 +130,7 @@ public partial class App : Application
         }
         // Otherwise ask for what we need up front, so the first dictation just works.
         else if (!Permissions.MicrophoneGranted) ShowSettings(SettingsPage.General);
-        else if (!_settings.IsConfigured(_settings.SttProvider)) ShowSettings(SettingsPage.Providers);
+        else if (SpeechModel.SetupIssue(_settings) is { } issue) ShowSettings(SettingsPageInfo.Parse(issue.Page));
         // A manual launch opens Home (new tray icons start hidden in the overflow area, so it also shows the app is
         // running); starting at sign-in stays in the tray unless the user asked for Home then too.
         else if (!Program.LaunchedAtLogin || _settings.ShowHomeAtLogin) ShowSettings(SettingsPage.Home);
@@ -168,7 +168,7 @@ public partial class App : Application
     private void ShowSetupOrHome()
     {
         if (!Permissions.MicrophoneGranted) ShowSettings(SettingsPage.General);
-        else if (!_settings.IsConfigured(_settings.SttProvider)) ShowSettings(SettingsPage.Providers);
+        else if (SpeechModel.SetupIssue(_settings) is { } issue) ShowSettings(SettingsPageInfo.Parse(issue.Page));
         else ShowSettings(SettingsPage.Home);
     }
 

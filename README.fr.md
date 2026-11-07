@@ -44,6 +44,7 @@ La plupart des apps de dictée s’en sortent pour une phrase et cèdent sur deu
 - **Réglages par app.** Entrée après l’insertion dans Slack, ton formel dans Mail, pas de nettoyage dans Terminal.
 - **Historique et fichiers.** Chaque dictée se recherche et s’exporte, et les fichiers audio ou vidéo se transcrivent aussi.
 - **Maîtrisez vos dépenses.** Mots, temps gagné et coût sur l’Accueil, avec une limite mensuelle facultative.
+- **Sur l’appareil, sans clé.** La transcription peut aussi se faire sur votre ordinateur : gratuite, hors ligne et privée, un peu moins précise que les modèles dans le cloud.
 - **Aperçu en direct (bêta).** Voyez vos mots au-dessus de la capsule pendant que vous parlez.
 - **Neuf langues, mises à jour automatiques.** English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch, Русский.
 
@@ -87,7 +88,7 @@ Ensuite, l’app se met à jour toute seule.
 ## Prise en main
 
 1. Ouvrez OpenTypeless. Il se trouve dans la barre des menus (macOS) ou la zone de notification (Windows).
-2. Le guide de bienvenue demande une clé API. [OpenRouter](https://openrouter.ai/keys) est le plus simple : une clé suffit pour tout.
+2. Le guide de bienvenue demande une clé API. [OpenRouter](https://openrouter.ai/keys) est le plus simple : une clé suffit pour tout. Ou choisissez **Utiliser la reconnaissance sur l’appareil** pour commencer sans aucune clé.
 3. Sur macOS, autorisez le **Micro** et l’**Accessibilité** quand c’est demandé.
 4. Maintenez le raccourci, parlez, relâchez. Le texte apparaît au curseur.
 
@@ -105,7 +106,7 @@ Deux apps natives dans un même dépôt : [`macos/`](macos) en Swift / SwiftUI e
 
 ## Remerciements
 
-Inspiré par Typeless. L’approche de l’intégration au système a été apprise des projets libres [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless) et [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless). Ce projet est indépendant et n’est affilié à aucun d’entre eux.
+Inspiré par Typeless. L’approche de l’intégration au système a été apprise des projets libres [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless) et [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless). Ce projet est indépendant et n’est affilié à aucun d’entre eux. La reconnaissance sur l’appareil sous Windows utilise [SenseVoice Small](https://github.com/FunAudioLLM/SenseVoice) (FunASR Model License) avec [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0).
 
 ## Licence
 

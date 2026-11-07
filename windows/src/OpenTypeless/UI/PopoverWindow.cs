@@ -31,6 +31,8 @@ public sealed class PopoverWindow : Window
     private DateTimeOffset _hiddenAt = DateTimeOffset.MinValue;
     private string? _copiedId;
     private (Updater.UpdatePhase, bool) _updateState;
+    /// <summary>The kind of state the on-device model was last in (downloading, ready…).</summary>
+    private Type? _modelState;
     /// <summary>
     /// The window in front before the panel opened, where "Paste last dictation" goes; 0 when that was this app, the
     /// desktop or the taskbar (a click on the tray icon may already have made the taskbar the window in front).
@@ -66,6 +68,14 @@ public sealed class PopoverWindow : Window
         };
         _controller.StateChanged += RefreshIfOpen;
         _history.Changed += RefreshIfOpen;
+        // The on-device model's download: only its start and end change what's shown, not each percent.
+        SpeechModel.Shared.Store.Changed += () =>
+        {
+            var state = SpeechModel.Shared.Store.State.GetType();
+            if (state == _modelState) return;
+            _modelState = state;
+            DispatcherQueue.TryEnqueue(RefreshIfOpen);
+        };
         // Download progress doesn't show here, so only a new phase (or a pending install) needs a rebuild.
         Updater.Shared.Changed += () =>
         {
@@ -310,16 +320,21 @@ public sealed class PopoverWindow : Window
         return text;
     }
 
-    /// <summary>Whether a setup issue (a missing key or microphone permission) is shown in <see cref="Warnings"/>.</summary>
-    private bool NeedsSetup() => !_settings.IsConfigured(_settings.SttProvider) || !Permissions.MicrophoneGranted;
+    /// <summary>
+    /// Whether a setup issue (a missing key, or the on-device model not downloaded, or microphone permission) is shown in
+    /// <see cref="Warnings"/>. With on-device recognition a missing key isn't one.
+    /// </summary>
+    private bool NeedsSetup() => SpeechModel.SetupIssue(_settings) != null || !Permissions.MicrophoneGranted;
 
     private FrameworkElement? Warnings()
     {
         var items = new List<(string Text, SettingsPage Page)>();
-        if (!_settings.IsConfigured(_settings.SttProvider))
+        if (SpeechModel.SetupIssue(_settings) is { } issue)
         {
             var name = _settings.SttProvider.DisplayName();
-            items.Add((L($"还没有配置 {name} 的 API Key", $"No API key for {name}"), SettingsPage.Providers));
+            items.Add(_settings.SpeechEngine == SpeechEngine.OnDevice
+                          ? (issue.Message, SettingsPage.Models)
+                          : (L($"还没有配置 {name} 的 API Key", $"No API key for {name}"), SettingsPage.Providers));
         }
         if (!Permissions.MicrophoneGranted) items.Add((L("需要麦克风权限", "Microphone permission needed"), SettingsPage.General));
         var failed = FailedRecord();

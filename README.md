@@ -44,6 +44,7 @@ Most voice-typing apps handle a sentence fine and fall apart on a two-minute ram
 - **Per-app settings.** Press Return after inserting in Slack, a formal tone in Mail, no clean-up in Terminal.
 - **History and files.** Every dictation is searchable and exportable, and audio or video files can be transcribed too.
 - **Know your spend.** Words, time saved and cost on the Home page, with an optional monthly limit.
+- **On-device, no key needed.** Speech-to-text can run on your computer instead: free, offline and private, a little less accurate than cloud models.
 - **Live preview (beta).** See your words above the capsule while you talk.
 - **Nine languages, automatic updates.** English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch, Русский.
 
@@ -87,7 +88,7 @@ After that, the app updates itself.
 ## Get started
 
 1. Open OpenTypeless. It lives in the menu bar (macOS) or the notification area (Windows).
-2. The welcome guide asks for an API key. [OpenRouter](https://openrouter.ai/keys) is the easiest: one key covers everything.
+2. The welcome guide asks for an API key. [OpenRouter](https://openrouter.ai/keys) is the easiest: one key covers everything. Or choose **Use on-device recognition** to start with no key at all.
 3. On macOS, allow **Microphone** and **Accessibility** when asked.
 4. Hold the shortcut, talk, and let go. The text appears at your cursor.
 
@@ -105,7 +106,7 @@ Two native apps in one repository: [`macos/`](macos) in Swift / SwiftUI and [`wi
 
 ## Acknowledgements
 
-Inspired by Typeless. The system-integration approach learned from the open-source [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless) and [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless). This project is independent and not affiliated with any of them.
+Inspired by Typeless. The system-integration approach learned from the open-source [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless) and [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless). This project is independent and not affiliated with any of them. On-device recognition on Windows runs [SenseVoice Small](https://github.com/FunAudioLLM/SenseVoice) (FunASR Model License) with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0).
 
 ## License
 

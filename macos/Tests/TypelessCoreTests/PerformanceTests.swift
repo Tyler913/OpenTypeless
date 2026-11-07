@@ -23,20 +23,22 @@ struct PerformanceTests {
         MockOpenRouter.handler = { _, _ in (200, Data(#"{"text":"ok"}"#.utf8)) }
         // Twice, keeping the better result: a block that is slow by nature is slow both times, while a hiccup of a
         // shared CI machine rarely hits twice.
-        var slowest = Double.infinity, total = Double.infinity
+        var behind = Double.infinity, total = Double.infinity
         for _ in 0..<2 {
             let run = try await dictate(audio)
             XCTAssertTrue(run.chunks >= 40)
-            slowest = min(slowest, run.slowest)
+            behind = min(behind, run.behind)
             total = min(total, run.total)
         }
-        // Everything the thread does per block is in here, so the bound is the block itself: the microphone fills the next
-        // one 40 ms later. (Cutting a chunk or starting a speculation copies about 1 MB, which a busy 2-core runner can
-        // stretch past 20 ms; losing nothing, since the capture buffers hold more than that.)
-        Performance.check("Live audio: slowest 40 ms block", slowest, budget: 40)
+        // Everything the thread does per block is in here, and the microphone fills the next block 40 ms after the last.
+        // What loses audio is falling further behind than the capture buffers hold, not one slow block: cutting a chunk
+        // or starting a speculation copies about 1 MB, which a busy 2-core runner can stretch past 40 ms, and the blocks
+        // waiting meanwhile are caught up at once. So the bound is how far the thread ever falls behind the microphone,
+        // kept to one block; the total keeps the blocks' usual cost small.
+        Performance.check("Live audio: furthest behind the microphone", behind, budget: 40)
         Performance.check("Live audio: 20 minutes, all blocks", total, budget: 1500)
 
-        func dictate(_ audio: [Int16]) async throws -> (slowest: Double, total: Double, chunks: Int) {
+        func dictate(_ audio: [Int16]) async throws -> (behind: Double, total: Double, chunks: Int) {
             let block = AudioFormat.sampleCount(forSeconds: 0.04)
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".wav")
             defer { try? FileManager.default.removeItem(at: url) }
@@ -48,22 +50,26 @@ struct PerformanceTests {
                 writer.append(samples)
                 pipeline.append(samples)
             }
-            var slowest = 0.0
+            // How far the thread is behind the microphone after each block: a block's time past its 40 ms adds to it,
+            // time to spare takes it back down to none.
+            var lag = 0.0, behind = 0.0
             let total = Performance.time {
                 var offset = 0
                 while offset + block <= audio.count {
                     let samples = Array(audio[offset..<(offset + block)])
-                    slowest = max(slowest, Performance.time {
+                    let took = Performance.time {
                         sink.deliver(samples)
                         _ = AudioLevel.rms(samples)
-                    })
+                    }
+                    lag = max(0, lag + took - 40)
+                    behind = max(behind, lag)
                     offset += block
                 }
             }
             sink.end()
             writer.close()
             _ = try await pipeline.finish()
-            return (slowest, total, pipeline.completedTranscripts().count)
+            return (behind, total, pipeline.completedTranscripts().count)
         }
     }
 

@@ -3,8 +3,19 @@ using System.Runtime.ExceptionServices;
 
 namespace TypelessCore;
 
+/// <summary>
+/// Turns one chunk into text, with the retries it's worth: a provider (<see cref="ApiClient"/>) or the model on this PC
+/// (<see cref="OnDeviceTranscriber"/>).
+/// </summary>
+public interface ISpeechTranscriber
+{
+    Task<TranscriptionResult> TranscribeDetailedWithRetry(short[] samples, TranscriptionOptions options, RetryPolicy? policy = null,
+                                                          Action<int, ApiException>? onRetry = null,
+                                                          CancellationToken cancellationToken = default);
+}
+
 /// <summary>A provider/model to transcribe with.</summary>
-public sealed record TranscriptionRoute(ApiClient Client, TranscriptionOptions Options);
+public sealed record TranscriptionRoute(ISpeechTranscriber Client, TranscriptionOptions Options);
 
 public abstract record ChunkState
 {
@@ -55,7 +66,7 @@ public sealed class PipelineFailure : Exception
 /// </summary>
 public sealed class TranscriptionPipeline
 {
-    private readonly ApiClient _client;
+    private readonly ISpeechTranscriber _client;
     private readonly TranscriptionOptions _options;
     /// <summary>Another provider/model, asked too when the primary is late for a chunk or fails (see <see cref="Transcribe"/>).</summary>
     private readonly TranscriptionRoute? _backup;
@@ -172,7 +183,7 @@ public sealed class TranscriptionPipeline
     /// speaker went on. Lets the caller start cleaning the text up before the key is released. It is called one call at a
     /// time and never with a stale transcript after a newer one, so it mustn't call back into the pipeline.
     /// </param>
-    public TranscriptionPipeline(ApiClient client, TranscriptionOptions options, Chunker.Config? chunkConfig = null,
+    public TranscriptionPipeline(ISpeechTranscriber client, TranscriptionOptions options, Chunker.Config? chunkConfig = null,
                                  RetryPolicy? policy = null, IReadOnlyDictionary<int, string>? preset = null,
                                  Action<int, ChunkState>? observer = null, TranscriptionRoute? backup = null,
                                  TranscriptionLatency? latency = null, bool trimSilence = true, bool speculate = true,
@@ -617,7 +628,7 @@ public sealed class TranscriptionPipeline
         }
     }
 
-    private Task<TranscriptionResult> Attempt(ApiClient client, TranscriptionOptions options, AudioChunk chunk, CancellationToken token,
+    private Task<TranscriptionResult> Attempt(ISpeechTranscriber client, TranscriptionOptions options, AudioChunk chunk, CancellationToken token,
                                               bool report) =>
         client.TranscribeDetailedWithRetry(
             chunk.Samples, options, _policy,

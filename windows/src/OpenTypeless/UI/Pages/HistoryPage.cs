@@ -866,7 +866,9 @@ public sealed class HistoryPage : PageBase
         _confirming = true;
         try
         {
-            var configured = _settings.SttEndpoint != null && _settings.IsConfigured(_settings.SttProvider);
+            var issue = SpeechModel.SetupIssue(_settings);
+            var configured = issue == null;
+            var cleansUp = _settings.CleansUp;
             var list = new StackPanel();
             var durations = new Dictionary<string, TextBlock>();
             foreach (var path in media)
@@ -891,7 +893,7 @@ public sealed class HistoryPage : PageBase
             var estimate = Ui.Text(L("正在读取文件长度…", "Reading how long the files are…"), 12, foreground: Ui.Secondary, wrap: true);
             var cleanUp = new ToggleSwitch
             {
-                IsOn = _settings.PolishEnabled && _settings.FileCleanUp, IsEnabled = _settings.PolishEnabled,
+                IsOn = cleansUp && _settings.FileCleanUp, IsEnabled = cleansUp,
                 OnContent = "", OffContent = "", MinWidth = 0,
             };
             var content = new StackPanel
@@ -904,19 +906,16 @@ public sealed class HistoryPage : PageBase
                     Card.Make(new CardRow
                     {
                         Glyph = Glyphs.Sparkle, Title = L("整理文字", "Clean up text"),
-                        Subtitle = _settings.PolishEnabled
+                        Subtitle = cleansUp
                             ? L("用整理模型分段整理转写结果，另行计费", "Runs the transcript through the clean-up model, in parts (billed on top)")
-                            : L("文字整理已在设置里关闭", "Clean-up is turned off in Settings"),
+                            : _settings.PolishEnabled
+                                ? L("文字整理还没有配置服务商", "Clean-up has no provider set up")
+                                : L("文字整理已在设置里关闭", "Clean-up is turned off in Settings"),
                         Trailing = cleanUp,
                     }),
                 },
             };
-            if (!configured)
-            {
-                var name = _settings.SttProvider.DisplayName();
-                content.Children.Add(new NoticeBar(Glyphs.Warning, Tint.Orange,
-                    L($"请先在设置里配置语音转文字服务商（{name}）", $"Set up the speech-to-text provider ({name}) in Settings first")));
-            }
+            if (issue is { } missing) content.Children.Add(new NoticeBar(Glyphs.Warning, Tint.Orange, missing.Message));
             content.Children.Add(Ui.Text(L("结果保存在历史记录里，不会粘贴。", "The text is kept in History; nothing is pasted."), 11.5,
                                          foreground: Ui.Tertiary, wrap: true));
             var dialog = new ContentDialog
@@ -946,10 +945,10 @@ public sealed class HistoryPage : PageBase
                 return;
             }
             if (result != ContentDialogResult.Primary) return;
-            if (_settings.PolishEnabled) _settings.FileCleanUp = cleanUp.IsOn;
+            if (cleansUp) _settings.FileCleanUp = cleanUp.IsOn;
             // The newest record is the last file's: show it.
             _selection = null;
-            _files.Transcribe(media, _settings.PolishEnabled && _settings.FileCleanUp);
+            _files.Transcribe(media, cleansUp && _settings.FileCleanUp);
 
             // Each file's length, or why it can't be transcribed, then the estimate for them all.
             async Task Probe()
@@ -985,6 +984,10 @@ public sealed class HistoryPage : PageBase
     private string Estimate(double seconds)
     {
         var total = UsageFormat.Duration(seconds);
+        if (_settings.SpeechEngine == SpeechEngine.OnDevice)
+        {
+            return L($"共 {total}，在这台电脑上识别，不收费。静音部分会跳过。", $"{total} in all, recognised on this PC for free. Silence is skipped.");
+        }
         var model = _settings.SttModel;
         var price = PriceStore.Shared.Price(_settings.SttProvider, _settings.SttModel);
         if (FileTranscription.EstimatedCost(seconds, price) is { } cost && price?.PerMinute is { } perMinute)

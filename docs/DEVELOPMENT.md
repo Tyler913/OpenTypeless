@@ -91,6 +91,9 @@ Useful command-line modes of the built binary (from `macos/`):
 # Show where the chunker cuts
 .build/debug/OpenTypeless --transcribe-file speech.m4a --chunks-only
 
+# Speech-to-text by the recognizer on this Mac, whatever the settings say (no key; downloads the language's model once)
+.build/debug/OpenTypeless --transcribe-file speech.m4a --on-device --no-polish
+
 # Evaluate clean-up prompts and models (see eval/README.md)
 .build/debug/OpenTypeless --eval-polish ../eval/polish-holdout.json --model google/gemini-3.8-flash ...
 

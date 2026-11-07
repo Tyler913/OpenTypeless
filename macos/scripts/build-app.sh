@@ -25,7 +25,7 @@ cd "$(dirname "$0")/.."
 
 APP_NAME="OpenTypeless"
 BUNDLE_ID="local.opentypeless.app"
-VERSION="2.4.1"
+VERSION="2.5.0"
 IDENTITY_NAME="OpenTypeless Dev"
 INSTALLED="/Applications/$APP_NAME.app"
 STAGING_DIR=".build/app-staging"
@@ -73,7 +73,7 @@ cat > "$STAGED/Contents/Info.plist" <<PLIST
     <key>NSMicrophoneUsageDescription</key>
     <string>OpenTypeless records your voice to turn it into text.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>With Live preview on, OpenTypeless shows what you say as you talk, recognised on this Mac.</string>
+    <string>OpenTypeless recognises your speech on this Mac for on-device dictation and the live preview.</string>
     <!-- "Open With" for audio and video files, which History offers to transcribe; never the default app for them. -->
     <key>CFBundleDocumentTypes</key>
     <array>

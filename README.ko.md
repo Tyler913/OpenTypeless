@@ -44,6 +44,7 @@
 - **앱별 설정.** Slack에서는 입력 후 Return, 메일에서는 격식 있는 어조, 터미널에서는 다듬기 없음.
 - **기록과 파일.** 모든 받아쓰기를 검색하고 내보낼 수 있으며, 오디오와 동영상 파일도 받아쓸 수 있습니다.
 - **비용을 한눈에.** 홈에 단어 수, 절약한 시간, 비용을 보여 주고 월 한도도 설정할 수 있습니다.
+- **온디바이스, 키 없이.** 음성 인식을 컴퓨터에서 직접 할 수도 있습니다. 무료이고 오프라인이며 녹음이 밖으로 나가지 않습니다. 정확도는 클라우드 모델보다 조금 낮습니다.
 - **실시간 미리 보기(베타).** 말하는 동안 캡슐 위에 내용이 표시됩니다.
 - **9개 언어, 자동 업데이트.** English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch, Русский.
 
@@ -87,7 +88,7 @@ Windows 10(2004 이상) 또는 Windows 11, x64 또는 ARM64가 필요합니다.
 ## 시작하기
 
 1. OpenTypeless를 엽니다. 메뉴 막대(macOS)나 알림 영역(Windows)에 있습니다.
-2. 환영 안내에서 API 키를 입력합니다. [OpenRouter](https://openrouter.ai/keys)가 가장 쉽습니다. 키 하나로 모두 됩니다.
+2. 환영 안내에서 API 키를 입력합니다. [OpenRouter](https://openrouter.ai/keys)가 가장 쉽습니다. 키 하나로 모두 됩니다. ‘온디바이스 인식 사용’을 고르면 키 없이 바로 시작할 수 있습니다.
 3. macOS에서는 요청이 뜨면 **마이크**와 **손쉬운 사용**을 허용합니다.
 4. 단축키를 누른 채 말하고 놓으세요. 커서 위치에 텍스트가 입력됩니다.
 
@@ -105,7 +106,7 @@ Windows 10(2004 이상) 또는 Windows 11, x64 또는 ARM64가 필요합니다.
 
 ## 감사의 말
 
-Typeless에서 영감을 받았습니다. 시스템 연동 방식은 오픈 소스인 [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless), [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless)에서 배웠습니다. 이 프로젝트는 독립적이며 이들 중 어느 것과도 관련이 없습니다.
+Typeless에서 영감을 받았습니다. 시스템 연동 방식은 오픈 소스인 [VoiceInk](https://github.com/Beingpax/VoiceInk), [OpenLess](https://github.com/Open-Less/openless), [OpenTypeless (tover0314-w)](https://github.com/tover0314-w/opentypeless)에서 배웠습니다. 이 프로젝트는 독립적이며 이들 중 어느 것과도 관련이 없습니다. Windows의 온디바이스 인식은 [SenseVoice Small](https://github.com/FunAudioLLM/SenseVoice)(FunASR Model License)를 [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)(Apache-2.0)로 실행합니다.
 
 ## 라이선스
 

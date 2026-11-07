@@ -1229,15 +1229,6 @@ extension Translations {
     "fr": "Vérifier maintenant",
     "de": "Jetzt prüfen"
   },
-  "Granted": {
-    "ja": "許可済み",
-    "ko": "허용됨",
-    "es": "Concedido",
-    "pt": "Concedido",
-    "ru": "Разрешено",
-    "fr": "Accordé",
-    "de": "Erteilt"
-  },
   "Grant…": {
     "ja": "許可…",
     "ko": "허용…",
@@ -2272,15 +2263,6 @@ extension Translations {
     "ru": "Чтобы отслеживать сочетание клавиш и вставлять текст у курсора. Windows не требует дополнительных разрешений, но не позволяет вставлять в приложения, запущенные от имени администратора (тогда текст попадает в буфер обмена).",
     "fr": "Pour détecter le raccourci et coller le texte au curseur. Windows ne demande aucune autorisation, mais ne permet pas de coller dans les apps exécutées en administrateur (le texte va alors dans le presse-papiers).",
     "de": "Um das Tastenkürzel zu erkennen und Text am Cursor einzufügen. Windows braucht keine zusätzliche Berechtigung, kann aber nicht in Apps einfügen, die als Administrator laufen (der Text landet dann in der Zwischenablage)."
-  },
-  "Not required": {
-    "ja": "不要",
-    "ko": "필요 없음",
-    "es": "No necesario",
-    "pt": "Não necessário",
-    "ru": "Не требуется",
-    "fr": "Non requis",
-    "de": "Nicht nötig"
   },
   "Waits in the notification area after you sign in": {
     "ja": "サインイン後、通知領域で待機します",

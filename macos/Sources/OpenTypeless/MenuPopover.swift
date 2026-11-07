@@ -39,8 +39,9 @@ struct MenuPopoverView: View {
             AppTile(size: 30)
             Text("OpenTypeless").font(.system(size: 14, weight: .bold))
             Spacer()
+            // Idle shows nothing when everything is set up: the pill only speaks up when something needs attention.
             switch controller.state {
-            case .idle: StatusPill(text: L("就绪", "Ready"), color: .green)
+            case .idle: if !setupIssues.isEmpty { StatusPill(text: L("需要完成设置", "Setup needed"), color: .orange) }
             case .recording: StatusPill(text: L("录音中", "Recording"), color: .red)
             case .processing: StatusPill(text: L("处理中", "Processing"), color: .blue)
             }

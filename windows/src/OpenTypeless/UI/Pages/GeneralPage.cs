@@ -48,7 +48,6 @@ public sealed class GeneralPage : PageBase
             Glyph = Glyphs.Keyboard, Title = L("键盘与粘贴", "Keyboard & paste"),
             Help = L("用来监听快捷键，并把文字粘贴到光标处。Windows 不需要额外授权，但无法粘贴到以管理员身份运行的程序（此时会复制到剪贴板）。",
                      "To listen for the shortcut and paste text at the cursor. Windows needs no extra permission, but can’t paste into apps running as administrator (the text goes to the clipboard instead)."),
-            Trailing = new StatusPill(L("无需授权", "Not required"), Tint.Green),
         });
         Body.Children.Add(permissions);
 
@@ -484,9 +483,10 @@ public sealed class GeneralPage : PageBase
         var granted = Permissions.MicrophoneGranted;
         if (_micShown == granted) return;
         _micShown = granted;
+        // Nothing once granted: only a missing permission needs a control.
         if (granted)
         {
-            _micControl.Content = new StatusPill(L("已授权", "Granted"), Tint.Green);
+            _micControl.Content = null;
         }
         else
         {

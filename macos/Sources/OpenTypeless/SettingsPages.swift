@@ -312,10 +312,9 @@ private struct PermissionControl: View {
     let granted: Bool
     let action: () -> Void
 
+    /// Nothing once granted: only a missing permission needs a control.
     var body: some View {
-        if granted {
-            StatusPill(text: L("已授权", "Granted"), color: .green)
-        } else {
+        if !granted {
             Button(L("授权…", "Grant…"), action: action).controlSize(.small)
         }
     }

@@ -209,14 +209,18 @@ public sealed class PopoverWindow : Window
         name.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(name, 1);
         grid.Children.Add(name);
+        // Idle shows nothing when everything is set up: the pill only speaks up when something needs attention.
         var pill = _controller.State switch
         {
             SessionController.SessionState.Recording => new StatusPill(L("录音中", "Recording"), Tint.Red),
             SessionController.SessionState.Processing => new StatusPill(L("处理中", "Processing"), Tint.Blue),
-            _ => new StatusPill(L("就绪", "Ready"), Tint.Green),
+            _ => NeedsSetup() ? new StatusPill(L("需要完成设置", "Setup needed"), Tint.Orange) : null,
         };
-        Grid.SetColumn(pill, 2);
-        grid.Children.Add(pill);
+        if (pill != null)
+        {
+            Grid.SetColumn(pill, 2);
+            grid.Children.Add(pill);
+        }
         return grid;
     }
 
@@ -305,6 +309,9 @@ public sealed class PopoverWindow : Window
         text.VerticalAlignment = VerticalAlignment.Center;
         return text;
     }
+
+    /// <summary>Whether a setup issue (a missing key or microphone permission) is shown in <see cref="Warnings"/>.</summary>
+    private bool NeedsSetup() => !_settings.IsConfigured(_settings.SttProvider) || !Permissions.MicrophoneGranted;
 
     private FrameworkElement? Warnings()
     {

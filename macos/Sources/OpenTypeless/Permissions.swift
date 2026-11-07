@@ -51,7 +51,7 @@ enum Permissions {
     }
 }
 
-/// Whether the microphone and Accessibility are allowed, for the "Ready" pill, the popover's banners and the General
+/// Whether the microphone and Accessibility are allowed, for the popover's "Setup needed" pill and banners and the General
 /// page. macOS says nothing when the user grants either in System Settings, so it's checked again whenever the app
 /// comes to the front, and every 1.5 s while something showing it is open (the settings window or the popover).
 @MainActor

@@ -937,6 +937,9 @@ struct ModelsPage: View {
     @State private var backupSTTModels: [APIClient.ModelInfo] = []
     /// The on-device recognizer's locale for the spoken language (see `OnDeviceModelRow`).
     @State private var onDeviceLocale: String?
+    /// The same for on-device recognition standing in while offline, and whether its model still has to be downloaded.
+    @State private var offlineLocale: String?
+    @State private var offlineModelMissing = false
 
     var body: some View {
         PageScaffold(page: .models) {
@@ -1009,6 +1012,14 @@ struct ModelsPage: View {
                     }
                     CardDivider()
                     PriceRow(settings: settings, provider: settings.sttBackupProvider, model: settings.sttBackupModel, speech: true)
+                }
+                CardDivider()
+                CardRow(title: L("离线时用设备端识别", "Use on-device recognition when offline"),
+                        help: L("网络断开时，用 macOS 自带的语音识别在这台 Mac 上转写，听写照样出字。准确率不如云端模型，并且要先下载说话语言的语音模型。文字整理也需要网络：离线时文字按识别结果直接插入。",
+                                "When the network is down, speech is recognised on this Mac with the speech recognition built into macOS, so dictation still gives you text. It's less accurate than cloud models and needs the speech model for your spoken language downloaded first. Clean-up needs the network too: offline, the text goes in as recognised."),
+                        isOn: $settings.onDeviceWhenOffline)
+                if settings.onDeviceWhenOffline, let locale = offlineLocale, !locale.isEmpty {
+                    OfflineModelRow(locale: locale, missing: offlineModelMissing)
                 }
                 }
             }
@@ -1095,6 +1106,15 @@ struct ModelsPage: View {
             onDeviceLocale = found ?? ""
             if let found { OnDeviceModels.shared.install(found) }
         }
+        // Standing in while offline: the model is only looked up here, and fetched when the user asks.
+        .task(id: settings.speechEngine == .provider && settings.onDeviceWhenOffline ? settings.sttLanguage : nil) {
+            guard settings.speechEngine == .provider, settings.onDeviceWhenOffline else { return }
+            let found = await OnDeviceModels.locale(for: settings.sttLanguage)
+            var missing = false
+            if let found { missing = !(await OnDeviceModels.isInstalled(found)) }
+            offlineModelMissing = missing
+            offlineLocale = found ?? ""
+        }
         .task(id: settings.sttProvider == .openrouter ? settings.sttModel : "") {
             if settings.sttProvider == .openrouter { await OpenRouterHosts.shared.load(settings.sttModel, settings: settings) }
         }
@@ -1176,6 +1196,25 @@ private struct OnDeviceModelRow: View {
             Image(systemName: symbol).foregroundStyle(.orange)
             Text(text).font(.system(size: 12))
             Spacer()
+        }
+    }
+}
+
+/// The speech model on-device recognition needs to stand in while offline (see `OfflineFallback`): a Download button
+/// while it isn't on this Mac (`missing`), then its download as `OnDeviceModelRow` shows it, and nothing once it's here.
+private struct OfflineModelRow: View {
+    let locale: String
+    let missing: Bool
+    @ObservedObject private var models = OnDeviceModels.shared
+
+    var body: some View {
+        if models.statuses[locale] != nil {
+            OnDeviceModelRow(locale: locale)
+        } else if missing {
+            CardDivider()
+            CardRow(title: L("语音模型", "Speech model")) {
+                Button(L("下载", "Download")) { models.install(locale) }
+            }
         }
     }
 }

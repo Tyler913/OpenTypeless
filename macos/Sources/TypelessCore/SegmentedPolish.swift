@@ -205,7 +205,8 @@ public enum SegmentedPolish {
 
     /// The app's clean-up of `transcript` (or its translation, when the routes' options ask for one): each part hedged
     /// between the routes (see HedgedPolish) and asked a second time after a transient failure, but not after a timeout.
-    /// A second wait as long as the first would only hold the dictation up; the part goes in as spoken instead.
+    /// A second wait as long as the first would only hold the dictation up; the part goes in as spoken instead. Nor when
+    /// the system has no connection at all (`NetworkFailure.noConnection`): a moment later it rarely has one.
     /// `concurrency` caps how many parts are out at once (nil: all of them, which is what a dictation wants; the
     /// transcript of an hour-long file has dozens), and with a cap, a part waits to start while `holdWhile` says so (a
     /// file's clean-up, while a dictation is under way).
@@ -217,7 +218,8 @@ public enum SegmentedPolish {
         holdWhile: (@Sendable () -> Bool)? = nil,
         onPartial: (@Sendable (String) -> Void)? = nil
     ) async throws -> SegmentedPolishResult {
-        let policy = RetryPolicy(maxAttempts: 2, retriesTimeouts: false)
+        let policy = RetryPolicy(maxAttempts: 2, retriesTimeouts: false,
+                                 stopsEarly: { $0.networkFailure == .noConnection })
         let options = primary.options
         let dictation = concurrency == nil
         let result = try await runParts(transcript: transcript, translation: options.translation,

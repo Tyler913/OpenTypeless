@@ -9,6 +9,23 @@ namespace TypelessCore;
 /// </summary>
 public enum ApiErrorKind { MissingApiKey, Http, Network, Timeout, BadResponse, Cancelled, UnsupportedLanguage, ModelMissing, OnDevice }
 
+/// <summary>
+/// Why a request didn't reach the provider, when the network is to blame rather than the provider (see
+/// <see cref="OfflineFallback"/>). The same names as on macOS.
+/// </summary>
+public enum NetworkFailure
+{
+    /// <summary>The system has no connection at all: no network adapter connected, or no route anywhere.</summary>
+    NoConnection,
+    /// <summary>The provider's host couldn't be found or reached: a DNS failure, no route to it, or the connection refused.</summary>
+    HostUnreachable,
+    /// <summary>
+    /// The connection dropped part way. A server that turns a request down mid-upload does that too, so on its own it
+    /// isn't taken for being offline.
+    /// </summary>
+    ConnectionLost,
+}
+
 /// <summary>Every failure the pipeline reports. Mirrors the macOS <c>APIError</c> enum case for case.</summary>
 public sealed class ApiException : Exception, IEquatable<ApiException>
 {
@@ -17,19 +34,24 @@ public sealed class ApiException : Exception, IEquatable<ApiException>
     public string Detail { get; }
     public int Status { get; }
     public double Seconds { get; }
+    /// <summary>For a network error, why the network kept the request from the provider, when it did (macOS: <c>.offline</c>).</summary>
+    public NetworkFailure? Offline { get; }
 
-    private ApiException(ApiErrorKind kind, string detail = "", int status = 0, double seconds = 0, Exception? inner = null)
+    private ApiException(ApiErrorKind kind, string detail = "", int status = 0, double seconds = 0, Exception? inner = null,
+                         NetworkFailure? offline = null)
         : base(null, inner)
     {
         Kind = kind;
         Detail = detail;
         Status = status;
         Seconds = seconds;
+        Offline = offline;
     }
 
     public static ApiException MissingApiKey(string provider) => new(ApiErrorKind.MissingApiKey, provider);
     public static ApiException Http(int status, string message) => new(ApiErrorKind.Http, message, status);
-    public static ApiException Network(string message, Exception? inner = null) => new(ApiErrorKind.Network, message, inner: inner);
+    public static ApiException Network(string message, Exception? inner = null, NetworkFailure? offline = null) =>
+        new(ApiErrorKind.Network, message, inner: inner, offline: offline);
     public static ApiException TimedOut(double seconds) => new(ApiErrorKind.Timeout, seconds: seconds);
     public static ApiException BadResponse(string message) => new(ApiErrorKind.BadResponse, message);
     public static ApiException Cancelled() => new(ApiErrorKind.Cancelled);
@@ -89,14 +111,42 @@ public sealed class ApiException : Exception, IEquatable<ApiException>
                 return From(aggregate.InnerException!);
             case HttpRequestException http:
                 if (FindSocketError(http) == SocketError.TimedOut) return Network(L("连接超时", "connection timed out"), http);
-                return Network(http.InnerException?.Message ?? http.Message, http);
+                return Network(http.InnerException?.Message ?? http.Message, http, NetworkFailureOf(http));
             case IOException io:
-                return Network(io.Message, io);
+                return Network(io.Message, io, NetworkFailureOf(io));
             case TimeoutException timeout:
                 return Network(L("连接超时", "connection timed out"), timeout);
             default:
                 return Network(error.Message, error);
         }
+    }
+
+    /// <summary>What a failed connection says about the network; null for a failure it isn't to blame for (a timeout, TLS…).</summary>
+    public static NetworkFailure? NetworkFailureOf(Exception error)
+    {
+        var socket = error is SocketException direct ? direct.SocketErrorCode : FindSocketError(error);
+        switch (socket)
+        {
+            case SocketError.NetworkDown or SocketError.NetworkUnreachable:
+                return NetworkFailure.NoConnection;
+            case SocketError.HostNotFound or SocketError.TryAgain or SocketError.NoData or SocketError.HostUnreachable
+                or SocketError.HostDown or SocketError.ConnectionRefused:
+                return NetworkFailure.HostUnreachable;
+            case SocketError.ConnectionReset or SocketError.ConnectionAborted or SocketError.Shutdown:
+                return NetworkFailure.ConnectionLost;
+        }
+        var reason = error switch
+        {
+            HttpRequestException http => http.HttpRequestError,
+            HttpIOException io => io.HttpRequestError,
+            _ => HttpRequestError.Unknown,
+        };
+        return reason switch
+        {
+            HttpRequestError.NameResolutionError or HttpRequestError.ConnectionError => NetworkFailure.HostUnreachable,
+            HttpRequestError.ResponseEnded => NetworkFailure.ConnectionLost,
+            _ => null,
+        };
     }
 
     private static SocketError? FindSocketError(Exception e)
@@ -122,7 +172,12 @@ public sealed class ApiException : Exception, IEquatable<ApiException>
 /// False where a second wait as long as the first would cost more than it could win back: the clean-up, whose
 /// transcript can go in as spoken instead.
 /// </param>
-public sealed record RetryPolicy(int MaxAttempts = 4, double BaseDelay = 1.0, bool RetriesTimeouts = true)
+/// <param name="StopsEarly">
+/// True for an error after which trying again isn't worth it here: the network is known to be down and something else
+/// can take over (see <see cref="OfflineFallback"/>).
+/// </param>
+public sealed record RetryPolicy(int MaxAttempts = 4, double BaseDelay = 1.0, bool RetriesTimeouts = true,
+                                 Func<ApiException, bool>? StopsEarly = null)
 {
     /// <summary>1s, 2s, 4s … with ±20% jitter so parallel chunks don't retry in lockstep.</summary>
     public double Delay(int afterAttempt)
@@ -146,7 +201,7 @@ public sealed record RetryPolicy(int MaxAttempts = 4, double BaseDelay = 1.0, bo
             {
                 var apiError = ApiException.From(error);
                 if (!apiError.IsRetryable || (!RetriesTimeouts && apiError.IsTimeout) || attempt >= MaxAttempts
-                    || cancellationToken.IsCancellationRequested)
+                    || StopsEarly?.Invoke(apiError) == true || cancellationToken.IsCancellationRequested)
                 {
                     throw apiError;
                 }

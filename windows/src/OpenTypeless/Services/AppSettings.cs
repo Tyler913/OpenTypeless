@@ -196,6 +196,16 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("sttBackupModel", value);
     }
 
+    /// <summary>
+    /// With a provider for speech-to-text, the model on this PC takes over while the network is down (see
+    /// <see cref="OfflineFallback"/>). The same key as on macOS.
+    /// </summary>
+    public bool OnDeviceWhenOffline
+    {
+        get => GetBool(OfflineFallback.SettingsKey, true);
+        set => SetValue(OfflineFallback.SettingsKey, value);
+    }
+
     /// <summary>A second clean-up model that races the first when it is slow to start (see HedgedPolish).</summary>
     public bool PolishBackupEnabled
     {

@@ -214,6 +214,8 @@ public sealed class SessionController
 
     public SessionController()
     {
+        // Watched from now on, so the first dictation already knows whether the network is down.
+        NetworkStatus.Start();
         _editWatcher.OnCorrections = (corrections, quiet) =>
         {
             if (!_settings.LearnFromEdits) return;
@@ -563,6 +565,7 @@ public sealed class SessionController
             // Laid out like any dictation's text, for when it's copied from History.
             record.RawText = LaidOutTranscript(raw).Text;
             record.ChunkTexts = pipeline.CompletedTranscripts();
+            NoteOfflineChunks(record, pipeline);
             Account(record, pipeline, null, discarded, sent);
             _history.Update(record);
         }
@@ -753,8 +756,9 @@ public sealed class SessionController
     private void WarmConnections(bool polishes)
     {
         var onDevice = _settings.SpeechEngine == SpeechEngine.OnDevice;
-        // On-device has no connection to open, but a model to load (about a second, the first time).
-        if (onDevice) SpeechModel.Shared.Transcriber.Warm();
+        // On-device has no connection to open, but a model to load (about a second, the first time); so does the model
+        // standing in for the provider while the network is down.
+        if (onDevice || (_settings.OnDeviceWhenOffline && NetworkStatus.IsDown && SpeechModel.Shared.IsReady)) SpeechModel.Shared.Transcriber.Warm();
         var endpoints = onDevice ? new List<ProviderEndpoint?>() : new List<ProviderEndpoint?> { _settings.SttEndpoint, _settings.SttBackupEndpoint };
         if (polishes || _settings.TranslationTarget != null || _settings.CommandModeEnabled)
         {
@@ -796,9 +800,24 @@ public sealed class SessionController
         var key = ModelPrice.Key(_settings.SttProvider, _settings.SttModel);
         var latency = forFile ? new TranscriptionLatency() : _latencies.GetValueOrDefault(key) ?? new TranscriptionLatency();
         if (!forFile) _latencies[key] = latency;
+        // A dictation's chunks go to the model on this PC while the network is down (see OfflineFallback); a file's don't.
+        var offline = !forFile && _settings.OnDeviceWhenOffline ? SpeechModel.OfflineRoute(hint, endpoint) : null;
         return new TranscriptionPipeline(Client(endpoint, forFile), new TranscriptionOptions(_settings.SttModel, hint, _settings.DictationVocabulary), preset: preset,
                                          backup: backup, latency: latency, speculate: !forFile, onSpeculation: onSpeculation,
-                                         maxConcurrentRequests: forFile ? FileTranscription.MaxConcurrentRequests : 3);
+                                         maxConcurrentRequests: forFile ? FileTranscription.MaxConcurrentRequests : 3,
+                                         offline: offline);
+    }
+
+    /// <summary>
+    /// Notes which of the record's chunks were recognised on this PC in the provider's place (see
+    /// <see cref="OfflineFallback"/>): those this run reused (Retry kept them) and this run's own.
+    /// </summary>
+    private void NoteOfflineChunks(DictationRecord record, TranscriptionPipeline pipeline)
+    {
+        var fresh = pipeline.OfflineChunks();
+        if (fresh.Count > 0) Note($"network unavailable: {fresh.Count} segment(s) recognised on this PC");
+        var chunks = (record.OnDeviceChunks ?? new List<int>()).Concat(fresh).Where(record.ChunkTexts.ContainsKey).Distinct().Order().ToList();
+        record.OnDeviceChunks = chunks.Count == 0 ? null : chunks;
     }
 
     private void StopCapture()
@@ -930,6 +949,7 @@ public sealed class SessionController
             record.Timing.LastChunkRoute = pipeline.LastChunkUsedBackup is { } backup ? backup ? "backup" : "primary" : null;
             if (pipeline.TailWasSpeculative) Note($"last segment transcribed ahead of time: text {started.Elapsed.TotalSeconds:0.00}s after release");
             record.ChunkTexts = pipeline.CompletedTranscripts();
+            NoteOfflineChunks(record, pipeline);
             // With "new line" and "new paragraph" said on their own as line breaks: what goes in when it isn't cleaned up.
             var layout = LaidOutTranscript(raw);
             record.RawText = layout.Text;
@@ -954,6 +974,7 @@ public sealed class SessionController
         {
             if (!IsCurrent(generation, token)) return;
             record.ChunkTexts = pipeline.CompletedTranscripts();
+            NoteOfflineChunks(record, pipeline);
             record.RawText = failure.PartialText;
             record.Status = DictationStatus.Failed;
             record.Error = failure.Message;
@@ -1132,7 +1153,10 @@ public sealed class SessionController
                     _history.Update(record);
                     return;
                 }
-                notice = L("整理失败，已插入原文", "Clean-up failed — inserted raw text");
+                // With no network, said as such: there was nothing to fix.
+                notice = ApiException.From(error).Offline == NetworkFailure.NoConnection || NetworkStatus.IsDown
+                    ? L("离线，已插入未整理的文字", "Offline — inserted without clean-up")
+                    : L("整理失败，已插入原文", "Clean-up failed — inserted raw text");
                 record.Error = error.Message;
                 record.Status = DictationStatus.PolishFailed;
             }
@@ -1927,9 +1951,13 @@ public sealed class SessionController
         record.ProfileName = dictation.ProfileName;
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again, and
         // transcribed with the same language hint (a profile, or the global setting, may have changed it since).
-        var preset = dictation.ReusesTranscripts(saved.ChunkLayout, saved.ChunkLanguage) ? saved.ChunkTexts : new Dictionary<int, string>();
+        var saves = dictation.ReusesTranscripts(saved.ChunkLayout, saved.ChunkLanguage);
+        // Chunks recognised on this PC for want of a network go to the provider again, now that it may be reachable.
+        var (preset, offlineChunks) = OfflineFallback.Reused(saves ? saved.ChunkTexts : new Dictionary<int, string>(), saved.OnDeviceChunks,
+                                                             usesProvider: _settings.SpeechEngine == SpeechEngine.Provider);
         // Saved with the new layout and language, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).
         record.ChunkTexts = new Dictionary<int, string>(preset);
+        record.OnDeviceChunks = offlineChunks;
         record.ChunkLayout = Chunker.Layout;
         record.ChunkLanguage = dictation.Language;
         _history.Update(record);
@@ -1975,6 +2003,7 @@ public sealed class SessionController
             if (_pipeline is { } pipeline)
             {
                 record.ChunkTexts = pipeline.CompletedTranscripts();
+                NoteOfflineChunks(record, pipeline);
                 if (record.RawText.Length == 0)
                 {
                     record.RawText = TranscriptJoiner.Join(record.ChunkTexts.OrderBy(p => p.Key).Select(p => p.Value));
@@ -2010,7 +2039,11 @@ public sealed class SessionController
         StopCapture();
         record.Duration = _counter.Seconds;
         // A retry reuses the segments already transcribed.
-        if (_pipeline is { } pipeline) record.ChunkTexts = pipeline.CompletedTranscripts();
+        if (_pipeline is { } pipeline)
+        {
+            record.ChunkTexts = pipeline.CompletedTranscripts();
+            NoteOfflineChunks(record, pipeline);
+        }
         // An accidental tap isn't worth an entry.
         if (record.Duration - _preRollSeconds < 0.4) _history.Delete(record);
         else _history.Update(record);

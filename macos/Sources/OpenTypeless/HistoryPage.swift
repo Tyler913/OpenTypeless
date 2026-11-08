@@ -553,7 +553,7 @@ private struct HistoryDetail: View {
 
     /// "0:42 · 123 words · $0.0012 · Slack" (the words said, not what snippets put in; the app profile it was made with,
     /// if any), and "Translation → English" for a translation dictation or "Edited a selection (240 characters)" for an
-    /// edit.
+    /// edit, and "On-device (offline)" when the network was down for some of it.
     private var details: String {
         var parts = [record.duration.durationLabel]
         let words = WordCount.count(record.finalText)
@@ -567,6 +567,8 @@ private struct HistoryDetail: View {
             parts.append(L("编辑选中文字（\(length) 字符）", "Edited a selection (\(length) characters)"))
         }
         if let profile = record.profileName { parts.append(profile) }
+        // Recognised on this Mac while the network was down: Re-transcribe asks the provider again.
+        if record.onDeviceChunks?.isEmpty == false { parts.append(L("设备端识别（离线）", "On-device (offline)")) }
         return parts.joined(separator: " · ")
     }
 }

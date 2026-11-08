@@ -229,7 +229,8 @@ public static class SegmentedPolish
     /// The app's clean-up of <paramref name="transcript"/> (or its translation, when the routes' options ask for one):
     /// each part hedged between the routes (see <see cref="HedgedPolish"/>) and asked a second time after a transient
     /// failure, but not after a timeout. A second wait as long as the first would only hold the dictation up; the part goes
-    /// in as spoken instead.
+    /// in as spoken instead. Nor when the system has no connection at all (<see cref="NetworkFailure.NoConnection"/>): a
+    /// moment later it rarely has one.
     /// </summary>
     /// <param name="concurrency">
     /// How many parts are out at once (null: all of them, which is what a dictation wants; the transcript of an hour-long
@@ -247,7 +248,8 @@ public static class SegmentedPolish
                                                         Action<string>? onPartial = null, CancellationToken cancellationToken = default,
                                                         int? concurrency = null, Func<bool>? holdWhile = null)
     {
-        var policy = new RetryPolicy(MaxAttempts: 2, RetriesTimeouts: false);
+        var policy = new RetryPolicy(MaxAttempts: 2, RetriesTimeouts: false,
+                                     StopsEarly: failed => failed.Offline == NetworkFailure.NoConnection);
         var options = primary.Options;
         var dictation = concurrency is null;
         var result = await RunParts(transcript, (part, surrounding, partial, token) =>

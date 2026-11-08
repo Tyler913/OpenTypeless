@@ -1,8 +1,31 @@
 import AVFoundation
 import Combine
+import Network
 import os
 import Speech
 import TypelessCore
+
+/// Whether this Mac has a network path at all (`NWPathMonitor`), so a dictation goes to the recognizer on this Mac at
+/// once while it hasn't, rather than waiting on requests that can't get out (see `OfflineFallback`). Watched from the
+/// first use (the app's start); until the system's first answer the network counts as up.
+final class NetworkStatus: @unchecked Sendable {
+    static let shared = NetworkStatus()
+
+    private let monitor = NWPathMonitor()
+    private let lock = NSLock()
+    private var down = false
+
+    private init() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            guard let self else { return }
+            // `.requiresConnection` (a VPN on demand, say) may come up as the request goes out: not down.
+            self.lock.withLock { self.down = path.status == .unsatisfied }
+        }
+        monitor.start(queue: DispatchQueue(label: "local.opentypeless.network-status"))
+    }
+
+    var isDown: Bool { lock.withLock { down } }
+}
 
 /// The speech models of the recognizer on this Mac: which language each dictation is recognised in, and downloading a
 /// language's model the first time it's used (in the background, with its progress for Settings and the capsule). The
@@ -94,6 +117,16 @@ final class OnDeviceModels: ObservableObject {
 /// Apple's SpeechAnalyzer with a SpeechTranscriber, one chunk at a time: the speech-to-text on this Mac.
 final class AppleSpeechRecognizer: OnDeviceRecognizer {
     static let shared = AppleSpeechRecognizer()
+    /// Standing in for the provider while the network is down (see `OfflineFallback`): a language's model that isn't
+    /// here can't be downloaded then, so the chunk fails at once instead.
+    static let installedOnly = AppleSpeechRecognizer(downloadsModels: false)
+
+    /// Whether a language's model is downloaded the first time it's needed.
+    private let downloadsModels: Bool
+
+    private init(downloadsModels: Bool = true) {
+        self.downloadsModels = downloadsModels
+    }
 
     static let sourceFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(AudioFormat.sampleRate),
                                                     channels: 1, interleaved: true)!
@@ -108,7 +141,11 @@ final class AppleSpeechRecognizer: OnDeviceRecognizer {
     }
 
     func transcribe(samples: [Int16], locale: String, vocabulary: [String]) async throws -> String {
-        try await OnDeviceModels.shared.waitUntilInstalled(locale)
+        if downloadsModels {
+            try await OnDeviceModels.shared.waitUntilInstalled(locale)
+        } else if !(await OnDeviceModels.isInstalled(locale)) {
+            throw APIError.unavailable(L("语音模型还没有下载", "The speech model isn't downloaded yet"))
+        }
         let transcriber = Self.transcriber(locale)
         guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]),
               let converter = AVAudioConverter(from: Self.sourceFormat, to: format),

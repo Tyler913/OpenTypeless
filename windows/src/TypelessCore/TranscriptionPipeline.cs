@@ -78,6 +78,14 @@ public sealed class TranscriptionPipeline
     private readonly bool _speculate;
     private readonly Action<string?>? _onSpeculation;
     private readonly CancellationTokenSource _cancellation = new();
+    /// <summary>The model on this PC, for the chunks the provider can't be reached for (see <see cref="OfflineFallback"/>).</summary>
+    private readonly OfflineFallbackRoute? _offline;
+    /// <summary>Whether <see cref="_offline"/> can recognise this dictation's language without the network, asked once as the pipeline starts.</summary>
+    private readonly bool _offlineReady;
+    /// <summary>The dictation has gone over to the model on this PC, for every chunk still to be transcribed. Under the lock.</summary>
+    private bool _switchedOffline;
+    /// <summary>Chunks the model on this PC transcribed in the provider's place.</summary>
+    private readonly HashSet<int> _answeredOffline = new();
 
     private readonly object _lock = new();
     private readonly Chunker _chunker;
@@ -139,8 +147,14 @@ public sealed class TranscriptionPipeline
         public Task<Outcome> Task { get; set; } = null!;
     }
 
-    /// <summary>A chunk's request: its state, whether a failure is permanent, and whether the backup route answered.</summary>
-    private readonly record struct Outcome(ChunkState State, bool Permanent, bool Backup = false);
+    /// <summary>
+    /// A chunk's request: its state, whether a failure is permanent, and whether the backup route answered, or the model on
+    /// this PC in the provider's place.
+    /// </summary>
+    private readonly record struct Outcome(ChunkState State, bool Permanent, bool Backup = false, bool Offline = false);
+
+    /// <summary>Which route answered a chunk: the main one, the backup, or the model on this PC in their place.</summary>
+    private enum Answerer { Primary, Backup, Offline }
 
     /// <summary>Whether the last chunk's transcript came from a speculative tail, so nothing was left to send when the recording ended.</summary>
     public bool TailWasSpeculative { get; private set; }
@@ -183,12 +197,16 @@ public sealed class TranscriptionPipeline
     /// speaker went on. Lets the caller start cleaning the text up before the key is released. It is called one call at a
     /// time and never with a stale transcript after a newer one, so it mustn't call back into the pipeline.
     /// </param>
+    /// <param name="offline">With a provider, the model on this PC, which takes over while the network is down.</param>
     public TranscriptionPipeline(ISpeechTranscriber client, TranscriptionOptions options, Chunker.Config? chunkConfig = null,
                                  RetryPolicy? policy = null, IReadOnlyDictionary<int, string>? preset = null,
                                  Action<int, ChunkState>? observer = null, TranscriptionRoute? backup = null,
                                  TranscriptionLatency? latency = null, bool trimSilence = true, bool speculate = true,
-                                 Action<string?>? onSpeculation = null, int maxConcurrentRequests = 3)
+                                 Action<string?>? onSpeculation = null, int maxConcurrentRequests = 3,
+                                 OfflineFallbackRoute? offline = null)
     {
+        _offline = offline;
+        _offlineReady = offline?.IsReady() == true;
         _semaphore = new SemaphoreSlim(Math.Max(1, maxConcurrentRequests));
         _trimSilence = trimSilence;
         _speculate = speculate;
@@ -378,6 +396,15 @@ public sealed class TranscriptionPipeline
         lock (_lock) return _backupUsages.Count;
     }
 
+    /// <summary>
+    /// The chunks the model on this PC transcribed because the provider couldn't be reached (see
+    /// <see cref="OfflineFallback"/>), in order. They cost nothing: their usage isn't in <see cref="Usages"/>.
+    /// </summary>
+    public List<int> OfflineChunks()
+    {
+        lock (_lock) return _answeredOffline.Order().ToList();
+    }
+
     // MARK: - Private
 
     private bool IsCancelled
@@ -462,6 +489,7 @@ public sealed class TranscriptionPipeline
             if (outcome.State is not ChunkState.Failed) _chunks.Remove(index);
             if (outcome.Permanent) _permanentFailures.Add(index); else _permanentFailures.Remove(index);
             if (outcome.State is ChunkState.Done) _answeredByBackup[index] = outcome.Backup; else _answeredByBackup.Remove(index);
+            if (outcome.State is ChunkState.Done && outcome.Offline) _answeredOffline.Add(index); else _answeredOffline.Remove(index);
             if (outcome.State is ChunkState.Done)
             {
                 _failureStreak = 0;
@@ -610,12 +638,14 @@ public sealed class TranscriptionPipeline
         if (_trimSilence) chunk = chunk.Trimmed();
         try
         {
-            var (result, usedBackup) = await Transcribe(chunk, token, report).ConfigureAwait(false);
-            if (result.Usage is { } usage)
+            var (result, route) = await Transcribe(chunk, token, report).ConfigureAwait(false);
+            // The model on this PC bills nothing: its chunks cost nothing at the provider's price.
+            if (result.Usage is { } usage && route != Answerer.Offline)
             {
-                lock (_lock) (usedBackup ? _backupUsages : _usages).Add(usage);
+                lock (_lock) (route == Answerer.Backup ? _backupUsages : _usages).Add(usage);
             }
-            return new Outcome(new ChunkState.Done(result.Text), Permanent: false, Backup: usedBackup);
+            return new Outcome(new ChunkState.Done(result.Text), Permanent: false, Backup: route == Answerer.Backup,
+                               Offline: route == Answerer.Offline);
         }
         catch (Exception error)
         {
@@ -629,9 +659,9 @@ public sealed class TranscriptionPipeline
     }
 
     private Task<TranscriptionResult> Attempt(ISpeechTranscriber client, TranscriptionOptions options, AudioChunk chunk, CancellationToken token,
-                                              bool report) =>
+                                              bool report, RetryPolicy? policy = null) =>
         client.TranscribeDetailedWithRetry(
-            chunk.Samples, options, _policy,
+            chunk.Samples, options, policy ?? ProviderPolicy,
             onRetry: (attempt, error) =>
             {
                 if (Environment.GetEnvironmentVariable("OPENTYPELESS_DEBUG") != null)
@@ -643,18 +673,69 @@ public sealed class TranscriptionPipeline
             cancellationToken: token);
 
     /// <summary>
+    /// The policy, and with the model on this PC to take over, no more retries once they can't help (see
+    /// <see cref="OfflineFallback.TakesOver"/>).
+    /// </summary>
+    private RetryPolicy ProviderPolicy
+    {
+        get
+        {
+            if (_offline is not { } offline) return _policy;
+            var stopsEarly = _policy.StopsEarly;
+            var ready = _offlineReady;
+            return _policy with
+            {
+                StopsEarly = failure => stopsEarly?.Invoke(failure) == true
+                                        || OfflineFallback.TakesOver(failure, retriesLeft: true, networkDown: offline.NetworkDown(), ready: ready),
+            };
+        }
+    }
+
+    /// <summary>
+    /// One chunk. With the model on this PC to stand in (see <see cref="OfflineFallback"/>), on it while the network is
+    /// down or once the dictation has gone over to it, and on it too when the provider can't be reached for it: the rest
+    /// of the dictation then goes there too, without waiting on the network again.
+    /// </summary>
+    private async Task<(TranscriptionResult Result, Answerer Route)> Transcribe(AudioChunk chunk, CancellationToken token, bool report)
+    {
+        if (_offline is not { } offline) return await TranscribeOnProvider(chunk, token, report).ConfigureAwait(false);
+        bool switched;
+        lock (_lock) switched = _switchedOffline;
+        if (!OfflineFallback.SkipsProvider(switched, offline.NetworkDown(), _offlineReady))
+        {
+            try
+            {
+                return await TranscribeOnProvider(chunk, token, report).ConfigureAwait(false);
+            }
+            catch (Exception failure) when (!token.IsCancellationRequested
+                                            && OfflineFallback.TakesOver(ApiException.From(failure), retriesLeft: false,
+                                                                         networkDown: offline.NetworkDown(), ready: _offlineReady))
+            {
+                if (Environment.GetEnvironmentVariable("OPENTYPELESS_DEBUG") != null)
+                {
+                    Console.Error.WriteLine($"  chunk {chunk.Index}: provider unreachable ({ApiException.From(failure)}), recognised on this PC");
+                }
+            }
+        }
+        lock (_lock) _switchedOffline = true;
+        // The model's own policy: it doesn't retry (see OnDeviceTranscriber).
+        var result = await Attempt(offline.Transcriber, offline.Options, chunk, token, report, _policy).ConfigureAwait(false);
+        return (result, Answerer.Offline);
+    }
+
+    /// <summary>
     /// One chunk, on the primary route; with a backup route, the backup is asked too once the primary has failed, or is
     /// late (see <see cref="TranscriptionLatency"/>, and <see cref="RaceSeconds"/> for a chunk sent after the recording
     /// ended) and the recording has ended, and whichever answers first is used; the other is cancelled.
     /// </summary>
-    private async Task<(TranscriptionResult Result, bool UsedBackup)> Transcribe(AudioChunk chunk, CancellationToken token, bool report)
+    private async Task<(TranscriptionResult Result, Answerer Route)> TranscribeOnProvider(AudioChunk chunk, CancellationToken token, bool report)
     {
         var clock = Stopwatch.StartNew();
         if (_backup is not { } backup)
         {
             var only = await Attempt(_client, _options, chunk, token, report).ConfigureAwait(false);
             _latency.Record(clock.Elapsed.TotalSeconds, chunk.Duration);
-            return (only, false);
+            return (only, Answerer.Primary);
         }
         using var race = CancellationTokenSource.CreateLinkedTokenSource(token);
         // Each on the thread pool, so neither can hold up the other (or the timer) before its first await.
@@ -680,7 +761,7 @@ public sealed class TranscriptionPipeline
                     if (primary.IsCompletedSuccessfully)
                     {
                         _latency.Record(clock.Elapsed.TotalSeconds, chunk.Duration);
-                        return (primary.Result, false);
+                        return (primary.Result, Answerer.Primary);
                     }
                     var error = primary.Exception?.InnerException ?? ApiException.Cancelled();
                     if (ApiException.From(error).IsCancelled || backupFailed) ExceptionDispatchInfo.Throw(error);
@@ -689,7 +770,7 @@ public sealed class TranscriptionPipeline
                 }
                 else if (done == second)
                 {
-                    if (second.IsCompletedSuccessfully) return (second.Result, true);
+                    if (second.IsCompletedSuccessfully) return (second.Result, Answerer.Backup);
                     backupFailed = true;
                     if (primaryError != null) ExceptionDispatchInfo.Throw(primaryError);
                 }

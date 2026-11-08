@@ -186,6 +186,8 @@ final class SessionController: ObservableObject {
     private(set) lazy var files = FileTranscriber(controller: self)
 
     init() {
+        // Watched from now on, so the first dictation already knows whether the network is down.
+        _ = NetworkStatus.shared
         editWatcher.onCorrections = { [weak self] corrections, quiet in
             guard let self, self.settings.learnFromEdits else { return }
             let added = self.settings.learn(corrections)
@@ -527,6 +529,7 @@ final class SessionController: ObservableObject {
             // Laid out like any dictation's text, for when it's copied from History.
             record.rawText = self.laidOutTranscript(raw).text
             record.chunkTexts = pipeline.completedTranscripts()
+            self.noteOfflineChunks(&record, pipeline: pipeline)
             self.account(&record, pipeline: pipeline, polished: nil, discarded: discarded, context: sent)
             self.history.update(record)
         }
@@ -766,10 +769,25 @@ final class SessionController: ObservableObject {
             preset: preset,
             backup: backup,
             latency: latency,
+            offline: !forFile && settings.onDeviceWhenOffline ? offlineFallback(language: language, endpoint: endpoint) : nil,
             maxConcurrentRequests: forFile ? FileTranscription.maxConcurrentRequests : 3,
             speculate: !forFile,
             onSpeculation: onSpeculation
         )
+    }
+
+    /// The recognizer on this Mac as the provider's stand-in while the network is down (see `OfflineFallback`): only with
+    /// the model for `language` already here, since nothing can be downloaded then. A provider on this Mac itself (a
+    /// local server) doesn't need the network, so only its own failures count for it, not the system's word.
+    private func offlineFallback(language: String?, endpoint: ProviderEndpoint) -> OfflineFallbackRoute {
+        let local = OfflineFallback.isLocalHost(endpoint.baseURL.host ?? "")
+        return OfflineFallbackRoute(
+            route: OnDeviceRoute(recognizer: AppleSpeechRecognizer.installedOnly),
+            isReady: {
+                guard let locale = await OnDeviceModels.locale(for: language ?? "") else { return false }
+                return await OnDeviceModels.isInstalled(locale)
+            },
+            networkDown: { !local && NetworkStatus.shared.isDown })
     }
 
     private func stopCapture() {
@@ -885,6 +903,7 @@ final class SessionController: ObservableObject {
                             ProcessInfo.processInfo.systemUptime - started))
             }
             record.chunkTexts = pipeline.completedTranscripts()
+            noteOfflineChunks(&record, pipeline: pipeline)
             // With "new line" and "new paragraph" said on their own as line breaks: what goes in when it isn't cleaned up.
             let layout = laidOutTranscript(raw)
             record.rawText = layout.text
@@ -910,6 +929,7 @@ final class SessionController: ObservableObject {
         } catch let failure as PipelineFailure {
             guard isCurrent(generation) else { return }
             record.chunkTexts = pipeline.completedTranscripts()
+            noteOfflineChunks(&record, pipeline: pipeline)
             record.rawText = failure.partialText
             record.status = .failed
             record.error = failure.localizedDescription
@@ -929,6 +949,15 @@ final class SessionController: ObservableObject {
             lastError = error.localizedDescription
             finish(showing: .error(error.localizedDescription), hideAfter: 5)
         }
+    }
+
+    /// Notes which of the record's chunks were recognised on this Mac in the provider's place (see `OfflineFallback`):
+    /// those this run reused (`retry` kept them) and this run's own.
+    private func noteOfflineChunks(_ record: inout DictationRecord, pipeline: TranscriptionPipeline) {
+        let fresh = pipeline.offlineChunks()
+        if !fresh.isEmpty { note("network unavailable: \(fresh.count) segment(s) recognised on this Mac") }
+        let chunks = Set(record.onDeviceChunks ?? []).union(fresh).filter { record.chunkTexts[$0] != nil }
+        record.onDeviceChunks = chunks.isEmpty ? nil : chunks.sorted()
     }
 
     /// `layout`: the record's transcript laid out (see `SpokenLayout.layout`). A line break said at the very start or end
@@ -1060,7 +1089,10 @@ final class SessionController: ObservableObject {
                     history.update(record)
                     return
                 }
-                notice = L("整理失败，已插入原文", "Clean-up failed — inserted raw text")
+                // With no network, said as such: there was nothing to fix.
+                notice = APIError.from(error).networkFailure == .noConnection || NetworkStatus.shared.isDown
+                    ? L("离线，已插入未整理的文字", "Offline — inserted without clean-up")
+                    : L("整理失败，已插入原文", "Clean-up failed — inserted raw text")
                 record.error = error.localizedDescription
                 record.status = .polishFailed
             }
@@ -1773,9 +1805,13 @@ final class SessionController: ObservableObject {
         record.profileName = dictation.profileName
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again, and
         // transcribed with the same language hint (a profile, or the global setting, may have changed it since).
-        let preset = dictation.reusesTranscripts(layout: saved.chunkLayout, language: saved.chunkLanguage) ? saved.chunkTexts : [:]
+        let saves = dictation.reusesTranscripts(layout: saved.chunkLayout, language: saved.chunkLanguage)
+        // Chunks recognised on this Mac for want of a network go to the provider again, now that it may be reachable.
+        let (preset, offlineChunks) = OfflineFallback.reused(saves ? saved.chunkTexts : [:], onDevice: saved.onDeviceChunks,
+                                                             usesProvider: settings.speechEngine == .provider)
         // Saved with the new layout and language, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).
         record.chunkTexts = preset
+        record.onDeviceChunks = offlineChunks
         record.chunkLayout = Chunker.layout
         record.chunkLanguage = dictation.language
         history.update(record)
@@ -1811,6 +1847,7 @@ final class SessionController: ObservableObject {
             // Cancelled while processing: keep what was transcribed; it can be re-transcribed for a day.
             if let pipeline {
                 record.chunkTexts = pipeline.completedTranscripts()
+                noteOfflineChunks(&record, pipeline: pipeline)
                 if record.rawText.isEmpty {
                     record.rawText = TranscriptJoiner.join(record.chunkTexts.sorted { $0.key < $1.key }.map(\.value))
                 }
@@ -1834,7 +1871,10 @@ final class SessionController: ObservableObject {
         stopCapture()
         record.duration = counter.seconds
         // A retry reuses the segments already transcribed.
-        if let pipeline { record.chunkTexts = pipeline.completedTranscripts() }
+        if let pipeline {
+            record.chunkTexts = pipeline.completedTranscripts()
+            noteOfflineChunks(&record, pipeline: pipeline)
+        }
         // An accidental tap isn't worth an entry.
         if record.duration - preRollSeconds < 0.4 { history.delete(record) } else { history.update(record) }
     }

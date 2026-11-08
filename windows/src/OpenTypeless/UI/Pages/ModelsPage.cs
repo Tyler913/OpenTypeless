@@ -13,7 +13,8 @@ public sealed class ModelsPage : PageBase
     private static readonly HashSet<string> StructuralProperties =
         [nameof(AppSettings.SpeechEngine), nameof(AppSettings.SttProvider), nameof(AppSettings.PolishProvider), nameof(AppSettings.PolishEnabled),
          nameof(AppSettings.PolishBackupEnabled), nameof(AppSettings.PolishBackupProvider), "ApiKeys", "BaseUrls",
-         nameof(AppSettings.SttBackupEnabled), nameof(AppSettings.SttBackupProvider), nameof(AppSettings.SpendLimitEnabled)];
+         nameof(AppSettings.SttBackupEnabled), nameof(AppSettings.SttBackupProvider), nameof(AppSettings.SpendLimitEnabled),
+         nameof(AppSettings.OnDeviceWhenOffline)];
 
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly SettingsWindow _window;
@@ -232,6 +233,33 @@ public sealed class ModelsPage : PageBase
             var sttBackupPriceRow = PriceRow(_sttBackupPrice);
             _sttBackupPrice.Row = sttBackupPriceRow;
             stt.Body.Add(sttBackupPriceRow);
+        }
+        if (!onDevice)
+        {
+            // The model on this PC standing in while the network is down (see OfflineFallback), with the model's own row
+            // (Download, its progress, Remove) while the switch is on.
+            stt.Body.Add(new CardDivider());
+            var offline = new ToggleSwitch { IsOn = _settings.OnDeviceWhenOffline, OnContent = "", OffContent = "", MinWidth = 0 };
+            offline.Toggled += (_, _) => _settings.OnDeviceWhenOffline = offline.IsOn;
+            stt.Body.Add(new CardRow
+            {
+                Glyph = Glyphs.Shield, Title = L("离线时用本机识别", "Use on-device recognition when offline"),
+                Help = L("网络断开时，在这台电脑上用本机模型转写，听写照样出字。准确率不如云端模型，并且要先下载本机语音模型（SenseVoice Small，支持中文、英语、日语、韩语和粤语）。文字整理也需要网络：离线时文字按识别结果直接插入。",
+                         "When the network is down, speech is recognised on this PC with the on-device model, so dictation still gives you text. It's less accurate than cloud models and needs the on-device speech model downloaded first (SenseVoice Small: Chinese, English, Japanese, Korean and Cantonese). Clean-up needs the network too: offline, the text goes in as recognised."),
+                Trailing = offline,
+            });
+            if (_settings.OnDeviceWhenOffline)
+            {
+                stt.Body.Add(new CardDivider());
+                _modelRow = new CardRow
+                {
+                    Glyph = Glyphs.Download, Title = L("语音模型", "Speech model"),
+                    Help = L("第一次使用前从 Hugging Face 下载一次，校验后保存在这台电脑上，随时可以移除。模型：SenseVoice Small（FunAudioLLM / 阿里巴巴，FunASR 模型许可）。",
+                             "Downloaded once from Hugging Face, checked and kept on this PC; remove it any time. Model: SenseVoice Small by FunAudioLLM (Alibaba), FunASR Model License."),
+                };
+                ShowModel();
+                stt.Body.Add(_modelRow);
+            }
         }
         Body.Children.Add(stt);
         if (onDevice) { }

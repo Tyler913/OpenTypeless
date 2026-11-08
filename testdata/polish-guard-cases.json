@@ -1,5 +1,5 @@
 {
-  "_comment": "Clean-up guard cases shared by the macOS and Windows tests (Prompts.fallback). The legitimate outputs are the heaviest edits each eval/ case's checks allow; the rest are answers, refusals, translations and summaries the apps must not insert. A case with a context was cleaned up with that text around the cursor (eval/polish-context.json): names spelled from it pass, text copied from it doesn't.",
+  "_comment": "Clean-up guard cases shared by the macOS and Windows tests (Prompts.fallback). The legitimate outputs are the heaviest edits each eval/ case's checks allow; the rest are answers, refusals, translations and summaries the apps must not insert. A case with a context was cleaned up with that text around the cursor (eval/polish-context.json): names spelled from it pass, text copied from it doesn't. A case with a strength was cleaned up at that strength (PolishStrength; standard without one): a polished clean-up may shorten a rambling transcript further than the others.",
   "cases": [
     {
       "id": "correction-same-sentence",
@@ -795,6 +795,33 @@
       "input": "I'm free Monday, um, Tuesday too, whichever works for you",
       "output": "I'm free Monday, Tuesday too, whichever works for you.",
       "expect": null
+    },
+    {
+      "id": "polished-tightened-ramble",
+      "strength": "polished",
+      "input": "so um basically what I wanted to say is that the build is, like, kind of really slow right now, you know, it takes like ten minutes or so every single time, and uh I think that we could maybe make it a lot faster if we, um, if we just cache the dependencies, because right now what happens is that every single time we run it, it downloads all of the dependencies again from scratch, which is, like, a huge waste of time, honestly. and the other thing is, um, the tests, the tests are also kind of slow, I mean they take like four minutes, and I think that we could, you know, run them in parallel, like split them up into maybe four groups or something like that, and then they would probably take about one minute instead. so yeah, um, basically those are the two things, the caching and the parallel tests, and I think if we do both of those things then the whole thing would take maybe five minutes instead of fourteen, which would be really nice for everybody on the team, I think",
+      "output": "The build is kind of slow right now: it takes about ten minutes every time. I think we could make it a lot faster by caching the dependencies, because right now every run downloads them all again from scratch, which is a huge waste of time. The tests are slow too, about four minutes. We could run them in parallel, split into maybe four groups, and they would probably take about a minute. With both the caching and the parallel tests, the whole thing would take maybe five minutes instead of fourteen, which would be really nice for the team.",
+      "expect": null
+    },
+    {
+      "id": "standard-tightened-ramble",
+      "input": "so um basically what I wanted to say is that the build is, like, kind of really slow right now, you know, it takes like ten minutes or so every single time, and uh I think that we could maybe make it a lot faster if we, um, if we just cache the dependencies, because right now what happens is that every single time we run it, it downloads all of the dependencies again from scratch, which is, like, a huge waste of time, honestly. and the other thing is, um, the tests, the tests are also kind of slow, I mean they take like four minutes, and I think that we could, you know, run them in parallel, like split them up into maybe four groups or something like that, and then they would probably take about one minute instead. so yeah, um, basically those are the two things, the caching and the parallel tests, and I think if we do both of those things then the whole thing would take maybe five minutes instead of fourteen, which would be really nice for everybody on the team, I think",
+      "output": "The build is kind of slow right now: it takes about ten minutes every time. I think we could make it a lot faster by caching the dependencies, because right now every run downloads them all again from scratch, which is a huge waste of time. The tests are slow too, about four minutes. We could run them in parallel, split into maybe four groups, and they would probably take about a minute. With both the caching and the parallel tests, the whole thing would take maybe five minutes instead of fourteen, which would be really nice for the team.",
+      "expect": "summarised"
+    },
+    {
+      "id": "light-tightened-ramble",
+      "strength": "light",
+      "input": "so um basically what I wanted to say is that the build is, like, kind of really slow right now, you know, it takes like ten minutes or so every single time, and uh I think that we could maybe make it a lot faster if we, um, if we just cache the dependencies, because right now what happens is that every single time we run it, it downloads all of the dependencies again from scratch, which is, like, a huge waste of time, honestly. and the other thing is, um, the tests, the tests are also kind of slow, I mean they take like four minutes, and I think that we could, you know, run them in parallel, like split them up into maybe four groups or something like that, and then they would probably take about one minute instead. so yeah, um, basically those are the two things, the caching and the parallel tests, and I think if we do both of those things then the whole thing would take maybe five minutes instead of fourteen, which would be really nice for everybody on the team, I think",
+      "output": "The build is kind of slow right now: it takes about ten minutes every time. I think we could make it a lot faster by caching the dependencies, because right now every run downloads them all again from scratch, which is a huge waste of time. The tests are slow too, about four minutes. We could run them in parallel, split into maybe four groups, and they would probably take about a minute. With both the caching and the parallel tests, the whole thing would take maybe five minutes instead of fourteen, which would be really nice for the team.",
+      "expect": "summarised"
+    },
+    {
+      "id": "polished-summary",
+      "strength": "polished",
+      "input": "so um basically what I wanted to say is that the build is, like, kind of really slow right now, you know, it takes like ten minutes or so every single time, and uh I think that we could maybe make it a lot faster if we, um, if we just cache the dependencies, because right now what happens is that every single time we run it, it downloads all of the dependencies again from scratch, which is, like, a huge waste of time, honestly. and the other thing is, um, the tests, the tests are also kind of slow, I mean they take like four minutes, and I think that we could, you know, run them in parallel, like split them up into maybe four groups or something like that, and then they would probably take about one minute instead. so yeah, um, basically those are the two things, the caching and the parallel tests, and I think if we do both of those things then the whole thing would take maybe five minutes instead of fourteen, which would be really nice for everybody on the team, I think",
+      "output": "The build takes ten minutes and the tests four. Caching dependencies and parallel tests would bring it to five minutes.",
+      "expect": "summarised"
     }
   ]
 }

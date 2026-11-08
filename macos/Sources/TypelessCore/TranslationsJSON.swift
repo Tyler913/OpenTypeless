@@ -1580,6 +1580,69 @@ extension Translations {
     "fr": "Supprime les tics de langage et les faux départs, ajoute paragraphes et listes",
     "de": "Entfernt Füllwörter und Versprecher, fügt Absätze und Listen ein"
   },
+  "Text goes in as recognised": {
+    "ja": "認識したままの文字を入力します",
+    "ko": "인식된 그대로 입력합니다",
+    "es": "El texto se inserta tal como se reconoció",
+    "pt": "O texto entra como foi reconhecido",
+    "ru": "Текст вставляется так, как распознан",
+    "fr": "Le texte est inséré tel que reconnu",
+    "de": "Text wird so eingefügt, wie er erkannt wurde"
+  },
+  "Only punctuation, fillers and clear slips": {
+    "ja": "句読点、言いよどみ、明らかな言い間違いだけを直します",
+    "ko": "문장 부호, 군더더기 말, 분명한 말실수만 고칩니다",
+    "es": "Solo puntuación, muletillas y errores claros",
+    "pt": "Só pontuação, vícios de linguagem e lapsos claros",
+    "ru": "Только пунктуация, слова-паразиты и явные оговорки",
+    "fr": "Ponctuation, tics de langage et lapsus évidents seulement",
+    "de": "Nur Satzzeichen, Füllwörter und klare Versprecher"
+  },
+  "Smooths speech into written prose, same meaning": {
+    "ja": "意味はそのまま、話し言葉を書き言葉に整えます",
+    "ko": "뜻은 그대로 두고 말을 글처럼 다듬습니다",
+    "es": "Convierte el habla en texto escrito, con el mismo sentido",
+    "pt": "Transforma a fala em texto escrito, com o mesmo sentido",
+    "ru": "Превращает речь в письменный текст, не меняя смысла",
+    "fr": "Transforme la parole en texte écrit, sans changer le sens",
+    "de": "Macht aus Gesprochenem geschriebenen Text, mit gleichem Sinn"
+  },
+  "Light": {
+    "ja": "ライト",
+    "ko": "가볍게",
+    "es": "Ligera",
+    "pt": "Leve",
+    "ru": "Лёгкая",
+    "fr": "Légère",
+    "de": "Leicht"
+  },
+  "Standard": {
+    "ja": "標準",
+    "ko": "표준",
+    "es": "Estándar",
+    "pt": "Normal",
+    "ru": "Стандартная",
+    "fr": "Standard",
+    "de": "Normal"
+  },
+  "Polished": {
+    "ja": "仕上げ",
+    "ko": "매끄럽게",
+    "es": "Pulida",
+    "pt": "Polida",
+    "ru": "Тщательная",
+    "fr": "Soignée",
+    "de": "Ausgefeilt"
+  },
+  "Light: punctuation and capitalisation, fillers, stutters and explicit self-corrections, and recognition errors it's sure of; the rest as you said it. Standard: also corrections without a “no wait” and verbal padding, mends what that leaves broken, and adds paragraphs and lists. Polished: also tightens wordy speech and fixes grammar so it reads as written, keeping your meaning and every fact, number and name, and adding nothing. Apps can have their own on the Apps page.": {
+    "ja": "ライト：句読点と大文字小文字、言いよどみ、どもり、はっきりした言い直し、確実な認識ミスだけを直し、ほかは話したとおりにします。標準：さらに「いや」のない言い直しや口癖も取り除き、それで崩れた文を直し、段落やリストに整えます。仕上げ：さらに冗長な話し言葉を簡潔にし、文法を直して、書いた文章のように整えます。意味、事実、数字、名前は変えず、何も付け足しません。アプリごとの設定は「アプリ」ページでできます。",
+    "ko": "가볍게: 문장 부호와 대소문자, 군더더기 말, 더듬은 말, 분명한 말 고침, 확실한 인식 오류만 고치고 나머지는 말한 그대로 둡니다. 표준: 여기에 '아니' 없이 고쳐 말한 부분과 말버릇도 정리하고, 그 때문에 끊긴 문장을 바로잡고, 문단과 목록으로 정리합니다. 매끄럽게: 여기에 장황한 말을 간결하게 줄이고 문법을 고쳐 글처럼 읽히게 합니다. 뜻과 사실, 숫자, 이름은 그대로 두고 아무것도 덧붙이지 않습니다. 앱마다 따로 정하려면 '앱' 페이지에서 설정하세요.",
+    "es": "Ligera: puntuación y mayúsculas, muletillas, tartamudeos, autocorrecciones explícitas y errores de reconocimiento seguros; el resto, tal como lo dijiste. Estándar: además, correcciones sin un «no, espera» y relleno verbal, arregla lo que eso deja roto y añade párrafos y listas. Pulida: además, condensa el habla prolija y corrige la gramática para que se lea como escrito, conservando tu sentido y cada dato, número y nombre, sin añadir nada. Cada app puede tener la suya en la página Apps.",
+    "pt": "Leve: pontuação e maiúsculas, vícios de linguagem, gaguejos, autocorreções explícitas e erros de reconhecimento certos; o resto, como você falou. Normal: também correções sem um “não, pera” e enchimento verbal, conserta o que isso deixa quebrado e adiciona parágrafos e listas. Polida: também enxuga a fala prolixa e corrige a gramática para ler como texto escrito, mantendo seu sentido e cada fato, número e nome, sem acrescentar nada. Cada app pode ter a sua na página Apps.",
+    "ru": "Лёгкая: пунктуация и регистр, слова-паразиты, запинки, явные самоисправления и уверенные ошибки распознавания; остальное — как вы сказали. Стандартная: также исправления без «нет, подожди» и словесный мусор, чинит то, что после этого разваливается, добавляет абзацы и списки. Тщательная: также сжимает многословную речь и исправляет грамматику, чтобы текст читался как написанный, сохраняя смысл и каждый факт, число и имя и ничего не добавляя. Для отдельных приложений — на странице «Приложения».",
+    "fr": "Légère : ponctuation et majuscules, tics de langage, bégaiements, autocorrections explicites et erreurs de reconnaissance sûres ; le reste tel que vous l’avez dit. Standard : aussi les corrections sans « non attends » et le remplissage, répare ce que cela laisse cassé, et ajoute paragraphes et listes. Soignée : resserre aussi la parole verbeuse et corrige la grammaire pour qu’on lise un texte écrit, en gardant votre sens et chaque fait, nombre et nom, sans rien ajouter. Chaque app peut avoir la sienne dans la page Apps.",
+    "de": "Leicht: Satzzeichen und Großschreibung, Füllwörter, Stottern, ausdrückliche Selbstkorrekturen und sichere Erkennungsfehler; der Rest, wie Sie es gesagt haben. Normal: dazu Korrekturen ohne „ach nee“ und Füllfloskeln, repariert, was dadurch kaputtgeht, und fügt Absätze und Listen ein. Ausgefeilt: strafft außerdem weitschweifige Rede und korrigiert die Grammatik, sodass es sich wie geschrieben liest, mit Ihrem Sinn und jeder Tatsache, Zahl und jedem Namen, ohne etwas hinzuzufügen. Apps können auf der Seite Apps eine eigene haben."
+  },
   "Reasoning is turned off or minimised for speed": {
     "ja": "速度を優先し、推論はオフまたは最小になります",
     "ko": "속도를 위해 추론은 끄거나 최소로 설정됩니다",
@@ -5009,23 +5072,14 @@ extension Translations {
     "fr": "Retirer",
     "de": "Entfernen"
   },
-  "Clean-up on": {
-    "ja": "整形：オン",
-    "ko": "다듬기: 켬",
-    "es": "Limpieza activada",
-    "pt": "Limpeza ligada",
-    "ru": "Очистка вкл.",
-    "fr": "Nettoyage activé",
-    "de": "Bereinigung an"
-  },
-  "Clean-up off": {
-    "ja": "整形：オフ",
-    "ko": "다듬기: 끔",
-    "es": "Limpieza desactivada",
-    "pt": "Limpeza desligada",
-    "ru": "Очистка выкл.",
-    "fr": "Nettoyage désactivé",
-    "de": "Bereinigung aus"
+  "Clean-up: {0}": {
+    "ja": "整形：{0}",
+    "ko": "다듬기: {0}",
+    "es": "Limpieza: {0}",
+    "pt": "Limpeza: {0}",
+    "ru": "Очистка: {0}",
+    "fr": "Nettoyage : {0}",
+    "de": "Bereinigung: {0}"
   },
   "Return on": {
     "ja": "Return：オン",
@@ -5161,6 +5215,78 @@ extension Translations {
     "ru": "Отдельные настройки для приложения, например мгновенная отправка в Slack",
     "fr": "Donnez à une app ses propres réglages, comme l’envoi immédiat dans Slack",
     "de": "Eigene Einstellungen für eine App, etwa sofort senden in Slack"
+  },
+  "Recommended settings": {
+    "ja": "おすすめ設定",
+    "ko": "추천 설정",
+    "es": "Ajustes recomendados",
+    "pt": "Configurações recomendadas",
+    "ru": "Рекомендуемые настройки",
+    "fr": "Réglages recommandés",
+    "de": "Empfohlene Einstellungen"
+  },
+  "Recommended settings for common apps": {
+    "ja": "よく使うアプリのおすすめ設定",
+    "ko": "자주 쓰는 앱의 추천 설정",
+    "es": "Ajustes recomendados para apps comunes",
+    "pt": "Configurações recomendadas para apps comuns",
+    "ru": "Рекомендуемые настройки для популярных приложений",
+    "fr": "Réglages recommandés pour les apps courantes",
+    "de": "Empfohlene Einstellungen für gängige Apps"
+  },
+  "Light for chat and code, Polished for email": {
+    "ja": "チャットとコードはライト、メールは仕上げ",
+    "ko": "채팅과 코드는 가볍게, 메일은 매끄럽게",
+    "es": "Ligera para chat y código, Pulida para correo",
+    "pt": "Leve para chat e código, Polida para e-mail",
+    "ru": "Лёгкая для чатов и кода, тщательная для почты",
+    "fr": "Légère pour le chat et le code, Soignée pour l’e-mail",
+    "de": "Leicht für Chat und Code, Ausgefeilt für E-Mail"
+  },
+  "These common apps get the recommended clean-up strength. Only the strength changes, never Return or the spoken language, and nothing while clean-up is off. An app's own profile with a strength set wins.": {
+    "ja": "以下のよく使うアプリには、おすすめの整形の強さが自動で使われます。変わるのは強さだけで、Return キーや話す言語は変わらず、整形がオフのときは何もしません。アプリの設定で強さを決めていれば、そちらが優先されます。",
+    "ko": "아래의 자주 쓰는 앱에는 추천 다듬기 강도가 자동으로 쓰입니다. 강도만 바뀌고 Return 키나 말하는 언어는 바뀌지 않으며, 다듬기가 꺼져 있으면 아무 것도 하지 않습니다. 앱 설정에서 강도를 정했다면 그 설정이 우선합니다.",
+    "es": "Estas apps comunes usan la intensidad de limpieza recomendada. Solo cambia la intensidad, nunca Retorno ni el idioma hablado, y nada mientras la limpieza esté desactivada. El perfil propio de una app con una intensidad elegida tiene prioridad.",
+    "pt": "Estes apps comuns usam a intensidade de limpeza recomendada. Só a intensidade muda, nunca o Return nem o idioma falado, e nada enquanto a limpeza estiver desligada. O perfil próprio de um app com uma intensidade definida tem prioridade.",
+    "ru": "Эти популярные приложения получают рекомендуемую степень очистки. Меняется только степень — никогда не Return и не язык речи, а при выключенной очистке ничего. Собственный профиль приложения с заданной степенью важнее.",
+    "fr": "Ces apps courantes reçoivent l’intensité de nettoyage recommandée. Seule l’intensité change, jamais Retour ni la langue parlée, et rien quand le nettoyage est désactivé. Le profil propre d’une app avec une intensité choisie l’emporte.",
+    "de": "Diese gängigen Apps bekommen die empfohlene Bereinigungsstufe. Nur die Stufe ändert sich, nie Return oder die gesprochene Sprache, und nichts, solange die Bereinigung aus ist. Das eigene Profil einer App mit gesetzter Stufe hat Vorrang."
+  },
+  "These common apps get the recommended clean-up strength. Only the strength changes, never Enter or the spoken language, and nothing while clean-up is off. An app's own profile with a strength set wins.": {
+    "ja": "以下のよく使うアプリには、おすすめの整形の強さが自動で使われます。変わるのは強さだけで、Enter キーや話す言語は変わらず、整形がオフのときは何もしません。アプリの設定で強さを決めていれば、そちらが優先されます。",
+    "ko": "아래의 자주 쓰는 앱에는 추천 다듬기 강도가 자동으로 쓰입니다. 강도만 바뀌고 Enter 키나 말하는 언어는 바뀌지 않으며, 다듬기가 꺼져 있으면 아무 것도 하지 않습니다. 앱 설정에서 강도를 정했다면 그 설정이 우선합니다.",
+    "es": "Estas apps comunes usan la intensidad de limpieza recomendada. Solo cambia la intensidad, nunca Intro ni el idioma hablado, y nada mientras la limpieza esté desactivada. El perfil propio de una app con una intensidad elegida tiene prioridad.",
+    "pt": "Estes apps comuns usam a intensidade de limpeza recomendada. Só a intensidade muda, nunca o Enter nem o idioma falado, e nada enquanto a limpeza estiver desligada. O perfil próprio de um app com uma intensidade definida tem prioridade.",
+    "ru": "Эти популярные приложения получают рекомендуемую степень очистки. Меняется только степень — никогда не Enter и не язык речи, а при выключенной очистке ничего. Собственный профиль приложения с заданной степенью важнее.",
+    "fr": "Ces apps courantes reçoivent l’intensité de nettoyage recommandée. Seule l’intensité change, jamais Entrée ni la langue parlée, et rien quand le nettoyage est désactivé. Le profil propre d’une app avec une intensité choisie l’emporte.",
+    "de": "Diese gängigen Apps bekommen die empfohlene Bereinigungsstufe. Nur die Stufe ändert sich, nie Eingabe oder die gesprochene Sprache, und nichts, solange die Bereinigung aus ist. Das eigene Profil einer App mit gesetzter Stufe hat Vorrang."
+  },
+  "Chat apps": {
+    "ja": "チャットアプリ",
+    "ko": "채팅 앱",
+    "es": "Apps de chat",
+    "pt": "Apps de chat",
+    "ru": "Мессенджеры",
+    "fr": "Apps de discussion",
+    "de": "Chat-Apps"
+  },
+  "Terminals and code editors": {
+    "ja": "ターミナルとコードエディタ",
+    "ko": "터미널과 코드 편집기",
+    "es": "Terminales y editores de código",
+    "pt": "Terminais e editores de código",
+    "ru": "Терминалы и редакторы кода",
+    "fr": "Terminaux et éditeurs de code",
+    "de": "Terminals und Code-Editoren"
+  },
+  "Recommended: {0}": {
+    "ja": "おすすめ設定：{0}",
+    "ko": "추천 설정: {0}",
+    "es": "Recomendado: {0}",
+    "pt": "Recomendado: {0}",
+    "ru": "Рекомендуемая: {0}",
+    "fr": "Recommandé : {0}",
+    "de": "Empfohlen: {0}"
   },
   "Names, products, projects, separated by commas or lines": {
     "ja": "人名、製品名、プロジェクト名をカンマか改行で区切って入力",

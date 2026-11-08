@@ -34,6 +34,9 @@ public class PromptVariantTests
         Prompts.SurroundingNote,
         Prompts.PolishReminder,
         Prompts.ContextNote,
+        Prompts.StrengthSection(PolishStrength.Light)!,
+        Prompts.StrengthSection(PolishStrength.Polished)!,
+        Prompts.PolishedReminder,
     ]));
 
     /// <summary>The macOS app sends the same text: the fixture holds its hash.</summary>
@@ -95,6 +98,67 @@ public class PromptVariantTests
         }
         Assert.Null(Prompts.LanguageExamples("zh"));
         Assert.Null(Prompts.LanguageExamples(null));
+    }
+
+    /// <summary>
+    /// A strength's section goes after the prompt and the spoken language's examples, before the layout, so every strength
+    /// shares the prompt's start; the standard strength is the prompt as it was.
+    /// </summary>
+    [Fact]
+    public void StrengthSectionsGoAfterTheSharedStart()
+    {
+        Assert.Null(Prompts.StrengthSection(PolishStrength.Standard));
+        Assert.Null(Prompts.StrengthSection(PolishStrength.Off));
+        var standard = Prompts.PolishSystemPrompt(["Claude"], "Short", layout: TextLayout.Chat, exampleLanguage: "ja");
+        Assert.Equal(standard, Prompts.PolishSystemPrompt(["Claude"], "Short", layout: TextLayout.Chat, exampleLanguage: "ja",
+                                                          strength: PolishStrength.Standard));
+        foreach (var strength in new[] { PolishStrength.Light, PolishStrength.Polished })
+        {
+            var section = Prompts.StrengthSection(strength)!;
+            var prompt = Prompts.PolishSystemPrompt(["Claude"], "Short", layout: TextLayout.Chat, exampleLanguage: "ja", strength: strength);
+            Assert.StartsWith(Prompts.BasePolishPrompt + "\n\n" + Prompts.LanguageExamples("ja") + "\n\n" + section + "\n\n"
+                              + Prompts.LayoutSection(TextLayout.Chat), prompt);
+            Assert.EndsWith("## Additional preferences from the speaker\nShort", prompt);
+        }
+        // Only a polished clean-up has a reminder of its own: "minimal edits" would take back what its section allows.
+        Assert.Equal(Prompts.PolishUserMessage("x"), Prompts.PolishUserMessage("x", strength: PolishStrength.Light));
+        Assert.EndsWith(Prompts.PolishedReminder, Prompts.PolishUserMessage("x", strength: PolishStrength.Polished));
+        Assert.Equal("Hi.", Prompts.SanitizePolishOutput("Hi.\n" + Prompts.PolishedReminder, Prompts.Reminder(null, PolishStrength.Polished)));
+        // A translation has no strength.
+        var target = TranslationTarget.From("en")!;
+        Assert.Equal(Prompts.Reminder(target), Prompts.Reminder(target, PolishStrength.Polished));
+    }
+
+    /// <summary>The request a clean-up at each strength sends.</summary>
+    [Fact]
+    public void StrengthReachesTheRequest()
+    {
+        var polished = ApiClient.PolishMessages("so um the build is slow", new PolishOptions("m", Strength: PolishStrength.Polished));
+        Assert.Contains(Prompts.PolishedStrengthSection, polished[0]);
+        Assert.EndsWith(Prompts.PolishedReminder, polished[1]);
+        var light = ApiClient.PolishMessages("so um the build is slow", new PolishOptions("m", Strength: PolishStrength.Light));
+        Assert.Contains(Prompts.LightStrengthSection, light[0]);
+        Assert.DoesNotContain(Prompts.PolishedStrengthSection, light[0]);
+        Assert.EndsWith(Prompts.PolishReminder, light[1]);
+        var translation = ApiClient.PolishMessages("x", new PolishOptions("m", Translation: TranslationTarget.From("zh-Hans"),
+                                                                          Strength: PolishStrength.Light));
+        Assert.DoesNotContain("## Strength", translation[0]);
+    }
+
+    /// <summary>Each strength's examples are clean-ups at that strength: the guards let them through, with no stock phrases.</summary>
+    [Fact]
+    public void StrengthExamplesPass()
+    {
+        foreach (var strength in new[] { PolishStrength.Light, PolishStrength.Polished })
+        {
+            var examples = PolishGuardTests.Examples("## Examples\n" + Prompts.StrengthSection(strength));
+            Assert.Equal(2, examples.Count);
+            foreach (var (input, output) in examples)
+            {
+                Assert.True(Prompts.Fallback(input, output, truncated: false, strength: strength) == null, input);
+                Assert.Empty(PolishChecks.AddedStockPhrases(input, output));
+            }
+        }
     }
 
     [Fact]

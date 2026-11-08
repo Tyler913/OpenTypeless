@@ -613,6 +613,11 @@ public sealed class HistoryPage : PageBase
         }
         // The app profile it was made with, if any.
         if (record.ProfileName is { } profile) details.Add(profile);
+        if (AppCategories.From(record.Recommendation) is { } kind)
+        {
+            var strength = kind.Strength().DisplayName();
+            details.Add(L($"推荐设置：{strength}", $"Recommended: {strength}"));
+        }
         // Recognised on this PC while the network was down: Re-transcribe asks the provider again.
         if (record.OnDeviceChunks is { Count: > 0 }) details.Add(L("本机识别（离线）", "On-device (offline)"));
 

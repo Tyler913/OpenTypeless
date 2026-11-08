@@ -1032,9 +1032,14 @@ struct ModelsPage: View {
             }
 
             CardSection(title: L("文字整理", "Clean-up")) {
-                CardRow(title: L("用 AI 整理文字", "Clean up with AI"),
-                        subtitle: L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists"),
-                        isOn: $settings.polishEnabled)
+                CardRow(title: L("用 AI 整理文字", "Clean up with AI"), subtitle: Self.strengthSubtitle(settings.polishStrength),
+                        help: Self.strengthHelp) {
+                    Picker(L("用 AI 整理文字", "Clean up with AI"), selection: $settings.polishStrength) {
+                        ForEach(PolishStrength.allCases) { Text($0.displayName).tag($0) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
                 if settings.polishEnabled {
                     CardDivider()
                     CardRow(title: L("服务商", "Provider")) {
@@ -1132,6 +1137,21 @@ struct ModelsPage: View {
 
     private var hedgeDelayLabel: String {
         HedgedPolish.defaultHedgeDelay.formatted(.number.precision(.fractionLength(0...2))) + L(" 秒", " s")
+    }
+
+    /// What the clean-up does at `strength`, in a line.
+    static func strengthSubtitle(_ strength: PolishStrength) -> String {
+        switch strength {
+        case .off: return L("按识别结果直接插入", "Text goes in as recognised")
+        case .light: return L("只修标点、口头禅和明确的口误", "Only punctuation, fillers and clear slips")
+        case .standard: return L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists")
+        case .polished: return L("把口语顺成书面文字，意思不变", "Smooths speech into written prose, same meaning")
+        }
+    }
+
+    static var strengthHelp: String {
+        L("轻度：改标点和大小写，去掉口头禅、结巴和明确的自我修正，修正有把握的识别错误，其余照你说的。标准：还会处理没说「不对」的改口和说话时的赘词，补好因此断开的句子，分段、整理成列表。润色：还会把啰嗦的口语改得简洁通顺、修正语法，读起来像写的一样；意思、事实、数字和名字不变，也不添内容。在「应用」页可以给某个应用单独设置。",
+          "Light: punctuation and capitalisation, fillers, stutters and explicit self-corrections, and recognition errors it's sure of; the rest as you said it. Standard: also corrections without a “no wait” and verbal padding, mends what that leaves broken, and adds paragraphs and lists. Polished: also tightens wordy speech and fixes grammar so it reads as written, keeping your meaning and every fact, number and name, and adding nothing. Apps can have their own on the Apps page.")
     }
 
     private func setupBanner(for id: ProviderID) -> some View {

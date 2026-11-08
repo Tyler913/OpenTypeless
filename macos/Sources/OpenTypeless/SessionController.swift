@@ -577,6 +577,7 @@ final class SessionController: ObservableObject {
         record.status = .recording
         record.profileID = dictation.profileID
         record.profileName = dictation.profileName
+        record.recommendation = dictation.recommendation?.rawValue
         record.chunkLanguage = dictation.language
         history.update(record)
 
@@ -645,6 +646,7 @@ final class SessionController: ObservableObject {
         self.counter = counter
         dictationSettings = dictation
         if let name = dictation.profileName { note("app profile: \(name)") }
+        if let kind = dictation.recommendation { note("recommended settings: \(kind.rawValue)") }
         deliverByPaste = true
         self.pressedAt = pressedAt
         handsFree = false
@@ -1571,11 +1573,11 @@ final class SessionController: ObservableObject {
         let instructions = dictation.extraInstructions
         let primary = route(endpoint, model: settings.polishModel, instructions: instructions, translation: translation,
                             context: context, sent: sent, dictatedLineBreaks: dictatedLineBreaks, forFile: forFile,
-                            layout: dictation.layout, spokenLanguage: dictation.language)
+                            layout: dictation.layout, spokenLanguage: dictation.language, strength: dictation.strength)
         let backup = settings.polishBackupEndpoint.map {
             route($0, model: settings.polishBackupModel, instructions: instructions, translation: translation,
                   context: context, sent: sent, dictatedLineBreaks: dictatedLineBreaks, forFile: forFile,
-                  layout: dictation.layout, spokenLanguage: dictation.language)
+                  layout: dictation.layout, spokenLanguage: dictation.language, strength: dictation.strength)
         }
         return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup,
                                              concurrency: forFile ? FileTranscription.cleanUpConcurrency : nil,
@@ -1585,7 +1587,7 @@ final class SessionController: ObservableObject {
     private func route(_ endpoint: ProviderEndpoint, model: String, instructions: String, translation: TranslationTarget?,
                        selection: String? = nil, context: String? = nil, sent: ContextSent? = nil,
                        dictatedLineBreaks: Bool = false, forFile: Bool = false, layout: TextLayout = .natural,
-                       spokenLanguage: String = "") -> PolishRoute {
+                       spokenLanguage: String = "", strength: PolishStrength = .standard) -> PolishRoute {
         let model = model.trimmingCharacters(in: .whitespaces)
         return PolishRoute(client: forFile ? .forFiles(endpoint: endpoint) : APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
@@ -1600,7 +1602,8 @@ final class SessionController: ObservableObject {
             onContextSent: { sent?.mark() },
             dictatedLineBreaks: dictatedLineBreaks,
             layout: layout,
-            spokenLanguage: spokenLanguage
+            spokenLanguage: spokenLanguage,
+            strength: strength
         ))
     }
 
@@ -1797,12 +1800,13 @@ final class SessionController: ObservableObject {
         // A cancelled recording still being transcribed in the background is this run's now.
         keptInBackground.remove(saved.id)
         // The app profile it was made with, while that still exists; the global settings otherwise.
-        let dictation = settings.dictationSettings(profileID: saved.profileID)
+        let dictation = settings.dictationSettings(profileID: saved.profileID, recommendation: saved.recommendation)
         var record = saved
         record.status = .processing
         record.error = nil
         record.profileID = dictation.profileID
         record.profileName = dictation.profileName
+        record.recommendation = dictation.recommendation?.rawValue
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again, and
         // transcribed with the same language hint (a profile, or the global setting, may have changed it since).
         let saves = dictation.reusesTranscripts(layout: saved.chunkLayout, language: saved.chunkLanguage)

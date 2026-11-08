@@ -73,6 +73,10 @@ enum PolishEval {
             }
             let catalog = (try JSONSerialization.jsonObject(with: catalogData) as? [String: Any])?["data"] as? [[String: Any]] ?? []
             let prompt = try value("--prompt-file").map { try String(contentsOfFile: $0, encoding: .utf8) }
+            // How heavily every case is cleaned up (see `PolishStrength`); the app's default without it.
+            guard let strength = PolishStrength(rawValue: value("--strength") ?? "standard"), strength != .off else {
+                throw APIError.badResponse("--strength must be light, standard or polished")
+            }
             let providerTag = value("--provider-tag")
             let providerRouting = try value("--provider-routing").map { json -> [String: Any] in
                 guard let object = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else {
@@ -123,6 +127,7 @@ enum PolishEval {
                         caseOptions.context = c.context
                         caseOptions.layout = c.textLayout
                         caseOptions.spokenLanguage = c.language ?? ""
+                        caseOptions.strength = strength
                         let plan = try client.evaluationPlan(transcript: c.input, options: caseOptions,
                                                             promptPrice: price.0, completionPrice: price.1, providerTag: providerTag,
                                                             providerRouting: providerRouting)
@@ -163,7 +168,8 @@ enum PolishEval {
                 let fallback = if let translation {
                     Prompts.translationFallback(input: c.input, output: attempt.output, truncated: false, target: translation)
                 } else {
-                    Prompts.fallback(input: c.input, output: attempt.output, truncated: false, context: c.context)
+                    Prompts.fallback(input: c.input, output: attempt.output, truncated: false, context: c.context,
+                                     strength: strength)
                 }
                 if !attempt.output.isEmpty, let fallback { failures.append("the app would reject it: \(fallback.rawValue)") }
                 if attempt.truncated { failures.append("truncated") }

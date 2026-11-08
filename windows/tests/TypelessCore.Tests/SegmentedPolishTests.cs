@@ -63,9 +63,19 @@ public class PolishGuardTests
         foreach (var node in cases)
         {
             var expected = (string?)node!["expect"];
-            var actual = Prompts.Fallback((string)node["input"]!, (string)node["output"]!, truncated: false, (string?)node["context"])
-                ?.ToString().ToLowerInvariant();
+            var strength = PolishStrengths.From((string?)node["strength"] ?? "standard");
+            Assert.True(strength is not null, $"{node["id"]}: unknown strength");
+            var actual = Prompts.Fallback((string)node["input"]!, (string)node["output"]!, truncated: false, (string?)node["context"],
+                                          strength!.Value)?.ToString().ToLowerInvariant();
             Assert.True(expected == actual, $"{node["id"]}: expected {expected ?? "null"}, got {actual ?? "null"}");
+            // What no clean-up may insert (an answer, a translation, text copied from the context), a polished one may not
+            // either: only a summary is told apart by how much a strength shortens.
+            if (node["strength"] is null && expected is { } rejected && rejected != "summarised")
+            {
+                var polished = Prompts.Fallback((string)node["input"]!, (string)node["output"]!, truncated: false, (string?)node["context"],
+                                                PolishStrength.Polished)?.ToString().ToLowerInvariant();
+                Assert.True(rejected == polished, $"{node["id"]}, polished: expected {rejected}, got {polished ?? "null"}");
+            }
         }
     }
 

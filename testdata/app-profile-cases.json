@@ -18,40 +18,80 @@
   "resolution": [
     {
       "name": "no profile: the global settings as they are",
-      "global": { "polishEnabled": true, "pressEnter": false, "language": "", "extraInstructions": "Keep my casual tone" },
+      "global": { "strength": "standard", "pressEnter": false, "language": "", "extraInstructions": "Keep my casual tone" },
       "profile": null,
-      "expected": { "polishEnabled": true, "pressEnter": false, "language": "", "extraInstructions": "Keep my casual tone", "profileID": null, "profileName": null }
+      "expected": { "strength": "standard", "pressEnter": false, "language": "", "extraInstructions": "Keep my casual tone", "profileID": null, "profileName": null }
     },
     {
       "name": "a profile that sets nothing still names itself",
-      "global": { "polishEnabled": true, "pressEnter": false, "language": "zh", "extraInstructions": "" },
+      "global": { "strength": "light", "pressEnter": false, "language": "zh", "extraInstructions": "" },
       "profile": { "id": "P1", "app": "com.apple.mail", "name": "Mail" },
-      "expected": { "polishEnabled": true, "pressEnter": false, "language": "zh", "extraInstructions": "", "profileID": "P1", "profileName": "Mail" }
+      "expected": { "strength": "light", "pressEnter": false, "language": "zh", "extraInstructions": "", "profileID": "P1", "profileName": "Mail" }
     },
     {
-      "name": "every override",
-      "global": { "polishEnabled": true, "pressEnter": false, "language": "", "extraInstructions": "" },
+      "name": "every override, clean-up off as older versions saved it",
+      "global": { "strength": "standard", "pressEnter": false, "language": "", "extraInstructions": "" },
       "profile": { "id": "P2", "app": "slack.exe", "name": "Slack", "polish": false, "pressEnter": true, "language": "en", "instructions": "Short messages" },
-      "expected": { "polishEnabled": false, "pressEnter": true, "language": "en", "extraInstructions": "Short messages", "profileID": "P2", "profileName": "Slack" }
+      "expected": { "strength": "off", "pressEnter": true, "language": "en", "extraInstructions": "Short messages", "profileID": "P2", "profileName": "Slack" }
     },
     {
-      "name": "the app's preferences come after the global ones",
-      "global": { "polishEnabled": false, "pressEnter": true, "language": "en", "extraInstructions": "  Never use bullet lists\n" },
+      "name": "the app's preferences come after the global ones; clean-up on as older versions saved it is the standard strength",
+      "global": { "strength": "off", "pressEnter": true, "language": "en", "extraInstructions": "  Never use bullet lists\n" },
       "profile": { "id": "P3", "app": "com.microsoft.Outlook", "name": "Outlook", "polish": true, "pressEnter": false, "instructions": "\nUse a formal tone  " },
-      "expected": { "polishEnabled": true, "pressEnter": false, "language": "en", "extraInstructions": "Never use bullet lists\nUse a formal tone", "profileID": "P3", "profileName": "Outlook" }
+      "expected": { "strength": "standard", "pressEnter": false, "language": "en", "extraInstructions": "Never use bullet lists\nUse a formal tone", "profileID": "P3", "profileName": "Outlook" }
     },
     {
       "name": "auto-detect overrides a fixed global language",
-      "global": { "polishEnabled": true, "pressEnter": false, "language": "zh", "extraInstructions": "Keep technical terms lowercase" },
+      "global": { "strength": "standard", "pressEnter": false, "language": "zh", "extraInstructions": "Keep technical terms lowercase" },
       "profile": { "id": "P4", "app": "code.exe", "name": "Visual Studio Code", "language": "", "instructions": "   " },
-      "expected": { "polishEnabled": true, "pressEnter": false, "language": "", "extraInstructions": "Keep technical terms lowercase", "profileID": "P4", "profileName": "Visual Studio Code" }
+      "expected": { "strength": "standard", "pressEnter": false, "language": "", "extraInstructions": "Keep technical terms lowercase", "profileID": "P4", "profileName": "Visual Studio Code" }
     },
     {
       "name": "fields of the wrong type or unknown fields count as unset; a missing name is the app",
-      "global": { "polishEnabled": true, "pressEnter": true, "language": "ja", "extraInstructions": "" },
-      "profile": { "id": "P5", "app": "wechat.exe", "polish": "no", "pressEnter": null, "language": 7, "website": "example.com" },
-      "expected": { "polishEnabled": true, "pressEnter": true, "language": "ja", "extraInstructions": "", "profileID": "P5", "profileName": "wechat.exe" }
+      "global": { "strength": "polished", "pressEnter": true, "language": "ja", "extraInstructions": "" },
+      "profile": { "id": "P5", "app": "wechat.exe", "polish": "no", "strength": 2, "pressEnter": null, "language": 7, "website": "example.com" },
+      "expected": { "strength": "polished", "pressEnter": true, "language": "ja", "extraInstructions": "", "profileID": "P5", "profileName": "wechat.exe" }
+    },
+    {
+      "name": "a profile's strength overrides the global one",
+      "global": { "strength": "standard", "pressEnter": false, "language": "", "extraInstructions": "" },
+      "profile": { "id": "P6", "app": "olk.exe", "name": "Outlook", "polish": true, "strength": "polished" },
+      "expected": { "strength": "polished", "pressEnter": false, "language": "", "extraInstructions": "", "profileID": "P6", "profileName": "Outlook" }
+    },
+    {
+      "name": "a profile turns clean-up on at its strength where it's off globally",
+      "global": { "strength": "off", "pressEnter": false, "language": "", "extraInstructions": "" },
+      "profile": { "id": "P7", "app": "notes.exe", "name": "Notes", "polish": true, "strength": "light" },
+      "expected": { "strength": "light", "pressEnter": false, "language": "", "extraInstructions": "", "profileID": "P7", "profileName": "Notes" }
     }
+  ],
+  "stored": [
+    { "name": "before strengths: on is the standard strength", "enabled": true, "level": null, "expected": "standard" },
+    { "name": "before strengths: off", "enabled": false, "level": null, "expected": "off" },
+    { "name": "a level", "enabled": true, "level": "light", "expected": "light" },
+    { "name": "polished", "enabled": true, "level": "polished", "expected": "polished" },
+    { "name": "an older version switched it off", "enabled": false, "level": "polished", "expected": "off" },
+    { "name": "an older version switched it back on", "enabled": true, "level": "off", "expected": "standard" },
+    { "name": "a level this version doesn't know", "enabled": true, "level": "maximum", "expected": "standard" },
+    { "name": "a profile that follows the global setting", "enabled": null, "level": null, "expected": null },
+    { "name": "a level saved without the switch", "enabled": null, "level": "light", "expected": "light" },
+    { "name": "off saved without the switch", "enabled": null, "level": "off", "expected": "off" },
+    { "name": "an unknown level without the switch", "enabled": null, "level": "maximum", "expected": null }
+  ],
+  "strengths": [
+    { "name": "a chat app gets light", "global": "standard", "recommendations": true, "app": "com.tinyspeck.slackmacgap", "profile": null, "expected": "light", "recommendation": "chat" },
+    { "name": "found by its executable, however it's spelled", "global": "standard", "recommendations": true, "app": "WeChat.EXE", "profile": null, "expected": "light", "recommendation": "chat" },
+    { "name": "a mail app gets polished", "global": "standard", "recommendations": true, "app": "olk.exe", "profile": null, "expected": "polished", "recommendation": "email" },
+    { "name": "a terminal gets light", "global": "standard", "recommendations": true, "app": "WindowsTerminal.exe", "profile": null, "expected": "light", "recommendation": "code" },
+    { "name": "the recommendation beats the global strength", "global": "light", "recommendations": true, "app": "com.apple.mail", "profile": null, "expected": "polished", "recommendation": "email" },
+    { "name": "an app not in the table keeps the global strength", "global": "polished", "recommendations": true, "app": "chrome.exe", "profile": null, "expected": "polished", "recommendation": null },
+    { "name": "the app unknown", "global": "standard", "recommendations": true, "app": null, "profile": null, "expected": "standard", "recommendation": null },
+    { "name": "recommendations switched off", "global": "standard", "recommendations": false, "app": "slack.exe", "profile": null, "expected": "standard", "recommendation": null },
+    { "name": "clean-up off: a recommendation never turns it on", "global": "off", "recommendations": true, "app": "slack.exe", "profile": null, "expected": "off", "recommendation": null },
+    { "name": "the app's profile with a strength wins", "global": "standard", "recommendations": true, "app": "slack.exe", "profile": { "id": "P1", "app": "slack.exe", "name": "Slack", "polish": true, "strength": "standard" }, "expected": "standard", "recommendation": null },
+    { "name": "a profile turning clean-up off wins", "global": "standard", "recommendations": true, "app": "com.apple.mail", "profile": { "id": "P2", "app": "com.apple.mail", "name": "Mail", "polish": false }, "expected": "off", "recommendation": null },
+    { "name": "a profile that leaves the strength on Default keeps the recommendation", "global": "standard", "recommendations": true, "app": "slack.exe", "profile": { "id": "P3", "app": "slack.exe", "name": "Slack", "pressEnter": true }, "expected": "light", "recommendation": "chat" },
+    { "name": "a profile on Default with clean-up off globally", "global": "off", "recommendations": true, "app": "slack.exe", "profile": { "id": "P4", "app": "slack.exe", "name": "Slack" }, "expected": "off", "recommendation": null }
   ],
   "lists": [
     {
@@ -95,5 +135,87 @@
     { "name": "saved before the language was kept, auto-detect now", "sameLayout": true, "saved": null, "language": "", "expected": true },
     { "name": "saved before the language was kept, a language now", "sameLayout": true, "saved": null, "language": "en", "expected": false },
     { "name": "cut into different chunks", "sameLayout": false, "saved": "en", "language": "en", "expected": false }
-  ]
+  ],
+  "recommendedApps": {
+    "com.tinyspeck.slackmacgap": "chat",
+    "slack": "chat",
+    "com.tencent.xinwechat": "chat",
+    "wechat": "chat",
+    "weixin": "chat",
+    "com.tencent.qq": "chat",
+    "qq": "chat",
+    "com.hnc.discord": "chat",
+    "discord": "chat",
+    "ru.keepcoder.telegram": "chat",
+    "org.telegram.desktop": "chat",
+    "telegram": "chat",
+    "net.whatsapp.whatsapp": "chat",
+    "desktop.whatsapp": "chat",
+    "whatsapp": "chat",
+    "whatsapp.root": "chat",
+    "com.apple.mobilesms": "chat",
+    "org.whispersystems.signal-desktop": "chat",
+    "signal": "chat",
+    "jp.naver.line.mac": "chat",
+    "line": "chat",
+    "com.microsoft.teams2": "chat",
+    "com.microsoft.teams": "chat",
+    "ms-teams": "chat",
+    "teams": "chat",
+    "com.electron.lark": "chat",
+    "feishu": "chat",
+    "lark": "chat",
+    "com.alibaba.dingtalkmac": "chat",
+    "dingtalk": "chat",
+    "com.kakao.kakaotalkmac": "chat",
+    "kakaotalk": "chat",
+    "com.apple.mail": "email",
+    "com.microsoft.outlook": "email",
+    "outlook": "email",
+    "olk": "email",
+    "com.readdle.smartemail-mac": "email",
+    "com.readdle.sparkdesktop": "email",
+    "spark": "email",
+    "org.mozilla.thunderbird": "email",
+    "thunderbird": "email",
+    "com.tencent.foxmail": "email",
+    "foxmail": "email",
+    "com.apple.terminal": "code",
+    "com.googlecode.iterm2": "code",
+    "dev.warp.warp-stable": "code",
+    "warp": "code",
+    "com.mitchellh.ghostty": "code",
+    "ghostty": "code",
+    "windowsterminal": "code",
+    "com.microsoft.vscode": "code",
+    "code": "code",
+    "com.todesktop.230313mzl4w4u92": "code",
+    "cursor": "code",
+    "com.apple.dt.xcode": "code",
+    "com.jetbrains.intellij": "code",
+    "com.jetbrains.intellij.ce": "code",
+    "com.jetbrains.pycharm": "code",
+    "com.jetbrains.pycharm.ce": "code",
+    "com.jetbrains.webstorm": "code",
+    "com.jetbrains.goland": "code",
+    "com.jetbrains.clion": "code",
+    "com.jetbrains.rider": "code",
+    "com.jetbrains.phpstorm": "code",
+    "com.jetbrains.rubymine": "code",
+    "com.jetbrains.datagrip": "code",
+    "com.jetbrains.rustrover": "code",
+    "idea64": "code",
+    "pycharm64": "code",
+    "webstorm64": "code",
+    "goland64": "code",
+    "clion64": "code",
+    "rider64": "code",
+    "phpstorm64": "code",
+    "rubymine64": "code",
+    "datagrip64": "code",
+    "rustrover64": "code",
+    "dev.zed.zed": "code",
+    "zed": "code"
+  },
+  "notRecommended": ["com.apple.Safari", "chrome.exe", "com.tinyspeck.slackmacgap.helper", "slack.exe.bak", "notepad.exe", "", ".exe"]
 }

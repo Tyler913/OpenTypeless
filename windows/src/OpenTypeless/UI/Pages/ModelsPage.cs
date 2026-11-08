@@ -12,6 +12,7 @@ public sealed class ModelsPage : PageBase
 {
     private static readonly HashSet<string> StructuralProperties =
         [nameof(AppSettings.SpeechEngine), nameof(AppSettings.SttProvider), nameof(AppSettings.PolishProvider), nameof(AppSettings.PolishEnabled),
+         nameof(AppSettings.PolishStrength),
          nameof(AppSettings.PolishBackupEnabled), nameof(AppSettings.PolishBackupProvider), "ApiKeys", "BaseUrls",
          nameof(AppSettings.SttBackupEnabled), nameof(AppSettings.SttBackupProvider), nameof(AppSettings.SpendLimitEnabled),
          nameof(AppSettings.OnDeviceWhenOffline)];
@@ -267,13 +268,21 @@ public sealed class ModelsPage : PageBase
         else if (_settings.SttBackupEnabled && !_settings.IsConfigured(_settings.SttBackupProvider)) Body.Children.Add(SetupBanner(_settings.SttBackupProvider));
 
         var polish = new CardSection { Title = L("文字整理", "Clean-up") };
-        var enabled = new ToggleSwitch { IsOn = _settings.PolishEnabled, OnContent = "", OffContent = "", MinWidth = 0 };
-        enabled.Toggled += (_, _) => _settings.PolishEnabled = enabled.IsOn;
+        var strengths = PolishStrengths.All;
+        var strengthPicker = new ComboBox { MinWidth = 150 };
+        foreach (var strength in strengths) strengthPicker.Items.Add(strength.DisplayName());
+        strengthPicker.SelectedIndex = Math.Max(0, Array.IndexOf(strengths, _settings.PolishStrength));
+        strengthPicker.SelectionChanged += (_, _) =>
+        {
+            if (strengthPicker.SelectedIndex >= 0) _settings.PolishStrength = strengths[strengthPicker.SelectedIndex];
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(strengthPicker, L("用 AI 整理文字", "Clean up with AI"));
         polish.Body.Add(new CardRow
         {
             Glyph = Glyphs.Sparkle, Title = L("用 AI 整理文字", "Clean up with AI"),
-            Subtitle = L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists"),
-            Trailing = enabled,
+            Subtitle = StrengthSubtitle(_settings.PolishStrength),
+            Help = StrengthHelp,
+            Trailing = strengthPicker,
         });
         if (_settings.PolishEnabled)
         {
@@ -424,6 +433,19 @@ public sealed class ModelsPage : PageBase
     }
 
     /// <param name="extra">A choice above the providers (on-device recognition), and whether it's the one made.</param>
+    /// <summary>What the clean-up does at <paramref name="strength"/>, in a line.</summary>
+    private static string StrengthSubtitle(PolishStrength strength) => strength switch
+    {
+        PolishStrength.Off => L("按识别结果直接插入", "Text goes in as recognised"),
+        PolishStrength.Light => L("只修标点、口头禅和明确的口误", "Only punctuation, fillers and clear slips"),
+        PolishStrength.Polished => L("把口语顺成书面文字，意思不变", "Smooths speech into written prose, same meaning"),
+        _ => L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists"),
+    };
+
+    private static string StrengthHelp =>
+        L("轻度：改标点和大小写，去掉口头禅、结巴和明确的自我修正，修正有把握的识别错误，其余照你说的。标准：还会处理没说「不对」的改口和说话时的赘词，补好因此断开的句子，分段、整理成列表。润色：还会把啰嗦的口语改得简洁通顺、修正语法，读起来像写的一样；意思、事实、数字和名字不变，也不添内容。在「应用」页可以给某个应用单独设置。",
+          "Light: punctuation and capitalisation, fillers, stutters and explicit self-corrections, and recognition errors it's sure of; the rest as you said it. Standard: also corrections without a “no wait” and verbal padding, mends what that leaves broken, and adds paragraphs and lists. Polished: also tightens wordy speech and fixes grammar so it reads as written, keeping your meaning and every fact, number and name, and adding nothing. Apps can have their own on the Apps page.");
+
     private DropDownButton ProviderPicker(ProviderId selection, IEnumerable<ProviderId> options, Action<ProviderId> onSelect,
                                           (string Label, bool Chosen, Action Choose)? extra = null)
     {

@@ -171,10 +171,28 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("polishModel", value);
     }
 
+    /// <summary>
+    /// Whether dictations are cleaned up; <see cref="PolishStrength"/> says how heavily, and is what Settings changes. Kept,
+    /// and kept in step, for older versions, which only know this switch.
+    /// </summary>
     public bool PolishEnabled
     {
         get => GetBool("polishEnabled", true);
         set => SetValue("polishEnabled", value);
+    }
+
+    /// <summary>
+    /// How heavily dictations are cleaned up, as far as the global settings go: <see cref="PolishEnabled"/> with the level
+    /// saved next to it (see <see cref="PolishStrengths.Stored"/>).
+    /// </summary>
+    public PolishStrength PolishStrength
+    {
+        get => PolishStrengths.Stored(PolishEnabled, GetString("polishStrength", "")) ?? TypelessCore.PolishStrength.Standard;
+        set
+        {
+            SetValue("polishStrength", value.Id());
+            PolishEnabled = value != TypelessCore.PolishStrength.Off;
+        }
     }
 
     /// <summary>A second speech-to-text route, asked when the first is late for a chunk or fails (see TranscriptionPipeline).</summary>
@@ -851,20 +869,43 @@ public sealed class AppSettings : INotifyPropertyChanged
     /// <summary>For the UI snapshots: shows these profiles in place of the saved ones, which stay as they are.</summary>
     public void ShowSampleAppProfiles(IEnumerable<AppProfile> profiles) => _sampleProfiles = profiles.ToList();
 
+    /// <summary>Common chat, mail and coding apps get the clean-up strength recommended for their kind (see <see cref="RecommendedApps"/>).</summary>
+    public bool RecommendedAppSettings
+    {
+        get => GetBool("recommendedAppSettings", true);
+        set => SetValue("recommendedAppSettings", value);
+    }
+
+    /// <summary>The global settings, as the global strength has them, before <see cref="Reachable"/>.</summary>
+    private DictationSettings UnreachableGlobalSettings =>
+        new DictationSettings(true, PressEnterAfterInsert, SttLanguage,
+                              StyleLearning.Compose(ExtraInstructions, LearnStyle ? StyleNote : "")).WithStrength(PolishStrength);
+
     /// <summary>What a dictation runs with when no profile applies.</summary>
-    public DictationSettings GlobalDictationSettings => Reachable(new(PolishEnabled, PressEnterAfterInsert, SttLanguage,
-                                                                     StyleLearning.Compose(ExtraInstructions, LearnStyle ? StyleNote : "")));
+    public DictationSettings GlobalDictationSettings => Reachable(UnreachableGlobalSettings);
 
     /// <summary>What a dictation started in the app with this executable name ("slack.exe") runs with.</summary>
     public DictationSettings DictationSettingsForApp(string? executable) =>
-        Reachable(GlobalDictationSettings.Applying(AppProfile.Matching(executable, AppProfiles), executable));
+        Reachable(UnreachableGlobalSettings.Applying(AppProfile.Matching(executable, AppProfiles), executable, RecommendationFor(executable)));
 
     /// <summary>
     /// What a retry of a dictation made with the profile <paramref name="id"/> runs with: that profile's settings while it
-    /// still exists, the global ones otherwise.
+    /// still exists, the global ones otherwise, with the strength recommended for <paramref name="recommendation"/> (the
+    /// kind of app it was made in, as saved) while the recommended settings are on.
     /// </summary>
-    public DictationSettings DictationSettingsForProfile(string? id) =>
-        Reachable(GlobalDictationSettings.Applying(AppProfiles.FirstOrDefault(p => p.Id == id)));
+    public DictationSettings DictationSettingsForProfile(string? id, string? recommendation = null) =>
+        Reachable(UnreachableGlobalSettings.Applying(AppProfiles.FirstOrDefault(p => p.Id == id),
+                                                     recommendation: RecommendedAppSettings ? AppCategories.From(recommendation) : null));
+
+    /// <summary>The kind of app <paramref name="executable"/> is, while the recommended settings are on and the table has it.</summary>
+    public AppCategory? RecommendationFor(string? executable) => RecommendedAppSettings ? RecommendedApps.CategoryFor(executable) : null;
+
+    /// <summary>
+    /// The strength an app gets when its profile leaves it on Default: the one recommended for it while the recommended
+    /// settings are on, else the global one (off while clean-up is off).
+    /// </summary>
+    public PolishStrength DefaultStrengthFor(string? executable) =>
+        UnreachableGlobalSettings.Applying(null, executable, RecommendationFor(executable)).EffectiveStrength;
 
     /// <summary>
     /// Whether clean-up runs (a file's, and a dictation's where no app profile says otherwise): switched on, and, with

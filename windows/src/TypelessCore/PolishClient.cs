@@ -55,7 +55,12 @@ public sealed record PolishOptions(
     /// Lay the transcript, a cleaned-up text, out again by <see cref="Layout"/> instead of cleaning it up (see
     /// <see cref="Prompts.RelayoutSystemPrompt"/>): only its line breaks and list markers change.
     /// </summary>
-    bool Relayout = false);
+    bool Relayout = false,
+    /// <summary>
+    /// How heavily a clean-up cleans up (see <see cref="PolishStrength"/>): its prompt's section, its reminder and the guards
+    /// its answer gets. A clean-up's only; never <c>Off</c>, which sends no request.
+    /// </summary>
+    PolishStrength Strength = PolishStrength.Standard);
 
 public static class ReasoningConfig
 {
@@ -235,8 +240,8 @@ public sealed partial class ApiClient
         [
             options.SystemPromptOverride ?? Prompts.PolishSystemPrompt(options.Vocabulary ?? [], options.ExtraInstructions, options.Misheard,
                                                                        options.DictatedLineBreaks && transcript.Contains('\n'), options.Layout,
-                                                                       ExampleLanguage.Resolve(options.SpokenLanguage, transcript)),
-            Prompts.PolishUserMessage(transcript, options.Context, options.Surrounding),
+                                                                       ExampleLanguage.Resolve(options.SpokenLanguage, transcript), options.Strength),
+            Prompts.PolishUserMessage(transcript, options.Context, options.Surrounding, options.Strength),
         ];
     }
 
@@ -418,7 +423,7 @@ public sealed partial class ApiClient
                     // An edit's answer is cleaned up as an edit's.
                     var cleaned = options.Selection is { } selection
                         ? Prompts.SanitizeCommandOutput(text.ToString(), selection, transcript)
-                        : Prompts.SanitizePolishOutput(text.ToString(), options.Relayout ? Prompts.RelayoutReminder : Prompts.Reminder(options.Translation),
+                        : Prompts.SanitizePolishOutput(text.ToString(), options.Relayout ? Prompts.RelayoutReminder : Prompts.Reminder(options.Translation, options.Strength),
                                                        sentContext);
                     if (cleaned.Length == 0) throw ApiException.BadResponse(L("模型返回了空内容", "the model returned nothing"));
                     if (usage is null || (usage.InputTokens == null && usage.OutputTokens == null && usage.Cost == null))

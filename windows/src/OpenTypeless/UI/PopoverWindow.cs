@@ -481,6 +481,7 @@ public sealed class PopoverWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -501,6 +502,19 @@ public sealed class PopoverWindow : Window
         Grid.SetColumn(history, 1);
         grid.Children.Add(history);
 
+        // The Scratchpad, to dictate a note; its tooltip shows the shortcut, when there is one.
+        var scratchpad = new Button { Content = Ui.Icon(Glyphs.Page, 16), Style = Subtle };
+        Ui.Label(scratchpad, L("草稿本", "Scratchpad"));
+        ToolTipService.SetToolTip(scratchpad, L("草稿本", "Scratchpad")
+            + (_settings.Shortcut(ShortcutAction.OpenScratchpad) is { } scratchpadShortcut ? $" ({scratchpadShortcut.DisplayName})" : ""));
+        scratchpad.Click += (_, _) =>
+        {
+            Dismiss();
+            ScratchpadWindow.Open();
+        };
+        Grid.SetColumn(scratchpad, 2);
+        grid.Children.Add(scratchpad);
+
         // Puts the newest dictation at the cursor of the window that had focus before the panel opened; its tooltip shows
         // the shortcut, when there is one.
         var action = ShortcutAction.PasteLastDictation;
@@ -517,13 +531,13 @@ public sealed class PopoverWindow : Window
             Dismiss();
             _controller.PasteLastDictation(null, _windowBefore);
         };
-        Grid.SetColumn(pasteLast, 2);
+        Grid.SetColumn(pasteLast, 3);
         grid.Children.Add(pasteLast);
 
         var quit = new Button { Content = Ui.Icon(Glyphs.Power, 16), Style = Subtle };
         Ui.Label(quit, L("退出 OpenTypeless", "Quit OpenTypeless"));
         quit.Click += (_, _) => _quit();
-        Grid.SetColumn(quit, 4);
+        Grid.SetColumn(quit, 5);
         grid.Children.Add(quit);
         return grid;
     }

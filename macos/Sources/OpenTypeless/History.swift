@@ -92,8 +92,8 @@ struct DictationRecord: Codable, Identifiable, Equatable {
         var usedContext: Bool?
         /// Release → the text ready and handed over for delivery (focus is checked, then it's pasted or copied at once).
         var delivered: Double?
-        /// "pasted"; "copied" (focus wasn't a text field); "failed" (the paste didn't land, or wasn't allowed; the text
-        /// is on the clipboard).
+        /// "pasted"; "scratchpad" (typed into the Scratchpad's editor); "copied" (focus wasn't a text field); "failed"
+        /// (the paste didn't land, or wasn't allowed; the text is on the clipboard).
         var delivery: String?
 
         /// "转写 0.8 秒 · 整理 1.2 秒（首字 0.4 秒，备用 deepseek/…）"

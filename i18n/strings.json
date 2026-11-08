@@ -125,6 +125,15 @@
     "fr": "Copié dans le presse-papiers",
     "de": "In die Zwischenablage kopiert"
   },
+  "Copied, and saved to Scratchpad": {
+    "ja": "コピーし、スクラッチパッドにも保存しました",
+    "ko": "복사했고 스크래치패드에도 저장했습니다",
+    "es": "Copiado y guardado en el bloc de notas",
+    "pt": "Copiado e guardado no bloco de notas",
+    "ru": "Скопировано и сохранено в черновик",
+    "fr": "Copié et enregistré dans le bloc-notes",
+    "de": "Kopiert und im Notizblock gesichert"
+  },
   "Added to vocabulary: ": {
     "ja": "語彙に追加：",
     "ko": "어휘에 추가됨: ",
@@ -916,6 +925,33 @@
     "ru": "Возвращать прежнее содержимое буфера после вставки",
     "fr": "Remet le contenu précédent du presse-papiers après l’insertion",
     "de": "Stellt nach dem Einfügen den vorherigen Inhalt der Zwischenablage wieder her"
+  },
+  "Save to Scratchpad when there's nowhere to type": {
+    "ja": "入力先がないときはスクラッチパッドに保存",
+    "ko": "입력할 곳이 없으면 스크래치패드에 저장",
+    "es": "Guardar en el bloc de notas si no hay dónde escribir",
+    "pt": "Guardar no bloco de notas quando não há onde escrever",
+    "ru": "Сохранять в черновик, если некуда вводить",
+    "fr": "Enregistrer dans le bloc-notes s’il n’y a nulle part où écrire",
+    "de": "Im Notizblock sichern, wenn kein Eingabefeld da ist"
+  },
+  "When a dictation has nowhere to go (no text field has focus, or you switched apps), it's copied to the clipboard as usual and also added to today's note in the Scratchpad. Open the Scratchpad from the menu bar.": {
+    "ja": "音声入力の入力先がないとき（テキスト欄にフォーカスがない、別のアプリに切り替えたなど）は、いつも通りクリップボードにコピーし、スクラッチパッドの今日のメモにも追加します。スクラッチパッドはメニューバーから開けます。",
+    "ko": "받아쓰기를 넣을 곳이 없으면(텍스트 필드에 포커스가 없거나 다른 앱으로 전환한 경우) 평소처럼 클립보드에 복사하고, 스크래치패드의 오늘 메모에도 추가합니다. 스크래치패드는 메뉴 막대에서 열 수 있습니다.",
+    "es": "Cuando un dictado no tiene dónde ir (ningún campo de texto tiene el foco o cambiaste de app), se copia al portapapeles como siempre y también se añade a la nota de hoy del bloc de notas. Abre el bloc de notas desde la barra de menús.",
+    "pt": "Quando um ditado não tem onde entrar (nenhum campo de texto está em foco ou você trocou de app), ele é copiado para a área de transferência como sempre e também adicionado à nota de hoje no bloco de notas. Abra o bloco de notas pela barra de menus.",
+    "ru": "Если диктовке некуда попасть (ни одно текстовое поле не в фокусе или вы переключились на другое приложение), она, как обычно, копируется в буфер обмена и ещё добавляется в сегодняшнюю заметку черновика. Черновик открывается из строки меню.",
+    "fr": "Quand une dictée n’a nulle part où aller (aucun champ de texte n’a le focus, ou vous avez changé d’app), elle est copiée dans le presse-papiers comme d’habitude et ajoutée aussi à la note du jour du bloc-notes. Ouvrez le bloc-notes depuis la barre des menus.",
+    "de": "Wenn ein Diktat nirgends eingefügt werden kann (kein Textfeld hat den Fokus oder du hast die App gewechselt), wird es wie gewohnt in die Zwischenablage kopiert und zusätzlich zur heutigen Notiz im Notizblock hinzugefügt. Öffne den Notizblock über die Menüleiste."
+  },
+  "When a dictation has nowhere to go (no text field has focus, or you switched windows), it's copied to the clipboard as usual and also added to today's note in the Scratchpad. Open the Scratchpad from the tray icon.": {
+    "ja": "音声入力の入力先がないとき（テキスト欄にフォーカスがない、別のウィンドウに切り替えたなど）は、いつも通りクリップボードにコピーし、スクラッチパッドの今日のメモにも追加します。スクラッチパッドはトレイアイコンから開けます。",
+    "ko": "받아쓰기를 넣을 곳이 없으면(텍스트 필드에 포커스가 없거나 다른 창으로 전환한 경우) 평소처럼 클립보드에 복사하고, 스크래치패드의 오늘 메모에도 추가합니다. 스크래치패드는 트레이 아이콘에서 열 수 있습니다.",
+    "es": "Cuando un dictado no tiene dónde ir (ningún campo de texto tiene el foco o cambiaste de ventana), se copia al portapapeles como siempre y también se añade a la nota de hoy del bloc de notas. Abre el bloc de notas desde el icono de la bandeja.",
+    "pt": "Quando um ditado não tem onde entrar (nenhum campo de texto está em foco ou você trocou de janela), ele é copiado para a área de transferência como sempre e também adicionado à nota de hoje no bloco de notas. Abra o bloco de notas pelo ícone na bandeja.",
+    "ru": "Если диктовке некуда попасть (ни одно текстовое поле не в фокусе или вы переключились на другое окно), она, как обычно, копируется в буфер обмена и ещё добавляется в сегодняшнюю заметку черновика. Черновик открывается из значка в трее.",
+    "fr": "Quand une dictée n’a nulle part où aller (aucun champ de texte n’a le focus, ou vous avez changé de fenêtre), elle est copiée dans le presse-papiers comme d’habitude et ajoutée aussi à la note du jour du bloc-notes. Ouvrez le bloc-notes depuis l’icône de la zone de notification.",
+    "de": "Wenn ein Diktat nirgends eingefügt werden kann (kein Textfeld hat den Fokus oder du hast das Fenster gewechselt), wird es wie gewohnt in die Zwischenablage kopiert und zusätzlich zur heutigen Notiz im Notizblock hinzugefügt. Öffne den Notizblock über das Symbol im Infobereich."
   },
   "When you dictate into existing text, adds a missing space, lowercases a capital in mid-sentence and drops a full stop that would end the sentence early, going by the text around the cursor. Where that can't be read (a password field, some apps), the text goes in as it is.": {
     "ja": "既存の文章の途中に音声入力すると、カーソル前後の文章を見て、足りないスペースを補い、文の途中の大文字を小文字にし、文を途中で終わらせてしまう句点を取り除きます。カーソル付近の文章を読み取れないとき（パスワード欄や一部のアプリ）は、そのまま挿入します。",
@@ -4120,6 +4156,105 @@
     "ru": "Снова вставляет последнюю диктовку в позицию курсора; если она не удалась, сначала распознаёт её заново",
     "fr": "Réinsère votre dernière dictée au curseur ; si elle a échoué, elle est d’abord retranscrite",
     "de": "Fügt dein letztes Diktat erneut am Cursor ein; ist es fehlgeschlagen, wird es zuerst neu transkribiert"
+  },
+  "Open Scratchpad": {
+    "ja": "スクラッチパッドを開く",
+    "ko": "스크래치패드 열기",
+    "es": "Abrir el bloc de notas",
+    "pt": "Abrir o bloco de notas",
+    "ru": "Открыть черновик",
+    "fr": "Ouvrir le bloc-notes",
+    "de": "Notizblock öffnen"
+  },
+  "Opens a fresh note to dictate into; dictations with nowhere to go are kept here too": {
+    "ja": "音声入力用の新しいメモを開きます。入力先がなかった音声入力もここに保存されます",
+    "ko": "받아쓰기할 새 메모를 엽니다. 넣을 곳이 없던 받아쓰기도 여기에 보관됩니다",
+    "es": "Abre una nota nueva para dictar en ella; los dictados que no tenían dónde ir también se guardan aquí",
+    "pt": "Abre uma nota nova para ditar nela; os ditados que não tinham onde entrar também ficam guardados aqui",
+    "ru": "Открывает новую заметку для диктовки; диктовки, которым некуда было попасть, тоже хранятся здесь",
+    "fr": "Ouvre une nouvelle note où dicter ; les dictées qui n’avaient nulle part où aller y sont aussi gardées",
+    "de": "Öffnet eine neue Notiz zum Diktieren; Diktate, die nirgends eingefügt werden konnten, landen ebenfalls hier"
+  },
+  "Scratchpad": {
+    "ja": "スクラッチパッド",
+    "ko": "스크래치패드",
+    "es": "Bloc de notas",
+    "pt": "Bloco de notas",
+    "ru": "Черновик",
+    "fr": "Bloc-notes",
+    "de": "Notizblock"
+  },
+  "New Note": {
+    "ja": "新規メモ",
+    "ko": "새 메모",
+    "es": "Nueva nota",
+    "pt": "Nova nota",
+    "ru": "Новая заметка",
+    "fr": "Nouvelle note",
+    "de": "Neue Notiz"
+  },
+  "Note": {
+    "ja": "メモ",
+    "ko": "메모",
+    "es": "Nota",
+    "pt": "Nota",
+    "ru": "Заметка",
+    "fr": "Note",
+    "de": "Notiz"
+  },
+  "No note selected": {
+    "ja": "メモが選択されていません",
+    "ko": "선택한 메모 없음",
+    "es": "Ninguna nota seleccionada",
+    "pt": "Nenhuma nota selecionada",
+    "ru": "Заметка не выбрана",
+    "fr": "Aucune note sélectionnée",
+    "de": "Keine Notiz ausgewählt"
+  },
+  "Edited {0}": {
+    "ja": "編集：{0}",
+    "ko": "수정: {0}",
+    "es": "Editada: {0}",
+    "pt": "Editada: {0}",
+    "ru": "Изменено: {0}",
+    "fr": "Modifiée : {0}",
+    "de": "Bearbeitet: {0}"
+  },
+  "Created {0}": {
+    "ja": "作成：{0}",
+    "ko": "생성: {0}",
+    "es": "Creada: {0}",
+    "pt": "Criada: {0}",
+    "ru": "Создано: {0}",
+    "fr": "Créée : {0}",
+    "de": "Erstellt: {0}"
+  },
+  "Copy Note": {
+    "ja": "メモをコピー",
+    "ko": "메모 복사",
+    "es": "Copiar nota",
+    "pt": "Copiar nota",
+    "ru": "Копировать заметку",
+    "fr": "Copier la note",
+    "de": "Notiz kopieren"
+  },
+  "Delete Note": {
+    "ja": "メモを削除",
+    "ko": "메모 삭제",
+    "es": "Eliminar nota",
+    "pt": "Apagar nota",
+    "ru": "Удалить заметку",
+    "fr": "Supprimer la note",
+    "de": "Notiz löschen"
+  },
+  "Note deleted": {
+    "ja": "メモを削除しました",
+    "ko": "메모를 삭제했습니다",
+    "es": "Nota eliminada",
+    "pt": "Nota apagada",
+    "ru": "Заметка удалена",
+    "fr": "Note supprimée",
+    "de": "Notiz gelöscht"
   },
   "A modifier on its own can't be used here — add a key to it.": {
     "ja": "修飾キー単独はここでは使えません。ほかのキーと組み合わせてください。",

@@ -44,6 +44,11 @@ struct GeneralPage: View {
                         help: L("插入文字后，把剪贴板恢复成原来的内容", "Put your previous clipboard back after inserting"),
                         isOn: $settings.restoreClipboard)
                 CardDivider()
+                CardRow(title: L("没有地方输入时存进草稿本", "Save to Scratchpad when there's nowhere to type"),
+                        help: L("没有能输入文字的地方（比如没有选中输入框，或者已经切到别的应用）时，听写的文字照常复制到剪贴板，同时加进草稿本里当天的笔记。从菜单栏打开草稿本。",
+                                "When a dictation has nowhere to go (no text field has focus, or you switched apps), it's copied to the clipboard as usual and also added to today's note in the Scratchpad. Open the Scratchpad from the menu bar."),
+                        isOn: $settings.saveToScratchpad)
+                CardDivider()
                 CardRow(title: L("贴合前后文", "Fit to surrounding text"),
                         subtitle: L("按光标前后的文字调整空格和大小写", "Adjusts spacing and capitals at the cursor"),
                         help: L("插入到已有文字中间时，按光标前后的文字补上缺的空格、把句中的首字母改成小写、去掉会提前结束句子的句号。读不到光标附近的文字时（比如密码框），按原样插入。",

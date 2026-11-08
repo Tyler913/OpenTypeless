@@ -121,6 +121,7 @@ extension ShortcutAction {
     var title: String {
         switch self {
         case .pasteLastDictation: return L("粘贴上一次听写", "Paste last dictation")
+        case .openScratchpad: return L("打开草稿本", "Open Scratchpad")
         }
     }
 
@@ -129,12 +130,16 @@ extension ShortcutAction {
         case .pasteLastDictation:
             return L("把最近一次听写的文字再插入到光标处；如果它转写失败了，会先重新转写",
                      "Inserts your latest dictation at the cursor again; if it failed, it's transcribed again first")
+        case .openScratchpad:
+            return L("打开一页新笔记，可以直接对着它听写；没有地方输入时的听写也存在这里",
+                     "Opens a fresh note to dictate into; dictations with nowhere to go are kept here too")
         }
     }
 
     var symbol: String {
         switch self {
         case .pasteLastDictation: return "doc.on.clipboard"
+        case .openScratchpad: return "square.and.pencil"
         }
     }
 }

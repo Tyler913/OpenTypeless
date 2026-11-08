@@ -172,6 +172,8 @@ final class SessionController: ObservableObject {
     private var modelInfoLoading = false
     /// False when retrying from the history window, or once the screen locked: the result goes to the clipboard instead.
     private var deliverByPaste = true
+    /// Why `deliverByPaste` is false, for whether the text is also kept in the Scratchpad (see `ScratchpadCapture`).
+    private var noPasteReason: ScratchpadCapture.Outcome = .fromHistory
     /// The text around the cursor in the field being dictated into, read as recording started, for the clean-up to spell
     /// names by (see CursorContext); nil when that's off or there was none. Never saved.
     private var cursorContext: String?
@@ -451,6 +453,7 @@ final class SessionController: ObservableObject {
         case .processing:
             note("\(reason) while processing — the text goes to the clipboard")
             deliverByPaste = false
+            noPasteReason = .locked
         }
     }
 
@@ -825,6 +828,7 @@ final class SessionController: ObservableObject {
         if !suits(dictation) {
             note("released in \(frontmostID), which has other settings than the app the recording started in → clipboard")
             deliverByPaste = false
+            noPasteReason = .movedAway
         }
         hud.showWorking(polishes: dictation.polishEnabled || record.translation != nil || record.isCommand)
 
@@ -1391,13 +1395,27 @@ final class SessionController: ObservableObject {
     @discardableResult
     private func deliver(_ text: String, notice: String?, generation: Int, dictation: DictationSettings,
                          watchEdits: Bool = true) async -> String {
+        // The Scratchpad's own editor, with the cursor in it: typed in directly, before Accessibility is asked about this
+        // app's own window (which would wait on the main thread, this one). No Return, no send key, no watching for edits.
+        if deliverByPaste, !focusMoved, suits(dictation),
+           ScratchpadWindowController.shared.insert(text, fit: settings.fitToSurroundingText, vocabulary: settings.vocabularyList) {
+            note("deliver → the Scratchpad's editor")
+            if let notice {
+                finish(showing: .error(notice), hideAfter: 3)
+            } else {
+                reset()
+                hud.finishWorking()
+            }
+            return "scratchpad"
+        }
         let target = deliverByPaste ? FocusProbe.focusedTarget() : .notEditable
         let otherSettings = deliverByPaste && !suits(dictation)
         if target == .notEditable || deliverByPaste && focusMoved || otherSettings {
             let reason = target == .notEditable ? "focus not editable" : otherSettings ? "an app with other settings in front" : "another app in front"
             note("deliver → clipboard (\(reason)) in \(frontmostID)")
             TextInserter.copyToClipboard(text)
-            finish(showing: notice.map { .error($0) } ?? .copied, hideAfter: 1.6)
+            let saved = saveToScratchpad(text, after: !deliverByPaste ? noPasteReason : target == .notEditable ? .notEditable : .movedAway)
+            finish(showing: notice.map { .error($0) } ?? (saved ? .savedToScratchpad : .copied), hideAfter: saved ? 2.2 : 1.6)
             return "copied"
         }
         // The fitted text goes in only while the cursor is still where it was read; otherwise the text as cleaned up does.
@@ -1442,18 +1460,31 @@ final class SessionController: ObservableObject {
             if settings.learnFromEdits || settings.learnStyle, watchEdits, !sent { editWatcher.watch(inserted: inserted) }
             return "pasted"
         case .notPasted:
-            finish(showing: .copied, hideAfter: 1.6)
+            let saved = saveToScratchpad(text, after: .notPasted)
+            finish(showing: saved ? .savedToScratchpad : .copied, hideAfter: saved ? 2.2 : 1.6)
             return "failed"
         case .skipped:
             // The screen locked or another app came to the front just as ⌘V was due.
             TextInserter.copyToClipboard(text)
-            finish(showing: notice.map { .error($0) } ?? .copied, hideAfter: 1.6)
+            let saved = saveToScratchpad(text, after: isLocked ? .locked : .movedAway)
+            finish(showing: notice.map { .error($0) } ?? (saved ? .savedToScratchpad : .copied), hideAfter: saved ? 2.2 : 1.6)
             return "copied"
         case .noPermission:
+            saveToScratchpad(text, after: .noPermission)
             finish(showing: .error(L("没有辅助功能权限，文字已复制到剪贴板",
                                      "No Accessibility permission — text copied to the clipboard")), hideAfter: 3)
             return "failed"
         }
+    }
+
+    /// "Save to Scratchpad when there's nowhere to type": a dictation that went to the clipboard for want of a place to go
+    /// is added to today's note too (see `ScratchpadCapture`). Returns whether it was.
+    @discardableResult
+    private func saveToScratchpad(_ text: String, after outcome: ScratchpadCapture.Outcome) -> Bool {
+        guard ScratchpadCapture.saves(text, after: outcome, enabled: settings.saveToScratchpad) else { return false }
+        ScratchpadStore.shared.capture(text)
+        note("saved to the Scratchpad (\(outcome.rawValue))")
+        return true
     }
 
     /// Presses the send key that ended the recording in the app the text was just pasted into, under the same conditions as
@@ -1601,6 +1632,7 @@ final class SessionController: ObservableObject {
         }
         switch action {
         case .pasteLastDictation: pasteLastDictation(releasing: shortcut)
+        case .openScratchpad: ScratchpadWindowController.shared.show()
         }
     }
 
@@ -1729,6 +1761,7 @@ final class SessionController: ObservableObject {
             return
         }
         deliverByPaste = paste
+        noPasteReason = .fromHistory
         // A cancelled recording still being transcribed in the background is this run's now.
         keptInBackground.remove(saved.id)
         // The app profile it was made with, while that still exists; the global settings otherwise.

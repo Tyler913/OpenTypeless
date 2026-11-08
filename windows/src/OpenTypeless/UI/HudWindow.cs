@@ -467,6 +467,10 @@ public sealed class HudWindow : Window
         };
         switch (phase)
         {
+            case HudPhase.Copied { SavedToScratchpad: true }:
+                row.Children.Add(Ui.Icon(Glyphs.Page, 14, Ui.Secondary));
+                row.Children.Add(Label(L("已复制，并存进草稿本", "Copied, and saved to Scratchpad")));
+                break;
             case HudPhase.Copied:
                 row.Children.Add(Ui.Icon(Glyphs.Paste, 14, Ui.Secondary));
                 row.Children.Add(Label(L("已复制到剪贴板", "Copied to clipboard")));
@@ -694,6 +698,7 @@ public sealed class HudWindow : Window
     {
         HudPhase.Recording or HudPhase.Working =>
             2 * (ButtonInsetDips + ButtonDips + GapDips) + WaveDips + (_model.Badge is { } badge ? 24 + badge.Length * 7 : 0),
+        HudPhase.Copied { SavedToScratchpad: true } => 250,
         HudPhase.Copied => 170,
         HudPhase.Learned l => Math.Min(372, 150 + l.Terms.Length * 9),
         HudPhase.Answer a => Math.Min(372, 150 + a.Text.Length * 13),

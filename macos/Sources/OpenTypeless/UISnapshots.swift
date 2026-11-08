@@ -14,8 +14,8 @@ enum UISnapshots {
     static let sampleAppProfiles = [
         AppProfile(id: "sample-slack", app: "com.tinyspeck.slackmacgap", name: "Slack", pressEnter: true),
         AppProfile(id: "sample-mail", app: "com.apple.mail", name: "Mail", instructions: "Use a more formal tone",
-                   polish: true, language: "en"),
-        AppProfile(id: "sample-terminal", app: "com.apple.Terminal", name: "Terminal", polish: false),
+                   strength: .standard, language: "en"),
+        AppProfile(id: "sample-terminal", app: "com.apple.Terminal", name: "Terminal", strength: .off),
     ]
 
     static func run(outputDirectory: String) throws {
@@ -67,6 +67,19 @@ enum UISnapshots {
                     try save(NSHostingView(rootView: view.background(Color(nsColor: .windowBackgroundColor))), size: OnboardingView.size, to: url)
                 }
             }
+            // The Scratchpad with sample notes (never saved), the newest selected.
+            let store = ScratchpadStore.sample()
+            let model = ScratchpadModel()
+            model.selection = store.notes.notes.first?.id
+            let scratchpad = ScratchpadWindowController.makeWindow(store: store, model: model)
+            let scratchpadURL = dir.appendingPathComponent("scratchpad-\(language.rawValue).png")
+            if live {
+                scratchpad.center()
+                try showAndCapture(scratchpad, to: scratchpadURL)
+            } else {
+                try save(scratchpad.contentView!, size: NSSize(width: 780, height: 520), to: scratchpadURL)
+            }
+
             let popover = MenuPopoverView(controller: controller, openSettings: { _ in }, close: {})
                 .background(Color(nsColor: .windowBackgroundColor))
             let host = NSHostingView(rootView: popover)

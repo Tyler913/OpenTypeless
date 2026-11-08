@@ -10,6 +10,8 @@ import Testing
         let expect: String?
         /// The text around the cursor the clean-up had, if any.
         let context: String?
+        /// How heavily it was asked to clean up (see `PolishStrength`); standard when absent.
+        let strength: String?
     }
 
     private struct GuardFile: Decodable {
@@ -25,8 +27,15 @@ import Testing
         let cases = try JSONDecoder().decode(GuardFile.self, from: data).cases
         #expect(cases.count > 50)
         for c in cases {
-            #expect(Prompts.fallback(input: c.input, output: c.output, truncated: false, context: c.context)?.rawValue
-                    == c.expect, "\(c.id)")
+            let strength = try #require(PolishStrength(rawValue: c.strength ?? "standard"), "\(c.id)")
+            #expect(Prompts.fallback(input: c.input, output: c.output, truncated: false, context: c.context,
+                                     strength: strength)?.rawValue == c.expect, "\(c.id)")
+            // What no clean-up may insert (an answer, a translation, text copied from the context), a polished one may not
+            // either: only a summary is told apart by how much a strength shortens.
+            if c.strength == nil, let expect = c.expect, expect != PolishFallback.summarised.rawValue {
+                #expect(Prompts.fallback(input: c.input, output: c.output, truncated: false, context: c.context,
+                                         strength: .polished)?.rawValue == expect, "\(c.id), polished")
+            }
         }
     }
 

@@ -12,6 +12,8 @@ final class HUDModel: ObservableObject {
         case working
         /// Nothing to paste into, so the text went to the clipboard.
         case copied
+        /// The same, and the text was added to the Scratchpad too (see `ScratchpadCapture`).
+        case savedToScratchpad
         /// New words were learned from the user's fixes to the last dictation.
         case learned(String)
         /// The answer to a question about the selection (see `SelectionCommand.Reply`), also on the clipboard.
@@ -464,6 +466,12 @@ struct HUDView: View {
             HStack(spacing: 7) {
                 Image(systemName: "doc.on.clipboard").foregroundStyle(.secondary)
                 Text(L("已复制到剪贴板", "Copied to clipboard"))
+            }
+            .noticeStyle()
+        case .savedToScratchpad:
+            HStack(spacing: 7) {
+                Image(systemName: "note.text").foregroundStyle(.secondary)
+                Text(L("已复制，并存进草稿本", "Copied, and saved to Scratchpad"))
             }
             .noticeStyle()
         case .learned:

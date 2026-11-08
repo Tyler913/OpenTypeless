@@ -26,16 +26,24 @@ import Testing
         }
     }
 
+    /// The global settings at `strength`, as the app makes them.
+    private func globalSettings(_ strength: String, pressEnter: Bool = false, language: String = "",
+                        extraInstructions: String = "") -> DictationSettings {
+        DictationSettings(polishEnabled: true, pressEnter: pressEnter, language: language, extraInstructions: extraInstructions)
+            .withStrength(PolishStrength(rawValue: strength)!)
+    }
+
     @Test func resolutionFollowsSharedCases() throws {
         for item in try Self.cases()["resolution"] as! [[String: Any]] {
             let g = item["global"] as! [String: Any]
-            let global = DictationSettings(polishEnabled: g["polishEnabled"] as! Bool, pressEnter: g["pressEnter"] as! Bool,
-                                           language: g["language"] as! String, extraInstructions: g["extraInstructions"] as! String)
+            let global = globalSettings(g["strength"] as! String, pressEnter: g["pressEnter"] as! Bool,
+                                       language: g["language"] as! String, extraInstructions: g["extraInstructions"] as! String)
             let profile = try (item["profile"] as? [String: Any]).map(decode)
             let resolved = global.applying(profile)
             let e = item["expected"] as! [String: Any]
             let name = item["name"] as! String
-            #expect(resolved.polishEnabled == e["polishEnabled"] as! Bool, "\(name)")
+            #expect(resolved.effectiveStrength.rawValue == e["strength"] as! String, "\(name)")
+            #expect(resolved.polishEnabled == (e["strength"] as! String != "off"), "\(name)")
             #expect(resolved.pressEnter == e["pressEnter"] as! Bool, "\(name)")
             #expect(resolved.language == e["language"] as! String, "\(name)")
             #expect(resolved.extraInstructions == e["extraInstructions"] as! String, "\(name)")
@@ -47,8 +55,9 @@ import Testing
     @Test func roundTripsThroughJSON() throws {
         let profiles = [
             AppProfile(id: "A", app: "com.tinyspeck.slackmacgap", name: "Slack", instructions: "Short messages\nNo lists",
-                       polish: false, pressEnter: true, language: "", layout: .natural),
+                       strength: .off, pressEnter: true, language: "", layout: .natural),
             AppProfile(id: "B", app: "com.apple.mail", name: "Mail"),
+            AppProfile(id: "C", app: "olk.exe", name: "Outlook", strength: .light),
         ]
         let data = try JSONEncoder().encode(profiles)
         #expect(try JSONDecoder().decode([AppProfile].self, from: data) == profiles)
@@ -56,9 +65,52 @@ import Testing
         let objects = try JSONSerialization.jsonObject(with: data) as! [[String: Any]]
         #expect(objects[0]["language"] as? String == "")
         #expect(objects[0]["polish"] as? Bool == false)
+        #expect(objects[0]["strength"] as? String == "off")
         #expect(objects[0]["layout"] as? String == "natural")
-        #expect(objects[1]["polish"] == nil && objects[1]["pressEnter"] == nil && objects[1]["language"] == nil)
+        #expect(objects[1]["polish"] == nil && objects[1]["strength"] == nil && objects[1]["pressEnter"] == nil
+                && objects[1]["language"] == nil)
         #expect(objects[1]["layout"] == nil)
+        // The switch older versions read goes with the strength: they clean up, at the only strength they know.
+        #expect(objects[2]["polish"] as? Bool == true)
+        #expect(objects[2]["strength"] as? String == "light")
+    }
+
+    @Test func storedStrengthFollowsSharedCases() throws {
+        for item in try Self.cases()["stored"] as! [[String: Any]] {
+            let actual = PolishStrength.stored(enabled: item["enabled"] as? Bool, level: item["level"] as? String)
+            #expect(actual?.rawValue == item["expected"] as? String, "\(item["name"]!)")
+        }
+    }
+
+    /// Which strength a dictation gets from the global setting, the recommended settings and the app's profile.
+    @Test func strengthsFollowSharedCases() throws {
+        for item in try Self.cases()["strengths"] as! [[String: Any]] {
+            let app = item["app"] as? String
+            let profile = try (item["profile"] as? [String: Any]).map(decode)
+            let recommendation = item["recommendations"] as! Bool ? RecommendedApps.category(for: app) : nil
+            let resolved = globalSettings(item["global"] as! String).applying(profile, app: app, recommendation: recommendation)
+            let name = item["name"] as! String
+            #expect(resolved.effectiveStrength.rawValue == item["expected"] as! String, "\(name)")
+            #expect(resolved.recommendation?.rawValue == item["recommendation"] as? String, "\(name)")
+            // A recommendation never changes Return or the language.
+            #expect(resolved.pressEnter == (profile?.pressEnter ?? false) && resolved.language == "", "\(name)")
+        }
+    }
+
+    /// The same table as the Windows app's: every identifier in the fixture, and no other.
+    @Test func recommendedAppsFollowSharedCases() throws {
+        let table = try Self.cases()["recommendedApps"] as! [String: String]
+        for (app, kind) in table {
+            #expect(RecommendedApps.category(for: app)?.rawValue == kind, "\(app)")
+        }
+        #expect(RecommendedApps.byKey.count == table.count)
+        for app in try Self.cases()["notRecommended"] as! [String] {
+            #expect(RecommendedApps.category(for: app) == nil, "\(app)")
+        }
+        #expect(RecommendedApps.category(for: nil) == nil)
+        #expect(Set(RecommendedApps.all.map(\.name)).count == RecommendedApps.all.count)
+        #expect(AppCategory.chat.strength == .light && AppCategory.code.strength == .light
+                && AppCategory.email.strength == .polished)
     }
 
     @Test func decodesWhatOtherVersionsWrote() throws {

@@ -44,6 +44,11 @@ struct GeneralPage: View {
                         help: L("插入文字后，把剪贴板恢复成原来的内容", "Put your previous clipboard back after inserting"),
                         isOn: $settings.restoreClipboard)
                 CardDivider()
+                CardRow(title: L("没有地方输入时存进草稿本", "Save to Scratchpad when there's nowhere to type"),
+                        help: L("没有能输入文字的地方（比如没有选中输入框，或者已经切到别的应用）时，听写的文字照常复制到剪贴板，同时加进草稿本里当天的笔记。从菜单栏打开草稿本。",
+                                "When a dictation has nowhere to go (no text field has focus, or you switched apps), it's copied to the clipboard as usual and also added to today's note in the Scratchpad. Open the Scratchpad from the menu bar."),
+                        isOn: $settings.saveToScratchpad)
+                CardDivider()
                 CardRow(title: L("贴合前后文", "Fit to surrounding text"),
                         subtitle: L("按光标前后的文字调整空格和大小写", "Adjusts spacing and capitals at the cursor"),
                         help: L("插入到已有文字中间时，按光标前后的文字补上缺的空格、把句中的首字母改成小写、去掉会提前结束句子的句号。读不到光标附近的文字时（比如密码框），按原样插入。",
@@ -932,6 +937,9 @@ struct ModelsPage: View {
     @State private var backupSTTModels: [APIClient.ModelInfo] = []
     /// The on-device recognizer's locale for the spoken language (see `OnDeviceModelRow`).
     @State private var onDeviceLocale: String?
+    /// The same for on-device recognition standing in while offline, and whether its model still has to be downloaded.
+    @State private var offlineLocale: String?
+    @State private var offlineModelMissing = false
 
     var body: some View {
         PageScaffold(page: .models) {
@@ -1005,6 +1013,14 @@ struct ModelsPage: View {
                     CardDivider()
                     PriceRow(settings: settings, provider: settings.sttBackupProvider, model: settings.sttBackupModel, speech: true)
                 }
+                CardDivider()
+                CardRow(title: L("离线时用设备端识别", "Use on-device recognition when offline"),
+                        help: L("网络断开时，用 macOS 自带的语音识别在这台 Mac 上转写，听写照样出字。准确率不如云端模型，并且要先下载说话语言的语音模型。文字整理也需要网络：离线时文字按识别结果直接插入。",
+                                "When the network is down, speech is recognised on this Mac with the speech recognition built into macOS, so dictation still gives you text. It's less accurate than cloud models and needs the speech model for your spoken language downloaded first. Clean-up needs the network too: offline, the text goes in as recognised."),
+                        isOn: $settings.onDeviceWhenOffline)
+                if settings.onDeviceWhenOffline, let locale = offlineLocale, !locale.isEmpty {
+                    OfflineModelRow(locale: locale, missing: offlineModelMissing)
+                }
                 }
             }
             if settings.speechEngine == .onDevice {
@@ -1016,9 +1032,14 @@ struct ModelsPage: View {
             }
 
             CardSection(title: L("文字整理", "Clean-up")) {
-                CardRow(title: L("用 AI 整理文字", "Clean up with AI"),
-                        subtitle: L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists"),
-                        isOn: $settings.polishEnabled)
+                CardRow(title: L("用 AI 整理文字", "Clean up with AI"), subtitle: Self.strengthSubtitle(settings.polishStrength),
+                        help: Self.strengthHelp) {
+                    Picker(L("用 AI 整理文字", "Clean up with AI"), selection: $settings.polishStrength) {
+                        ForEach(PolishStrength.allCases) { Text($0.displayName).tag($0) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
                 if settings.polishEnabled {
                     CardDivider()
                     CardRow(title: L("服务商", "Provider")) {
@@ -1090,6 +1111,15 @@ struct ModelsPage: View {
             onDeviceLocale = found ?? ""
             if let found { OnDeviceModels.shared.install(found) }
         }
+        // Standing in while offline: the model is only looked up here, and fetched when the user asks.
+        .task(id: settings.speechEngine == .provider && settings.onDeviceWhenOffline ? settings.sttLanguage : nil) {
+            guard settings.speechEngine == .provider, settings.onDeviceWhenOffline else { return }
+            let found = await OnDeviceModels.locale(for: settings.sttLanguage)
+            var missing = false
+            if let found { missing = !(await OnDeviceModels.isInstalled(found)) }
+            offlineModelMissing = missing
+            offlineLocale = found ?? ""
+        }
         .task(id: settings.sttProvider == .openrouter ? settings.sttModel : "") {
             if settings.sttProvider == .openrouter { await OpenRouterHosts.shared.load(settings.sttModel, settings: settings) }
         }
@@ -1107,6 +1137,21 @@ struct ModelsPage: View {
 
     private var hedgeDelayLabel: String {
         HedgedPolish.defaultHedgeDelay.formatted(.number.precision(.fractionLength(0...2))) + L(" 秒", " s")
+    }
+
+    /// What the clean-up does at `strength`, in a line.
+    static func strengthSubtitle(_ strength: PolishStrength) -> String {
+        switch strength {
+        case .off: return L("按识别结果直接插入", "Text goes in as recognised")
+        case .light: return L("只修标点、口头禅和明确的口误", "Only punctuation, fillers and clear slips")
+        case .standard: return L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists")
+        case .polished: return L("把口语顺成书面文字，意思不变", "Smooths speech into written prose, same meaning")
+        }
+    }
+
+    static var strengthHelp: String {
+        L("轻度：改标点和大小写，去掉口头禅、结巴和明确的自我修正，修正有把握的识别错误，其余照你说的。标准：还会处理没说「不对」的改口和说话时的赘词，补好因此断开的句子，分段、整理成列表。润色：还会把啰嗦的口语改得简洁通顺、修正语法，读起来像写的一样；意思、事实、数字和名字不变，也不添内容。在「应用」页可以给某个应用单独设置。",
+          "Light: punctuation and capitalisation, fillers, stutters and explicit self-corrections, and recognition errors it's sure of; the rest as you said it. Standard: also corrections without a “no wait” and verbal padding, mends what that leaves broken, and adds paragraphs and lists. Polished: also tightens wordy speech and fixes grammar so it reads as written, keeping your meaning and every fact, number and name, and adding nothing. Apps can have their own on the Apps page.")
     }
 
     private func setupBanner(for id: ProviderID) -> some View {
@@ -1171,6 +1216,25 @@ private struct OnDeviceModelRow: View {
             Image(systemName: symbol).foregroundStyle(.orange)
             Text(text).font(.system(size: 12))
             Spacer()
+        }
+    }
+}
+
+/// The speech model on-device recognition needs to stand in while offline (see `OfflineFallback`): a Download button
+/// while it isn't on this Mac (`missing`), then its download as `OnDeviceModelRow` shows it, and nothing once it's here.
+private struct OfflineModelRow: View {
+    let locale: String
+    let missing: Bool
+    @ObservedObject private var models = OnDeviceModels.shared
+
+    var body: some View {
+        if models.statuses[locale] != nil {
+            OnDeviceModelRow(locale: locale)
+        } else if missing {
+            CardDivider()
+            CardRow(title: L("语音模型", "Speech model")) {
+                Button(L("下载", "Download")) { models.install(locale) }
+            }
         }
     }
 }
@@ -1559,6 +1623,7 @@ struct StylePage: View {
                                           "e.g. “Never use bullet lists”, “Keep my casual tone”, “Keep technical terms lowercase”."),
                            height: 88)
             }
+            StyleSection(settings: settings)
             CardSection(title: L("快捷短语", "Snippets"),
                         help: L("说出触发词，插入时会换成你写好的内容，一字不改，句子中间说也行。触发词会作为词汇提示交给语音识别和整理，让它原样保留。最好选一个平时不会说的说法，免得误替换。",
                                 "Say a trigger and the text you wrote goes in instead, word for word, even mid-sentence. Triggers go to speech-to-text and clean-up as vocabulary, so they come through intact. Pick a phrase you wouldn't otherwise say, so it isn't replaced by accident.")) {
@@ -1682,6 +1747,44 @@ struct StylePage: View {
             parts.append(L("另有 \(plan.known) 个已经在词汇表里。", "\(plan.known) more are already in your vocabulary."))
         }
         return parts.joined(separator: "\n\n")
+    }
+}
+
+/// Learning how the user writes: the switch, the note (learned, or edited by hand), and Learn now and Clear. Why a run
+/// gave no new note shows under the section until the next one.
+private struct StyleSection: View {
+    @ObservedObject var settings: AppSettings
+    @ObservedObject private var learner = StyleLearner.shared
+
+    var body: some View {
+        CardSection(title: L("写作风格", "Writing style"), footer: settings.learnStyle ? learner.problem : nil) {
+            CardRow(title: L("学习我的写作风格", "Learn my writing style"),
+                    help: L("根据历史记录里最近的听写和你粘贴后自己改过的文字，总结你的标点、大小写、中英混排、数字格式和语气习惯，写成几行说明，整理时照着做。每听写 50 次自动更新一次，也可以随时点「立即学习」。只学写法，不学内容。这些文字只发给你自己设置的文字整理服务商，费用计入花费。你手动改过的说明不会被自动更新覆盖。关闭后不再学习也不再使用，为此保存的修改记录会删除；说明会保留，点「清除」才会清空。",
+                            "Your recent dictations in History, and the changes you make after a paste, are summed up in a few lines about your punctuation, capitalisation, mixing of languages, number formats and tone, and clean-up follows them. It's updated every 50 dictations, or whenever you press Learn Now. Only how you write is learned, never what you write about. The texts go only to your own clean-up provider, and the request counts toward your spend. A note you've edited isn't replaced automatically. Turned off, nothing is learned or used and the changes kept for it are deleted; the note stays until you press Clear."),
+                    isOn: $settings.learnStyle)
+            if settings.learnStyle {
+                CardDivider()
+                NoteEditor(text: $settings.styleNote,
+                           placeholder: L("学到的写作习惯会显示在这里，你也可以自己修改。",
+                                          "What's learned about how you write shows here. You can edit it too."),
+                           height: 120)
+                CardDivider(inset: 0)
+                HStack(spacing: 8) {
+                    Button(L("立即学习", "Learn Now")) { learner.learnNow() }
+                        .disabled(learner.isLearning)
+                    Button(L("清除", "Clear")) { learner.clear() }
+                        .disabled(learner.isLearning || settings.styleNote.isEmpty)
+                    if learner.isLearning { ProgressView().controlSize(.small) }
+                    Spacer()
+                }
+                .controlSize(.small)
+                .rowPadding(.horizontal, 12)
+                .rowPadding(.vertical, 8)
+            }
+        }
+        .onChange(of: settings.learnStyle) { _, on in
+            if !on { learner.switchedOff() }
+        }
     }
 }
 

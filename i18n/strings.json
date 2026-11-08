@@ -125,6 +125,15 @@
     "fr": "Copié dans le presse-papiers",
     "de": "In die Zwischenablage kopiert"
   },
+  "Copied, and saved to Scratchpad": {
+    "ja": "コピーし、スクラッチパッドにも保存しました",
+    "ko": "복사했고 스크래치패드에도 저장했습니다",
+    "es": "Copiado y guardado en el bloc de notas",
+    "pt": "Copiado e guardado no bloco de notas",
+    "ru": "Скопировано и сохранено в черновик",
+    "fr": "Copié et enregistré dans le bloc-notes",
+    "de": "Kopiert und im Notizblock gesichert"
+  },
   "Added to vocabulary: ": {
     "ja": "語彙に追加：",
     "ko": "어휘에 추가됨: ",
@@ -764,6 +773,15 @@
     "fr": "Échec du nettoyage — texte brut inséré",
     "de": "Bereinigung fehlgeschlagen – Rohtext eingefügt"
   },
+  "Offline — inserted without clean-up": {
+    "ja": "オフラインのため、整形せずに挿入しました",
+    "ko": "오프라인 — 다듬지 않고 삽입함",
+    "es": "Sin conexión: se insertó sin limpieza",
+    "pt": "Offline — inserido sem limpeza",
+    "ru": "Нет сети — вставлено без очистки",
+    "fr": "Hors ligne — inséré sans nettoyage",
+    "de": "Offline – ohne Bereinigung eingefügt"
+  },
   "No Accessibility permission — text copied to the clipboard": {
     "ja": "アクセシビリティの許可がないため、テキストをクリップボードにコピーしました",
     "ko": "손쉬운 사용 권한이 없어 텍스트를 클립보드에 복사함",
@@ -916,6 +934,33 @@
     "ru": "Возвращать прежнее содержимое буфера после вставки",
     "fr": "Remet le contenu précédent du presse-papiers après l’insertion",
     "de": "Stellt nach dem Einfügen den vorherigen Inhalt der Zwischenablage wieder her"
+  },
+  "Save to Scratchpad when there's nowhere to type": {
+    "ja": "入力先がないときはスクラッチパッドに保存",
+    "ko": "입력할 곳이 없으면 스크래치패드에 저장",
+    "es": "Guardar en el bloc de notas si no hay dónde escribir",
+    "pt": "Guardar no bloco de notas quando não há onde escrever",
+    "ru": "Сохранять в черновик, если некуда вводить",
+    "fr": "Enregistrer dans le bloc-notes s’il n’y a nulle part où écrire",
+    "de": "Im Notizblock sichern, wenn kein Eingabefeld da ist"
+  },
+  "When a dictation has nowhere to go (no text field has focus, or you switched apps), it's copied to the clipboard as usual and also added to today's note in the Scratchpad. Open the Scratchpad from the menu bar.": {
+    "ja": "音声入力の入力先がないとき（テキスト欄にフォーカスがない、別のアプリに切り替えたなど）は、いつも通りクリップボードにコピーし、スクラッチパッドの今日のメモにも追加します。スクラッチパッドはメニューバーから開けます。",
+    "ko": "받아쓰기를 넣을 곳이 없으면(텍스트 필드에 포커스가 없거나 다른 앱으로 전환한 경우) 평소처럼 클립보드에 복사하고, 스크래치패드의 오늘 메모에도 추가합니다. 스크래치패드는 메뉴 막대에서 열 수 있습니다.",
+    "es": "Cuando un dictado no tiene dónde ir (ningún campo de texto tiene el foco o cambiaste de app), se copia al portapapeles como siempre y también se añade a la nota de hoy del bloc de notas. Abre el bloc de notas desde la barra de menús.",
+    "pt": "Quando um ditado não tem onde entrar (nenhum campo de texto está em foco ou você trocou de app), ele é copiado para a área de transferência como sempre e também adicionado à nota de hoje no bloco de notas. Abra o bloco de notas pela barra de menus.",
+    "ru": "Если диктовке некуда попасть (ни одно текстовое поле не в фокусе или вы переключились на другое приложение), она, как обычно, копируется в буфер обмена и ещё добавляется в сегодняшнюю заметку черновика. Черновик открывается из строки меню.",
+    "fr": "Quand une dictée n’a nulle part où aller (aucun champ de texte n’a le focus, ou vous avez changé d’app), elle est copiée dans le presse-papiers comme d’habitude et ajoutée aussi à la note du jour du bloc-notes. Ouvrez le bloc-notes depuis la barre des menus.",
+    "de": "Wenn ein Diktat nirgends eingefügt werden kann (kein Textfeld hat den Fokus oder du hast die App gewechselt), wird es wie gewohnt in die Zwischenablage kopiert und zusätzlich zur heutigen Notiz im Notizblock hinzugefügt. Öffne den Notizblock über die Menüleiste."
+  },
+  "When a dictation has nowhere to go (no text field has focus, or you switched windows), it's copied to the clipboard as usual and also added to today's note in the Scratchpad. Open the Scratchpad from the tray icon.": {
+    "ja": "音声入力の入力先がないとき（テキスト欄にフォーカスがない、別のウィンドウに切り替えたなど）は、いつも通りクリップボードにコピーし、スクラッチパッドの今日のメモにも追加します。スクラッチパッドはトレイアイコンから開けます。",
+    "ko": "받아쓰기를 넣을 곳이 없으면(텍스트 필드에 포커스가 없거나 다른 창으로 전환한 경우) 평소처럼 클립보드에 복사하고, 스크래치패드의 오늘 메모에도 추가합니다. 스크래치패드는 트레이 아이콘에서 열 수 있습니다.",
+    "es": "Cuando un dictado no tiene dónde ir (ningún campo de texto tiene el foco o cambiaste de ventana), se copia al portapapeles como siempre y también se añade a la nota de hoy del bloc de notas. Abre el bloc de notas desde el icono de la bandeja.",
+    "pt": "Quando um ditado não tem onde entrar (nenhum campo de texto está em foco ou você trocou de janela), ele é copiado para a área de transferência como sempre e também adicionado à nota de hoje no bloco de notas. Abra o bloco de notas pelo ícone na bandeja.",
+    "ru": "Если диктовке некуда попасть (ни одно текстовое поле не в фокусе или вы переключились на другое окно), она, как обычно, копируется в буфер обмена и ещё добавляется в сегодняшнюю заметку черновика. Черновик открывается из значка в трее.",
+    "fr": "Quand une dictée n’a nulle part où aller (aucun champ de texte n’a le focus, ou vous avez changé de fenêtre), elle est copiée dans le presse-papiers comme d’habitude et ajoutée aussi à la note du jour du bloc-notes. Ouvrez le bloc-notes depuis l’icône de la zone de notification.",
+    "de": "Wenn ein Diktat nirgends eingefügt werden kann (kein Textfeld hat den Fokus oder du hast das Fenster gewechselt), wird es wie gewohnt in die Zwischenablage kopiert und zusätzlich zur heutigen Notiz im Notizblock hinzugefügt. Öffne den Notizblock über das Symbol im Infobereich."
   },
   "When you dictate into existing text, adds a missing space, lowercases a capital in mid-sentence and drops a full stop that would end the sentence early, going by the text around the cursor. Where that can't be read (a password field, some apps), the text goes in as it is.": {
     "ja": "既存の文章の途中に音声入力すると、カーソル前後の文章を見て、足りないスペースを補い、文の途中の大文字を小文字にし、文を途中で終わらせてしまう句点を取り除きます。カーソル付近の文章を読み取れないとき（パスワード欄や一部のアプリ）は、そのまま挿入します。",
@@ -1529,6 +1574,69 @@
     "fr": "Supprime les tics de langage et les faux départs, ajoute paragraphes et listes",
     "de": "Entfernt Füllwörter und Versprecher, fügt Absätze und Listen ein"
   },
+  "Text goes in as recognised": {
+    "ja": "認識したままの文字を入力します",
+    "ko": "인식된 그대로 입력합니다",
+    "es": "El texto se inserta tal como se reconoció",
+    "pt": "O texto entra como foi reconhecido",
+    "ru": "Текст вставляется так, как распознан",
+    "fr": "Le texte est inséré tel que reconnu",
+    "de": "Text wird so eingefügt, wie er erkannt wurde"
+  },
+  "Only punctuation, fillers and clear slips": {
+    "ja": "句読点、言いよどみ、明らかな言い間違いだけを直します",
+    "ko": "문장 부호, 군더더기 말, 분명한 말실수만 고칩니다",
+    "es": "Solo puntuación, muletillas y errores claros",
+    "pt": "Só pontuação, vícios de linguagem e lapsos claros",
+    "ru": "Только пунктуация, слова-паразиты и явные оговорки",
+    "fr": "Ponctuation, tics de langage et lapsus évidents seulement",
+    "de": "Nur Satzzeichen, Füllwörter und klare Versprecher"
+  },
+  "Smooths speech into written prose, same meaning": {
+    "ja": "意味はそのまま、話し言葉を書き言葉に整えます",
+    "ko": "뜻은 그대로 두고 말을 글처럼 다듬습니다",
+    "es": "Convierte el habla en texto escrito, con el mismo sentido",
+    "pt": "Transforma a fala em texto escrito, com o mesmo sentido",
+    "ru": "Превращает речь в письменный текст, не меняя смысла",
+    "fr": "Transforme la parole en texte écrit, sans changer le sens",
+    "de": "Macht aus Gesprochenem geschriebenen Text, mit gleichem Sinn"
+  },
+  "Light": {
+    "ja": "ライト",
+    "ko": "가볍게",
+    "es": "Ligera",
+    "pt": "Leve",
+    "ru": "Лёгкая",
+    "fr": "Légère",
+    "de": "Leicht"
+  },
+  "Standard": {
+    "ja": "標準",
+    "ko": "표준",
+    "es": "Estándar",
+    "pt": "Normal",
+    "ru": "Стандартная",
+    "fr": "Standard",
+    "de": "Normal"
+  },
+  "Polished": {
+    "ja": "仕上げ",
+    "ko": "매끄럽게",
+    "es": "Pulida",
+    "pt": "Polida",
+    "ru": "Тщательная",
+    "fr": "Soignée",
+    "de": "Ausgefeilt"
+  },
+  "Light: punctuation and capitalisation, fillers, stutters and explicit self-corrections, and recognition errors it's sure of; the rest as you said it. Standard: also corrections without a “no wait” and verbal padding, mends what that leaves broken, and adds paragraphs and lists. Polished: also tightens wordy speech and fixes grammar so it reads as written, keeping your meaning and every fact, number and name, and adding nothing. Apps can have their own on the Apps page.": {
+    "ja": "ライト：句読点と大文字小文字、言いよどみ、どもり、はっきりした言い直し、確実な認識ミスだけを直し、ほかは話したとおりにします。標準：さらに「いや」のない言い直しや口癖も取り除き、それで崩れた文を直し、段落やリストに整えます。仕上げ：さらに冗長な話し言葉を簡潔にし、文法を直して、書いた文章のように整えます。意味、事実、数字、名前は変えず、何も付け足しません。アプリごとの設定は「アプリ」ページでできます。",
+    "ko": "가볍게: 문장 부호와 대소문자, 군더더기 말, 더듬은 말, 분명한 말 고침, 확실한 인식 오류만 고치고 나머지는 말한 그대로 둡니다. 표준: 여기에 '아니' 없이 고쳐 말한 부분과 말버릇도 정리하고, 그 때문에 끊긴 문장을 바로잡고, 문단과 목록으로 정리합니다. 매끄럽게: 여기에 장황한 말을 간결하게 줄이고 문법을 고쳐 글처럼 읽히게 합니다. 뜻과 사실, 숫자, 이름은 그대로 두고 아무것도 덧붙이지 않습니다. 앱마다 따로 정하려면 '앱' 페이지에서 설정하세요.",
+    "es": "Ligera: puntuación y mayúsculas, muletillas, tartamudeos, autocorrecciones explícitas y errores de reconocimiento seguros; el resto, tal como lo dijiste. Estándar: además, correcciones sin un «no, espera» y relleno verbal, arregla lo que eso deja roto y añade párrafos y listas. Pulida: además, condensa el habla prolija y corrige la gramática para que se lea como escrito, conservando tu sentido y cada dato, número y nombre, sin añadir nada. Cada app puede tener la suya en la página Apps.",
+    "pt": "Leve: pontuação e maiúsculas, vícios de linguagem, gaguejos, autocorreções explícitas e erros de reconhecimento certos; o resto, como você falou. Normal: também correções sem um “não, pera” e enchimento verbal, conserta o que isso deixa quebrado e adiciona parágrafos e listas. Polida: também enxuga a fala prolixa e corrige a gramática para ler como texto escrito, mantendo seu sentido e cada fato, número e nome, sem acrescentar nada. Cada app pode ter a sua na página Apps.",
+    "ru": "Лёгкая: пунктуация и регистр, слова-паразиты, запинки, явные самоисправления и уверенные ошибки распознавания; остальное — как вы сказали. Стандартная: также исправления без «нет, подожди» и словесный мусор, чинит то, что после этого разваливается, добавляет абзацы и списки. Тщательная: также сжимает многословную речь и исправляет грамматику, чтобы текст читался как написанный, сохраняя смысл и каждый факт, число и имя и ничего не добавляя. Для отдельных приложений — на странице «Приложения».",
+    "fr": "Légère : ponctuation et majuscules, tics de langage, bégaiements, autocorrections explicites et erreurs de reconnaissance sûres ; le reste tel que vous l’avez dit. Standard : aussi les corrections sans « non attends » et le remplissage, répare ce que cela laisse cassé, et ajoute paragraphes et listes. Soignée : resserre aussi la parole verbeuse et corrige la grammaire pour qu’on lise un texte écrit, en gardant votre sens et chaque fait, nombre et nom, sans rien ajouter. Chaque app peut avoir la sienne dans la page Apps.",
+    "de": "Leicht: Satzzeichen und Großschreibung, Füllwörter, Stottern, ausdrückliche Selbstkorrekturen und sichere Erkennungsfehler; der Rest, wie Sie es gesagt haben. Normal: dazu Korrekturen ohne „ach nee“ und Füllfloskeln, repariert, was dadurch kaputtgeht, und fügt Absätze und Listen ein. Ausgefeilt: strafft außerdem weitschweifige Rede und korrigiert die Grammatik, sodass es sich wie geschrieben liest, mit Ihrem Sinn und jeder Tatsache, Zahl und jedem Namen, ohne etwas hinzuzufügen. Apps können auf der Seite Apps eine eigene haben."
+  },
   "Reasoning is turned off or minimised for speed": {
     "ja": "速度を優先し、推論はオフまたは最小になります",
     "ko": "속도를 위해 추론은 끄거나 최소로 설정됩니다",
@@ -1771,6 +1879,96 @@
     "ru": "Например: «Никогда не используй маркированные списки», «Сохраняй мой разговорный тон», «Пиши технические термины строчными».",
     "fr": "p. ex. « Jamais de listes à puces », « Garde mon ton décontracté », « Termes techniques en minuscules ».",
     "de": "z. B. „Keine Aufzählungen verwenden“, „Meinen lockeren Ton beibehalten“, „Fachbegriffe kleinschreiben“."
+  },
+  "Writing style": {
+    "ja": "文体",
+    "ko": "글쓰기 스타일",
+    "es": "Estilo de escritura",
+    "pt": "Estilo de escrita",
+    "ru": "Стиль письма",
+    "fr": "Style d'écriture",
+    "de": "Schreibstil"
+  },
+  "Learn my writing style": {
+    "ja": "自分の文体を学習",
+    "ko": "내 글쓰기 스타일 학습",
+    "es": "Aprender mi estilo de escritura",
+    "pt": "Aprender meu estilo de escrita",
+    "ru": "Изучать мой стиль письма",
+    "fr": "Apprendre mon style d'écriture",
+    "de": "Meinen Schreibstil lernen"
+  },
+  "Your recent dictations in History, and the changes you make after a paste, are summed up in a few lines about your punctuation, capitalisation, mixing of languages, number formats and tone, and clean-up follows them. It's updated every 50 dictations, or whenever you press Learn Now. Only how you write is learned, never what you write about. The texts go only to your own clean-up provider, and the request counts toward your spend. A note you've edited isn't replaced automatically. Turned off, nothing is learned or used and the changes kept for it are deleted; the note stays until you press Clear.": {
+    "ja": "履歴にある最近の音声入力と、ペースト後に自分で直した文章から、句読点、大文字と小文字、言語の混ぜ方、数字の書き方、口調の癖を数行にまとめ、整形はそれに従います。50 回の音声入力ごとに自動で更新され、「今すぐ学習」でいつでも更新できます。学ぶのは書き方だけで、内容は学びません。文章は自分で設定した整形プロバイダーにだけ送られ、そのリクエストも支出に含まれます。手で編集したメモは自動では置き換えられません。オフにすると学習も使用もされず、そのために保存した修正記録は削除されます。メモは「消去」を押すまで残ります。",
+    "ko": "기록에 있는 최근 받아쓰기와 붙여넣은 뒤 직접 고친 내용을 바탕으로 문장 부호, 대소문자, 언어를 섞어 쓰는 방식, 숫자 표기, 말투 습관을 몇 줄로 정리하고, 다듬기가 이를 따릅니다. 받아쓰기 50번마다 자동으로 갱신되며, 언제든 '지금 학습'을 눌러 갱신할 수 있습니다. 쓰는 방식만 학습하고 내용은 학습하지 않습니다. 텍스트는 직접 설정한 다듬기 제공업체로만 전송되며, 그 요청도 지출에 포함됩니다. 직접 수정한 메모는 자동으로 바뀌지 않습니다. 끄면 학습도 사용도 하지 않고 이를 위해 저장한 수정 기록은 삭제되며, 메모는 '지우기'를 누를 때까지 남습니다.",
+    "es": "Tus dictados recientes del historial y los cambios que haces después de pegar se resumen en unas líneas sobre tu puntuación, mayúsculas, mezcla de idiomas, formato de números y tono, y la limpieza las sigue. Se actualiza cada 50 dictados, o cuando pulsas Aprender ahora. Solo se aprende cómo escribes, nunca de qué escribes. Los textos solo van a tu propio proveedor de limpieza, y la solicitud cuenta en tu gasto. Una nota que hayas editado no se reemplaza automáticamente. Desactivado, no se aprende ni se usa nada y se borran los cambios guardados para ello; la nota se queda hasta que pulses Borrar.",
+    "pt": "Seus ditados recentes do histórico e as alterações que você faz depois de colar são resumidos em algumas linhas sobre sua pontuação, maiúsculas, mistura de idiomas, formato de números e tom, e a limpeza os segue. É atualizado a cada 50 ditados, ou sempre que você clicar em Aprender agora. Só se aprende como você escreve, nunca sobre o que escreve. Os textos vão apenas para o seu próprio provedor de limpeza, e a solicitação conta nos seus gastos. Uma nota que você editou não é substituída automaticamente. Desativado, nada é aprendido nem usado e as alterações guardadas para isso são apagadas; a nota fica até você clicar em Limpar.",
+    "ru": "Ваши недавние диктовки из истории и правки, которые вы вносите после вставки, сводятся в несколько строк о вашей пунктуации, заглавных буквах, смешении языков, записи чисел и тоне, и очистка им следует. Заметка обновляется каждые 50 диктовок или когда вы нажимаете «Изучить сейчас». Изучается только то, как вы пишете, а не о чём. Тексты отправляются только вашему поставщику очистки, а запрос учитывается в расходах. Заметку, которую вы изменили вручную, автоматически не заменяют. Если выключить, ничего не изучается и не используется, а сохранённые для этого правки удаляются; заметка остаётся, пока вы не нажмёте «Очистить».",
+    "fr": "Vos dictées récentes de l'historique et les modifications que vous faites après un collage sont résumées en quelques lignes sur votre ponctuation, vos majuscules, votre mélange de langues, l'écriture des nombres et votre ton, et le nettoyage les suit. La note est mise à jour toutes les 50 dictées, ou quand vous cliquez sur Apprendre maintenant. Seule votre façon d'écrire est apprise, jamais ce dont vous parlez. Les textes ne vont qu'à votre propre fournisseur de nettoyage, et la requête compte dans vos dépenses. Une note que vous avez modifiée n'est pas remplacée automatiquement. Désactivé, rien n'est appris ni utilisé et les modifications gardées pour cela sont supprimées ; la note reste jusqu'à ce que vous cliquiez sur Effacer.",
+    "de": "Deine letzten Diktate im Verlauf und die Änderungen, die du nach dem Einfügen machst, werden in ein paar Zeilen zu Zeichensetzung, Groß- und Kleinschreibung, Sprachmischung, Zahlenformaten und Ton zusammengefasst, und die Bereinigung richtet sich danach. Die Notiz wird alle 50 Diktate aktualisiert oder wenn du auf „Jetzt lernen“ klickst. Gelernt wird nur, wie du schreibst, nie worüber. Die Texte gehen nur an deinen eigenen Bereinigungsanbieter, und die Anfrage zählt zu deinen Ausgaben. Eine Notiz, die du bearbeitet hast, wird nicht automatisch ersetzt. Ausgeschaltet wird nichts gelernt oder verwendet, und die dafür gespeicherten Änderungen werden gelöscht; die Notiz bleibt, bis du auf „Löschen“ klickst."
+  },
+  "What's learned about how you write shows here. You can edit it too.": {
+    "ja": "学習した書き方の癖がここに表示されます。自分で編集することもできます。",
+    "ko": "학습한 글쓰기 습관이 여기에 표시됩니다. 직접 수정할 수도 있습니다.",
+    "es": "Aquí aparece lo que se aprende sobre cómo escribes. También puedes editarlo.",
+    "pt": "O que for aprendido sobre como você escreve aparece aqui. Você também pode editar.",
+    "ru": "Здесь появится то, что удалось узнать о вашем стиле. Это можно изменить вручную.",
+    "fr": "Ce qui est appris sur votre façon d'écrire s'affiche ici. Vous pouvez aussi le modifier.",
+    "de": "Hier erscheint, was über deinen Schreibstil gelernt wurde. Du kannst es auch bearbeiten."
+  },
+  "Learn Now": {
+    "ja": "今すぐ学習",
+    "ko": "지금 학습",
+    "es": "Aprender ahora",
+    "pt": "Aprender agora",
+    "ru": "Изучить сейчас",
+    "fr": "Apprendre maintenant",
+    "de": "Jetzt lernen"
+  },
+  "Clear": {
+    "ja": "消去",
+    "ko": "지우기",
+    "es": "Borrar",
+    "pt": "Limpar",
+    "ru": "Очистить",
+    "fr": "Effacer",
+    "de": "Löschen"
+  },
+  "Not enough texts to learn from yet. Dictate a little more first": {
+    "ja": "学習できる文章がまだ足りません。もう少し音声入力してからお試しください",
+    "ko": "학습할 텍스트가 아직 부족합니다. 조금 더 받아쓰기한 뒤 다시 시도하세요",
+    "es": "Aún no hay suficientes textos para aprender. Dicta un poco más primero",
+    "pt": "Ainda não há textos suficientes para aprender. Dite um pouco mais primeiro",
+    "ru": "Пока недостаточно текстов для изучения. Сначала надиктуйте ещё немного",
+    "fr": "Pas encore assez de textes pour apprendre. Dictez encore un peu d'abord",
+    "de": "Noch nicht genug Texte zum Lernen. Diktiere erst noch ein wenig"
+  },
+  "No clear habits yet. The note is unchanged": {
+    "ja": "まだはっきりした癖は見つかりません。メモは変わっていません",
+    "ko": "아직 뚜렷한 습관이 없습니다. 메모는 그대로입니다",
+    "es": "Aún no hay hábitos claros. La nota no ha cambiado",
+    "pt": "Ainda não há hábitos claros. A nota não mudou",
+    "ru": "Явных привычек пока нет. Заметка не изменилась",
+    "fr": "Pas encore d'habitudes nettes. La note n'a pas changé",
+    "de": "Noch keine klaren Gewohnheiten. Die Notiz ist unverändert"
+  },
+  "No usable note came back. The note is unchanged": {
+    "ja": "使えるメモが返ってきませんでした。メモは変わっていません",
+    "ko": "사용할 수 있는 메모를 받지 못했습니다. 메모는 그대로입니다",
+    "es": "No llegó una nota utilizable. La nota no ha cambiado",
+    "pt": "Não veio uma nota utilizável. A nota não mudou",
+    "ru": "Пригодная заметка не пришла. Заметка не изменилась",
+    "fr": "Aucune note utilisable n'est revenue. La note n'a pas changé",
+    "de": "Es kam keine brauchbare Notiz zurück. Die Notiz ist unverändert"
+  },
+  "Couldn't learn: ": {
+    "ja": "学習できませんでした：",
+    "ko": "학습하지 못했습니다: ",
+    "es": "No se pudo aprender: ",
+    "pt": "Não foi possível aprender: ",
+    "ru": "Не удалось изучить: ",
+    "fr": "Apprentissage impossible : ",
+    "de": "Lernen fehlgeschlagen: "
   },
   "heard as ": {
     "ja": "聞き取り：",
@@ -3590,6 +3788,42 @@
     "fr": "Impossible d’enregistrer l’audio",
     "de": "Aufnahme konnte nicht gesichert werden"
   },
+  "Play recording": {
+    "ja": "録音を再生",
+    "ko": "녹음 재생",
+    "es": "Reproducir grabación",
+    "pt": "Reproduzir gravação",
+    "ru": "Воспроизвести запись",
+    "fr": "Lire l’audio",
+    "de": "Aufnahme abspielen"
+  },
+  "Pause": {
+    "ja": "一時停止",
+    "ko": "일시 정지",
+    "es": "Pausar",
+    "pt": "Pausar",
+    "ru": "Пауза",
+    "fr": "Pause",
+    "de": "Pause"
+  },
+  "Couldn't play the recording": {
+    "ja": "録音を再生できませんでした",
+    "ko": "녹음을 재생할 수 없습니다",
+    "es": "No se pudo reproducir la grabación",
+    "pt": "Não foi possível reproduzir a gravação",
+    "ru": "Не удалось воспроизвести запись",
+    "fr": "Impossible de lire l’audio",
+    "de": "Aufnahme konnte nicht abgespielt werden"
+  },
+  "The recording is damaged or can't be read.": {
+    "ja": "録音ファイルが壊れているか、読み込めません。",
+    "ko": "녹음 파일이 손상되었거나 읽을 수 없습니다.",
+    "es": "La grabación está dañada o no se puede leer.",
+    "pt": "A gravação está danificada ou não pode ser lida.",
+    "ru": "Файл записи повреждён или не читается.",
+    "fr": "L’audio est endommagé ou illisible.",
+    "de": "Die Aufnahme ist beschädigt oder kann nicht gelesen werden."
+  },
   "Import": {
     "ja": "読み込む",
     "ko": "가져오기",
@@ -3994,6 +4228,105 @@
     "ru": "Снова вставляет последнюю диктовку в позицию курсора; если она не удалась, сначала распознаёт её заново",
     "fr": "Réinsère votre dernière dictée au curseur ; si elle a échoué, elle est d’abord retranscrite",
     "de": "Fügt dein letztes Diktat erneut am Cursor ein; ist es fehlgeschlagen, wird es zuerst neu transkribiert"
+  },
+  "Open Scratchpad": {
+    "ja": "スクラッチパッドを開く",
+    "ko": "스크래치패드 열기",
+    "es": "Abrir el bloc de notas",
+    "pt": "Abrir o bloco de notas",
+    "ru": "Открыть черновик",
+    "fr": "Ouvrir le bloc-notes",
+    "de": "Notizblock öffnen"
+  },
+  "Opens a fresh note to dictate into; dictations with nowhere to go are kept here too": {
+    "ja": "音声入力用の新しいメモを開きます。入力先がなかった音声入力もここに保存されます",
+    "ko": "받아쓰기할 새 메모를 엽니다. 넣을 곳이 없던 받아쓰기도 여기에 보관됩니다",
+    "es": "Abre una nota nueva para dictar en ella; los dictados que no tenían dónde ir también se guardan aquí",
+    "pt": "Abre uma nota nova para ditar nela; os ditados que não tinham onde entrar também ficam guardados aqui",
+    "ru": "Открывает новую заметку для диктовки; диктовки, которым некуда было попасть, тоже хранятся здесь",
+    "fr": "Ouvre une nouvelle note où dicter ; les dictées qui n’avaient nulle part où aller y sont aussi gardées",
+    "de": "Öffnet eine neue Notiz zum Diktieren; Diktate, die nirgends eingefügt werden konnten, landen ebenfalls hier"
+  },
+  "Scratchpad": {
+    "ja": "スクラッチパッド",
+    "ko": "스크래치패드",
+    "es": "Bloc de notas",
+    "pt": "Bloco de notas",
+    "ru": "Черновик",
+    "fr": "Bloc-notes",
+    "de": "Notizblock"
+  },
+  "New Note": {
+    "ja": "新規メモ",
+    "ko": "새 메모",
+    "es": "Nueva nota",
+    "pt": "Nova nota",
+    "ru": "Новая заметка",
+    "fr": "Nouvelle note",
+    "de": "Neue Notiz"
+  },
+  "Note": {
+    "ja": "メモ",
+    "ko": "메모",
+    "es": "Nota",
+    "pt": "Nota",
+    "ru": "Заметка",
+    "fr": "Note",
+    "de": "Notiz"
+  },
+  "No note selected": {
+    "ja": "メモが選択されていません",
+    "ko": "선택한 메모 없음",
+    "es": "Ninguna nota seleccionada",
+    "pt": "Nenhuma nota selecionada",
+    "ru": "Заметка не выбрана",
+    "fr": "Aucune note sélectionnée",
+    "de": "Keine Notiz ausgewählt"
+  },
+  "Edited {0}": {
+    "ja": "編集：{0}",
+    "ko": "수정: {0}",
+    "es": "Editada: {0}",
+    "pt": "Editada: {0}",
+    "ru": "Изменено: {0}",
+    "fr": "Modifiée : {0}",
+    "de": "Bearbeitet: {0}"
+  },
+  "Created {0}": {
+    "ja": "作成：{0}",
+    "ko": "생성: {0}",
+    "es": "Creada: {0}",
+    "pt": "Criada: {0}",
+    "ru": "Создано: {0}",
+    "fr": "Créée : {0}",
+    "de": "Erstellt: {0}"
+  },
+  "Copy Note": {
+    "ja": "メモをコピー",
+    "ko": "메모 복사",
+    "es": "Copiar nota",
+    "pt": "Copiar nota",
+    "ru": "Копировать заметку",
+    "fr": "Copier la note",
+    "de": "Notiz kopieren"
+  },
+  "Delete Note": {
+    "ja": "メモを削除",
+    "ko": "메모 삭제",
+    "es": "Eliminar nota",
+    "pt": "Apagar nota",
+    "ru": "Удалить заметку",
+    "fr": "Supprimer la note",
+    "de": "Notiz löschen"
+  },
+  "Note deleted": {
+    "ja": "メモを削除しました",
+    "ko": "메모를 삭제했습니다",
+    "es": "Nota eliminada",
+    "pt": "Nota apagada",
+    "ru": "Заметка удалена",
+    "fr": "Note supprimée",
+    "de": "Notiz gelöscht"
   },
   "A modifier on its own can't be used here — add a key to it.": {
     "ja": "修飾キー単独はここでは使えません。ほかのキーと組み合わせてください。",
@@ -4733,23 +5066,14 @@
     "fr": "Retirer",
     "de": "Entfernen"
   },
-  "Clean-up on": {
-    "ja": "整形：オン",
-    "ko": "다듬기: 켬",
-    "es": "Limpieza activada",
-    "pt": "Limpeza ligada",
-    "ru": "Очистка вкл.",
-    "fr": "Nettoyage activé",
-    "de": "Bereinigung an"
-  },
-  "Clean-up off": {
-    "ja": "整形：オフ",
-    "ko": "다듬기: 끔",
-    "es": "Limpieza desactivada",
-    "pt": "Limpeza desligada",
-    "ru": "Очистка выкл.",
-    "fr": "Nettoyage désactivé",
-    "de": "Bereinigung aus"
+  "Clean-up: {0}": {
+    "ja": "整形：{0}",
+    "ko": "다듬기: {0}",
+    "es": "Limpieza: {0}",
+    "pt": "Limpeza: {0}",
+    "ru": "Очистка: {0}",
+    "fr": "Nettoyage : {0}",
+    "de": "Bereinigung: {0}"
   },
   "Return on": {
     "ja": "Return：オン",
@@ -4885,6 +5209,78 @@
     "ru": "Отдельные настройки для приложения, например мгновенная отправка в Slack",
     "fr": "Donnez à une app ses propres réglages, comme l’envoi immédiat dans Slack",
     "de": "Eigene Einstellungen für eine App, etwa sofort senden in Slack"
+  },
+  "Recommended settings": {
+    "ja": "おすすめ設定",
+    "ko": "추천 설정",
+    "es": "Ajustes recomendados",
+    "pt": "Configurações recomendadas",
+    "ru": "Рекомендуемые настройки",
+    "fr": "Réglages recommandés",
+    "de": "Empfohlene Einstellungen"
+  },
+  "Recommended settings for common apps": {
+    "ja": "よく使うアプリのおすすめ設定",
+    "ko": "자주 쓰는 앱의 추천 설정",
+    "es": "Ajustes recomendados para apps comunes",
+    "pt": "Configurações recomendadas para apps comuns",
+    "ru": "Рекомендуемые настройки для популярных приложений",
+    "fr": "Réglages recommandés pour les apps courantes",
+    "de": "Empfohlene Einstellungen für gängige Apps"
+  },
+  "Light for chat and code, Polished for email": {
+    "ja": "チャットとコードはライト、メールは仕上げ",
+    "ko": "채팅과 코드는 가볍게, 메일은 매끄럽게",
+    "es": "Ligera para chat y código, Pulida para correo",
+    "pt": "Leve para chat e código, Polida para e-mail",
+    "ru": "Лёгкая для чатов и кода, тщательная для почты",
+    "fr": "Légère pour le chat et le code, Soignée pour l’e-mail",
+    "de": "Leicht für Chat und Code, Ausgefeilt für E-Mail"
+  },
+  "These common apps get the recommended clean-up strength. Only the strength changes, never Return or the spoken language, and nothing while clean-up is off. An app's own profile with a strength set wins.": {
+    "ja": "以下のよく使うアプリには、おすすめの整形の強さが自動で使われます。変わるのは強さだけで、Return キーや話す言語は変わらず、整形がオフのときは何もしません。アプリの設定で強さを決めていれば、そちらが優先されます。",
+    "ko": "아래의 자주 쓰는 앱에는 추천 다듬기 강도가 자동으로 쓰입니다. 강도만 바뀌고 Return 키나 말하는 언어는 바뀌지 않으며, 다듬기가 꺼져 있으면 아무 것도 하지 않습니다. 앱 설정에서 강도를 정했다면 그 설정이 우선합니다.",
+    "es": "Estas apps comunes usan la intensidad de limpieza recomendada. Solo cambia la intensidad, nunca Retorno ni el idioma hablado, y nada mientras la limpieza esté desactivada. El perfil propio de una app con una intensidad elegida tiene prioridad.",
+    "pt": "Estes apps comuns usam a intensidade de limpeza recomendada. Só a intensidade muda, nunca o Return nem o idioma falado, e nada enquanto a limpeza estiver desligada. O perfil próprio de um app com uma intensidade definida tem prioridade.",
+    "ru": "Эти популярные приложения получают рекомендуемую степень очистки. Меняется только степень — никогда не Return и не язык речи, а при выключенной очистке ничего. Собственный профиль приложения с заданной степенью важнее.",
+    "fr": "Ces apps courantes reçoivent l’intensité de nettoyage recommandée. Seule l’intensité change, jamais Retour ni la langue parlée, et rien quand le nettoyage est désactivé. Le profil propre d’une app avec une intensité choisie l’emporte.",
+    "de": "Diese gängigen Apps bekommen die empfohlene Bereinigungsstufe. Nur die Stufe ändert sich, nie Return oder die gesprochene Sprache, und nichts, solange die Bereinigung aus ist. Das eigene Profil einer App mit gesetzter Stufe hat Vorrang."
+  },
+  "These common apps get the recommended clean-up strength. Only the strength changes, never Enter or the spoken language, and nothing while clean-up is off. An app's own profile with a strength set wins.": {
+    "ja": "以下のよく使うアプリには、おすすめの整形の強さが自動で使われます。変わるのは強さだけで、Enter キーや話す言語は変わらず、整形がオフのときは何もしません。アプリの設定で強さを決めていれば、そちらが優先されます。",
+    "ko": "아래의 자주 쓰는 앱에는 추천 다듬기 강도가 자동으로 쓰입니다. 강도만 바뀌고 Enter 키나 말하는 언어는 바뀌지 않으며, 다듬기가 꺼져 있으면 아무 것도 하지 않습니다. 앱 설정에서 강도를 정했다면 그 설정이 우선합니다.",
+    "es": "Estas apps comunes usan la intensidad de limpieza recomendada. Solo cambia la intensidad, nunca Intro ni el idioma hablado, y nada mientras la limpieza esté desactivada. El perfil propio de una app con una intensidad elegida tiene prioridad.",
+    "pt": "Estes apps comuns usam a intensidade de limpeza recomendada. Só a intensidade muda, nunca o Enter nem o idioma falado, e nada enquanto a limpeza estiver desligada. O perfil próprio de um app com uma intensidade definida tem prioridade.",
+    "ru": "Эти популярные приложения получают рекомендуемую степень очистки. Меняется только степень — никогда не Enter и не язык речи, а при выключенной очистке ничего. Собственный профиль приложения с заданной степенью важнее.",
+    "fr": "Ces apps courantes reçoivent l’intensité de nettoyage recommandée. Seule l’intensité change, jamais Entrée ni la langue parlée, et rien quand le nettoyage est désactivé. Le profil propre d’une app avec une intensité choisie l’emporte.",
+    "de": "Diese gängigen Apps bekommen die empfohlene Bereinigungsstufe. Nur die Stufe ändert sich, nie Eingabe oder die gesprochene Sprache, und nichts, solange die Bereinigung aus ist. Das eigene Profil einer App mit gesetzter Stufe hat Vorrang."
+  },
+  "Chat apps": {
+    "ja": "チャットアプリ",
+    "ko": "채팅 앱",
+    "es": "Apps de chat",
+    "pt": "Apps de chat",
+    "ru": "Мессенджеры",
+    "fr": "Apps de discussion",
+    "de": "Chat-Apps"
+  },
+  "Terminals and code editors": {
+    "ja": "ターミナルとコードエディタ",
+    "ko": "터미널과 코드 편집기",
+    "es": "Terminales y editores de código",
+    "pt": "Terminais e editores de código",
+    "ru": "Терминалы и редакторы кода",
+    "fr": "Terminaux et éditeurs de code",
+    "de": "Terminals und Code-Editoren"
+  },
+  "Recommended: {0}": {
+    "ja": "おすすめ設定：{0}",
+    "ko": "추천 설정: {0}",
+    "es": "Recomendado: {0}",
+    "pt": "Recomendado: {0}",
+    "ru": "Рекомендуемая: {0}",
+    "fr": "Recommandé : {0}",
+    "de": "Empfohlen: {0}"
   },
   "Names, products, projects, separated by commas or lines": {
     "ja": "人名、製品名、プロジェクト名をカンマか改行で区切って入力",
@@ -5326,6 +5722,42 @@
     "ru": "На устройстве",
     "fr": "Sur l’appareil",
     "de": "Auf dem Gerät"
+  },
+  "On-device (offline)": {
+    "ja": "オンデバイス（オフライン）",
+    "ko": "온디바이스 (오프라인)",
+    "es": "En el dispositivo (sin conexión)",
+    "pt": "No dispositivo (offline)",
+    "ru": "На устройстве (без сети)",
+    "fr": "Sur l’appareil (hors ligne)",
+    "de": "Auf dem Gerät (offline)"
+  },
+  "Use on-device recognition when offline": {
+    "ja": "オフライン時はオンデバイス認識を使う",
+    "ko": "오프라인일 때 온디바이스 인식 사용",
+    "es": "Usar el reconocimiento en el dispositivo sin conexión",
+    "pt": "Usar o reconhecimento no dispositivo quando offline",
+    "ru": "Распознавать на устройстве, когда нет сети",
+    "fr": "Utiliser la reconnaissance sur l’appareil hors ligne",
+    "de": "Ohne Netzwerk auf dem Gerät erkennen"
+  },
+  "When the network is down, speech is recognised on this Mac with the speech recognition built into macOS, so dictation still gives you text. It's less accurate than cloud models and needs the speech model for your spoken language downloaded first. Clean-up needs the network too: offline, the text goes in as recognised.": {
+    "ja": "ネットワークが使えないときは、macOS に組み込まれた音声認識でこの Mac 上で文字起こしするので、音声入力はそのまま使えます。クラウドのモデルより精度は下がり、話す言語の音声モデルを先にダウンロードしておく必要があります。整形にもネットワークが必要なため、オフラインでは認識結果がそのまま入力されます。",
+    "ko": "네트워크가 끊기면 macOS에 내장된 음성 인식으로 이 Mac에서 받아쓰므로 받아쓰기가 그대로 글자를 내놓습니다. 클라우드 모델보다 정확도가 낮고, 말하는 언어의 음성 모델을 먼저 다운로드해야 합니다. 정리에도 네트워크가 필요해 오프라인에서는 인식된 텍스트가 그대로 입력됩니다.",
+    "es": "Cuando no hay red, la voz se reconoce en este Mac con el reconocimiento de voz integrado en macOS, así que el dictado sigue dándote texto. Es menos preciso que los modelos en la nube y necesita que el modelo de voz de tu idioma esté descargado antes. La limpieza también necesita la red: sin conexión, el texto se inserta tal como se reconoció.",
+    "pt": "Quando a rede cai, a fala é reconhecida neste Mac com o reconhecimento de fala integrado ao macOS, então o ditado continua gerando texto. É menos preciso que os modelos na nuvem e precisa que o modelo de fala do seu idioma já esteja baixado. A limpeza também precisa da rede: offline, o texto entra como foi reconhecido.",
+    "ru": "Когда сети нет, речь распознаётся на этом Mac встроенным в macOS распознаванием, так что диктовка по-прежнему даёт текст. Точность ниже, чем у облачных моделей, и речевая модель вашего языка должна быть загружена заранее. Очистке тоже нужна сеть: без неё текст вставляется как распознан.",
+    "fr": "Quand le réseau est coupé, la parole est reconnue sur ce Mac avec la reconnaissance vocale intégrée à macOS, et la dictée donne toujours du texte. C’est moins précis que les modèles dans le cloud et il faut avoir téléchargé au préalable le modèle vocal de votre langue. Le nettoyage a lui aussi besoin du réseau : hors ligne, le texte est inséré tel que reconnu.",
+    "de": "Ohne Netzwerk wird die Sprache auf diesem Mac mit der in macOS integrierten Spracherkennung erkannt, sodass das Diktat trotzdem Text liefert. Das ist ungenauer als Cloud-Modelle und setzt voraus, dass das Sprachmodell deiner Sprache schon geladen ist. Auch die Bereinigung braucht das Netzwerk: offline wird der Text so eingefügt, wie er erkannt wurde."
+  },
+  "When the network is down, speech is recognised on this PC with the on-device model, so dictation still gives you text. It's less accurate than cloud models and needs the on-device speech model downloaded first (SenseVoice Small: Chinese, English, Japanese, Korean and Cantonese). Clean-up needs the network too: offline, the text goes in as recognised.": {
+    "ja": "ネットワークが使えないときは、この PC 上のオンデバイスモデルで文字起こしするので、音声入力はそのまま使えます。クラウドのモデルより精度は下がり、オンデバイスの音声モデル（SenseVoice Small：中国語・英語・日本語・韓国語・広東語）を先にダウンロードしておく必要があります。整形にもネットワークが必要なため、オフラインでは認識結果がそのまま入力されます。",
+    "ko": "네트워크가 끊기면 이 PC의 온디바이스 모델로 받아쓰므로 받아쓰기가 그대로 글자를 내놓습니다. 클라우드 모델보다 정확도가 낮고, 온디바이스 음성 모델(SenseVoice Small: 중국어, 영어, 일본어, 한국어, 광둥어)을 먼저 다운로드해야 합니다. 정리에도 네트워크가 필요해 오프라인에서는 인식된 텍스트가 그대로 입력됩니다.",
+    "es": "Cuando no hay red, la voz se reconoce en este PC con el modelo en el dispositivo, así que el dictado sigue dándote texto. Es menos preciso que los modelos en la nube y necesita el modelo de voz en el dispositivo descargado antes (SenseVoice Small: chino, inglés, japonés, coreano y cantonés). La limpieza también necesita la red: sin conexión, el texto se inserta tal como se reconoció.",
+    "pt": "Quando a rede cai, a fala é reconhecida neste PC com o modelo no dispositivo, então o ditado continua gerando texto. É menos preciso que os modelos na nuvem e precisa do modelo de fala no dispositivo já baixado (SenseVoice Small: chinês, inglês, japonês, coreano e cantonês). A limpeza também precisa da rede: offline, o texto entra como foi reconhecido.",
+    "ru": "Когда сети нет, речь распознаётся на этом ПК моделью на устройстве, так что диктовка по-прежнему даёт текст. Точность ниже, чем у облачных моделей, и речевая модель на устройстве должна быть загружена заранее (SenseVoice Small: китайский, английский, японский, корейский и кантонский). Очистке тоже нужна сеть: без неё текст вставляется как распознан.",
+    "fr": "Quand le réseau est coupé, la parole est reconnue sur ce PC avec le modèle sur l’appareil, et la dictée donne toujours du texte. C’est moins précis que les modèles dans le cloud et il faut avoir téléchargé au préalable le modèle vocal sur l’appareil (SenseVoice Small : chinois, anglais, japonais, coréen et cantonais). Le nettoyage a lui aussi besoin du réseau : hors ligne, le texte est inséré tel que reconnu.",
+    "de": "Ohne Netzwerk wird die Sprache auf diesem PC mit dem Modell auf dem Gerät erkannt, sodass das Diktat trotzdem Text liefert. Das ist ungenauer als Cloud-Modelle und setzt voraus, dass das Sprachmodell auf dem Gerät schon geladen ist (SenseVoice Small: Chinesisch, Englisch, Japanisch, Koreanisch und Kantonesisch). Auch die Bereinigung braucht das Netzwerk: offline wird der Text so eingefügt, wie er erkannt wurde."
   },
   "Free and offline; less accurate than cloud models.": {
     "ja": "無料でオフライン。クラウドのモデルより精度は低めです。",

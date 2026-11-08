@@ -6,6 +6,8 @@ import Foundation
 public enum ShortcutAction: String, CaseIterable, Sendable {
     /// Puts the newest finished dictation at the cursor again (see `LastDictation`).
     case pasteLastDictation
+    /// Brings up the Scratchpad, to dictate a note when there's no text field to dictate into.
+    case openScratchpad
 }
 
 /// A key and the modifiers held with it, in the platform's own codes (macOS: a virtual key code and `CGEventFlags` bits;

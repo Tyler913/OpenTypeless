@@ -124,8 +124,20 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     private let trimSilence: Bool
     private let speculate: Bool
     private let onSpeculation: (@Sendable (String?) -> Void)?
+    /// The recognizer on this computer, for the chunks the provider can't be reached for (see `OfflineFallback`).
+    private let offline: OfflineFallbackRoute?
+    /// Whether `offline` can recognise this dictation's language without the network, asked once as the pipeline starts.
+    private let offlineReady: Task<Bool, Never>?
+    /// Recognitions on this computer run one at a time (two at once are slower than one after the other).
+    private let offlineGate = AsyncSemaphore(1)
 
     private let lock = NSLock()
+    /// `offlineReady`'s answer once it's in (nil until then), for the retry policy, which can't wait for it.
+    private var offlineReadyNow: Bool?
+    /// The dictation has gone over to the recognizer on this computer, for every chunk still to be transcribed.
+    private var switchedOffline = false
+    /// Chunks the recognizer on this computer transcribed in the provider's place.
+    private var answeredOffline: Set<Int> = []
     private let chunker: Chunker
     private var chunks: [Int: AudioChunk] = [:]
     private var results: [Int: ChunkState] = [:]
@@ -204,7 +216,14 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     /// Whether speech-to-text runs on this Mac (`OnDeviceRoute`): nothing to pay for, see `transcriptionCost`.
     public var isOnDevice: Bool { client is OnDeviceRoute }
 
+    /// The chunks the recognizer on this computer transcribed because the provider couldn't be reached (see
+    /// `OfflineFallback`), in order. They cost nothing: their usage isn't in `requestUsages`.
+    public func offlineChunks() -> [Int] {
+        lock.withLock { answeredOffline.sorted() }
+    }
+
     /// `client`: where each chunk's transcript comes from, a provider's API or the recognizer on this Mac.
+    /// `offline`: with a provider, the recognizer on this computer, which takes over while the network is down.
     /// `preset` lets a retry reuse transcripts that already succeeded (keyed by chunk index).
     /// `maxConcurrentRequests`: how many chunks are transcribed at once (a file being transcribed asks for fewer than a
     /// dictation, see `FileTranscription`).
@@ -222,6 +241,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         preset: [Int: String] = [:],
         backup: (client: APIClient, options: APIClient.TranscriptionOptions)? = nil,
         latency: TranscriptionLatency = TranscriptionLatency(),
+        offline: OfflineFallbackRoute? = nil,
         maxConcurrentRequests: Int = 3,
         trimSilence: Bool = true,
         speculate: Bool = true,
@@ -237,9 +257,18 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         self.latency = latency
         self.policy = policy
         self.observer = observer
+        self.offline = offline
+        self.offlineReady = offline.map { route in Task { await route.isReady() } }
         self.semaphore = AsyncSemaphore(max(1, maxConcurrentRequests))
         self.chunker = Chunker(config: chunkConfig)
         for (index, text) in preset { results[index] = .done(text) }
+        if let offlineReady {
+            Task { [weak self] in
+                let ready = await offlineReady.value
+                guard let self else { return }
+                self.lock.withLock { self.offlineReadyNow = ready }
+            }
+        }
     }
 
     public func append(_ samples: [Int16]) {
@@ -430,7 +459,8 @@ public final class TranscriptionPipeline: @unchecked Sendable {
             // hour-long file from being held in memory as it's transcribed.
             if case .failed = outcome.state {} else { chunks[index] = nil }
             if outcome.permanent { permanentFailures.insert(index) } else { permanentFailures.remove(index) }
-            if case .done = outcome.state { answeredByBackup[index] = outcome.backup } else { answeredByBackup[index] = nil }
+            if case .done = outcome.state { answeredByBackup[index] = outcome.route == .backup } else { answeredByBackup[index] = nil }
+            if case .done = outcome.state, outcome.route == .offline { answeredOffline.insert(index) } else { answeredOffline.remove(index) }
             switch outcome.state {
             case .done:
                 failureStreak = 0
@@ -472,7 +502,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
 
         let speculation = Speculation(chunk: chunk)
         speculation.task = Task { [weak self] in
-            guard let self else { return (.failed(APIError.cancelled.localizedDescription), true, false) }
+            guard let self else { return (.failed(APIError.cancelled.localizedDescription), true, .primary) }
             await self.semaphore.wait()
             let outcome = await self.run(chunk, report: false)
             await self.semaphore.signal()
@@ -499,7 +529,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         tasks[tail.index] = Task { [weak self] in
             let request = speculation.task
             let outcome = await withTaskCancellationHandler {
-                await request?.value ?? (.failed(APIError.cancelled.localizedDescription), true, false)
+                await request?.value ?? (.failed(APIError.cancelled.localizedDescription), true, .primary)
             } onCancel: {
                 request?.cancel()
             }
@@ -545,24 +575,28 @@ public final class TranscriptionPipeline: @unchecked Sendable {
 
     // MARK: - Requests
 
-    /// A chunk's request: its state, whether a failure is permanent, and whether the backup route answered.
-    private typealias Outcome = (state: ChunkState, permanent: Bool, backup: Bool)
+    /// Which route answered a chunk: the main one, the backup, or the recognizer on this computer in their place.
+    private enum Answerer { case primary, backup, offline }
+
+    /// A chunk's request: its state, whether a failure is permanent, and which route answered.
+    private typealias Outcome = (state: ChunkState, permanent: Bool, route: Answerer)
 
     /// `report` is false for a speculative tail: nothing is waiting on it yet, so the observer isn't told.
     private func run(_ chunk: AudioChunk, report: Bool = true) async -> Outcome {
-        if Task.isCancelled { return (.failed(APIError.cancelled.localizedDescription), true, false) }
+        if Task.isCancelled { return (.failed(APIError.cancelled.localizedDescription), true, .primary) }
         if report { observer?(chunk.index, .transcribing(attempt: 1)) }
         let chunk = trimSilence ? chunk.trimmed() : chunk
         do {
-            let (result, usedBackup) = try await transcribe(chunk, report: report)
-            if let usage = result.usage {
-                lock.withLock { if usedBackup { backupUsages.append(usage) } else { usages.append(usage) } }
+            let (result, route) = try await transcribe(chunk, report: report)
+            // The recognizer on this computer bills nothing: its chunks cost nothing at the provider's price.
+            if let usage = result.usage, route != .offline {
+                lock.withLock { if route == .backup { backupUsages.append(usage) } else { usages.append(usage) } }
             }
-            return (.done(result.text), false, usedBackup)
+            return (.done(result.text), false, route)
         } catch {
             let apiError = APIError.from(error)
             if apiError.refusesEveryRequest { lock.withLock { _ = refusals.insert(chunk.index) } }
-            return (.failed(apiError.localizedDescription), !apiError.isRetryable, false)
+            return (.failed(apiError.localizedDescription), !apiError.isRetryable, .primary)
         }
     }
 
@@ -573,9 +607,9 @@ public final class TranscriptionPipeline: @unchecked Sendable {
     }
 
     private func attempt(_ route: any SpeechToTextRoute, _ options: APIClient.TranscriptionOptions, _ chunk: AudioChunk,
-                         report: Bool) async throws -> APIClient.TranscriptionResult {
+                         policy: RetryPolicy? = nil, report: Bool) async throws -> APIClient.TranscriptionResult {
         try await route.transcribeDetailedWithRetry(
-            samples: chunk.samples, options: options, policy: policy,
+            samples: chunk.samples, options: options, policy: policy ?? providerPolicy,
             onRetry: { [observer] attempt, error in
                 if ProcessInfo.processInfo.environment["OPENTYPELESS_DEBUG"] != nil {
                     FileHandle.standardError.write(Data("  chunk \(chunk.index) attempt \(attempt) failed: \(error)\n".utf8))
@@ -585,15 +619,70 @@ public final class TranscriptionPipeline: @unchecked Sendable {
         )
     }
 
+    /// `policy`, and with the recognizer on this computer to take over, no more retries once they can't help (see
+    /// `OfflineFallback.takesOver`).
+    private var providerPolicy: RetryPolicy {
+        guard let offline else { return policy }
+        var policy = self.policy
+        let stopsEarly = policy.stopsEarly
+        policy.stopsEarly = { [weak self] error in
+            if stopsEarly?(error) == true { return true }
+            let ready = self?.lock.withLock { self?.offlineReadyNow } ?? nil
+            return OfflineFallback.takesOver(after: error, retriesLeft: true, networkDown: offline.networkDown(),
+                                             ready: ready == true)
+        }
+        return policy
+    }
+
+    /// One chunk. With the recognizer on this computer to stand in (`offline`), on it while the network is down or once
+    /// the dictation has gone over to it, and on it too when the provider can't be reached for it: the rest of the
+    /// dictation then goes there too, without waiting on the network again.
+    private func transcribe(_ chunk: AudioChunk, report: Bool) async throws -> (APIClient.TranscriptionResult, Answerer) {
+        guard let offline, let offlineReady else { return try await transcribeOnProvider(chunk, report: report) }
+        let switched = lock.withLock { switchedOffline }
+        let down = offline.networkDown()
+        // Readiness is only waited for (a moment, once) when it matters.
+        if switched || down, OfflineFallback.skipsProvider(switched: switched, networkDown: down, ready: await offlineReady.value) {
+            lock.withLock { switchedOffline = true }
+            return (try await recognizeOffline(chunk, on: offline, report: report), .offline)
+        }
+        do {
+            return try await transcribeOnProvider(chunk, report: report)
+        } catch {
+            guard !Task.isCancelled,
+                  OfflineFallback.takesOver(after: APIError.from(error), retriesLeft: false, networkDown: offline.networkDown(),
+                                            ready: await offlineReady.value) else { throw error }
+            lock.withLock { switchedOffline = true }
+            if ProcessInfo.processInfo.environment["OPENTYPELESS_DEBUG"] != nil {
+                FileHandle.standardError.write(Data("  chunk \(chunk.index): provider unreachable (\(error)), recognised on this computer\n".utf8))
+            }
+            return (try await recognizeOffline(chunk, on: offline, report: report), .offline)
+        }
+    }
+
+    /// One chunk on the recognizer on this computer, one at a time.
+    private func recognizeOffline(_ chunk: AudioChunk, on offline: OfflineFallbackRoute,
+                                  report: Bool) async throws -> APIClient.TranscriptionResult {
+        await offlineGate.wait()
+        do {
+            let result = try await attempt(offline.route, options, chunk, policy: OnDeviceRoute.policy, report: report)
+            await offlineGate.signal()
+            return result
+        } catch {
+            await offlineGate.signal()
+            throw error
+        }
+    }
+
     /// One chunk, on the primary route; with a backup route, the backup is asked too once the primary has failed,
     /// or is late (see `TranscriptionLatency`, and `raceSeconds` for a chunk sent after the recording ended) and the
     /// recording has ended, and whichever answers first is used; the other is cancelled.
-    private func transcribe(_ chunk: AudioChunk, report: Bool) async throws -> (APIClient.TranscriptionResult, usedBackup: Bool) {
+    private func transcribeOnProvider(_ chunk: AudioChunk, report: Bool) async throws -> (APIClient.TranscriptionResult, Answerer) {
         let start = ProcessInfo.processInfo.systemUptime
         guard let backup else {
             let result = try await attempt(client, options, chunk, report: report)
             latency.record(latency: ProcessInfo.processInfo.systemUptime - start, audioSeconds: chunk.duration)
-            return (result, false)
+            return (result, .primary)
         }
         let delay = hedgeDelay(for: chunk)
         return try await withThrowingTaskGroup(of: Attempt.self) { group in
@@ -619,7 +708,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
                 case let .primary(.success(result)):
                     group.cancelAll()
                     latency.record(latency: ProcessInfo.processInfo.systemUptime - start, audioSeconds: chunk.duration)
-                    return (result, false)
+                    return (result, .primary)
                 case let .primary(.failure(error)):
                     if APIError.from(error) == .cancelled || backupFailed {
                         group.cancelAll()
@@ -629,7 +718,7 @@ public final class TranscriptionPipeline: @unchecked Sendable {
                     askBackup = true
                 case let .backup(.success(result)):
                     group.cancelAll()
-                    return (result, true)
+                    return (result, .backup)
                 case .backup(.failure):
                     backupFailed = true
                     if let primaryError {

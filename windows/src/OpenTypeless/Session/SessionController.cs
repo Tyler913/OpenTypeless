@@ -189,6 +189,8 @@ public sealed class SessionController
     private Dictionary<string, ModelInfo> _modelInfo = new();
     /// <summary>False when retrying from the history page, or once the screen locked: the result goes to the clipboard instead.</summary>
     private bool _deliverByPaste = true;
+    /// <summary>Why <see cref="_deliverByPaste"/> is false, for whether the text is also kept in the Scratchpad (see <see cref="ScratchpadCapture"/>).</summary>
+    private ScratchpadCapture.Outcome _noPasteReason = ScratchpadCapture.Outcome.FromHistory;
     /// <summary>
     /// The text around the cursor in the field being dictated into, read as recording started, for the clean-up to spell
     /// names by (see <see cref="CursorContext"/>); null when that's off or there was none. Never saved.
@@ -212,6 +214,8 @@ public sealed class SessionController
 
     public SessionController()
     {
+        // Watched from now on, so the first dictation already knows whether the network is down.
+        NetworkStatus.Start();
         _editWatcher.OnCorrections = (corrections, quiet) =>
         {
             if (!_settings.LearnFromEdits) return;
@@ -222,6 +226,9 @@ public sealed class SessionController
                 Hud.Show(new HudPhase.Learned(string.Join(L("、", ", "), added)), 2.5);
             }
         };
+        _editWatcher.OnEdit = (inserted, edited) => StyleLearner.Shared.RecordEdit(inserted, edited);
+        StyleLearner.Shared.ModelInfoFor = model => _modelInfo.GetValueOrDefault(model);
+        StyleLearner.Shared.OnSpendReminder = reminder => Hud.ShowWhenFree(new HudPhase.Spending(reminder), 4);
         _recorder.OnFailure = error => _dispatcher.TryEnqueue(() =>
         {
             // The recorder has stopped: a warm microphone is opened again once idle (or by the next dictation).
@@ -487,6 +494,7 @@ public sealed class SessionController
             case SessionState.Processing:
                 Note($"{reason} while processing — the text goes to the clipboard");
                 _deliverByPaste = false;
+                _noPasteReason = ScratchpadCapture.Outcome.Locked;
                 break;
         }
         UpdateWarmMicrophone();
@@ -557,6 +565,7 @@ public sealed class SessionController
             // Laid out like any dictation's text, for when it's copied from History.
             record.RawText = LaidOutTranscript(raw).Text;
             record.ChunkTexts = pipeline.CompletedTranscripts();
+            NoteOfflineChunks(record, pipeline);
             Account(record, pipeline, null, discarded, sent);
             _history.Update(record);
         }
@@ -579,6 +588,8 @@ public sealed class SessionController
         _isLocked = false;
         // The new dictation is what the user is after now.
         DropPendingPasteLast("a dictation started");
+        // A recording playing in History would be heard by the microphone.
+        RecordingPlayer.Shared.Stop();
         // On-device needs its model and no key; a provider needs its key.
         if (SpeechModel.SetupIssue(_settings) is { } issue)
         {
@@ -604,6 +615,7 @@ public sealed class SessionController
         record.Status = DictationStatus.Recording;
         record.ProfileId = dictation.ProfileId;
         record.ProfileName = dictation.ProfileName;
+        record.Recommendation = dictation.Recommendation?.Id();
         record.ChunkLanguage = dictation.Language;
         _history.Update(record);
 
@@ -674,6 +686,7 @@ public sealed class SessionController
         _counter = counter;
         _dictationSettings = dictation;
         if (dictation.ProfileName is { } profileName) Note($"app profile: {profileName}");
+        if (dictation.Recommendation is { } recommendation) Note($"recommended settings: {recommendation.Id()}");
         _deliverByPaste = true;
         _pressedAt = pressedAt;
         _handsFree = false;
@@ -745,8 +758,9 @@ public sealed class SessionController
     private void WarmConnections(bool polishes)
     {
         var onDevice = _settings.SpeechEngine == SpeechEngine.OnDevice;
-        // On-device has no connection to open, but a model to load (about a second, the first time).
-        if (onDevice) SpeechModel.Shared.Transcriber.Warm();
+        // On-device has no connection to open, but a model to load (about a second, the first time); so does the model
+        // standing in for the provider while the network is down.
+        if (onDevice || (_settings.OnDeviceWhenOffline && NetworkStatus.IsDown && SpeechModel.Shared.IsReady)) SpeechModel.Shared.Transcriber.Warm();
         var endpoints = onDevice ? new List<ProviderEndpoint?>() : new List<ProviderEndpoint?> { _settings.SttEndpoint, _settings.SttBackupEndpoint };
         if (polishes || _settings.TranslationTarget != null || _settings.CommandModeEnabled)
         {
@@ -788,9 +802,24 @@ public sealed class SessionController
         var key = ModelPrice.Key(_settings.SttProvider, _settings.SttModel);
         var latency = forFile ? new TranscriptionLatency() : _latencies.GetValueOrDefault(key) ?? new TranscriptionLatency();
         if (!forFile) _latencies[key] = latency;
+        // A dictation's chunks go to the model on this PC while the network is down (see OfflineFallback); a file's don't.
+        var offline = !forFile && _settings.OnDeviceWhenOffline ? SpeechModel.OfflineRoute(hint, endpoint) : null;
         return new TranscriptionPipeline(Client(endpoint, forFile), new TranscriptionOptions(_settings.SttModel, hint, _settings.DictationVocabulary), preset: preset,
                                          backup: backup, latency: latency, speculate: !forFile, onSpeculation: onSpeculation,
-                                         maxConcurrentRequests: forFile ? FileTranscription.MaxConcurrentRequests : 3);
+                                         maxConcurrentRequests: forFile ? FileTranscription.MaxConcurrentRequests : 3,
+                                         offline: offline);
+    }
+
+    /// <summary>
+    /// Notes which of the record's chunks were recognised on this PC in the provider's place (see
+    /// <see cref="OfflineFallback"/>): those this run reused (Retry kept them) and this run's own.
+    /// </summary>
+    private void NoteOfflineChunks(DictationRecord record, TranscriptionPipeline pipeline)
+    {
+        var fresh = pipeline.OfflineChunks();
+        if (fresh.Count > 0) Note($"network unavailable: {fresh.Count} segment(s) recognised on this PC");
+        var chunks = (record.OnDeviceChunks ?? new List<int>()).Concat(fresh).Where(record.ChunkTexts.ContainsKey).Distinct().Order().ToList();
+        record.OnDeviceChunks = chunks.Count == 0 ? null : chunks;
     }
 
     private void StopCapture()
@@ -871,6 +900,7 @@ public sealed class SessionController
         {
             Note("released in an app with other settings than the one the recording started in → clipboard");
             _deliverByPaste = false;
+            _noPasteReason = ScratchpadCapture.Outcome.MovedAway;
         }
         Hud.ShowWorking(dictation.PolishEnabled || record.Translation != null || record.IsCommand);
 
@@ -921,6 +951,7 @@ public sealed class SessionController
             record.Timing.LastChunkRoute = pipeline.LastChunkUsedBackup is { } backup ? backup ? "backup" : "primary" : null;
             if (pipeline.TailWasSpeculative) Note($"last segment transcribed ahead of time: text {started.Elapsed.TotalSeconds:0.00}s after release");
             record.ChunkTexts = pipeline.CompletedTranscripts();
+            NoteOfflineChunks(record, pipeline);
             // With "new line" and "new paragraph" said on their own as line breaks: what goes in when it isn't cleaned up.
             var layout = LaidOutTranscript(raw);
             record.RawText = layout.Text;
@@ -945,6 +976,7 @@ public sealed class SessionController
         {
             if (!IsCurrent(generation, token)) return;
             record.ChunkTexts = pipeline.CompletedTranscripts();
+            NoteOfflineChunks(record, pipeline);
             record.RawText = failure.PartialText;
             record.Status = DictationStatus.Failed;
             record.Error = failure.Message;
@@ -1123,7 +1155,10 @@ public sealed class SessionController
                     _history.Update(record);
                     return;
                 }
-                notice = L("整理失败，已插入原文", "Clean-up failed — inserted raw text");
+                // With no network, said as such: there was nothing to fix.
+                notice = ApiException.From(error).Offline == NetworkFailure.NoConnection || NetworkStatus.IsDown
+                    ? L("离线，已插入未整理的文字", "Offline — inserted without clean-up")
+                    : L("整理失败，已插入原文", "Clean-up failed — inserted raw text");
                 record.Error = error.Message;
                 record.Status = DictationStatus.PolishFailed;
             }
@@ -1158,8 +1193,11 @@ public sealed class SessionController
         // it stays, now with its clean-up.
         if (token.IsCancellationRequested) record.Status = DictationStatus.Cancelled;
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
+        var counted = record.Counted == true;
         Account(record, pipeline, polished, discarded, sent);
         _history.Update(record);
+        // Counted just now: it finished for the first time (a retry of one already counted isn't new).
+        if (!counted && record.Counted == true) StyleLearner.Shared.DictationFinished(record);
     }
 
     // MARK: - Editing a selection
@@ -1472,6 +1510,23 @@ public sealed class SessionController
     private async Task<string> Deliver(string text, string? notice, int generation, DictationSettings dictation, CancellationToken token,
                                        bool watchEdits = true)
     {
+        // The Scratchpad's own editor, with the cursor in it: typed in directly, without the clipboard or a paste. No Enter,
+        // no send key, no watching for edits.
+        if (_deliverByPaste && !FocusMoved && Suits(dictation)
+            && ScratchpadWindow.TryInsert(text, _settings.FitToSurroundingText, _settings.VocabularyList))
+        {
+            Note("deliver → the Scratchpad's editor");
+            if (notice is { } scratchpadNotice)
+            {
+                Finish(new HudPhase.Error(scratchpadNotice), 3);
+            }
+            else
+            {
+                Reset();
+                Hud.FinishWorking();
+            }
+            return "scratchpad";
+        }
         if (_deliverByPaste) await TextInserter.LeaveMenuMode();
         var target = _deliverByPaste ? await FocusProbe.FocusedTarget() : FocusProbe.Target.NotEditable;
         // Read before the checks below, so a cancel or a switch of window while it's read still counts.
@@ -1488,7 +1543,9 @@ public sealed class SessionController
                 : otherSettings ? "an app with other settings in front" : "another window in front";
             Note($"deliver → clipboard ({reason})");
             TextInserter.CopyToClipboard(text);
-            Finish(notice is { } n ? new HudPhase.Error(n) : new HudPhase.Copied(), 1.6);
+            var saved = SaveToScratchpad(text, !_deliverByPaste ? _noPasteReason
+                : target == FocusProbe.Target.NotEditable ? ScratchpadCapture.Outcome.NotEditable : ScratchpadCapture.Outcome.MovedAway);
+            Finish(notice is { } n ? new HudPhase.Error(n) : new HudPhase.Copied(saved), saved ? 2.2 : 1.6);
             return "copied";
         }
         // The fitted text goes in only while the cursor is still where it was read; otherwise the text as cleaned up does.
@@ -1539,17 +1596,32 @@ public sealed class SessionController
                     Reset();
                     Hud.FinishWorking();
                 }
-                if (_settings.LearnFromEdits && watchEdits && !sent) _editWatcher.Watch(inserted);
+                if ((_settings.LearnFromEdits || _settings.LearnStyle) && watchEdits && !sent) _editWatcher.Watch(inserted);
                 return "pasted";
             case TextInserter.Outcome.Skipped:
                 // The screen locked or another window came to the front just as Ctrl+V was due.
                 TextInserter.CopyToClipboard(text);
-                Finish(notice is { } skippedNotice ? new HudPhase.Error(skippedNotice) : new HudPhase.Copied(), 1.6);
+                var savedSkipped = SaveToScratchpad(text, _isLocked ? ScratchpadCapture.Outcome.Locked : ScratchpadCapture.Outcome.MovedAway);
+                Finish(notice is { } skippedNotice ? new HudPhase.Error(skippedNotice) : new HudPhase.Copied(savedSkipped), savedSkipped ? 2.2 : 1.6);
                 return "copied";
             default:
-                Finish(new HudPhase.Copied(), 1.6);
+                // Ctrl+V was sent but nothing took the text: it's on the clipboard.
+                var savedFailed = SaveToScratchpad(text, ScratchpadCapture.Outcome.NotPasted);
+                Finish(new HudPhase.Copied(savedFailed), savedFailed ? 2.2 : 1.6);
                 return "failed";
         }
+    }
+
+    /// <summary>
+    /// "Save to Scratchpad when there's nowhere to type": a dictation that went to the clipboard for want of a place to go
+    /// is added to today's note too (see <see cref="ScratchpadCapture"/>). Returns whether it was.
+    /// </summary>
+    private bool SaveToScratchpad(string text, ScratchpadCapture.Outcome outcome)
+    {
+        if (!ScratchpadCapture.Saves(text, outcome, _settings.SaveToScratchpad)) return false;
+        ScratchpadStore.Shared.Capture(text);
+        Note($"saved to the Scratchpad ({outcome.RawValue()})");
+        return true;
     }
 
     /// <summary>
@@ -1619,10 +1691,12 @@ public sealed class SessionController
         var settings = dictation ?? _settings.GlobalDictationSettings;
         var instructions = settings.ExtraInstructions;
         var primary = Route(endpoint, _settings.PolishModel, instructions, translation, context, sent, forFile,
-                            dictatedLineBreaks: dictatedLineBreaks, layout: settings.Layout, spokenLanguage: settings.Language);
+                            dictatedLineBreaks: dictatedLineBreaks, layout: settings.Layout, spokenLanguage: settings.Language,
+                            strength: settings.Strength);
         var backup = _settings.PolishBackupEndpoint is { } backupEndpoint
             ? Route(backupEndpoint, _settings.PolishBackupModel, instructions, translation, context, sent, forFile,
-                    dictatedLineBreaks: dictatedLineBreaks, layout: settings.Layout, spokenLanguage: settings.Language)
+                    dictatedLineBreaks: dictatedLineBreaks, layout: settings.Layout, spokenLanguage: settings.Language,
+                    strength: settings.Strength)
             : null;
         return await SegmentedPolish.Run(raw, primary, backup, onPartial, token,
                                          forFile ? FileTranscription.CleanUpConcurrency : null, holdWhile);
@@ -1633,7 +1707,8 @@ public sealed class SessionController
 
     private PolishRoute Route(ProviderEndpoint endpoint, string model, string instructions, TranslationTarget? translation,
                               string? context = null, ContextSent? sent = null, bool forFile = false, string? selection = null,
-                              bool dictatedLineBreaks = false, TextLayout layout = TextLayout.Natural, string spokenLanguage = "")
+                              bool dictatedLineBreaks = false, TextLayout layout = TextLayout.Natural, string spokenLanguage = "",
+                              PolishStrength strength = PolishStrength.Standard)
     {
         model = model.Trim();
         return new PolishRoute(Client(endpoint, forFile), new PolishOptions(
@@ -1649,7 +1724,8 @@ public sealed class SessionController
             OnContextSent: sent is null ? null : sent.Mark,
             DictatedLineBreaks: dictatedLineBreaks,
             Layout: layout,
-            SpokenLanguage: spokenLanguage));
+            SpokenLanguage: spokenLanguage,
+            Strength: strength));
     }
 
     /// <summary>
@@ -1725,6 +1801,9 @@ public sealed class SessionController
         {
             case ShortcutAction.PasteLastDictation:
                 PasteLastDictation(shortcut, Win32.GetForegroundWindow());
+                break;
+            case ShortcutAction.OpenScratchpad:
+                ScratchpadWindow.Open();
                 break;
         }
     }
@@ -1866,20 +1945,26 @@ public sealed class SessionController
             return;
         }
         _deliverByPaste = paste;
+        _noPasteReason = ScratchpadCapture.Outcome.FromHistory;
         // A cancelled recording still being transcribed in the background is this run's now.
         _keptInBackground.Remove(saved.Id);
         // The app profile it was made with, while that still exists; the global settings otherwise.
-        var dictation = _settings.DictationSettingsForProfile(saved.ProfileId);
+        var dictation = _settings.DictationSettingsForProfile(saved.ProfileId, saved.Recommendation);
         var record = saved.Copy();
         record.Status = DictationStatus.Processing;
         record.Error = null;
         record.ProfileId = dictation.ProfileId;
         record.ProfileName = dictation.ProfileName;
+        record.Recommendation = dictation.Recommendation?.Id();
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again, and
         // transcribed with the same language hint (a profile, or the global setting, may have changed it since).
-        var preset = dictation.ReusesTranscripts(saved.ChunkLayout, saved.ChunkLanguage) ? saved.ChunkTexts : new Dictionary<int, string>();
+        var saves = dictation.ReusesTranscripts(saved.ChunkLayout, saved.ChunkLanguage);
+        // Chunks recognised on this PC for want of a network go to the provider again, now that it may be reachable.
+        var (preset, offlineChunks) = OfflineFallback.Reused(saves ? saved.ChunkTexts : new Dictionary<int, string>(), saved.OnDeviceChunks,
+                                                             usesProvider: _settings.SpeechEngine == SpeechEngine.Provider);
         // Saved with the new layout and language, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).
         record.ChunkTexts = new Dictionary<int, string>(preset);
+        record.OnDeviceChunks = offlineChunks;
         record.ChunkLayout = Chunker.Layout;
         record.ChunkLanguage = dictation.Language;
         _history.Update(record);
@@ -1925,6 +2010,7 @@ public sealed class SessionController
             if (_pipeline is { } pipeline)
             {
                 record.ChunkTexts = pipeline.CompletedTranscripts();
+                NoteOfflineChunks(record, pipeline);
                 if (record.RawText.Length == 0)
                 {
                     record.RawText = TranscriptJoiner.Join(record.ChunkTexts.OrderBy(p => p.Key).Select(p => p.Value));
@@ -1960,7 +2046,11 @@ public sealed class SessionController
         StopCapture();
         record.Duration = _counter.Seconds;
         // A retry reuses the segments already transcribed.
-        if (_pipeline is { } pipeline) record.ChunkTexts = pipeline.CompletedTranscripts();
+        if (_pipeline is { } pipeline)
+        {
+            record.ChunkTexts = pipeline.CompletedTranscripts();
+            NoteOfflineChunks(record, pipeline);
+        }
         // An accidental tap isn't worth an entry.
         if (record.Duration - _preRollSeconds < 0.4) _history.Delete(record);
         else _history.Update(record);

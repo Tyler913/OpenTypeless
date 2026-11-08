@@ -175,6 +175,11 @@ struct MenuPopoverView: View {
         VStack(spacing: 0) {
             MenuRow(symbol: "gearshape.fill", title: L("设置", "Settings")) { close(); openSettings(nil) }
             MenuRow(symbol: "clock.fill", title: L("历史", "History")) { close(); openSettings(.history) }
+            MenuRow(symbol: ShortcutAction.openScratchpad.symbol, title: L("草稿本", "Scratchpad"),
+                    shortcut: settings.shortcut(for: .openScratchpad)?.displayName) {
+                close()
+                ScratchpadWindowController.shared.show()
+            }
             pasteLastButton
             Divider().padding(.vertical, 4)
             MenuRow(symbol: "power", title: L("退出 OpenTypeless", "Quit OpenTypeless")) { NSApp.terminate(nil) }

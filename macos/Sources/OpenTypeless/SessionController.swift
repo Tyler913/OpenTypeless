@@ -172,6 +172,8 @@ final class SessionController: ObservableObject {
     private var modelInfoLoading = false
     /// False when retrying from the history window, or once the screen locked: the result goes to the clipboard instead.
     private var deliverByPaste = true
+    /// Why `deliverByPaste` is false, for whether the text is also kept in the Scratchpad (see `ScratchpadCapture`).
+    private var noPasteReason: ScratchpadCapture.Outcome = .fromHistory
     /// The text around the cursor in the field being dictated into, read as recording started, for the clean-up to spell
     /// names by (see CursorContext); nil when that's off or there was none. Never saved.
     private var cursorContext: String?
@@ -184,6 +186,8 @@ final class SessionController: ObservableObject {
     private(set) lazy var files = FileTranscriber(controller: self)
 
     init() {
+        // Watched from now on, so the first dictation already knows whether the network is down.
+        _ = NetworkStatus.shared
         editWatcher.onCorrections = { [weak self] corrections, quiet in
             guard let self, self.settings.learnFromEdits else { return }
             let added = self.settings.learn(corrections)
@@ -191,6 +195,11 @@ final class SessionController: ObservableObject {
             if !added.isEmpty, !quiet, self.state == .idle {
                 self.hud.show(.learned(added.joined(separator: L("、", ", "))), autoHideAfter: 2.5)
             }
+        }
+        editWatcher.onEdit = { inserted, edited in StyleLearner.shared.recordEdit(inserted: inserted, edited: edited) }
+        StyleLearner.shared.modelInfo = { [weak self] model in self?.modelInfo[model] }
+        StyleLearner.shared.onSpendReminder = { [weak self] reminder in
+            self?.hud.showWhenFree(.spending(reminder), autoHideAfter: 4)
         }
         // The capsule's buttons: ✕ (and ■ while processing) is Esc, ↑ is letting go of the key.
         hud.model.onCancel = { [weak self] in self?.escapePressed() }
@@ -446,6 +455,7 @@ final class SessionController: ObservableObject {
         case .processing:
             note("\(reason) while processing — the text goes to the clipboard")
             deliverByPaste = false
+            noPasteReason = .locked
         }
     }
 
@@ -519,6 +529,7 @@ final class SessionController: ObservableObject {
             // Laid out like any dictation's text, for when it's copied from History.
             record.rawText = self.laidOutTranscript(raw).text
             record.chunkTexts = pipeline.completedTranscripts()
+            self.noteOfflineChunks(&record, pipeline: pipeline)
             self.account(&record, pipeline: pipeline, polished: nil, discarded: discarded, context: sent)
             self.history.update(record)
         }
@@ -538,6 +549,8 @@ final class SessionController: ObservableObject {
         isLocked = false
         // The new dictation is what the user is after now.
         dropPendingPasteLast("a dictation started")
+        // A recording playing in History would be heard by the microphone.
+        RecordingPlayer.shared.stop()
         guard settings.speechReady else {
             note("not started — speech-to-text provider not configured")
             hud.show(.error(settings.speechSetupMessage), autoHideAfter: 3)
@@ -558,12 +571,13 @@ final class SessionController: ObservableObject {
 
         // Whatever the user did to the previous dictation is final now.
         editWatcher.finish(quiet: true, reason: "next dictation")
-        if settings.learnFromEdits { editWatcher.prepare() }
+        if settings.learnFromEdits || settings.learnStyle { editWatcher.prepare() }
 
         var record = history.create()
         record.status = .recording
         record.profileID = dictation.profileID
         record.profileName = dictation.profileName
+        record.recommendation = dictation.recommendation?.rawValue
         record.chunkLanguage = dictation.language
         history.update(record)
 
@@ -632,6 +646,7 @@ final class SessionController: ObservableObject {
         self.counter = counter
         dictationSettings = dictation
         if let name = dictation.profileName { note("app profile: \(name)") }
+        if let kind = dictation.recommendation { note("recommended settings: \(kind.rawValue)") }
         deliverByPaste = true
         self.pressedAt = pressedAt
         handsFree = false
@@ -756,10 +771,25 @@ final class SessionController: ObservableObject {
             preset: preset,
             backup: backup,
             latency: latency,
+            offline: !forFile && settings.onDeviceWhenOffline ? offlineFallback(language: language, endpoint: endpoint) : nil,
             maxConcurrentRequests: forFile ? FileTranscription.maxConcurrentRequests : 3,
             speculate: !forFile,
             onSpeculation: onSpeculation
         )
+    }
+
+    /// The recognizer on this Mac as the provider's stand-in while the network is down (see `OfflineFallback`): only with
+    /// the model for `language` already here, since nothing can be downloaded then. A provider on this Mac itself (a
+    /// local server) doesn't need the network, so only its own failures count for it, not the system's word.
+    private func offlineFallback(language: String?, endpoint: ProviderEndpoint) -> OfflineFallbackRoute {
+        let local = OfflineFallback.isLocalHost(endpoint.baseURL.host ?? "")
+        return OfflineFallbackRoute(
+            route: OnDeviceRoute(recognizer: AppleSpeechRecognizer.installedOnly),
+            isReady: {
+                guard let locale = await OnDeviceModels.locale(for: language ?? "") else { return false }
+                return await OnDeviceModels.isInstalled(locale)
+            },
+            networkDown: { !local && NetworkStatus.shared.isDown })
     }
 
     private func stopCapture() {
@@ -818,6 +848,7 @@ final class SessionController: ObservableObject {
         if !suits(dictation) {
             note("released in \(frontmostID), which has other settings than the app the recording started in → clipboard")
             deliverByPaste = false
+            noPasteReason = .movedAway
         }
         hud.showWorking(polishes: dictation.polishEnabled || record.translation != nil || record.isCommand)
 
@@ -874,6 +905,7 @@ final class SessionController: ObservableObject {
                             ProcessInfo.processInfo.systemUptime - started))
             }
             record.chunkTexts = pipeline.completedTranscripts()
+            noteOfflineChunks(&record, pipeline: pipeline)
             // With "new line" and "new paragraph" said on their own as line breaks: what goes in when it isn't cleaned up.
             let layout = laidOutTranscript(raw)
             record.rawText = layout.text
@@ -899,6 +931,7 @@ final class SessionController: ObservableObject {
         } catch let failure as PipelineFailure {
             guard isCurrent(generation) else { return }
             record.chunkTexts = pipeline.completedTranscripts()
+            noteOfflineChunks(&record, pipeline: pipeline)
             record.rawText = failure.partialText
             record.status = .failed
             record.error = failure.localizedDescription
@@ -918,6 +951,15 @@ final class SessionController: ObservableObject {
             lastError = error.localizedDescription
             finish(showing: .error(error.localizedDescription), hideAfter: 5)
         }
+    }
+
+    /// Notes which of the record's chunks were recognised on this Mac in the provider's place (see `OfflineFallback`):
+    /// those this run reused (`retry` kept them) and this run's own.
+    private func noteOfflineChunks(_ record: inout DictationRecord, pipeline: TranscriptionPipeline) {
+        let fresh = pipeline.offlineChunks()
+        if !fresh.isEmpty { note("network unavailable: \(fresh.count) segment(s) recognised on this Mac") }
+        let chunks = Set(record.onDeviceChunks ?? []).union(fresh).filter { record.chunkTexts[$0] != nil }
+        record.onDeviceChunks = chunks.isEmpty ? nil : chunks.sorted()
     }
 
     /// `layout`: the record's transcript laid out (see `SpokenLayout.layout`). A line break said at the very start or end
@@ -1049,7 +1091,10 @@ final class SessionController: ObservableObject {
                     history.update(record)
                     return
                 }
-                notice = L("整理失败，已插入原文", "Clean-up failed — inserted raw text")
+                // With no network, said as such: there was nothing to fix.
+                notice = APIError.from(error).networkFailure == .noConnection || NetworkStatus.shared.isDown
+                    ? L("离线，已插入未整理的文字", "Offline — inserted without clean-up")
+                    : L("整理失败，已插入原文", "Clean-up failed — inserted raw text")
                 record.error = error.localizedDescription
                 record.status = .polishFailed
             }
@@ -1078,8 +1123,11 @@ final class SessionController: ObservableObject {
         // so it stays, now with its clean-up.
         if Task.isCancelled { record.status = .cancelled }
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
+        let counted = record.counted == true
         account(&record, pipeline: pipeline, polished: polished, discarded: discarded, context: sent)
         history.update(record)
+        // Counted just now: it finished for the first time (a retry of one already counted isn't new).
+        if !counted, record.counted == true { StyleLearner.shared.dictationFinished(record) }
     }
 
     /// `transcript` with the layout commands said in it as line breaks, unless they're switched off (see `SpokenLayout`).
@@ -1381,13 +1429,27 @@ final class SessionController: ObservableObject {
     @discardableResult
     private func deliver(_ text: String, notice: String?, generation: Int, dictation: DictationSettings,
                          watchEdits: Bool = true) async -> String {
+        // The Scratchpad's own editor, with the cursor in it: typed in directly, before Accessibility is asked about this
+        // app's own window (which would wait on the main thread, this one). No Return, no send key, no watching for edits.
+        if deliverByPaste, !focusMoved, suits(dictation),
+           ScratchpadWindowController.shared.insert(text, fit: settings.fitToSurroundingText, vocabulary: settings.vocabularyList) {
+            note("deliver → the Scratchpad's editor")
+            if let notice {
+                finish(showing: .error(notice), hideAfter: 3)
+            } else {
+                reset()
+                hud.finishWorking()
+            }
+            return "scratchpad"
+        }
         let target = deliverByPaste ? FocusProbe.focusedTarget() : .notEditable
         let otherSettings = deliverByPaste && !suits(dictation)
         if target == .notEditable || deliverByPaste && focusMoved || otherSettings {
             let reason = target == .notEditable ? "focus not editable" : otherSettings ? "an app with other settings in front" : "another app in front"
             note("deliver → clipboard (\(reason)) in \(frontmostID)")
             TextInserter.copyToClipboard(text)
-            finish(showing: notice.map { .error($0) } ?? .copied, hideAfter: 1.6)
+            let saved = saveToScratchpad(text, after: !deliverByPaste ? noPasteReason : target == .notEditable ? .notEditable : .movedAway)
+            finish(showing: notice.map { .error($0) } ?? (saved ? .savedToScratchpad : .copied), hideAfter: saved ? 2.2 : 1.6)
             return "copied"
         }
         // The fitted text goes in only while the cursor is still where it was read; otherwise the text as cleaned up does.
@@ -1429,21 +1491,34 @@ final class SessionController: ObservableObject {
                 reset()
                 hud.finishWorking()
             }
-            if settings.learnFromEdits, watchEdits, !sent { editWatcher.watch(inserted: inserted) }
+            if settings.learnFromEdits || settings.learnStyle, watchEdits, !sent { editWatcher.watch(inserted: inserted) }
             return "pasted"
         case .notPasted:
-            finish(showing: .copied, hideAfter: 1.6)
+            let saved = saveToScratchpad(text, after: .notPasted)
+            finish(showing: saved ? .savedToScratchpad : .copied, hideAfter: saved ? 2.2 : 1.6)
             return "failed"
         case .skipped:
             // The screen locked or another app came to the front just as ⌘V was due.
             TextInserter.copyToClipboard(text)
-            finish(showing: notice.map { .error($0) } ?? .copied, hideAfter: 1.6)
+            let saved = saveToScratchpad(text, after: isLocked ? .locked : .movedAway)
+            finish(showing: notice.map { .error($0) } ?? (saved ? .savedToScratchpad : .copied), hideAfter: saved ? 2.2 : 1.6)
             return "copied"
         case .noPermission:
+            saveToScratchpad(text, after: .noPermission)
             finish(showing: .error(L("没有辅助功能权限，文字已复制到剪贴板",
                                      "No Accessibility permission — text copied to the clipboard")), hideAfter: 3)
             return "failed"
         }
+    }
+
+    /// "Save to Scratchpad when there's nowhere to type": a dictation that went to the clipboard for want of a place to go
+    /// is added to today's note too (see `ScratchpadCapture`). Returns whether it was.
+    @discardableResult
+    private func saveToScratchpad(_ text: String, after outcome: ScratchpadCapture.Outcome) -> Bool {
+        guard ScratchpadCapture.saves(text, after: outcome, enabled: settings.saveToScratchpad) else { return false }
+        ScratchpadStore.shared.capture(text)
+        note("saved to the Scratchpad (\(outcome.rawValue))")
+        return true
     }
 
     /// Presses the send key that ended the recording in the app the text was just pasted into, under the same conditions as
@@ -1498,11 +1573,11 @@ final class SessionController: ObservableObject {
         let instructions = dictation.extraInstructions
         let primary = route(endpoint, model: settings.polishModel, instructions: instructions, translation: translation,
                             context: context, sent: sent, dictatedLineBreaks: dictatedLineBreaks, forFile: forFile,
-                            layout: dictation.layout, spokenLanguage: dictation.language)
+                            layout: dictation.layout, spokenLanguage: dictation.language, strength: dictation.strength)
         let backup = settings.polishBackupEndpoint.map {
             route($0, model: settings.polishBackupModel, instructions: instructions, translation: translation,
                   context: context, sent: sent, dictatedLineBreaks: dictatedLineBreaks, forFile: forFile,
-                  layout: dictation.layout, spokenLanguage: dictation.language)
+                  layout: dictation.layout, spokenLanguage: dictation.language, strength: dictation.strength)
         }
         return try await SegmentedPolish.run(transcript: raw, primary: primary, backup: backup,
                                              concurrency: forFile ? FileTranscription.cleanUpConcurrency : nil,
@@ -1512,7 +1587,7 @@ final class SessionController: ObservableObject {
     private func route(_ endpoint: ProviderEndpoint, model: String, instructions: String, translation: TranslationTarget?,
                        selection: String? = nil, context: String? = nil, sent: ContextSent? = nil,
                        dictatedLineBreaks: Bool = false, forFile: Bool = false, layout: TextLayout = .natural,
-                       spokenLanguage: String = "") -> PolishRoute {
+                       spokenLanguage: String = "", strength: PolishStrength = .standard) -> PolishRoute {
         let model = model.trimmingCharacters(in: .whitespaces)
         return PolishRoute(client: forFile ? .forFiles(endpoint: endpoint) : APIClient(endpoint: endpoint), options: PolishOptions(
             model: model,
@@ -1527,7 +1602,8 @@ final class SessionController: ObservableObject {
             onContextSent: { sent?.mark() },
             dictatedLineBreaks: dictatedLineBreaks,
             layout: layout,
-            spokenLanguage: spokenLanguage
+            spokenLanguage: spokenLanguage,
+            strength: strength
         ))
     }
 
@@ -1591,6 +1667,7 @@ final class SessionController: ObservableObject {
         }
         switch action {
         case .pasteLastDictation: pasteLastDictation(releasing: shortcut)
+        case .openScratchpad: ScratchpadWindowController.shared.show()
         }
     }
 
@@ -1719,20 +1796,26 @@ final class SessionController: ObservableObject {
             return
         }
         deliverByPaste = paste
+        noPasteReason = .fromHistory
         // A cancelled recording still being transcribed in the background is this run's now.
         keptInBackground.remove(saved.id)
         // The app profile it was made with, while that still exists; the global settings otherwise.
-        let dictation = settings.dictationSettings(profileID: saved.profileID)
+        let dictation = settings.dictationSettings(profileID: saved.profileID, recommendation: saved.recommendation)
         var record = saved
         record.status = .processing
         record.error = nil
         record.profileID = dictation.profileID
         record.profileName = dictation.profileName
+        record.recommendation = dictation.recommendation?.rawValue
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again, and
         // transcribed with the same language hint (a profile, or the global setting, may have changed it since).
-        let preset = dictation.reusesTranscripts(layout: saved.chunkLayout, language: saved.chunkLanguage) ? saved.chunkTexts : [:]
+        let saves = dictation.reusesTranscripts(layout: saved.chunkLayout, language: saved.chunkLanguage)
+        // Chunks recognised on this Mac for want of a network go to the provider again, now that it may be reachable.
+        let (preset, offlineChunks) = OfflineFallback.reused(saves ? saved.chunkTexts : [:], onDevice: saved.onDeviceChunks,
+                                                             usesProvider: settings.speechEngine == .provider)
         // Saved with the new layout and language, so only transcripts of the new chunks may stay (a quit mid-retry keeps them).
         record.chunkTexts = preset
+        record.onDeviceChunks = offlineChunks
         record.chunkLayout = Chunker.layout
         record.chunkLanguage = dictation.language
         history.update(record)
@@ -1768,6 +1851,7 @@ final class SessionController: ObservableObject {
             // Cancelled while processing: keep what was transcribed; it can be re-transcribed for a day.
             if let pipeline {
                 record.chunkTexts = pipeline.completedTranscripts()
+                noteOfflineChunks(&record, pipeline: pipeline)
                 if record.rawText.isEmpty {
                     record.rawText = TranscriptJoiner.join(record.chunkTexts.sorted { $0.key < $1.key }.map(\.value))
                 }
@@ -1791,7 +1875,10 @@ final class SessionController: ObservableObject {
         stopCapture()
         record.duration = counter.seconds
         // A retry reuses the segments already transcribed.
-        if let pipeline { record.chunkTexts = pipeline.completedTranscripts() }
+        if let pipeline {
+            record.chunkTexts = pipeline.completedTranscripts()
+            noteOfflineChunks(&record, pipeline: pipeline)
+        }
         // An accidental tap isn't worth an entry.
         if record.duration - preRollSeconds < 0.4 { history.delete(record) } else { history.update(record) }
     }

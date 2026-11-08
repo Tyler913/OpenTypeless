@@ -72,4 +72,49 @@ public sealed class SpeechModel
         var name = settings.SttProvider.DisplayName();
         return (L($"请先在设置里配置语音转文字服务商（{name}）", $"Set up the speech-to-text provider ({name}) in Settings first"), "providers");
     }
+
+    /// <summary>
+    /// The model as the provider's stand-in while the network is down (see <see cref="OfflineFallback"/>): only once it's
+    /// downloaded and knows <paramref name="language"/>, since nothing can be downloaded then. A provider on this PC itself
+    /// (a local server) doesn't need the network, so only its own failures count for it, not the system's word.
+    /// </summary>
+    public static OfflineFallbackRoute OfflineRoute(string? language, ProviderEndpoint endpoint)
+    {
+        var local = OfflineFallback.IsLocalHost(endpoint.BaseUrl.Host);
+        return new OfflineFallbackRoute(Shared.Transcriber, OnDeviceTranscriber.Options(language),
+                                        () => Shared.IsReady && OnDeviceLanguages.ModelLanguage(language) != null,
+                                        () => !local && NetworkStatus.IsDown);
+    }
+}
+
+/// <summary>
+/// Whether this PC has a network connection at all (any adapter up that isn't a loopback or tunnel), so a dictation goes
+/// to the model on this PC at once while it hasn't, rather than waiting on requests that can't get out (see
+/// <see cref="OfflineFallback"/>). Read again whenever Windows says that changed; until the first answer the network
+/// counts as up.
+/// </summary>
+public static class NetworkStatus
+{
+    private static volatile bool _down;
+    private static int _started;
+
+    /// <summary>Starts watching, once (at launch).</summary>
+    public static void Start()
+    {
+        if (Interlocked.Exchange(ref _started, 1) == 1) return;
+        System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += (_, args) => _down = !args.IsAvailable;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                _down = !System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable();
+            }
+            catch (Exception error)
+            {
+                AppLog.Debug("network", "can't tell whether the network is up: " + error.Message);
+            }
+        });
+    }
+
+    public static bool IsDown => _down;
 }

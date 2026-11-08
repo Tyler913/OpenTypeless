@@ -104,6 +104,11 @@ public static class PolishEval
             }
             var catalog = (JsonNode.Parse(catalogData) as JsonObject)?["data"] as JsonArray ?? [];
             var prompt = Value("--prompt-file") is { } promptFile ? await File.ReadAllTextAsync(promptFile) : null;
+            // How heavily every case is cleaned up (see PolishStrength); the app's default without it.
+            if (PolishStrengths.From(Value("--strength") ?? "standard") is not { } strength || strength == PolishStrength.Off)
+            {
+                throw ApiException.BadResponse("--strength must be light, standard or polished");
+            }
             var providerTag = Value("--provider-tag");
             JsonObject? providerRouting = null;
             if (Value("--provider-routing") is { } routing)
@@ -169,7 +174,7 @@ public static class PolishEval
                         var caseOptions = options[model] with
                         {
                             Translation = TranslationTarget.From(c.TranslateTo), Context = c.Context, Layout = c.TextLayout,
-                            SpokenLanguage = c.Language ?? "",
+                            SpokenLanguage = c.Language ?? "", Strength = strength,
                         };
                         var plan = client.EvaluationPlan(c.Input, caseOptions, price.Prompt, price.Completion, providerTag, providerRouting);
                         if (tierThresholds.TryGetValue(model, out var threshold) && plan.InputTokenBound >= threshold)
@@ -209,7 +214,7 @@ public static class PolishEval
                 // instead of this output.
                 var translation = TranslationTarget.From(c.TranslateTo);
                 var rejected = translation is null
-                    ? Prompts.Fallback(c.Input, attempt.Output, truncated: false, c.Context)
+                    ? Prompts.Fallback(c.Input, attempt.Output, truncated: false, c.Context, strength)
                     : Prompts.TranslationFallback(c.Input, attempt.Output, truncated: false, translation);
                 if (attempt.Output.Length > 0 && rejected is { } fallback)
                 {

@@ -70,6 +70,21 @@ public sealed class UsageStore
         return reminder;
     }
 
+    /// <summary>
+    /// Adds what a clean-up model request made outside any dictation cost (learning the writing style, see StyleLearner)
+    /// to today's spend. Returns the spending reminder that brings due, if any.
+    /// </summary>
+    public SpendReminder? RecordCleanUp(double cost, int unpriced)
+    {
+        var today = Today;
+        var before = Ledger.Month(today).Cost;
+        Ledger.AddCost(today, 0, cost, unpriced);
+        Ledger.Save(FilePath);
+        var reminder = SpendReminderFor(today, before);
+        Changed?.Invoke();
+        return reminder;
+    }
+
     /// <summary>This calendar month's spend (what Home shows as "this month") against the monthly limit, while one is set.</summary>
     public (double Spent, double Limit)? MonthlySpend =>
         AppSettings.Shared.ActiveSpendLimit is { } limit ? (Ledger.Month(Today).Cost, limit) : null;

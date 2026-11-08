@@ -187,6 +187,8 @@ public partial class App : Application
         _tray.Dispose();
         _onboarding?.CloseForExit();
         _settingsWindow?.CloseForExit();
+        // The Scratchpad's last keystrokes, saved a second after typing stops, are written now.
+        ScratchpadWindow.CloseForQuit();
         _settings.Flush();
         Exit();
     }

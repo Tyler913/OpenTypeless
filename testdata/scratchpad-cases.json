@@ -1,0 +1,81 @@
+{
+  "titles": [
+    { "text": "Groceries\nmilk, eggs", "title": "Groceries" },
+    { "text": "  \n\n   Call Sam back  \nabout the launch", "title": "Call Sam back" },
+    { "text": "\r\n\tWindows lines\r\nsecond", "title": "Windows lines" },
+    { "text": "\rOld Mac line\rsecond", "title": "Old Mac line" },
+    { "text": "　会议纪要　\n第二行", "title": "会议纪要" },
+    { "text": "first\u2028second", "title": "first" },
+    { "text": "", "title": "" },
+    { "text": " \n \t \r\n ", "title": "" },
+    { "text": "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789", "title": "01234567890123456789012345678901234567890123456789012345678901234567890123456789" }
+  ],
+  "appending": [
+    { "existing": "", "addition": "Hello there.", "expected": "Hello there." },
+    { "existing": "  \n", "addition": "Hello there.", "expected": "Hello there." },
+    { "existing": "First thought.", "addition": "Second thought.", "expected": "First thought.\n\nSecond thought." },
+    { "existing": "First thought.\n", "addition": "Second thought.", "expected": "First thought.\n\nSecond thought." },
+    { "existing": "First thought. \n\n\n", "addition": "Second thought.", "expected": "First thought.\n\nSecond thought." },
+    { "existing": "第一条\r\n", "addition": "第二条", "expected": "第一条\n\n第二条" },
+    { "existing": "  indented", "addition": "next", "expected": "  indented\n\nnext" }
+  ],
+  "capture": [
+    { "outcome": "notEditable", "enabled": true, "text": "Remember the milk.", "saves": true },
+    { "outcome": "movedAway", "enabled": true, "text": "Remember the milk.", "saves": true },
+    { "outcome": "notPasted", "enabled": true, "text": "Remember the milk.", "saves": true },
+    { "outcome": "noPermission", "enabled": true, "text": "Remember the milk.", "saves": true },
+    { "outcome": "locked", "enabled": true, "text": "Remember the milk.", "saves": true },
+    { "outcome": "notEditable", "enabled": false, "text": "Remember the milk.", "saves": false },
+    { "outcome": "notEditable", "enabled": true, "text": "  \n ", "saves": false },
+    { "outcome": "pasted", "enabled": true, "text": "Remember the milk.", "saves": false },
+    { "outcome": "scratchpad", "enabled": true, "text": "Remember the milk.", "saves": false },
+    { "outcome": "fromHistory", "enabled": true, "text": "Remember the milk.", "saves": false },
+    { "outcome": "cancelled", "enabled": true, "text": "Remember the milk.", "saves": false }
+  ],
+  "files": [
+    {
+      "name": "listed by when they were last edited, deleted ones left out",
+      "now": "2026-11-07T12:00:00Z",
+      "json": "{\"version\":1,\"notes\":[{\"id\":\"a\",\"text\":\"Oldest\",\"created\":\"2026-11-01T08:00:00Z\",\"modified\":\"2026-11-01T08:00:00Z\"},{\"id\":\"b\",\"text\":\"Edited last\",\"created\":\"2026-10-01T08:00:00Z\",\"modified\":\"2026-11-06T08:00:00Z\"},{\"id\":\"c\",\"text\":\"Deleted\",\"created\":\"2026-11-05T08:00:00Z\",\"modified\":\"2026-11-05T08:00:00Z\",\"deleted\":\"2026-11-06T09:00:00Z\"},{\"id\":\"d\",\"text\":\"Middle\",\"created\":\"2026-11-03T08:00:00Z\",\"modified\":\"2026-11-03T08:00:00Z\",\"captureDay\":\"2026-11-03\"}]}",
+      "listed": [
+        { "id": "b", "text": "Edited last", "created": "2026-10-01T08:00:00Z", "modified": "2026-11-06T08:00:00Z" },
+        { "id": "d", "text": "Middle", "captureDay": "2026-11-03" },
+        { "id": "a", "text": "Oldest" }
+      ],
+      "entries": 4
+    },
+    {
+      "name": "the same time: the one made last, then the one further down the file",
+      "now": "2026-11-07T12:00:00Z",
+      "json": "{\"notes\":[{\"id\":\"x\",\"text\":\"one\",\"created\":\"2026-11-01T08:00:00Z\",\"modified\":\"2026-11-02T08:00:00Z\"},{\"id\":\"y\",\"text\":\"two\",\"created\":\"2026-11-01T09:00:00Z\",\"modified\":\"2026-11-02T08:00:00Z\"},{\"id\":\"z\",\"text\":\"three\",\"created\":\"2026-11-01T08:00:00Z\",\"modified\":\"2026-11-02T08:00:00Z\"}]}",
+      "listed": [{ "id": "y", "text": "two" }, { "id": "z", "text": "three" }, { "id": "x", "text": "one" }],
+      "entries": 3
+    },
+    {
+      "name": "damaged entries are skipped or repaired, unknown fields ignored",
+      "now": "2026-11-07T12:00:00Z",
+      "json": "{\"version\":7,\"fromTheFuture\":true,\"notes\":[{\"id\":\"ok\",\"text\":\"Fine\",\"created\":\"2026-11-01T08:00:00Z\",\"modified\":\"2026-11-01T08:00:00Z\",\"color\":\"yellow\"},{\"id\":\"notext\",\"created\":\"2026-11-01T08:00:00Z\"},{\"id\":\"numbertext\",\"text\":42},\"not a note\",7,null,{\"text\":\"No id\",\"created\":\"2026-11-02T08:00:00Z\",\"modified\":\"2026-11-02T08:00:00Z\"},{\"id\":\"ok\",\"text\":\"Same id\",\"created\":\"2026-11-03T08:00:00Z\",\"modified\":\"2026-11-03T08:00:00Z\"},{\"id\":\"baddates\",\"text\":\"Bad dates\",\"created\":\"yesterday\",\"modified\":12},{\"id\":\"onedate\",\"text\":\"One date\",\"modified\":\"2026-11-04T08:00:00Z\"},{\"id\":\"fraction\",\"text\":\"Fraction\",\"created\":\"2026-10-01T08:00:00.750Z\",\"modified\":\"2026-10-01T08:00:00.750Z\",\"deleted\":\"soon\",\"captureDay\":5}]}",
+      "listed": [
+        { "id": "baddates", "text": "Bad dates", "created": "2026-11-07T12:00:00Z", "modified": "2026-11-07T12:00:00Z" },
+        { "id": "onedate", "text": "One date", "created": "2026-11-04T08:00:00Z", "modified": "2026-11-04T08:00:00Z" },
+        { "id": null, "text": "Same id" },
+        { "id": null, "text": "No id" },
+        { "id": "ok", "text": "Fine" },
+        { "id": "fraction", "text": "Fraction", "created": "2026-10-01T08:00:00Z", "modified": "2026-10-01T08:00:00Z" }
+      ],
+      "entries": 6
+    },
+    {
+      "name": "a note deleted more than 30 days ago is forgotten, a recent one kept for Undo",
+      "now": "2026-11-07T12:00:00Z",
+      "json": "{\"notes\":[{\"id\":\"old\",\"text\":\"Long gone\",\"created\":\"2026-09-01T08:00:00Z\",\"modified\":\"2026-09-01T08:00:00Z\",\"deleted\":\"2026-10-01T08:00:00Z\"},{\"id\":\"recent\",\"text\":\"Just deleted\",\"created\":\"2026-09-01T08:00:00Z\",\"modified\":\"2026-09-01T08:00:00Z\",\"deleted\":\"2026-11-06T08:00:00Z\"}]}",
+      "listed": [],
+      "entries": 1
+    },
+    { "name": "an empty file", "now": "2026-11-07T12:00:00Z", "json": "{\"notes\":[]}", "listed": [], "entries": 0 },
+    { "name": "not JSON", "now": "2026-11-07T12:00:00Z", "json": "{\"notes\":[{\"id\":", "listed": null },
+    { "name": "not an object", "now": "2026-11-07T12:00:00Z", "json": "[{\"id\":\"a\",\"text\":\"x\"}]", "listed": null },
+    { "name": "no list of notes", "now": "2026-11-07T12:00:00Z", "json": "{\"notes\":{\"a\":\"x\"}}", "listed": null },
+    { "name": "nothing at all", "now": "2026-11-07T12:00:00Z", "json": "", "listed": null }
+  ]
+}

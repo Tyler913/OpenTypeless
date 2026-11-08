@@ -34,6 +34,9 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     /// The language hint those chunks were transcribed with ("" auto-detect; nil before it was saved): a retry with
     /// another one sends them again (see `DictationSettings.reusesTranscripts`).
     var chunkLanguage: String?
+    /// The chunks recognised on this Mac because the provider couldn't be reached (see `OfflineFallback`), in order; nil
+    /// when there were none. A retry with the provider sends them to it again.
+    var onDeviceChunks: [Int]?
     var timing: Timing?
     /// What processing it cost so far in USD, retries included (nil when nothing could be priced).
     var cost: Double?
@@ -44,6 +47,9 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var profileID: String?
     /// That profile's name, for History.
     var profileName: String?
+    /// The kind of app whose recommended clean-up strength applied (`AppCategory`: "chat", "email", "code"), for
+    /// History and a retry; nil when none did.
+    var recommendation: String?
     /// "translate" for a translation dictation (see `TranslationTarget.recordMode`), "command" for an edit of a selection
     /// by voice (see `SelectionCommand.recordMode`), nil for plain dictation: records from before translation, and older
     /// versions reading newer ones, see a dictation.
@@ -92,8 +98,8 @@ struct DictationRecord: Codable, Identifiable, Equatable {
         var usedContext: Bool?
         /// Release → the text ready and handed over for delivery (focus is checked, then it's pasted or copied at once).
         var delivered: Double?
-        /// "pasted"; "copied" (focus wasn't a text field); "failed" (the paste didn't land, or wasn't allowed; the text
-        /// is on the clipboard).
+        /// "pasted"; "scratchpad" (typed into the Scratchpad's editor); "copied" (focus wasn't a text field); "failed"
+        /// (the paste didn't land, or wasn't allowed; the text is on the clipboard).
         var delivery: String?
 
         /// "转写 0.8 秒 · 整理 1.2 秒（首字 0.4 秒，备用 deepseek/…）"
@@ -129,6 +135,8 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     /// Where a file's sound is written while it's read; renamed to `audioURL` once all of it is there.
     var partialAudioURL: URL { folder.appendingPathComponent("audio.partial.wav") }
     var hasAudio: Bool { FileManager.default.fileExists(atPath: audioURL.path) }
+    /// History can play its recording (see RecordingPlayback).
+    var isPlayable: Bool { RecordingPlayback.isPlayable(status: status.rawValue, hasAudio: hasAudio) }
 
     /// This dictation as History exports it. A record keeps no time zone, so its time is written in this Mac's, with the
     /// offset that zone had on that date.
@@ -219,6 +227,7 @@ final class HistoryStore: ObservableObject {
     }
 
     func delete(_ record: DictationRecord) {
+        RecordingPlayer.shared.stop(recordID: record.id)
         records.removeAll { $0.id == record.id }
         try? FileManager.default.removeItem(at: record.folder)
         audioSizes[record.id] = nil
@@ -268,11 +277,13 @@ final class HistoryStore: ObservableObject {
             case .keep:
                 kept.append(record)
             case .removeAudio:
+                RecordingPlayer.shared.stop(recordID: record.id)
                 try? FileManager.default.removeItem(at: record.audioURL)
                 audioSizes[record.id] = 0
                 kept.append(record)
                 changed = true
             case .remove:
+                RecordingPlayer.shared.stop(recordID: record.id)
                 try? FileManager.default.removeItem(at: record.folder)
                 audioSizes[record.id] = nil
                 changed = true

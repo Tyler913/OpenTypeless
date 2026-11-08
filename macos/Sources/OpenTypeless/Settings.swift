@@ -18,11 +18,18 @@ final class AppSettings: ObservableObject {
     @AppStorage("sttModel") var sttModel: String = ProviderID.openrouter.defaultSTTModel
     @AppStorage("polishProvider") var polishProvider: ProviderID = .openrouter
     @AppStorage("polishModel") var polishModel: String = ProviderID.openrouter.defaultChatModel
+    /// Whether dictations are cleaned up; `polishStrength` says how heavily, and is what Settings changes. Kept, and kept in
+    /// step, for older versions, which only know this switch.
     @AppStorage("polishEnabled") var polishEnabled: Bool = true
+    /// The level next to `polishEnabled` (see `PolishStrength.stored`); "" before there were levels.
+    @AppStorage("polishStrength") private var polishLevel: String = ""
     /// A second speech-to-text route, asked when the first is late for a chunk or fails (see TranscriptionPipeline).
     @AppStorage("sttBackupEnabled") var sttBackupEnabled: Bool = false
     @AppStorage("sttBackupProvider") var sttBackupProvider: ProviderID = .openrouter
     @AppStorage("sttBackupModel") var sttBackupModel: String = ProviderID.openrouter.defaultBackupSTTModel
+    /// With a provider for speech-to-text, the recognizer on this Mac takes over while the network is down (see
+    /// `OfflineFallback`).
+    @AppStorage(OfflineFallback.defaultsKey) var onDeviceWhenOffline: Bool = true
     /// A second clean-up model that races the first when it is slow to start (see HedgedPolish).
     @AppStorage("polishBackupEnabled") var polishBackupEnabled: Bool = true
     @AppStorage("polishBackupProvider") var polishBackupProvider: ProviderID = .openrouter
@@ -33,6 +40,9 @@ final class AppSettings: ObservableObject {
     @AppStorage("extraInstructions") var extraInstructions: String = ""
     @AppStorage("playSounds") var playSounds: Bool = true
     @AppStorage("restoreClipboard") var restoreClipboard: Bool = true
+    /// A dictation that goes to the clipboard because there's nowhere to type is also added to the Scratchpad (see
+    /// `ScratchpadCapture`).
+    @AppStorage("saveToScratchpad") var saveToScratchpad: Bool = true
     /// Press Return once the text is pasted, so a chat message or AI prompt is sent without touching the keyboard.
     @AppStorage("pressEnterAfterInsert") var pressEnterAfterInsert: Bool = false
     /// Fit the spacing and capitalisation of pasted text to the text around the cursor (see InsertionJoiner). Safe on by
@@ -91,6 +101,16 @@ final class AppSettings: ObservableObject {
     /// Learn vocabulary from the fixes the user makes to dictated text (see EditWatcher).
     @AppStorage("learnFromEdits") var learnFromEdits: Bool = true
     @Published private(set) var learnedTerms: [LearnedTerm]
+    /// Learn how the user writes from their own texts, and add the note to the clean-up's preferences (see StyleLearner).
+    /// Off by default: a sample of History goes to the clean-up provider.
+    @AppStorage("learnStyle") var learnStyle: Bool = false
+    /// The style note, learned or written by hand; used while `learnStyle` is on.
+    @AppStorage("styleNote") var styleNote: String = ""
+    /// The note as it was last learned: a note that differs was edited by hand, and isn't replaced on its own (see
+    /// `StyleLearning.isDue`).
+    @AppStorage("styleLearnedNote") var styleLearnedNote: String = ""
+    /// Eligible dictations since the note was last learned (see `StyleLearning.relearnEvery`).
+    @AppStorage("styleNewDictations") var styleNewDictations: Int = 0
     /// Send the text around the cursor with the transcript, for the clean-up to spell names by (see CursorContextReader).
     /// Off by default: it goes to the clean-up provider.
     @AppStorage("useCursorContext") var useCursorContext: Bool = false
@@ -111,6 +131,8 @@ final class AppSettings: ObservableObject {
     @Published private(set) var openRouterHosts: [String: String]
     /// Settings for particular apps, by bundle ID, applied to a dictation started in them (see AppProfile). None at first.
     @Published private(set) var appProfiles: [AppProfile]
+    /// Common chat, mail and coding apps get the clean-up strength recommended for their kind (see `RecommendedApps`).
+    @AppStorage("recommendedAppSettings") var recommendedAppSettings: Bool = true
     /// The shortcuts the user gave to actions besides dictating (see `ShortcutAction`), by the action's name; none by
     /// default.
     @Published private var actionShortcuts: [String: Hotkey]
@@ -356,21 +378,40 @@ final class AppSettings: ObservableObject {
 
     // MARK: App profiles
 
+    /// How heavily dictations are cleaned up, as far as the global settings go: `polishEnabled` with its level.
+    var polishStrength: PolishStrength {
+        get { PolishStrength.stored(enabled: polishEnabled, level: polishLevel) ?? .standard }
+        set {
+            polishLevel = newValue.rawValue
+            polishEnabled = newValue != .off
+        }
+    }
+
     /// What a dictation runs with when no profile applies.
     var globalDictationSettings: DictationSettings {
-        DictationSettings(polishEnabled: polishEnabled, pressEnter: pressEnterAfterInsert, language: sttLanguage,
-                          extraInstructions: extraInstructions)
+        DictationSettings(polishEnabled: true, pressEnter: pressEnterAfterInsert, language: sttLanguage,
+                          extraInstructions: StyleLearning.compose(extraInstructions, note: learnStyle ? styleNote : ""))
+            .withStrength(polishStrength)
     }
 
     /// What a dictation started in the app with this bundle ID runs with.
     func dictationSettings(forApp bundleID: String?) -> DictationSettings {
-        runnable(globalDictationSettings.applying(AppProfile.matching(bundleID, in: appProfiles), app: bundleID))
+        runnable(globalDictationSettings.applying(AppProfile.matching(bundleID, in: appProfiles), app: bundleID,
+                                                  recommendation: recommendation(for: bundleID)))
     }
 
     /// What a retry of a dictation made with the profile `id` runs with: that profile's settings while it still exists,
-    /// the global ones otherwise.
-    func dictationSettings(profileID id: String?) -> DictationSettings {
-        runnable(globalDictationSettings.applying(appProfiles.first { $0.id == id }))
+    /// the global ones otherwise, with the strength recommended for `recommendation` (the kind of app it was made in, as
+    /// saved) while the recommended settings are on.
+    func dictationSettings(profileID id: String?, recommendation: String? = nil) -> DictationSettings {
+        runnable(globalDictationSettings.applying(appProfiles.first { $0.id == id },
+                                                  recommendation: recommendedAppSettings
+                                                      ? recommendation.flatMap(AppCategory.init(rawValue:)) : nil))
+    }
+
+    /// The kind of app `bundleID` is, while the recommended settings are on and the table has it.
+    func recommendation(for bundleID: String?) -> AppCategory? {
+        recommendedAppSettings ? RecommendedApps.category(for: bundleID) : nil
     }
 
     /// `dictation` without a clean-up it can't have (see `SpeechSetup.cleansUp`).

@@ -16,7 +16,7 @@ HUD_STATES = ("recording", "working", "copied", "learned", "spending", "error", 
 def expected_files(language):
     return ({f"settings-{language}-{page}.png" for page in PAGES}
             | {f"onboarding-{language}-{step}.png" for step in range(1, 5)}
-            | {f"popover-{language}.png"}
+            | {f"popover-{language}.png", f"scratchpad-{language}.png"}
             | {f"hud-{state}.png" for state in HUD_STATES})
 
 

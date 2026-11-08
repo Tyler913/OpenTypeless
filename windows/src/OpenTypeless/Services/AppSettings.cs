@@ -171,10 +171,28 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("polishModel", value);
     }
 
+    /// <summary>
+    /// Whether dictations are cleaned up; <see cref="PolishStrength"/> says how heavily, and is what Settings changes. Kept,
+    /// and kept in step, for older versions, which only know this switch.
+    /// </summary>
     public bool PolishEnabled
     {
         get => GetBool("polishEnabled", true);
         set => SetValue("polishEnabled", value);
+    }
+
+    /// <summary>
+    /// How heavily dictations are cleaned up, as far as the global settings go: <see cref="PolishEnabled"/> with the level
+    /// saved next to it (see <see cref="PolishStrengths.Stored"/>).
+    /// </summary>
+    public PolishStrength PolishStrength
+    {
+        get => PolishStrengths.Stored(PolishEnabled, GetString("polishStrength", "")) ?? TypelessCore.PolishStrength.Standard;
+        set
+        {
+            SetValue("polishStrength", value.Id());
+            PolishEnabled = value != TypelessCore.PolishStrength.Off;
+        }
     }
 
     /// <summary>A second speech-to-text route, asked when the first is late for a chunk or fails (see TranscriptionPipeline).</summary>
@@ -194,6 +212,16 @@ public sealed class AppSettings : INotifyPropertyChanged
     {
         get => GetString("sttBackupModel", ProviderId.OpenRouter.DefaultBackupSttModel());
         set => SetValue("sttBackupModel", value);
+    }
+
+    /// <summary>
+    /// With a provider for speech-to-text, the model on this PC takes over while the network is down (see
+    /// <see cref="OfflineFallback"/>). The same key as on macOS.
+    /// </summary>
+    public bool OnDeviceWhenOffline
+    {
+        get => GetBool(OfflineFallback.SettingsKey, true);
+        set => SetValue(OfflineFallback.SettingsKey, value);
     }
 
     /// <summary>A second clean-up model that races the first when it is slow to start (see HedgedPolish).</summary>
@@ -244,6 +272,16 @@ public sealed class AppSettings : INotifyPropertyChanged
     {
         get => GetBool("restoreClipboard", true);
         set => SetValue("restoreClipboard", value);
+    }
+
+    /// <summary>
+    /// A dictation that goes to the clipboard because there's nowhere to type is also added to the Scratchpad (see
+    /// <see cref="TypelessCore.ScratchpadCapture"/>).
+    /// </summary>
+    public bool SaveToScratchpad
+    {
+        get => GetBool("saveToScratchpad", true);
+        set => SetValue("saveToScratchpad", value);
     }
 
     /// <summary>Press Enter once the text is pasted, so a chat message or AI prompt is sent without touching the keyboard.</summary>
@@ -307,6 +345,40 @@ public sealed class AppSettings : INotifyPropertyChanged
     {
         get => GetBool("learnFromEdits", true);
         set => SetValue("learnFromEdits", value);
+    }
+
+    /// <summary>
+    /// Learn how the user writes from their own texts, and add the note to the clean-up's preferences (see StyleLearner).
+    /// Off by default: a sample of History goes to the clean-up provider.
+    /// </summary>
+    public bool LearnStyle
+    {
+        get => GetBool("learnStyle", false);
+        set => SetValue("learnStyle", value);
+    }
+
+    /// <summary>The style note, learned or written by hand; used while <see cref="LearnStyle"/> is on.</summary>
+    public string StyleNote
+    {
+        get => GetString("styleNote", "");
+        set => SetValue("styleNote", value);
+    }
+
+    /// <summary>
+    /// The note as it was last learned: a note that differs was edited by hand, and isn't replaced on its own (see
+    /// <see cref="StyleLearning.IsDue"/>).
+    /// </summary>
+    public string StyleLearnedNote
+    {
+        get => GetString("styleLearnedNote", "");
+        set => SetValue("styleLearnedNote", value);
+    }
+
+    /// <summary>Eligible dictations since the note was last learned (see <see cref="StyleLearning.RelearnEvery"/>).</summary>
+    public int StyleNewDictations
+    {
+        get => GetInt("styleNewDictations", 0);
+        set => SetValue("styleNewDictations", value);
     }
 
     /// <summary>
@@ -797,19 +869,43 @@ public sealed class AppSettings : INotifyPropertyChanged
     /// <summary>For the UI snapshots: shows these profiles in place of the saved ones, which stay as they are.</summary>
     public void ShowSampleAppProfiles(IEnumerable<AppProfile> profiles) => _sampleProfiles = profiles.ToList();
 
+    /// <summary>Common chat, mail and coding apps get the clean-up strength recommended for their kind (see <see cref="RecommendedApps"/>).</summary>
+    public bool RecommendedAppSettings
+    {
+        get => GetBool("recommendedAppSettings", true);
+        set => SetValue("recommendedAppSettings", value);
+    }
+
+    /// <summary>The global settings, as the global strength has them, before <see cref="Reachable"/>.</summary>
+    private DictationSettings UnreachableGlobalSettings =>
+        new DictationSettings(true, PressEnterAfterInsert, SttLanguage,
+                              StyleLearning.Compose(ExtraInstructions, LearnStyle ? StyleNote : "")).WithStrength(PolishStrength);
+
     /// <summary>What a dictation runs with when no profile applies.</summary>
-    public DictationSettings GlobalDictationSettings => Reachable(new(PolishEnabled, PressEnterAfterInsert, SttLanguage, ExtraInstructions));
+    public DictationSettings GlobalDictationSettings => Reachable(UnreachableGlobalSettings);
 
     /// <summary>What a dictation started in the app with this executable name ("slack.exe") runs with.</summary>
     public DictationSettings DictationSettingsForApp(string? executable) =>
-        Reachable(GlobalDictationSettings.Applying(AppProfile.Matching(executable, AppProfiles), executable));
+        Reachable(UnreachableGlobalSettings.Applying(AppProfile.Matching(executable, AppProfiles), executable, RecommendationFor(executable)));
 
     /// <summary>
     /// What a retry of a dictation made with the profile <paramref name="id"/> runs with: that profile's settings while it
-    /// still exists, the global ones otherwise.
+    /// still exists, the global ones otherwise, with the strength recommended for <paramref name="recommendation"/> (the
+    /// kind of app it was made in, as saved) while the recommended settings are on.
     /// </summary>
-    public DictationSettings DictationSettingsForProfile(string? id) =>
-        Reachable(GlobalDictationSettings.Applying(AppProfiles.FirstOrDefault(p => p.Id == id)));
+    public DictationSettings DictationSettingsForProfile(string? id, string? recommendation = null) =>
+        Reachable(UnreachableGlobalSettings.Applying(AppProfiles.FirstOrDefault(p => p.Id == id),
+                                                     recommendation: RecommendedAppSettings ? AppCategories.From(recommendation) : null));
+
+    /// <summary>The kind of app <paramref name="executable"/> is, while the recommended settings are on and the table has it.</summary>
+    public AppCategory? RecommendationFor(string? executable) => RecommendedAppSettings ? RecommendedApps.CategoryFor(executable) : null;
+
+    /// <summary>
+    /// The strength an app gets when its profile leaves it on Default: the one recommended for it while the recommended
+    /// settings are on, else the global one (off while clean-up is off).
+    /// </summary>
+    public PolishStrength DefaultStrengthFor(string? executable) =>
+        UnreachableGlobalSettings.Applying(null, executable, RecommendationFor(executable)).EffectiveStrength;
 
     /// <summary>
     /// Whether clean-up runs (a file's, and a dictation's where no app profile says otherwise): switched on, and, with

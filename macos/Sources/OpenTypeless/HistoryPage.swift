@@ -374,6 +374,9 @@ private struct HistoryDetail: View {
                     }
                 }
                 Spacer(minLength: 8)
+                if record.isPlayable {
+                    PlaybackControl(record: record, player: RecordingPlayer.shared, controller: controller)
+                }
                 if record.status != .done { StatusPill(text: record.status.label, color: record.status.color) }
             }
             .padding(16)
@@ -549,8 +552,9 @@ private struct HistoryDetail: View {
     }
 
     /// "0:42 · 123 words · $0.0012 · Slack" (the words said, not what snippets put in; the app profile it was made with,
-    /// if any), and "Translation → English" for a translation dictation or "Edited a selection (240 characters)" for an
-    /// edit.
+    /// if any, and the recommended strength that applied), and "Translation → English" for a translation dictation or
+    /// "Edited a selection (240 characters)" for an edit, and "On-device (offline)" when the network was down for some
+    /// of it.
     private var details: String {
         var parts = [record.duration.durationLabel]
         let words = WordCount.count(record.finalText)
@@ -564,7 +568,53 @@ private struct HistoryDetail: View {
             parts.append(L("编辑选中文字（\(length) 字符）", "Edited a selection (\(length) characters)"))
         }
         if let profile = record.profileName { parts.append(profile) }
+        if let kind = record.recommendation.flatMap(AppCategory.init(rawValue:)) {
+            parts.append(L("推荐设置：\(kind.strength.displayName)", "Recommended: \(kind.strength.displayName)"))
+        }
+        // Recognised on this Mac while the network was down: Re-transcribe asks the provider again.
+        if record.onDeviceChunks?.isEmpty == false { parts.append(L("设备端识别（离线）", "On-device (offline)")) }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// Plays the dictation's recording, and while it's playing or paused shows how far it has got. Selecting another
+/// dictation or leaving History stops it.
+private struct PlaybackControl: View {
+    let record: DictationRecord
+    @ObservedObject var player: RecordingPlayer
+    @ObservedObject var controller: SessionController
+
+    var body: some View {
+        let current = player.recordID == record.id
+        let playing = current && player.isPlaying
+        HStack(spacing: 6) {
+            if current {
+                Text(verbatim: "\(Self.clock(player.elapsed)) / \(Self.clock(player.duration.rounded()))")
+                    .font(.system(size: 11.5))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            Button { player.toggle(record) } label: {
+                Image(systemName: playing ? "pause.fill" : "play.fill").frame(width: 14)
+            }
+            .controlSize(.small)
+            // The microphone would hear it.
+            .disabled(controller.state != .idle)
+            .help(playing ? L("暂停", "Pause") : L("播放录音", "Play recording"))
+            .accessibilityLabel(playing ? L("暂停", "Pause") : L("播放录音", "Play recording"))
+        }
+        .onDisappear { player.stop(recordID: record.id) }
+        .alert(L("无法播放录音", "Couldn't play the recording"), isPresented: Binding(get: { player.failure != nil }, set: { if !$0 { player.failure = nil } })) {
+            Button(L("好", "OK")) {}
+        } message: {
+            Text(player.failure ?? "")
+        }
+    }
+
+    /// "0:07", "12:40": minutes and seconds, cut down to the second.
+    static func clock(_ seconds: Double) -> String {
+        let whole = max(0, Int(seconds))
+        return String(format: "%d:%02d", whole / 60, whole % 60)
     }
 }
 

@@ -40,11 +40,13 @@ Die meisten Diktier-Apps schaffen einen Satz und scheitern an zwei Minuten am St
 - **Beim Sprechen übersetzen.** Nimm **Umschalt** dazu, und deine Worte kommen in der gewählten Sprache heraus.
 - **Per Stimme bearbeiten.** Text markieren, **Strg** dazunehmen und „formeller“ oder „mach eine Liste daraus“ sagen.
 - **Ein Wortschatz, der lernt.** Füge Namen und Fachbegriffe hinzu; Wörter, die du nach dem Einfügen korrigierst, lernt die App selbst.
+- **Lernt, wie du schreibst (optional).** Zeichensetzung und Ton, aus deinen Diktaten und Korrekturen gelernt, in einer kurzen Notiz, die du bearbeiten kannst.
 - **Textbausteine.** Sag „meine E-Mail“, und dein gespeicherter Text wird Wort für Wort eingefügt.
-- **Einstellungen pro App.** Eingabetaste nach dem Einfügen in Slack, förmlicher Ton in Mail, keine Bereinigung im Terminal.
-- **Verlauf und Dateien.** Jedes Diktat ist durchsuchbar und exportierbar, und Audio- oder Videodateien lassen sich auch transkribieren.
+- **Notizblock.** Ein Notizblock zum Hineindiktieren, der auch ein Diktat aufhebt, das nirgends hinkonnte.
+- **Bereinigung nach Wunsch.** Aus, Leicht, Normal oder Ausgefeilt, für Chat-, Mail- und Code-Apps schon voreingestellt. Pro App kann auch nach dem Einfügen die Eingabetaste gedrückt werden, etwa in Slack.
+- **Verlauf und Dateien.** Jedes Diktat ist durchsuchbar, exportierbar und lässt sich anhören, und Audio- oder Videodateien lassen sich auch transkribieren.
 - **Kosten im Blick.** Wörter, gesparte Zeit und Kosten auf der Startseite, mit optionalem Monatslimit.
-- **Auf dem Gerät, ohne Schlüssel.** Die Spracherkennung kann auch auf deinem Computer laufen: kostenlos, offline und privat, etwas ungenauer als Cloud-Modelle.
+- **Auf dem Gerät, ohne Schlüssel.** Die Spracherkennung kann auch auf deinem Computer laufen: kostenlos, offline und privat, etwas ungenauer als Cloud-Modelle. Ohne Internet springt sie auch selbst ein.
 - **Live-Vorschau (Beta).** Sieh deine Worte über der Kapsel, während du sprichst.
 - **Neun Sprachen, automatische Updates.** English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch, Русский.
 

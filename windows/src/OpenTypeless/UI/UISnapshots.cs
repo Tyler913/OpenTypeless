@@ -25,8 +25,8 @@ public static class UISnapshots
     private static readonly AppProfile[] SampleAppProfiles =
     [
         new() { Id = "sample-slack", App = "slack.exe", Name = "Slack", PressEnter = true },
-        new() { Id = "sample-outlook", App = "olk.exe", Name = "Outlook", Instructions = "Use a more formal tone", Polish = true, Language = "en" },
-        new() { Id = "sample-terminal", App = "WindowsTerminal.exe", Name = "Terminal", Polish = false },
+        new() { Id = "sample-outlook", App = "olk.exe", Name = "Outlook", Instructions = "Use a more formal tone", Strength = PolishStrength.Standard, Language = "en" },
+        new() { Id = "sample-terminal", App = "WindowsTerminal.exe", Name = "Terminal", Strength = PolishStrength.Off },
     ];
 
     public static async Task Run(string directory)
@@ -72,6 +72,13 @@ public static class UISnapshots
                 await Task.Delay(900);
                 await Capture((FrameworkElement)popover.Content, Path.Combine(directory, $"popover-{language.RawValue()}.png"));
                 popover.Dismiss();
+
+                // The Scratchpad with sample notes (never saved), the newest selected.
+                var scratchpad = new ScratchpadWindow(ScratchpadStore.Sample());
+                scratchpad.Show(startNote: false);
+                await Task.Delay(900);
+                await Capture((FrameworkElement)scratchpad.Content, Path.Combine(directory, $"scratchpad-{language.RawValue()}.png"));
+                scratchpad.CloseForExit();
             }
 
             var hud = controller.Hud;

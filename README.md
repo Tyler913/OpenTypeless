@@ -40,11 +40,13 @@ Most voice-typing apps handle a sentence fine and fall apart on a two-minute ram
 - **Translate as you speak.** Add **Shift** and your words come out in the language you picked.
 - **Edit by voice.** Select text, add **Ctrl**, and say “make it more formal” or “turn this into a list”.
 - **Vocabulary that learns.** Add names and jargon; words you correct after pasting are learned automatically.
+- **Learns how you write (optional).** Your punctuation and tone, learned from your dictations and edits into a short note you can edit.
 - **Snippets.** Say “my email” and your saved text goes in, word for word.
-- **Per-app settings.** Press Return after inserting in Slack, a formal tone in Mail, no clean-up in Terminal.
-- **History and files.** Every dictation is searchable and exportable, and audio or video files can be transcribed too.
+- **Scratchpad.** A notepad to dictate into, where a dictation with nowhere to go is kept too.
+- **Clean-up your way.** Off, Light, Standard or Polished, preset for chat, mail and code apps. Per app you can also press Return after inserting, as in Slack.
+- **History and files.** Every dictation is searchable, exportable and can be played back, and audio or video files can be transcribed too.
 - **Know your spend.** Words, time saved and cost on the Home page, with an optional monthly limit.
-- **On-device, no key needed.** Speech-to-text can run on your computer instead: free, offline and private, a little less accurate than cloud models.
+- **On-device, no key needed.** Speech-to-text can run on your computer instead: free, offline and private, a little less accurate than cloud models. It also takes over when you're offline.
 - **Live preview (beta).** See your words above the capsule while you talk.
 - **Nine languages, automatic updates.** English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch, Русский.
 

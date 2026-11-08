@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.UI.Dispatching;
+using OpenTypeless.Audio;
 using TypelessCore;
 
 namespace OpenTypeless.Services;
@@ -56,6 +57,11 @@ public sealed class DictationRecord
     /// another one sends them again (see <see cref="TypelessCore.DictationSettings.ReusesTranscripts"/>).
     /// </summary>
     [JsonPropertyName("chunkLanguage")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ChunkLanguage { get; set; }
+    /// <summary>
+    /// The chunks recognised on this PC because the provider couldn't be reached (see <see cref="TypelessCore.OfflineFallback"/>),
+    /// in order; null when there were none. A retry with the provider sends them to it again.
+    /// </summary>
+    [JsonPropertyName("onDeviceChunks")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<int>? OnDeviceChunks { get; set; }
     [JsonPropertyName("timing")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public DictationTiming? Timing { get; set; }
     /// <summary>What processing it cost so far in USD, retries included (null when nothing could be priced).</summary>
     [JsonPropertyName("cost")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Cost { get; set; }
@@ -68,6 +74,11 @@ public sealed class DictationRecord
     [JsonPropertyName("profileID")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ProfileId { get; set; }
     /// <summary>That profile's name, for History.</summary>
     [JsonPropertyName("profileName")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ProfileName { get; set; }
+    /// <summary>
+    /// The kind of app whose recommended clean-up strength applied (<see cref="TypelessCore.AppCategory"/>: "chat", "email",
+    /// "code"), for History and a retry; null when none did.
+    /// </summary>
+    [JsonPropertyName("recommendation")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Recommendation { get; set; }
     /// "translate" for a translation dictation (see <see cref="TranslationTarget.RecordMode"/>), "command" for an edit of a
     /// selection by voice (see <see cref="SelectionCommand.RecordMode"/>), null for plain dictation: records from before
     /// translation, and older versions reading newer ones, see a dictation.
@@ -119,6 +130,8 @@ public sealed class DictationRecord
     /// <summary>Where a file's sound is written while it's read; renamed to <see cref="AudioPath"/> once all of it is there.</summary>
     [JsonIgnore] public string PartialAudioPath => Path.Combine(Folder, "audio.partial.wav");
     [JsonIgnore] public bool HasAudio => File.Exists(AudioPath);
+    /// <summary>History can play its recording (see <see cref="RecordingPlayback"/>).</summary>
+    [JsonIgnore] public bool IsPlayable => RecordingPlayback.IsPlayable(Status.RawValue(), HasAudio);
 
     /// <summary>
     /// This dictation as History exports it. A record keeps no time zone, so its time is written in this PC's, with the
@@ -132,6 +145,7 @@ public sealed class DictationRecord
     {
         var copy = (DictationRecord)MemberwiseClone();
         copy.ChunkTexts = new Dictionary<int, string>(ChunkTexts);
+        copy.OnDeviceChunks = OnDeviceChunks is null ? null : new List<int>(OnDeviceChunks);
         copy.Timing = Timing?.Copy();
         return copy;
     }
@@ -185,8 +199,8 @@ public sealed class DictationTiming
     /// <summary>Release → the text ready and handed over for delivery (focus is checked, then it's pasted or copied at once).</summary>
     [JsonPropertyName("delivered")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Delivered { get; set; }
     /// <summary>
-    /// "pasted"; "copied" (focus wasn't a text field); "failed" (the paste didn't land, or wasn't allowed; the text is on
-    /// the clipboard).
+    /// "pasted"; "scratchpad" (typed into the Scratchpad's editor); "copied" (focus wasn't a text field); "failed" (the
+    /// paste didn't land, or wasn't allowed; the text is on the clipboard).
     /// </summary>
     [JsonPropertyName("delivery")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Delivery { get; set; }
 
@@ -287,6 +301,7 @@ public sealed class HistoryStore
 
     public void Delete(DictationRecord record)
     {
+        RecordingPlayer.Shared.Stop(record.Id);
         _records.RemoveAll(r => r.Id == record.Id);
         try { Directory.Delete(record.Folder, recursive: true); } catch { /* already gone */ }
         _audioSizes.Remove(record.Id);
@@ -360,12 +375,14 @@ public sealed class HistoryStore
             switch (actions[index])
             {
                 case HistoryPruning.Action.RemoveAudio:
+                    RecordingPlayer.Shared.Stop(record.Id);
                     try { File.Delete(record.AudioPath); } catch { }
                     _audioSizes[record.Id] = 0;
                     kept.Add(record);
                     changed = true;
                     break;
                 case HistoryPruning.Action.Remove:
+                    RecordingPlayer.Shared.Stop(record.Id);
                     try { Directory.Delete(record.Folder, recursive: true); } catch { }
                     _audioSizes.Remove(record.Id);
                     changed = true;

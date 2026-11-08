@@ -22,18 +22,23 @@ public class AppProfileTests
         }
     }
 
+    /// <summary>The global settings at <paramref name="strength"/>, as the app makes them.</summary>
+    private static DictationSettings GlobalSettings(string strength, bool pressEnter = false, string language = "", string extraInstructions = "") =>
+        new DictationSettings(true, pressEnter, language, extraInstructions).WithStrength(PolishStrengths.From(strength)!.Value);
+
     [Fact]
     public void ResolutionFollowsSharedCases()
     {
         foreach (var node in Cases()["resolution"]!.AsArray())
         {
             var g = node!["global"]!;
-            var global = new DictationSettings((bool)g["polishEnabled"]!, (bool)g["pressEnter"]!, (string)g["language"]!, (string)g["extraInstructions"]!);
+            var global = GlobalSettings((string)g["strength"]!, (bool)g["pressEnter"]!, (string)g["language"]!, (string)g["extraInstructions"]!);
             var profile = AppProfile.FromJson(node["profile"]);
             var resolved = global.Applying(profile);
             var e = node["expected"]!;
             var name = (string)node["name"]!;
-            Assert.True(resolved.PolishEnabled == (bool)e["polishEnabled"]!, name);
+            Assert.True(resolved.EffectiveStrength.Id() == (string)e["strength"]!, name);
+            Assert.True(resolved.PolishEnabled == ((string)e["strength"]! != "off"), name);
             Assert.True(resolved.PressEnter == (bool)e["pressEnter"]!, name);
             Assert.True(resolved.Language == (string)e["language"]!, name);
             Assert.True(resolved.ExtraInstructions == (string)e["extraInstructions"]!, name);
@@ -47,8 +52,9 @@ public class AppProfileTests
     {
         List<AppProfile> profiles =
         [
-            new() { Id = "A", App = "slack.exe", Name = "Slack", Instructions = "Short messages\nNo lists", Polish = false, PressEnter = true, Language = "", Layout = TextLayout.Natural },
+            new() { Id = "A", App = "slack.exe", Name = "Slack", Instructions = "Short messages\nNo lists", Strength = PolishStrength.Off, PressEnter = true, Language = "", Layout = TextLayout.Natural },
             new() { Id = "B", App = "outlook.exe", Name = "Outlook" },
+            new() { Id = "C", App = "olk.exe", Name = "Outlook", Strength = PolishStrength.Light },
         ];
         // Through text, as the settings file stores it.
         var json = AppProfile.ListToJson(profiles);
@@ -57,11 +63,59 @@ public class AppProfileTests
         // Unset overrides aren't written, so "follow the global setting" survives as such (and "" stays auto-detect).
         Assert.Equal("", (string?)json[0]!["language"]);
         Assert.False((bool?)json[0]!["polish"]);
+        Assert.Equal("off", (string?)json[0]!["strength"]);
         Assert.Equal("natural", (string?)json[0]!["layout"]);
         Assert.Null(json[1]!["layout"]);
         Assert.Null(json[1]!["polish"]);
+        Assert.Null(json[1]!["strength"]);
+        // The switch older versions read goes with the strength: they clean up, at the only strength they know.
+        Assert.True((bool?)json[2]!["polish"]);
+        Assert.Equal("light", (string?)json[2]!["strength"]);
         Assert.Null(json[1]!["pressEnter"]);
         Assert.Null(json[1]!["language"]);
+    }
+
+    [Fact]
+    public void StoredStrengthFollowsSharedCases()
+    {
+        foreach (var node in Cases()["stored"]!.AsArray())
+        {
+            var actual = PolishStrengths.Stored((bool?)node!["enabled"], (string?)node["level"]);
+            Assert.True(actual?.Id() == (string?)node["expected"], (string)node["name"]!);
+        }
+    }
+
+    /// <summary>Which strength a dictation gets from the global setting, the recommended settings and the app's profile.</summary>
+    [Fact]
+    public void StrengthsFollowSharedCases()
+    {
+        foreach (var node in Cases()["strengths"]!.AsArray())
+        {
+            var app = (string?)node!["app"];
+            var profile = AppProfile.FromJson(node["profile"]);
+            var recommendation = (bool)node["recommendations"]! ? RecommendedApps.CategoryFor(app) : null;
+            var resolved = GlobalSettings((string)node["global"]!).Applying(profile, app, recommendation);
+            var name = (string)node["name"]!;
+            Assert.True(resolved.EffectiveStrength.Id() == (string)node["expected"]!, name);
+            Assert.True(resolved.Recommendation?.Id() == (string?)node["recommendation"], name);
+            // A recommendation never changes Enter or the language.
+            Assert.True(resolved.PressEnter == (profile?.PressEnter ?? false) && resolved.Language == "", name);
+        }
+    }
+
+    /// <summary>The same table as the macOS app's: every identifier in the fixture, and no other.</summary>
+    [Fact]
+    public void RecommendedAppsFollowSharedCases()
+    {
+        var table = Cases()["recommendedApps"]!.AsObject();
+        foreach (var (app, kind) in table) Assert.True(RecommendedApps.CategoryFor(app)?.Id() == (string?)kind, app);
+        Assert.Equal(table.Count, RecommendedApps.ByKey.Count);
+        foreach (var app in Cases()["notRecommended"]!.AsArray()) Assert.Null(RecommendedApps.CategoryFor((string)app!));
+        Assert.Null(RecommendedApps.CategoryFor(null));
+        Assert.Equal(RecommendedApps.All.Length, RecommendedApps.All.Select(a => a.Name).Distinct().Count());
+        Assert.Equal(PolishStrength.Light, AppCategory.Chat.Strength());
+        Assert.Equal(PolishStrength.Light, AppCategory.Code.Strength());
+        Assert.Equal(PolishStrength.Polished, AppCategory.Email.Strength());
     }
 
     [Fact]

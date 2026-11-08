@@ -37,13 +37,16 @@ public struct PolishOptions: Sendable {
     /// Lay the transcript, a cleaned-up text, out again by `layout` instead of cleaning it up (see
     /// `Prompts.relayoutSystemPrompt`): only its line breaks and list markers change.
     public var relayout: Bool
+    /// How heavily a clean-up cleans up (see `PolishStrength`): its prompt's section, its reminder and the guards its
+    /// answer gets. A clean-up's only; never `.off`, which sends no request.
+    public var strength: PolishStrength
 
     public init(model: String, vocabulary: [String] = [], misheard: [Correction] = [], extraInstructions: String = "",
                 modelInfo: APIClient.ModelInfo? = nil, systemPromptOverride: String? = nil, host: String? = nil,
                 translation: TranslationTarget? = nil, selection: String? = nil, context: String? = nil,
                 onContextSent: (@Sendable () -> Void)? = nil, dictatedLineBreaks: Bool = false,
                 layout: TextLayout = .natural, spokenLanguage: String = "", surrounding: SurroundingParts? = nil,
-                relayout: Bool = false) {
+                relayout: Bool = false, strength: PolishStrength = .standard) {
         self.model = model
         self.vocabulary = vocabulary
         self.misheard = misheard
@@ -60,6 +63,7 @@ public struct PolishOptions: Sendable {
         self.spokenLanguage = spokenLanguage
         self.surrounding = surrounding
         self.relayout = relayout
+        self.strength = strength
     }
 }
 
@@ -204,8 +208,10 @@ extension APIClient {
                     vocabulary: options.vocabulary, misheard: options.misheard, extraInstructions: options.extraInstructions,
                     dictatedLineBreaks: options.dictatedLineBreaks && transcript.contains(where: \.isNewline),
                     layout: options.layout,
-                    exampleLanguage: ExampleLanguage.resolve(hint: options.spokenLanguage, transcript: transcript)),
-                Prompts.polishUserMessage(transcript: transcript, context: options.context, surrounding: options.surrounding)]
+                    exampleLanguage: ExampleLanguage.resolve(hint: options.spokenLanguage, transcript: transcript),
+                    strength: options.strength),
+                Prompts.polishUserMessage(transcript: transcript, context: options.context, surrounding: options.surrounding,
+                                          strength: options.strength)]
     }
 
     /// Builds the chat request body. Optional tuning parameters are only sent where they're known to
@@ -327,7 +333,7 @@ extension APIClient {
         let body = polishBody(transcript: transcript, options: options, includeOptional: includeOptional)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let messages = (body["messages"] as? [[String: String]] ?? []).compactMap { $0["content"] }
-        let reminder = options.relayout ? Prompts.relayoutReminder : Prompts.reminder(translation: options.translation)
+        let reminder = options.relayout ? Prompts.relayoutReminder : Prompts.reminder(translation: options.translation, strength: options.strength)
         let selection = options.selection
         let instruction = transcript
         let session = self.session

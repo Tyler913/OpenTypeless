@@ -176,6 +176,7 @@ public static class ShortcutActionText
     public static string Title(this ShortcutAction action) => action switch
     {
         ShortcutAction.PasteLastDictation => L("粘贴上一次听写", "Paste last dictation"),
+        ShortcutAction.OpenScratchpad => L("打开草稿本", "Open Scratchpad"),
         _ => action.ToString(),
     };
 
@@ -183,6 +184,8 @@ public static class ShortcutActionText
     {
         ShortcutAction.PasteLastDictation => L("把最近一次听写的文字再插入到光标处；如果它转写失败了，会先重新转写",
                                                "Inserts your latest dictation at the cursor again; if it failed, it's transcribed again first"),
+        ShortcutAction.OpenScratchpad => L("打开一页新笔记，可以直接对着它听写；没有地方输入时的听写也存在这里",
+                                           "Opens a fresh note to dictate into; dictations with nowhere to go are kept here too"),
         _ => "",
     };
 

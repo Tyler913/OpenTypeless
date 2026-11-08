@@ -12,8 +12,11 @@ public abstract record HudPhase
     /// the ■ button filling as the answers come back (<see cref="HudModel.Progress"/>).
     /// </summary>
     public sealed record Working : HudPhase;
-    /// <summary>Nothing to paste into, so the text went to the clipboard.</summary>
-    public sealed record Copied : HudPhase;
+    /// <summary>
+    /// Nothing to paste into, so the text went to the clipboard; <c>SavedToScratchpad</c>: it was added to the
+    /// Scratchpad too (see <see cref="ScratchpadCapture"/>).
+    /// </summary>
+    public sealed record Copied(bool SavedToScratchpad = false) : HudPhase;
     /// <summary>New words were learned from the user's fixes to the last dictation.</summary>
     public sealed record Learned(string Terms) : HudPhase;
     /// <summary>The answer to a question about the selection (see <see cref="SelectionCommand.Reply"/>), also on the clipboard.</summary>

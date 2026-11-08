@@ -189,6 +189,8 @@ public sealed class SessionController
     private Dictionary<string, ModelInfo> _modelInfo = new();
     /// <summary>False when retrying from the history page, or once the screen locked: the result goes to the clipboard instead.</summary>
     private bool _deliverByPaste = true;
+    /// <summary>Why <see cref="_deliverByPaste"/> is false, for whether the text is also kept in the Scratchpad (see <see cref="ScratchpadCapture"/>).</summary>
+    private ScratchpadCapture.Outcome _noPasteReason = ScratchpadCapture.Outcome.FromHistory;
     /// <summary>
     /// The text around the cursor in the field being dictated into, read as recording started, for the clean-up to spell
     /// names by (see <see cref="CursorContext"/>); null when that's off or there was none. Never saved.
@@ -487,6 +489,7 @@ public sealed class SessionController
             case SessionState.Processing:
                 Note($"{reason} while processing — the text goes to the clipboard");
                 _deliverByPaste = false;
+                _noPasteReason = ScratchpadCapture.Outcome.Locked;
                 break;
         }
         UpdateWarmMicrophone();
@@ -871,6 +874,7 @@ public sealed class SessionController
         {
             Note("released in an app with other settings than the one the recording started in → clipboard");
             _deliverByPaste = false;
+            _noPasteReason = ScratchpadCapture.Outcome.MovedAway;
         }
         Hud.ShowWorking(dictation.PolishEnabled || record.Translation != null || record.IsCommand);
 
@@ -1472,6 +1476,23 @@ public sealed class SessionController
     private async Task<string> Deliver(string text, string? notice, int generation, DictationSettings dictation, CancellationToken token,
                                        bool watchEdits = true)
     {
+        // The Scratchpad's own editor, with the cursor in it: typed in directly, without the clipboard or a paste. No Enter,
+        // no send key, no watching for edits.
+        if (_deliverByPaste && !FocusMoved && Suits(dictation)
+            && ScratchpadWindow.TryInsert(text, _settings.FitToSurroundingText, _settings.VocabularyList))
+        {
+            Note("deliver → the Scratchpad's editor");
+            if (notice is { } scratchpadNotice)
+            {
+                Finish(new HudPhase.Error(scratchpadNotice), 3);
+            }
+            else
+            {
+                Reset();
+                Hud.FinishWorking();
+            }
+            return "scratchpad";
+        }
         if (_deliverByPaste) await TextInserter.LeaveMenuMode();
         var target = _deliverByPaste ? await FocusProbe.FocusedTarget() : FocusProbe.Target.NotEditable;
         // Read before the checks below, so a cancel or a switch of window while it's read still counts.
@@ -1488,7 +1509,9 @@ public sealed class SessionController
                 : otherSettings ? "an app with other settings in front" : "another window in front";
             Note($"deliver → clipboard ({reason})");
             TextInserter.CopyToClipboard(text);
-            Finish(notice is { } n ? new HudPhase.Error(n) : new HudPhase.Copied(), 1.6);
+            var saved = SaveToScratchpad(text, !_deliverByPaste ? _noPasteReason
+                : target == FocusProbe.Target.NotEditable ? ScratchpadCapture.Outcome.NotEditable : ScratchpadCapture.Outcome.MovedAway);
+            Finish(notice is { } n ? new HudPhase.Error(n) : new HudPhase.Copied(saved), saved ? 2.2 : 1.6);
             return "copied";
         }
         // The fitted text goes in only while the cursor is still where it was read; otherwise the text as cleaned up does.
@@ -1544,12 +1567,27 @@ public sealed class SessionController
             case TextInserter.Outcome.Skipped:
                 // The screen locked or another window came to the front just as Ctrl+V was due.
                 TextInserter.CopyToClipboard(text);
-                Finish(notice is { } skippedNotice ? new HudPhase.Error(skippedNotice) : new HudPhase.Copied(), 1.6);
+                var savedSkipped = SaveToScratchpad(text, _isLocked ? ScratchpadCapture.Outcome.Locked : ScratchpadCapture.Outcome.MovedAway);
+                Finish(notice is { } skippedNotice ? new HudPhase.Error(skippedNotice) : new HudPhase.Copied(savedSkipped), savedSkipped ? 2.2 : 1.6);
                 return "copied";
             default:
-                Finish(new HudPhase.Copied(), 1.6);
+                // Ctrl+V was sent but nothing took the text: it's on the clipboard.
+                var savedFailed = SaveToScratchpad(text, ScratchpadCapture.Outcome.NotPasted);
+                Finish(new HudPhase.Copied(savedFailed), savedFailed ? 2.2 : 1.6);
                 return "failed";
         }
+    }
+
+    /// <summary>
+    /// "Save to Scratchpad when there's nowhere to type": a dictation that went to the clipboard for want of a place to go
+    /// is added to today's note too (see <see cref="ScratchpadCapture"/>). Returns whether it was.
+    /// </summary>
+    private bool SaveToScratchpad(string text, ScratchpadCapture.Outcome outcome)
+    {
+        if (!ScratchpadCapture.Saves(text, outcome, _settings.SaveToScratchpad)) return false;
+        ScratchpadStore.Shared.Capture(text);
+        Note($"saved to the Scratchpad ({outcome.RawValue()})");
+        return true;
     }
 
     /// <summary>
@@ -1726,6 +1764,9 @@ public sealed class SessionController
             case ShortcutAction.PasteLastDictation:
                 PasteLastDictation(shortcut, Win32.GetForegroundWindow());
                 break;
+            case ShortcutAction.OpenScratchpad:
+                ScratchpadWindow.Open();
+                break;
         }
     }
 
@@ -1866,6 +1907,7 @@ public sealed class SessionController
             return;
         }
         _deliverByPaste = paste;
+        _noPasteReason = ScratchpadCapture.Outcome.FromHistory;
         // A cancelled recording still being transcribed in the background is this run's now.
         _keptInBackground.Remove(saved.Id);
         // The app profile it was made with, while that still exists; the global settings otherwise.

@@ -185,8 +185,8 @@ public sealed class DictationTiming
     /// <summary>Release → the text ready and handed over for delivery (focus is checked, then it's pasted or copied at once).</summary>
     [JsonPropertyName("delivered")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Delivered { get; set; }
     /// <summary>
-    /// "pasted"; "copied" (focus wasn't a text field); "failed" (the paste didn't land, or wasn't allowed; the text is on
-    /// the clipboard).
+    /// "pasted"; "scratchpad" (typed into the Scratchpad's editor); "copied" (focus wasn't a text field); "failed" (the
+    /// paste didn't land, or wasn't allowed; the text is on the clipboard).
     /// </summary>
     [JsonPropertyName("delivery")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Delivery { get; set; }
 

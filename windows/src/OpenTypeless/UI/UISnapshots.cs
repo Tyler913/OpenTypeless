@@ -72,6 +72,13 @@ public static class UISnapshots
                 await Task.Delay(900);
                 await Capture((FrameworkElement)popover.Content, Path.Combine(directory, $"popover-{language.RawValue()}.png"));
                 popover.Dismiss();
+
+                // The Scratchpad with sample notes (never saved), the newest selected.
+                var scratchpad = new ScratchpadWindow(ScratchpadStore.Sample());
+                scratchpad.Show(startNote: false);
+                await Task.Delay(900);
+                await Capture((FrameworkElement)scratchpad.Content, Path.Combine(directory, $"scratchpad-{language.RawValue()}.png"));
+                scratchpad.CloseForExit();
             }
 
             var hud = controller.Hud;

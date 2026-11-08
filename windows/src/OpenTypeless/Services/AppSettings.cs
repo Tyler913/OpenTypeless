@@ -246,6 +246,16 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => SetValue("restoreClipboard", value);
     }
 
+    /// <summary>
+    /// A dictation that goes to the clipboard because there's nowhere to type is also added to the Scratchpad (see
+    /// <see cref="TypelessCore.ScratchpadCapture"/>).
+    /// </summary>
+    public bool SaveToScratchpad
+    {
+        get => GetBool("saveToScratchpad", true);
+        set => SetValue("saveToScratchpad", value);
+    }
+
     /// <summary>Press Enter once the text is pasted, so a chat message or AI prompt is sent without touching the keyboard.</summary>
     public bool PressEnterAfterInsert
     {

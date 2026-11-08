@@ -33,6 +33,9 @@ final class AppSettings: ObservableObject {
     @AppStorage("extraInstructions") var extraInstructions: String = ""
     @AppStorage("playSounds") var playSounds: Bool = true
     @AppStorage("restoreClipboard") var restoreClipboard: Bool = true
+    /// A dictation that goes to the clipboard because there's nowhere to type is also added to the Scratchpad (see
+    /// `ScratchpadCapture`).
+    @AppStorage("saveToScratchpad") var saveToScratchpad: Bool = true
     /// Press Return once the text is pasted, so a chat message or AI prompt is sent without touching the keyboard.
     @AppStorage("pressEnterAfterInsert") var pressEnterAfterInsert: Bool = false
     /// Fit the spacing and capitalisation of pasted text to the text around the cursor (see InsertionJoiner). Safe on by

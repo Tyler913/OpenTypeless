@@ -144,6 +144,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Quitting mid-recording keeps what was said, retryable from History; so does a file being transcribed.
         controller.stopForQuit()
         controller.files.stopForQuit()
+        // The Scratchpad's last keystrokes, saved a second after typing stops, are written now.
+        ScratchpadStore.shared.flush()
         // And mustn't leave the speakers muted.
         OutputMute.restoreLeftover()
     }

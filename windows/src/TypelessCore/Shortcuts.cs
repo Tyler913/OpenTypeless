@@ -9,6 +9,8 @@ public enum ShortcutAction
 {
     /// <summary>Puts the newest finished dictation at the cursor again (see <see cref="LastDictation"/>).</summary>
     PasteLastDictation,
+    /// <summary>Brings up the Scratchpad, to dictate a note when there's no text field to dictate into.</summary>
+    OpenScratchpad,
 }
 
 public static class ShortcutActions
@@ -19,6 +21,7 @@ public static class ShortcutActions
     public static string RawValue(this ShortcutAction action) => action switch
     {
         ShortcutAction.PasteLastDictation => "pasteLastDictation",
+        ShortcutAction.OpenScratchpad => "openScratchpad",
         _ => action.ToString(),
     };
 

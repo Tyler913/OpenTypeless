@@ -14,8 +14,8 @@ enum UISnapshots {
     static let sampleAppProfiles = [
         AppProfile(id: "sample-slack", app: "com.tinyspeck.slackmacgap", name: "Slack", pressEnter: true),
         AppProfile(id: "sample-mail", app: "com.apple.mail", name: "Mail", instructions: "Use a more formal tone",
-                   polish: true, language: "en"),
-        AppProfile(id: "sample-terminal", app: "com.apple.Terminal", name: "Terminal", polish: false),
+                   strength: .standard, language: "en"),
+        AppProfile(id: "sample-terminal", app: "com.apple.Terminal", name: "Terminal", strength: .off),
     ]
 
     static func run(outputDirectory: String) throws {

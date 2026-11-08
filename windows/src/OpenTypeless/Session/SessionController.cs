@@ -604,6 +604,7 @@ public sealed class SessionController
         record.Status = DictationStatus.Recording;
         record.ProfileId = dictation.ProfileId;
         record.ProfileName = dictation.ProfileName;
+        record.Recommendation = dictation.Recommendation?.Id();
         record.ChunkLanguage = dictation.Language;
         _history.Update(record);
 
@@ -674,6 +675,7 @@ public sealed class SessionController
         _counter = counter;
         _dictationSettings = dictation;
         if (dictation.ProfileName is { } profileName) Note($"app profile: {profileName}");
+        if (dictation.Recommendation is { } recommendation) Note($"recommended settings: {recommendation.Id()}");
         _deliverByPaste = true;
         _pressedAt = pressedAt;
         _handsFree = false;
@@ -1619,10 +1621,12 @@ public sealed class SessionController
         var settings = dictation ?? _settings.GlobalDictationSettings;
         var instructions = settings.ExtraInstructions;
         var primary = Route(endpoint, _settings.PolishModel, instructions, translation, context, sent, forFile,
-                            dictatedLineBreaks: dictatedLineBreaks, layout: settings.Layout, spokenLanguage: settings.Language);
+                            dictatedLineBreaks: dictatedLineBreaks, layout: settings.Layout, spokenLanguage: settings.Language,
+                            strength: settings.Strength);
         var backup = _settings.PolishBackupEndpoint is { } backupEndpoint
             ? Route(backupEndpoint, _settings.PolishBackupModel, instructions, translation, context, sent, forFile,
-                    dictatedLineBreaks: dictatedLineBreaks, layout: settings.Layout, spokenLanguage: settings.Language)
+                    dictatedLineBreaks: dictatedLineBreaks, layout: settings.Layout, spokenLanguage: settings.Language,
+                    strength: settings.Strength)
             : null;
         return await SegmentedPolish.Run(raw, primary, backup, onPartial, token,
                                          forFile ? FileTranscription.CleanUpConcurrency : null, holdWhile);
@@ -1633,7 +1637,8 @@ public sealed class SessionController
 
     private PolishRoute Route(ProviderEndpoint endpoint, string model, string instructions, TranslationTarget? translation,
                               string? context = null, ContextSent? sent = null, bool forFile = false, string? selection = null,
-                              bool dictatedLineBreaks = false, TextLayout layout = TextLayout.Natural, string spokenLanguage = "")
+                              bool dictatedLineBreaks = false, TextLayout layout = TextLayout.Natural, string spokenLanguage = "",
+                              PolishStrength strength = PolishStrength.Standard)
     {
         model = model.Trim();
         return new PolishRoute(Client(endpoint, forFile), new PolishOptions(
@@ -1649,7 +1654,8 @@ public sealed class SessionController
             OnContextSent: sent is null ? null : sent.Mark,
             DictatedLineBreaks: dictatedLineBreaks,
             Layout: layout,
-            SpokenLanguage: spokenLanguage));
+            SpokenLanguage: spokenLanguage,
+            Strength: strength));
     }
 
     /// <summary>
@@ -1869,12 +1875,13 @@ public sealed class SessionController
         // A cancelled recording still being transcribed in the background is this run's now.
         _keptInBackground.Remove(saved.Id);
         // The app profile it was made with, while that still exists; the global settings otherwise.
-        var dictation = _settings.DictationSettingsForProfile(saved.ProfileId);
+        var dictation = _settings.DictationSettingsForProfile(saved.ProfileId, saved.Recommendation);
         var record = saved.Copy();
         record.Status = DictationStatus.Processing;
         record.Error = null;
         record.ProfileId = dictation.ProfileId;
         record.ProfileName = dictation.ProfileName;
+        record.Recommendation = dictation.Recommendation?.Id();
         // Saved transcripts are reused by chunk index, so only when the recording is cut into the same chunks again, and
         // transcribed with the same language hint (a profile, or the global setting, may have changed it since).
         var preset = dictation.ReusesTranscripts(saved.ChunkLayout, saved.ChunkLanguage) ? saved.ChunkTexts : new Dictionary<int, string>();

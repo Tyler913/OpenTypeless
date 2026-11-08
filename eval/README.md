@@ -69,6 +69,7 @@ windows\src\OpenTypeless.Cli\bin\x64\Debug\net10.0-windows10.0.22621.0\OpenTypel
 - **Routing:** requests are identical to the app's, same body and same provider routing, so latency and reliability match real use. Add `--provider-tag <tag> --endpoint-catalog <file>` to benchmark a single upstream provider.
 - **Budget:** every request is costed from OpenRouter's `usage.cost` (falling back to the generation API), recorded in the ledger, and checked against `--budget-usd` before it is sent. Use `--dry-run` to see the request count and a conservative cost bound without spending anything.
 - **Prompt experiments:** `--prompt-file new-prompt.txt` replaces the built-in system prompt for the run, all of it: a case's `layout` and language examples aren't added to it.
+- **Strength:** `--strength light` or `--strength polished` cleans every case up at that strength (`PolishStrength`; `standard`, the default, is the prompt as it is), with that strength's guards. The cases' own checks are written for the standard strength, so a `length` check can fail at polished on purpose.
 - **Routing experiments:** `--provider-routing '{"sort":"latency"}'` replaces OpenRouter's `provider` object for the run (in PowerShell, escape the inner quotes: `'{\"sort\":\"latency\"}'`).
 - **Latency:** each attempt records time to first token and total time; the summary prints p50/p90 for both.
 - **Rounds:** models are non-deterministic, so use `--rounds 3` before drawing conclusions. Models are interleaved per case and round.

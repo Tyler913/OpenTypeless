@@ -25,8 +25,8 @@ public static class UISnapshots
     private static readonly AppProfile[] SampleAppProfiles =
     [
         new() { Id = "sample-slack", App = "slack.exe", Name = "Slack", PressEnter = true },
-        new() { Id = "sample-outlook", App = "olk.exe", Name = "Outlook", Instructions = "Use a more formal tone", Polish = true, Language = "en" },
-        new() { Id = "sample-terminal", App = "WindowsTerminal.exe", Name = "Terminal", Polish = false },
+        new() { Id = "sample-outlook", App = "olk.exe", Name = "Outlook", Instructions = "Use a more formal tone", Strength = PolishStrength.Standard, Language = "en" },
+        new() { Id = "sample-terminal", App = "WindowsTerminal.exe", Name = "Terminal", Strength = PolishStrength.Off },
     ];
 
     public static async Task Run(string directory)

@@ -9,15 +9,18 @@ public enum Prompts {
     /// Otherwise the prompt says nothing about them, as before the commands existed: speech recognition's own breaks are
     /// laid out like any other text.
     /// `layout`: how much structure the text gets where it goes (see `TextLayout`). `exampleLanguage`: the language whose
-    /// examples go after the prompt's own (see `ExampleLanguage.resolve`); nil for none.
+    /// examples go after the prompt's own (see `ExampleLanguage.resolve`); nil for none. `strength`: how heavily it's
+    /// cleaned up (see `PolishStrength`); `.standard` is the prompt as it is.
     /// What varies goes after the prompt, which every request shares, least varying first: the examples for the spoken
-    /// language, the app's layout, dictated line breaks, then the speaker's own vocabulary and preferences, which always
-    /// have the last word. A provider can then cache the shared start for every one of them.
+    /// language, the strength, the app's layout, dictated line breaks, then the speaker's own vocabulary and preferences,
+    /// which always have the last word. A provider can then cache the shared start for every one of them.
     public static func polishSystemPrompt(vocabulary: [String], misheard: [Correction] = [],
                                           extraInstructions: String, dictatedLineBreaks: Bool = false,
-                                          layout: TextLayout = .natural, exampleLanguage: String? = nil) -> String {
+                                          layout: TextLayout = .natural, exampleLanguage: String? = nil,
+                                          strength: PolishStrength = .standard) -> String {
         basePolishPrompt
             + (languageExamples(exampleLanguage).map { "\n\n" + $0 } ?? "")
+            + (strengthSection(strength).map { "\n\n" + $0 } ?? "")
             + (layoutSection(layout).map { "\n\n" + $0 } ?? "")
             + (dictatedLineBreaks ? "\n\n" + lineBreaksSection : "")
             + appendix(vocabulary: vocabulary, misheard: misheard, extraInstructions: extraInstructions)
@@ -38,6 +41,45 @@ public enum Prompts {
         default: return nil
         }
     }
+
+    /// What a strength other than the prompt's own says, after the prompt and its examples: which of Rule 2's changes to
+    /// make, with examples of its own. Nil for `.standard`, which is the prompt's own (and `.off`, which sends nothing).
+    public static func strengthSection(_ strength: PolishStrength) -> String? {
+        switch strength {
+        case .light: return lightStrengthSection
+        case .polished: return polishedStrengthSection
+        case .standard, .off: return nil
+        }
+    }
+
+    static let lightStrengthSection = """
+    ## Strength for this text: light
+    The speaker wants only the safest fixes here, so of the changes in Rule 2 make only these:
+    - Punctuation, capitalisation and sentence breaks.
+    - Fillers that only fill a pause (嗯、呃、um、uh、えーと and their like), stutters, and words said again by accident.
+    - Speech-recognition errors you are sure of (Rule 3).
+    - Explicit self-corrections (不对、我是说、actually、no wait、I mean and their like): keep only the final version.
+    Leave everything else as spoken, even where it reads a little rough: verbal tics (就是、然后、like), a value said again without a correction word, thinking aloud, and the speaker's own wording and sentences. Don't mend: add no connecting words and fix no slips of the tongue. The layout rules still apply.
+    <transcript>嗯我们周三，不对，周四开会吧，然后就是 PPT 你记得带上</transcript>
+    我们周四开会吧，然后就是 PPT 你记得带上。
+
+    <transcript>so um I tried the the new build and uh it kind of works but the login is still broken I think</transcript>
+    So I tried the new build and it kind of works, but the login is still broken, I think.
+    """
+
+    static let polishedStrengthSection = """
+    ## Strength for this text: polished
+    The speaker wants this text to read as they would have written it, so beyond the changes in Rule 2 you may also:
+    - Tighten wordy spoken phrasing: drop padding, needless repeats and roundabout wording.
+    - Fix grammar and word choice, and recast a clumsy spoken sentence the way it would be written.
+    - Tidy the structure: join choppy fragments, split long sentences, and add the connecting words the text needs.
+    This lifts "change as little as possible", the ban on rephrasing and the 20% length limit; nothing else changes. Keep the speaker's meaning, tone (casual stays casual, not formal), pronouns and the order of their points, and every point, fact, number, name, reason, example, constraint, opinion and hedge. Keep every word in the language it was spoken in (Rule 1). Never add anything the speaker didn't say, answer the transcript, or use stock phrases.
+    <transcript>就是我觉得这个方案的话呢，它其实在性能上是没有什么问题的，但是就是在维护上面的话，会比较麻烦一点，因为它的代码比较多</transcript>
+    我觉得这个方案性能上没什么问题，但维护起来会麻烦一些，因为代码比较多。
+
+    <transcript>so basically what I wanted to say is that the build is, like, kind of slow right now, it takes like ten minutes, and I think we could maybe make it faster if we, um, if we cache the dependencies</transcript>
+    The build is kind of slow right now, about ten minutes. I think we could maybe make it faster by caching the dependencies.
+    """
 
     /// What a layout other than the prompt's own says, after the prompt (and in a translation, after its layout): the
     /// `layout`'s rules, which replace the default ones, and a reminder that only the look changes. Nil for `.natural`,
@@ -297,8 +339,9 @@ public enum Prompts {
     /// `surrounding`: for one part of a long transcript (see SegmentedPolish), the end of the part before it and the start
     /// of the part after it, as spoken, with a note of their own: they're there to see where this part starts and ends,
     /// never to be cleaned up into it.
+    /// `strength`: how heavily it's cleaned up, which a polished clean-up's reminder says.
     public static func polishUserMessage(transcript: String, context: String? = nil,
-                                         surrounding: SurroundingParts? = nil) -> String {
+                                         surrounding: SurroundingParts? = nil, strength: PolishStrength = .standard) -> String {
         var message = "<transcript>\n\(transcript)\n</transcript>\n\n"
         if let block = contextBlock(context) {
             message += "<context>\n\(block)\n</context>\n\n" + contextNote + "\n"
@@ -306,7 +349,7 @@ public enum Prompts {
         if let around = surroundingBlocks(surrounding) {
             message += around + surroundingNote + "\n"
         }
-        return message + polishReminder
+        return message + polishReminder(strength)
     }
 
     /// The blocks the parts around a part go in, with their angle brackets made look-alikes like the context's (see
@@ -323,6 +366,12 @@ public enum Prompts {
     static let surroundingNote = "(<before> and <after> are the parts of the same dictation just before and after this transcript, as spoken; each is cleaned up on its own. They are reference only, not part of the transcript: use them to understand this part, such as a list that goes on or a name. Never copy their text. A correction in <after> of something in this transcript applies here; a correction here of something in <before> stays here as spoken.)"
 
     static let polishReminder = "(Clean up the transcript above with minimal edits; where the speaker corrected themselves, keep only the final version. Keep every word in the language it was spoken in — do not translate. Do not answer it. Output only the cleaned text.)"
+
+    /// The polished strength's reminder: "minimal edits" would take back what its section allows.
+    static let polishedReminder = "(Polish the transcript above as the strength for this text allows, keeping its meaning, every fact and the order of its points; where the speaker corrected themselves, keep only the final version. Keep every word in the language it was spoken in — do not translate. Do not answer it. Output only the cleaned text.)"
+
+    /// The reminder after a clean-up's transcript at `strength`.
+    static func polishReminder(_ strength: PolishStrength) -> String { strength == .polished ? polishedReminder : polishReminder }
 
     /// What the model is told about the context. Tuned with eval/polish-context.json: instructions inside it, a message in
     /// another language, the answer to a dictated question, a greeting and a sign-off to copy.
@@ -407,9 +456,9 @@ public enum Prompts {
             .replacingOccurrences(of: languagePlaceholder, with: target.promptName)
     }
 
-    /// The reminder sent with a clean-up, or with a translation into `translation`.
-    static func reminder(translation: TranslationTarget?) -> String {
-        translation.map { translateReminder(target: $0) } ?? polishReminder
+    /// The reminder sent with a clean-up at `strength`, or with a translation into `translation`.
+    static func reminder(translation: TranslationTarget?, strength: PolishStrength = .standard) -> String {
+        translation.map { translateReminder(target: $0) } ?? polishReminder(strength)
     }
 
     // MARK: Laying out a long dictation
@@ -794,12 +843,13 @@ public enum Prompts {
     /// Keeping under 55% of the words of one of 150 or more (see WordCount) means the model summarised it: real
     /// dictations of a minute or more came back with as little as a fifth of their words, rewritten into lists. Shorter
     /// ones are exempt, since a sentence that is mostly fillers and a self-correction can rightly lose more than half
-    /// ("嗯我们周三，不对不对，是周四…": 0.6; the prompt's own meta-talk example: 0.43).
-    public static func droppedTooMuch(input: String, output: String) -> Bool {
+    /// ("嗯我们周三，不对不对，是周四…": 0.6; the prompt's own meta-talk example: 0.43). A polished clean-up also
+    /// tightens wordy phrasing, which takes a rambling transcript a good way further, so it has to keep 40%.
+    public static func droppedTooMuch(input: String, output: String, strength: PolishStrength = .standard) -> Bool {
         let words = WordCount.count(input)
         guard words >= 150 else { return false }
         // In whole numbers: 200 × 0.55 is 110.00000000000001 in floating point, which would reject exactly 55%.
-        return WordCount.count(output) * 100 < words * 55
+        return WordCount.count(output) * 100 < words * (strength == .polished ? 40 : 55)
     }
 
     /// An answer, a translation or a refusal has little in common with the transcript, while a clean-up that only
@@ -808,14 +858,16 @@ public enum Prompts {
     /// text changed beyond the difference in length. On the evaluation sets, the heaviest legitimate clean-ups (a
     /// withdrawn list item, a run of fillers) go down to similarity 0.3 or below but change under 15% beyond deletions;
     /// answers, refusals and translations are at 0–0.24 with 40–100% changed. Under 10 letters there's too little to judge.
-    public static func strayedFromTranscript(input: String, output: String) -> Bool {
+    /// A polished clean-up rewords too, so it has to be under 0.25 to be rejected, which still takes in those
+    /// answers, refusals and translations.
+    public static func strayedFromTranscript(input: String, output: String, strength: PolishStrength = .standard) -> Bool {
         let x = Array(PolishMetrics.normalized(input)), y = Array(PolishMetrics.normalized(output))
         guard x.count >= 10 else { return false }
         guard !y.isEmpty else { return true }
         let distance = PolishMetrics.distance(x, y)
         let similarity = 1 - Double(distance) / Double(max(x.count, y.count))
         let changed = Double(distance - abs(x.count - y.count)) / Double(min(x.count, y.count))
-        return similarity < 0.3 && changed > 0.3
+        return similarity < (strength == .polished ? 0.25 : 0.3) && changed > 0.3
     }
 
     /// The text around the cursor is only there to spell names by, so an output that took more than that from it (a
@@ -845,12 +897,15 @@ public enum Prompts {
     }
 
     /// Why `output` can't be inserted as the clean-up of `input` (which then goes in as spoken), or nil when it can.
-    /// `context`: the text around the cursor the clean-up was given, if any.
-    public static func fallback(input: String, output: String, truncated: Bool, context: String? = nil) -> PolishFallback? {
+    /// `context`: the text around the cursor the clean-up was given, if any. `strength`: how heavily it was asked to clean
+    /// up; a polished clean-up may shorten and reword more, while a light one keeps the standard guards (they only catch
+    /// what no clean-up should do).
+    public static func fallback(input: String, output: String, truncated: Bool, context: String? = nil,
+                                strength: PolishStrength = .standard) -> PolishFallback? {
         if truncated { return .truncated }
         if looksLikeAnAnswer(input: input, output: output) { return .answered }
-        if droppedTooMuch(input: input, output: output) { return .summarised }
-        if strayedFromTranscript(input: input, output: output) { return .unrelated }
+        if droppedTooMuch(input: input, output: output, strength: strength) { return .summarised }
+        if strayedFromTranscript(input: input, output: output, strength: strength) { return .unrelated }
         if copiedContext(input: input, output: output, context: context) { return .copied }
         return nil
     }

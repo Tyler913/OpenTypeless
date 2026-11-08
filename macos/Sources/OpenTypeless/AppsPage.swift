@@ -4,7 +4,8 @@ import TypelessCore
 import UniformTypeIdentifiers
 
 /// Settings for particular apps (see AppProfile): a card for each app, opened to change what it overrides. There are none
-/// until the user adds one.
+/// until the user adds one. Below them, the recommended settings for common apps (see `RecommendedApps`) and the apps
+/// they cover.
 struct AppsPage: View {
     @ObservedObject var settings: AppSettings
     @State private var expanded: Set<String>
@@ -47,6 +48,7 @@ struct AppsPage: View {
                     ))
                 }
             }
+            RecommendedAppsSection(settings: settings)
         }
     }
 
@@ -210,7 +212,16 @@ private struct AppProfileCard: View {
             if expanded {
                 CardDivider(inset: 0)
                 CardRow(title: L("用 AI 整理文字", "Clean up with AI")) {
-                    OverridePicker(title: L("用 AI 整理文字", "Clean up with AI"), value: binding(\.polish), global: settings.polishEnabled)
+                    Picker(L("用 AI 整理文字", "Clean up with AI"), selection: binding(\.strength)) {
+                        Text(L("默认（\(defaultStrength.displayName)）", "Default (\(defaultStrength.displayName))"))
+                            .tag(PolishStrength?.none)
+                        Divider()
+                        ForEach(PolishStrength.allCases) { strength in
+                            Text(strength.displayName).tag(PolishStrength?.some(strength))
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
                 }
                 CardDivider()
                 CardRow(title: L("插入后自动回车", "Press Return after inserting")) {
@@ -249,8 +260,8 @@ private struct AppProfileCard: View {
                     .fixedSize()
                 }
                 // Only used while the text is cleaned up.
-                .disabled(!(profile.polish ?? settings.polishEnabled))
-                .opacity(profile.polish ?? settings.polishEnabled ? 1 : 0.5)
+                .disabled(!cleansUp)
+                .opacity(cleansUp ? 1 : 0.5)
                 CardDivider()
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 5) {
@@ -269,8 +280,8 @@ private struct AppProfileCard: View {
                 }
                 .rowPadding(.all, 14)
                 // Only used while the text is cleaned up.
-                .disabled(!(profile.polish ?? settings.polishEnabled))
-                .opacity(profile.polish ?? settings.polishEnabled ? 1 : 0.5)
+                .disabled(!cleansUp)
+                .opacity(cleansUp ? 1 : 0.5)
                 CardDivider(inset: 0)
                 HStack {
                     Text(profile.app).font(.system(size: 11, design: .monospaced)).foregroundStyle(.tertiary).textSelection(.enabled)
@@ -304,7 +315,9 @@ private struct AppProfileCard: View {
     /// "Clean-up off · Return on · English", or that everything follows the usual settings.
     private var summary: String {
         var parts: [String] = []
-        if let polish = profile.polish { parts.append(polish ? L("整理：开", "Clean-up on") : L("整理：关", "Clean-up off")) }
+        if let strength = profile.strength {
+            parts.append(L("整理：\(strength.displayName)", "Clean-up: \(strength.displayName)"))
+        }
         if let enter = profile.pressEnter { parts.append(enter ? L("回车：开", "Return on") : L("回车：关", "Return off")) }
         if let language = profile.language { parts.append(Self.languageName(language)) }
         if let layout = profile.layout { parts.append(Self.layoutName(layout)) }
@@ -313,6 +326,15 @@ private struct AppProfileCard: View {
         }
         return parts.isEmpty ? L("全部跟随你平时的设置", "Uses your usual settings") : parts.joined(separator: " · ")
     }
+
+    /// The strength this app gets when its profile leaves it on Default: the one recommended for it while the recommended
+    /// settings are on, else the global one (off while clean-up is off).
+    private var defaultStrength: PolishStrength {
+        settings.globalDictationSettings.applying(nil, recommendation: settings.recommendation(for: profile.app)).effectiveStrength
+    }
+
+    /// Whether this app's dictations are cleaned up.
+    private var cleansUp: Bool { (profile.strength ?? defaultStrength) != .off }
 
     /// The layout this app gets when its profile leaves it on Default: its built-in one, or the prompt's own.
     private var builtInLayout: TextLayout { TextLayout.builtIn(for: profile.app) ?? .natural }
@@ -337,6 +359,34 @@ private struct AppProfileCard: View {
         if code.isEmpty { return L("自动检测", "Auto-detect") }
         guard let language = AppLanguage(rawValue: code), language != .system else { return code }
         return language == .zh ? "中文" : language.nativeName
+    }
+}
+
+/// The recommended settings for common apps: a switch, and the apps they cover by kind with the strength each kind gets,
+/// shown whether it's on or off, so it's plain which apps a profile of their own would override.
+private struct RecommendedAppsSection: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        CardSection(title: L("推荐设置", "Recommended settings")) {
+            CardRow(title: L("常用应用的推荐设置", "Recommended settings for common apps"),
+                    subtitle: L("聊天和写代码用轻度，邮件用润色", "Light for chat and code, Polished for email"),
+                    help: L("下面这些常用应用自动用推荐的整理强度。只改整理强度，不会自动回车，也不改说话语言；文字整理关闭时不起作用。给某个应用添加配置并设了整理强度，就按你的配置来。",
+                            "These common apps get the recommended clean-up strength. Only the strength changes, never Return or the spoken language, and nothing while clean-up is off. An app's own profile with a strength set wins."),
+                    isOn: $settings.recommendedAppSettings)
+            ForEach(AppCategory.allCases) { kind in
+                CardDivider()
+                CardRow(title: kind.displayName, subtitle: Self.names(kind)) {
+                    Text(kind.strength.displayName).foregroundStyle(.secondary)
+                }
+                .opacity(settings.recommendedAppSettings ? 1 : 0.5)
+            }
+        }
+    }
+
+    /// The Mac apps of this kind the table covers.
+    static func names(_ kind: AppCategory) -> String {
+        RecommendedApps.all.filter { $0.category == kind && !$0.mac.isEmpty }.map(\.displayName).joined(separator: ", ")
     }
 }
 

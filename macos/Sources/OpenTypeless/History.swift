@@ -44,6 +44,9 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     var profileID: String?
     /// That profile's name, for History.
     var profileName: String?
+    /// The kind of app whose recommended clean-up strength applied (`AppCategory`: "chat", "email", "code"), for
+    /// History and a retry; nil when none did.
+    var recommendation: String?
     /// "translate" for a translation dictation (see `TranslationTarget.recordMode`), "command" for an edit of a selection
     /// by voice (see `SelectionCommand.recordMode`), nil for plain dictation: records from before translation, and older
     /// versions reading newer ones, see a dictation.

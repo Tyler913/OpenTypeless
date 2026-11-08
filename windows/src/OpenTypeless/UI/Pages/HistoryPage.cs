@@ -610,6 +610,11 @@ public sealed class HistoryPage : PageBase
         }
         // The app profile it was made with, if any.
         if (record.ProfileName is { } profile) details.Add(profile);
+        if (AppCategories.From(record.Recommendation) is { } kind)
+        {
+            var strength = kind.Strength().DisplayName();
+            details.Add(L($"推荐设置：{strength}", $"Recommended: {strength}"));
+        }
 
         var header = new Grid { Padding = new Thickness(16) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

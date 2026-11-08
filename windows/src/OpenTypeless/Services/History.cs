@@ -68,6 +68,11 @@ public sealed class DictationRecord
     [JsonPropertyName("profileID")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ProfileId { get; set; }
     /// <summary>That profile's name, for History.</summary>
     [JsonPropertyName("profileName")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ProfileName { get; set; }
+    /// <summary>
+    /// The kind of app whose recommended clean-up strength applied (<see cref="TypelessCore.AppCategory"/>: "chat", "email",
+    /// "code"), for History and a retry; null when none did.
+    /// </summary>
+    [JsonPropertyName("recommendation")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Recommendation { get; set; }
     /// "translate" for a translation dictation (see <see cref="TranslationTarget.RecordMode"/>), "command" for an edit of a
     /// selection by voice (see <see cref="SelectionCommand.RecordMode"/>), null for plain dictation: records from before
     /// translation, and older versions reading newer ones, see a dictation.

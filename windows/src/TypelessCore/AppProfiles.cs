@@ -21,8 +21,11 @@ public sealed record AppProfile
     public string Name { get; init; } = "";
     /// <summary>Clean-up preferences for this app, added after the global ones; "" adds none.</summary>
     public string Instructions { get; init; } = "";
-    /// <summary>Clean up with AI; null follows the global setting.</summary>
-    public bool? Polish { get; init; }
+    /// <summary>
+    /// How heavily the text is cleaned up, <c>Off</c> for not at all; null follows the recommended settings for the app, if
+    /// any, else the global setting (see <see cref="DictationSettings.Applying"/>).
+    /// </summary>
+    public PolishStrength? Strength { get; init; }
     /// <summary>Press Enter (Return on macOS) after the paste; null follows the global setting.</summary>
     public bool? PressEnter { get; init; }
     /// <summary>Spoken-language hint for speech-to-text, "" to auto-detect; null follows the global setting.</summary>
@@ -52,13 +55,20 @@ public sealed record AppProfile
     public static AppProfile? Matching(string? app, IEnumerable<AppProfile> profiles) => profiles.FirstOrDefault(p => p.Matches(app));
 
     /// <summary>Whether every setting follows the global one.</summary>
-    public bool IsEmpty => Polish is null && PressEnter is null && Language is null && Layout is null && Instructions.Trim().Length == 0;
+    public bool IsEmpty => Strength is null && PressEnter is null && Language is null && Layout is null && Instructions.Trim().Length == 0;
 
-    /// <summary>The same JSON as the macOS app's: unset overrides aren't written, so they stay "follow the global setting".</summary>
+    /// <summary>
+    /// The same JSON as the macOS app's: unset overrides aren't written, so they stay "follow the global setting". The
+    /// strength goes with the on/off switch older versions read, so they still clean up, or don't, as it says.
+    /// </summary>
     public JsonObject ToJson()
     {
         var json = new JsonObject { ["id"] = Id, ["app"] = App, ["name"] = Name, ["instructions"] = Instructions };
-        if (Polish is { } polish) json["polish"] = polish;
+        if (Strength is { } strength)
+        {
+            json["polish"] = strength != PolishStrength.Off;
+            json["strength"] = strength.Id();
+        }
         if (PressEnter is { } pressEnter) json["pressEnter"] = pressEnter;
         if (Language is { } language) json["language"] = language;
         if (Layout is { } layout) json["layout"] = layout.Id();
@@ -80,7 +90,8 @@ public sealed record AppProfile
             App = app,
             Name = Text(json["name"]) ?? app,
             Instructions = Text(json["instructions"]) ?? "",
-            Polish = Flag(json["polish"]),
+            // Saved by an older version as on or off, which "strength" refines (see PolishStrengths.Stored).
+            Strength = PolishStrengths.Stored(Flag(json["polish"]), Text(json["strength"])),
             PressEnter = Flag(json["pressEnter"]),
             Language = Text(json["language"]),
             Layout = TextLayouts.From(Text(json["layout"])),
@@ -136,17 +147,37 @@ public sealed record DictationSettings(bool PolishEnabled, bool PressEnter, stri
     public string? ProfileName { get; init; }
     /// <summary>How much structure the cleaned-up text gets (see <see cref="TextLayout"/>).</summary>
     public TextLayout Layout { get; init; } = TextLayout.Natural;
+    /// <summary>How heavily the text is cleaned up while <see cref="PolishEnabled"/>: never <c>Off</c>, which <see cref="PolishEnabled"/> says.</summary>
+    public PolishStrength Strength { get; init; } = PolishStrength.Standard;
+    /// <summary>The kind of app whose recommended strength applied (see <see cref="RecommendedApps"/>); null when none did.</summary>
+    public AppCategory? Recommendation { get; init; }
+
+    /// <summary>The clean-up as it runs at <paramref name="strength"/>: on at that strength, or off.</summary>
+    public DictationSettings WithStrength(PolishStrength strength) =>
+        strength == PolishStrength.Off ? this with { PolishEnabled = false } : this with { PolishEnabled = true, Strength = strength };
+
+    /// <summary>How heavily the text is cleaned up: <see cref="Strength"/>, or <c>Off</c>.</summary>
+    public PolishStrength EffectiveStrength => PolishEnabled ? Strength : PolishStrength.Off;
 
     /// <summary>
     /// These settings with <paramref name="profile"/>'s overrides on top; unchanged without one. The layout is the
     /// profile's, else the built-in one of the app (<paramref name="app"/>, or the profile's own), else as it was.
+    /// <paramref name="recommendation"/>: the kind of app it is, when the recommended settings are on (see
+    /// <see cref="RecommendedApps"/>), whose strength applies unless the profile sets one; it only picks how heavily, never
+    /// whether, so with clean-up off it changes nothing.
     /// </summary>
-    public DictationSettings Applying(AppProfile? profile, string? app = null)
+    public DictationSettings Applying(AppProfile? profile, string? app = null, AppCategory? recommendation = null)
     {
         var layout = profile?.Layout ?? TextLayouts.BuiltIn(app ?? profile?.App) ?? Layout;
-        return profile is null ? this with { Layout = layout } : this with
+        var settings = this with { Layout = layout };
+        if (recommendation is { } kind && PolishEnabled && profile?.Strength is null)
         {
-            PolishEnabled = profile.Polish ?? PolishEnabled,
+            settings = settings with { Strength = kind.Strength(), Recommendation = kind };
+        }
+        if (profile is null) return settings;
+        if (profile.Strength is { } strength) settings = settings.WithStrength(strength);
+        return settings with
+        {
             PressEnter = profile.PressEnter ?? PressEnter,
             Language = profile.Language ?? Language,
             ExtraInstructions = Combine(ExtraInstructions, profile.Instructions),

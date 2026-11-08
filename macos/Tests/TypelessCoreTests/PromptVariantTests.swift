@@ -20,7 +20,8 @@ import Testing
           Prompts.layoutSection(.structured)!, Prompts.layoutSection(.email)!]
             + ExampleLanguage.withExamples.map { Prompts.languageExamples($0)! }
             + [Prompts.relayoutSystemPrompt(.structured), Prompts.relayoutSystemPrompt(.email), Prompts.relayoutReminder,
-               Prompts.surroundingNote, Prompts.polishReminder, Prompts.contextNote])
+               Prompts.surroundingNote, Prompts.polishReminder, Prompts.contextNote,
+               Prompts.strengthSection(.light)!, Prompts.strengthSection(.polished)!, Prompts.polishedReminder])
             .joined(separator: "\n\n")
     }
 
@@ -72,6 +73,59 @@ import Testing
         }
         #expect(Prompts.languageExamples("zh") == nil)
         #expect(Prompts.languageExamples(nil) == nil)
+    }
+
+    /// A strength's section goes after the prompt and the spoken language's examples, before the layout, so every
+    /// strength shares the prompt's start; the standard strength is the prompt as it was.
+    @Test func strengthSectionsGoAfterTheSharedStart() {
+        #expect(Prompts.strengthSection(.standard) == nil && Prompts.strengthSection(.off) == nil)
+        let standard = Prompts.polishSystemPrompt(vocabulary: ["Claude"], extraInstructions: "Short", layout: .chat,
+                                                  exampleLanguage: "ja")
+        #expect(standard == Prompts.polishSystemPrompt(vocabulary: ["Claude"], extraInstructions: "Short", layout: .chat,
+                                                       exampleLanguage: "ja", strength: .standard))
+        for strength in [PolishStrength.light, .polished] {
+            let section = Prompts.strengthSection(strength)!
+            let prompt = Prompts.polishSystemPrompt(vocabulary: ["Claude"], extraInstructions: "Short", layout: .chat,
+                                                    exampleLanguage: "ja", strength: strength)
+            #expect(prompt.hasPrefix(Prompts.basePolishPrompt + "\n\n" + Prompts.languageExamples("ja")! + "\n\n" + section
+                                     + "\n\n" + Prompts.layoutSection(.chat)!))
+            #expect(prompt.hasSuffix("## Additional preferences from the speaker\nShort"))
+        }
+        // Only a polished clean-up has a reminder of its own: "minimal edits" would take back what its section allows.
+        #expect(Prompts.polishUserMessage(transcript: "x", strength: .light) == Prompts.polishUserMessage(transcript: "x"))
+        #expect(Prompts.polishUserMessage(transcript: "x", strength: .polished).hasSuffix(Prompts.polishedReminder))
+        #expect(Prompts.sanitizePolishOutput("Hi.\n" + Prompts.polishedReminder,
+                                             reminder: Prompts.reminder(translation: nil, strength: .polished)) == "Hi.")
+        // A translation has no strength.
+        let target = TranslationTarget("en")!
+        #expect(Prompts.reminder(translation: target, strength: .polished) == Prompts.reminder(translation: target))
+    }
+
+    /// The request a clean-up at each strength sends.
+    @Test func strengthReachesTheRequest() {
+        var options = PolishOptions(model: "m")
+        options.strength = .polished
+        let polished = APIClient.polishMessages(transcript: "so um the build is slow", options: options)
+        #expect(polished[0].contains(Prompts.polishedStrengthSection))
+        #expect(polished[1].hasSuffix(Prompts.polishedReminder))
+        options.strength = .light
+        let light = APIClient.polishMessages(transcript: "so um the build is slow", options: options)
+        #expect(light[0].contains(Prompts.lightStrengthSection) && !light[0].contains(Prompts.polishedStrengthSection))
+        #expect(light[1].hasSuffix(Prompts.polishReminder))
+        options.translation = TranslationTarget("zh-Hans")
+        #expect(!APIClient.polishMessages(transcript: "x", options: options)[0].contains("## Strength"))
+    }
+
+    /// Each strength's examples are clean-ups at that strength: the guards let them through, with no stock phrases.
+    @Test func strengthExamplesPass() {
+        for strength in [PolishStrength.light, .polished] {
+            let examples = PolishGuardTests.examples(in: "## Examples\n" + Prompts.strengthSection(strength)!)
+            #expect(examples.count == 2, "\(strength)")
+            for (input, output) in examples {
+                #expect(Prompts.fallback(input: input, output: output, truncated: false, strength: strength) == nil, "\(input)")
+                #expect(PolishChecks.addedStockPhrases(input: input, output: output).isEmpty)
+            }
+        }
     }
 
     @Test func relayoutFollowsSharedCases() throws {

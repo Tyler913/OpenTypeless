@@ -221,7 +221,7 @@ public enum SegmentedPolish {
         let options = primary.options
         let dictation = concurrency == nil
         let result = try await runParts(transcript: transcript, translation: options.translation,
-                                        vocabulary: options.vocabulary, context: options.context,
+                                        vocabulary: options.vocabulary, context: options.context, strength: options.strength,
                                         concurrency: concurrency, holdWhile: holdWhile, polish: { part, surrounding, partial in
             var first = primary
             first.options.surrounding = surrounding
@@ -272,12 +272,13 @@ public enum SegmentedPolish {
     /// first part's error), or when cancelled. `onPartial` gets the parts' text so far, joined. `vocabulary`: the
     /// speaker's terms, which a translation keeps as they are. `context`: the text around the cursor the requests carry,
     /// if any. `keepsLineBreaks`: the transcript's line breaks were dictated, and those between two parts are put back as
-    /// they were.
+    /// they were. `strength`: how heavily the parts were cleaned up, which the guards allow for.
     public static func run(
         transcript: String,
         translation: TranslationTarget? = nil,
         vocabulary: [String] = [],
         context: String? = nil,
+        strength: PolishStrength = .standard,
         concurrency: Int? = nil,
         holdWhile: (@Sendable () -> Bool)? = nil,
         polish: @escaping @Sendable (String, (@Sendable (String) -> Void)?) async throws -> HedgedPolishResult,
@@ -285,7 +286,7 @@ public enum SegmentedPolish {
         keepsLineBreaks: Bool = false
     ) async throws -> SegmentedPolishResult {
         try await runParts(transcript: transcript, translation: translation, vocabulary: vocabulary, context: context,
-                           concurrency: concurrency, holdWhile: holdWhile,
+                           strength: strength, concurrency: concurrency, holdWhile: holdWhile,
                            polish: { part, _, partial in try await polish(part, partial) },
                            onPartial: onPartial, keepsLineBreaks: keepsLineBreaks, sendsSurrounding: false)
     }
@@ -298,6 +299,7 @@ public enum SegmentedPolish {
         translation: TranslationTarget? = nil,
         vocabulary: [String] = [],
         context: String? = nil,
+        strength: PolishStrength = .standard,
         concurrency: Int? = nil,
         holdWhile: (@Sendable () -> Bool)? = nil,
         polish: @escaping @Sendable (String, SurroundingParts?, (@Sendable (String) -> Void)?) async throws -> HedgedPolishResult,
@@ -346,7 +348,7 @@ public enum SegmentedPolish {
                                                 vocabulary: vocabulary)
                 } else {
                     Prompts.fallback(input: text, output: output, truncated: truncated,
-                                     context: reference(context, surroundings[index]))
+                                     context: reference(context, surroundings[index]), strength: strength)
                 }
                 results.append(.init(transcript: text, answer: answer, fallback: fallback, error: nil))
             case let .failure(error)?:

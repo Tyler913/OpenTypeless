@@ -259,7 +259,7 @@ public static class SegmentedPolish
                                     },
                                     onPartial, cancellationToken, options.Translation, options.Vocabulary, options.Context,
                                     concurrency, holdWhile, options.DictatedLineBreaks,
-                                    sendsSurrounding: dictation && options.Translation is null).ConfigureAwait(false);
+                                    sendsSurrounding: dictation && options.Translation is null, strength: options.Strength).ConfigureAwait(false);
         if (!dictation || result.Parts.Count < 2 || !Prompts.Relayouts(options.Layout) || options.DictatedLineBreaks
             || WordCount.Count(result.Text) > RelayoutLimit)
         {
@@ -315,14 +315,16 @@ public static class SegmentedPolish
     /// <see cref="Run(string, Func{string, Action{string}?, CancellationToken, Task{HedgedPolishResult}}, Action{string}?, CancellationToken, TranslationTarget?, IReadOnlyList{string}?, string?, int?, Func{bool}?, bool)"/>,
     /// with <paramref name="polish"/> given each part's surrounding parts (see <see cref="Surrounding"/>) when
     /// <paramref name="sendsSurrounding"/> and there's more than one part; an answer that copied from them beyond what
-    /// the clean-up allows is then not used.
+    /// the clean-up allows is then not used. <paramref name="strength"/>: how heavily the parts were cleaned up, which the
+    /// guards allow for.
     /// </summary>
     public static async Task<SegmentedPolishResult> RunParts(string transcript,
                                                              Func<string, SurroundingParts?, Action<string>?, CancellationToken, Task<HedgedPolishResult>> polish,
                                                              Action<string>? onPartial = null, CancellationToken cancellationToken = default,
                                                              TranslationTarget? translation = null, IReadOnlyList<string>? vocabulary = null,
                                                              string? context = null, int? concurrency = null, Func<bool>? holdWhile = null,
-                                                             bool keepsLineBreaks = false, bool sendsSurrounding = false)
+                                                             bool keepsLineBreaks = false, bool sendsSurrounding = false,
+                                                             PolishStrength strength = PolishStrength.Standard)
     {
         var split = PartsAndBreaks(transcript);
         var texts = split.Select(p => p.Text).ToList();
@@ -340,7 +342,7 @@ public static class SegmentedPolish
             if (answer != null)
             {
                 var fallback = translation is null
-                    ? Prompts.Fallback(texts[i], answer.Result.Text, answer.Result.Truncated, Reference(context, surroundings[i]))
+                    ? Prompts.Fallback(texts[i], answer.Result.Text, answer.Result.Truncated, Reference(context, surroundings[i]), strength)
                     : Prompts.TranslationFallback(texts[i], answer.Result.Text, answer.Result.Truncated, translation, vocabulary);
                 results.Add(new SegmentedPolishResult.Part(texts[i], answer, fallback, null));
             }

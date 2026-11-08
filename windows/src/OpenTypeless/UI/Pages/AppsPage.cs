@@ -14,7 +14,8 @@ namespace OpenTypeless.UI;
 
 /// <summary>
 /// Settings for particular apps (see <see cref="AppProfile"/>): a card for each app, opened to change what it overrides.
-/// There are none until the user adds one.
+/// There are none until the user adds one. Below them, the recommended settings for common apps (see
+/// <see cref="RecommendedApps"/>) and the apps they cover.
 /// </summary>
 public sealed class AppsPage : PageBase
 {
@@ -65,6 +66,7 @@ public sealed class AppsPage : PageBase
                     add,
                 },
             }));
+            _content.Children.Add(RecommendedSection());
             return;
         }
         foreach (var profile in profiles)
@@ -84,6 +86,44 @@ public sealed class AppsPage : PageBase
         var more = AddButton();
         more.HorizontalAlignment = HorizontalAlignment.Left;
         _content.Children.Add(more);
+        _content.Children.Add(RecommendedSection());
+    }
+
+    /// <summary>
+    /// The recommended settings for common apps: a switch, and the apps they cover by kind with the strength each kind gets,
+    /// shown whether it's on or off, so it's plain which apps a profile of their own would override.
+    /// </summary>
+    private CardSection RecommendedSection()
+    {
+        var section = new CardSection { Title = L("推荐设置", "Recommended settings"), Margin = new Thickness(0, 20, 0, 0) };
+        var toggle = new ToggleSwitch { IsOn = _settings.RecommendedAppSettings, OnContent = "", OffContent = "", MinWidth = 0 };
+        toggle.Toggled += (_, _) =>
+        {
+            _settings.RecommendedAppSettings = toggle.IsOn;
+            // Drawn again once the switch is done: the list dims, and the profiles' "Default" names what their app gets now.
+            DispatcherQueue.TryEnqueue(() => Render());
+        };
+        section.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.Wand, Title = L("常用应用的推荐设置", "Recommended settings for common apps"),
+            Subtitle = L("聊天和写代码用轻度，邮件用润色", "Light for chat and code, Polished for email"),
+            Help = L("下面这些常用应用自动用推荐的整理强度。只改整理强度，不会自动按回车，也不改说话语言；文字整理关闭时不起作用。给某个应用添加配置并设了整理强度，就按你的配置来。",
+                     "These common apps get the recommended clean-up strength. Only the strength changes, never Enter or the spoken language, and nothing while clean-up is off. An app's own profile with a strength set wins."),
+            Trailing = toggle,
+        });
+        foreach (var kind in AppCategories.All)
+        {
+            section.Body.Add(new CardRow
+            {
+                Glyph = kind switch { AppCategory.Chat => Glyphs.Message, AppCategory.Email => Glyphs.Send, _ => Glyphs.Code },
+                Title = kind.DisplayName(),
+                Subtitle = string.Join(", ", RecommendedApps.All.Where(app => app.Category == kind && app.WindowsIds.Length > 0)
+                                                                .Select(app => app.DisplayName)),
+                Trailing = Ui.Text(kind.Strength().DisplayName(), 14, foreground: Ui.Secondary),
+                Opacity = _settings.RecommendedAppSettings ? 1 : 0.5,
+            });
+        }
+        return section;
     }
 
     /// <summary>Lists the running apps that have no profile yet, and a file picker for any other program, to add one.</summary>
@@ -238,7 +278,7 @@ internal sealed class AppProfileCard : UserControl
         _details.Children.Add(new CardRow
         {
             Glyph = Glyphs.Sparkle, Title = L("用 AI 整理文字", "Clean up with AI"),
-            Trailing = OverrideBox(profile.Polish, _settings.PolishEnabled, value => Update(p => p with { Polish = value })),
+            Trailing = StrengthBox(),
         });
         _details.Children.Add(new CardDivider());
         _details.Children.Add(new CardRow
@@ -345,7 +385,7 @@ internal sealed class AppProfileCard : UserControl
     {
         _summary.Text = Summary(_profile);
         // Only used while the text is cleaned up.
-        _instructions.IsEnabled = _profile.Polish ?? _settings.PolishEnabled;
+        _instructions.IsEnabled = (_profile.Strength ?? _settings.DefaultStrengthFor(_profile.App)) != PolishStrength.Off;
         _layout.IsEnabled = _instructions.IsEnabled;
     }
 
@@ -358,6 +398,25 @@ internal sealed class AppProfileCard : UserControl
         box.Items.Add(L("关", "Off"));
         box.SelectedIndex = value is null ? 0 : value.Value ? 1 : 2;
         box.SelectionChanged += (_, _) => set(box.SelectedIndex switch { 1 => true, 2 => false, _ => null });
+        return box;
+    }
+
+    /// <summary>
+    /// The strength the app gets without one of its own (named: the recommended one while the recommended settings are on,
+    /// else the global one), or one of the strengths.
+    /// </summary>
+    private ComboBox StrengthBox()
+    {
+        var box = new ComboBox { MinWidth = 150 };
+        List<PolishStrength?> strengths = [null, .. PolishStrengths.All.Select(s => (PolishStrength?)s)];
+        var fallback = _settings.DefaultStrengthFor(_profile.App).DisplayName();
+        foreach (var strength in strengths) box.Items.Add(strength is { } chosen ? chosen.DisplayName() : L($"默认（{fallback}）", $"Default ({fallback})"));
+        box.SelectedIndex = Math.Max(0, strengths.IndexOf(_profile.Strength));
+        box.SelectionChanged += (_, _) =>
+        {
+            var strength = strengths[Math.Max(0, box.SelectedIndex)];
+            Update(p => p with { Strength = strength });
+        };
         return box;
     }
 
@@ -412,7 +471,7 @@ internal sealed class AppProfileCard : UserControl
     private static string Summary(AppProfile profile)
     {
         var parts = new List<string>();
-        if (profile.Polish is { } polish) parts.Add(polish ? L("整理：开", "Clean-up on") : L("整理：关", "Clean-up off"));
+        if (profile.Strength is { } strength) parts.Add(L($"整理：{strength.DisplayName()}", $"Clean-up: {strength.DisplayName()}"));
         if (profile.PressEnter is { } enter) parts.Add(enter ? L("回车：开", "Enter on") : L("回车：关", "Enter off"));
         if (profile.Language is { } language) parts.Add(LanguageName(language));
         if (profile.Layout is { } layout) parts.Add(LayoutName(layout));

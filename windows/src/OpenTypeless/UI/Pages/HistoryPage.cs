@@ -610,6 +610,8 @@ public sealed class HistoryPage : PageBase
         }
         // The app profile it was made with, if any.
         if (record.ProfileName is { } profile) details.Add(profile);
+        // Recognised on this PC while the network was down: Re-transcribe asks the provider again.
+        if (record.OnDeviceChunks is { Count: > 0 }) details.Add(L("本机识别（离线）", "On-device (offline)"));
 
         var header = new Grid { Padding = new Thickness(16) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

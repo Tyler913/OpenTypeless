@@ -34,6 +34,9 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     /// The language hint those chunks were transcribed with ("" auto-detect; nil before it was saved): a retry with
     /// another one sends them again (see `DictationSettings.reusesTranscripts`).
     var chunkLanguage: String?
+    /// The chunks recognised on this Mac because the provider couldn't be reached (see `OfflineFallback`), in order; nil
+    /// when there were none. A retry with the provider sends them to it again.
+    var onDeviceChunks: [Int]?
     var timing: Timing?
     /// What processing it cost so far in USD, retries included (nil when nothing could be priced).
     var cost: Double?

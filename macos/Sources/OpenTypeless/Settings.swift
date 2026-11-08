@@ -23,6 +23,9 @@ final class AppSettings: ObservableObject {
     @AppStorage("sttBackupEnabled") var sttBackupEnabled: Bool = false
     @AppStorage("sttBackupProvider") var sttBackupProvider: ProviderID = .openrouter
     @AppStorage("sttBackupModel") var sttBackupModel: String = ProviderID.openrouter.defaultBackupSTTModel
+    /// With a provider for speech-to-text, the recognizer on this Mac takes over while the network is down (see
+    /// `OfflineFallback`).
+    @AppStorage(OfflineFallback.defaultsKey) var onDeviceWhenOffline: Bool = true
     /// A second clean-up model that races the first when it is slow to start (see HedgedPolish).
     @AppStorage("polishBackupEnabled") var polishBackupEnabled: Bool = true
     @AppStorage("polishBackupProvider") var polishBackupProvider: ProviderID = .openrouter

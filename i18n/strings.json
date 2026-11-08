@@ -764,6 +764,15 @@
     "fr": "Échec du nettoyage — texte brut inséré",
     "de": "Bereinigung fehlgeschlagen – Rohtext eingefügt"
   },
+  "Offline — inserted without clean-up": {
+    "ja": "オフラインのため、整形せずに挿入しました",
+    "ko": "오프라인 — 다듬지 않고 삽입함",
+    "es": "Sin conexión: se insertó sin limpieza",
+    "pt": "Offline — inserido sem limpeza",
+    "ru": "Нет сети — вставлено без очистки",
+    "fr": "Hors ligne — inséré sans nettoyage",
+    "de": "Offline – ohne Bereinigung eingefügt"
+  },
   "No Accessibility permission — text copied to the clipboard": {
     "ja": "アクセシビリティの許可がないため、テキストをクリップボードにコピーしました",
     "ko": "손쉬운 사용 권한이 없어 텍스트를 클립보드에 복사함",
@@ -5326,6 +5335,42 @@
     "ru": "На устройстве",
     "fr": "Sur l’appareil",
     "de": "Auf dem Gerät"
+  },
+  "On-device (offline)": {
+    "ja": "オンデバイス（オフライン）",
+    "ko": "온디바이스 (오프라인)",
+    "es": "En el dispositivo (sin conexión)",
+    "pt": "No dispositivo (offline)",
+    "ru": "На устройстве (без сети)",
+    "fr": "Sur l’appareil (hors ligne)",
+    "de": "Auf dem Gerät (offline)"
+  },
+  "Use on-device recognition when offline": {
+    "ja": "オフライン時はオンデバイス認識を使う",
+    "ko": "오프라인일 때 온디바이스 인식 사용",
+    "es": "Usar el reconocimiento en el dispositivo sin conexión",
+    "pt": "Usar o reconhecimento no dispositivo quando offline",
+    "ru": "Распознавать на устройстве, когда нет сети",
+    "fr": "Utiliser la reconnaissance sur l’appareil hors ligne",
+    "de": "Ohne Netzwerk auf dem Gerät erkennen"
+  },
+  "When the network is down, speech is recognised on this Mac with the speech recognition built into macOS, so dictation still gives you text. It's less accurate than cloud models and needs the speech model for your spoken language downloaded first. Clean-up needs the network too: offline, the text goes in as recognised.": {
+    "ja": "ネットワークが使えないときは、macOS に組み込まれた音声認識でこの Mac 上で文字起こしするので、音声入力はそのまま使えます。クラウドのモデルより精度は下がり、話す言語の音声モデルを先にダウンロードしておく必要があります。整形にもネットワークが必要なため、オフラインでは認識結果がそのまま入力されます。",
+    "ko": "네트워크가 끊기면 macOS에 내장된 음성 인식으로 이 Mac에서 받아쓰므로 받아쓰기가 그대로 글자를 내놓습니다. 클라우드 모델보다 정확도가 낮고, 말하는 언어의 음성 모델을 먼저 다운로드해야 합니다. 정리에도 네트워크가 필요해 오프라인에서는 인식된 텍스트가 그대로 입력됩니다.",
+    "es": "Cuando no hay red, la voz se reconoce en este Mac con el reconocimiento de voz integrado en macOS, así que el dictado sigue dándote texto. Es menos preciso que los modelos en la nube y necesita que el modelo de voz de tu idioma esté descargado antes. La limpieza también necesita la red: sin conexión, el texto se inserta tal como se reconoció.",
+    "pt": "Quando a rede cai, a fala é reconhecida neste Mac com o reconhecimento de fala integrado ao macOS, então o ditado continua gerando texto. É menos preciso que os modelos na nuvem e precisa que o modelo de fala do seu idioma já esteja baixado. A limpeza também precisa da rede: offline, o texto entra como foi reconhecido.",
+    "ru": "Когда сети нет, речь распознаётся на этом Mac встроенным в macOS распознаванием, так что диктовка по-прежнему даёт текст. Точность ниже, чем у облачных моделей, и речевая модель вашего языка должна быть загружена заранее. Очистке тоже нужна сеть: без неё текст вставляется как распознан.",
+    "fr": "Quand le réseau est coupé, la parole est reconnue sur ce Mac avec la reconnaissance vocale intégrée à macOS, et la dictée donne toujours du texte. C’est moins précis que les modèles dans le cloud et il faut avoir téléchargé au préalable le modèle vocal de votre langue. Le nettoyage a lui aussi besoin du réseau : hors ligne, le texte est inséré tel que reconnu.",
+    "de": "Ohne Netzwerk wird die Sprache auf diesem Mac mit der in macOS integrierten Spracherkennung erkannt, sodass das Diktat trotzdem Text liefert. Das ist ungenauer als Cloud-Modelle und setzt voraus, dass das Sprachmodell deiner Sprache schon geladen ist. Auch die Bereinigung braucht das Netzwerk: offline wird der Text so eingefügt, wie er erkannt wurde."
+  },
+  "When the network is down, speech is recognised on this PC with the on-device model, so dictation still gives you text. It's less accurate than cloud models and needs the on-device speech model downloaded first (SenseVoice Small: Chinese, English, Japanese, Korean and Cantonese). Clean-up needs the network too: offline, the text goes in as recognised.": {
+    "ja": "ネットワークが使えないときは、この PC 上のオンデバイスモデルで文字起こしするので、音声入力はそのまま使えます。クラウドのモデルより精度は下がり、オンデバイスの音声モデル（SenseVoice Small：中国語・英語・日本語・韓国語・広東語）を先にダウンロードしておく必要があります。整形にもネットワークが必要なため、オフラインでは認識結果がそのまま入力されます。",
+    "ko": "네트워크가 끊기면 이 PC의 온디바이스 모델로 받아쓰므로 받아쓰기가 그대로 글자를 내놓습니다. 클라우드 모델보다 정확도가 낮고, 온디바이스 음성 모델(SenseVoice Small: 중국어, 영어, 일본어, 한국어, 광둥어)을 먼저 다운로드해야 합니다. 정리에도 네트워크가 필요해 오프라인에서는 인식된 텍스트가 그대로 입력됩니다.",
+    "es": "Cuando no hay red, la voz se reconoce en este PC con el modelo en el dispositivo, así que el dictado sigue dándote texto. Es menos preciso que los modelos en la nube y necesita el modelo de voz en el dispositivo descargado antes (SenseVoice Small: chino, inglés, japonés, coreano y cantonés). La limpieza también necesita la red: sin conexión, el texto se inserta tal como se reconoció.",
+    "pt": "Quando a rede cai, a fala é reconhecida neste PC com o modelo no dispositivo, então o ditado continua gerando texto. É menos preciso que os modelos na nuvem e precisa do modelo de fala no dispositivo já baixado (SenseVoice Small: chinês, inglês, japonês, coreano e cantonês). A limpeza também precisa da rede: offline, o texto entra como foi reconhecido.",
+    "ru": "Когда сети нет, речь распознаётся на этом ПК моделью на устройстве, так что диктовка по-прежнему даёт текст. Точность ниже, чем у облачных моделей, и речевая модель на устройстве должна быть загружена заранее (SenseVoice Small: китайский, английский, японский, корейский и кантонский). Очистке тоже нужна сеть: без неё текст вставляется как распознан.",
+    "fr": "Quand le réseau est coupé, la parole est reconnue sur ce PC avec le modèle sur l’appareil, et la dictée donne toujours du texte. C’est moins précis que les modèles dans le cloud et il faut avoir téléchargé au préalable le modèle vocal sur l’appareil (SenseVoice Small : chinois, anglais, japonais, coréen et cantonais). Le nettoyage a lui aussi besoin du réseau : hors ligne, le texte est inséré tel que reconnu.",
+    "de": "Ohne Netzwerk wird die Sprache auf diesem PC mit dem Modell auf dem Gerät erkannt, sodass das Diktat trotzdem Text liefert. Das ist ungenauer als Cloud-Modelle und setzt voraus, dass das Sprachmodell auf dem Gerät schon geladen ist (SenseVoice Small: Chinesisch, Englisch, Japanisch, Koreanisch und Kantonesisch). Auch die Bereinigung braucht das Netzwerk: offline wird der Text so eingefügt, wie er erkannt wurde."
   },
   "Free and offline; less accurate than cloud models.": {
     "ja": "無料でオフライン。クラウドのモデルより精度は低めです。",

@@ -1,9 +1,33 @@
 import Foundation
 
+/// Why a request didn't reach the provider, when the network is to blame rather than the provider (see
+/// `OfflineFallback`). The same names on both platforms.
+public enum NetworkFailure: String, Sendable, CaseIterable {
+    /// The system has no connection at all: no Wi-Fi or cable, airplane mode, or data not allowed.
+    case noConnection
+    /// The provider's host couldn't be found or reached: a DNS failure, no route to it, or the connection refused.
+    case hostUnreachable
+    /// The connection dropped part way. A server that turns a request down mid-upload does that too (see
+    /// docs/DESIGN.md), so on its own it isn't taken for being offline.
+    case connectionLost
+
+    /// What a URLSession error says about the network; nil for one the network isn't to blame for (a timeout, TLS…).
+    public init?(_ code: URLError.Code) {
+        switch code {
+        case .notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff, .callIsActive: self = .noConnection
+        case .cannotFindHost, .dnsLookupFailed, .cannotConnectToHost: self = .hostUnreachable
+        case .networkConnectionLost: self = .connectionLost
+        default: return nil
+        }
+    }
+}
+
 public enum APIError: Error, LocalizedError, Equatable {
     case missingAPIKey(String)
     case http(status: Int, message: String)
     case network(String)
+    /// A network error the network itself is to blame for (see `NetworkFailure`); retried like any network error.
+    case offline(NetworkFailure, String)
     case timeout(seconds: Double)
     case badResponse(String)
     case cancelled
@@ -22,7 +46,7 @@ public enum APIError: Error, LocalizedError, Equatable {
             case 429: return L("请求过于频繁 (429)：", "Rate limited (429): ") + message
             default: return "HTTP \(status): \(message)"
             }
-        case let .network(message): return L("网络错误：", "Network error: ") + message
+        case let .network(message), let .offline(_, message): return L("网络错误：", "Network error: ") + message
         case let .timeout(seconds): return L("请求超时（\(Int(seconds)) 秒）", "Timed out after \(Int(seconds))s")
         case let .badResponse(message): return L("返回内容无法解析：", "Unexpected response: ") + message
         case .cancelled: return L("已取消", "Cancelled")
@@ -44,7 +68,7 @@ public enum APIError: Error, LocalizedError, Equatable {
     public var isRetryable: Bool {
         switch self {
         case .missingAPIKey, .cancelled, .unavailable: return false
-        case .network, .timeout, .recognition: return true
+        case .network, .offline, .timeout, .recognition: return true
         case .badResponse: return true
         case let .http(status, _):
             return status == 408 || status == 409 || status == 425 || status == 429 || status >= 500
@@ -56,12 +80,19 @@ public enum APIError: Error, LocalizedError, Equatable {
         return false
     }
 
+    /// Why the network kept the request from the provider, when it did.
+    public var networkFailure: NetworkFailure? {
+        if case let .offline(failure, _) = self { return failure }
+        return nil
+    }
+
     public static func from(_ error: Error) -> APIError {
         if let api = error as? APIError { return api }
         if error is CancellationError { return .cancelled }
         if let url = error as? URLError {
             if url.code == .cancelled { return .cancelled }
             if url.code == .timedOut { return .network(L("连接超时", "connection timed out")) }
+            if let failure = NetworkFailure(url.code) { return .offline(failure, url.localizedDescription) }
             return .network(url.localizedDescription)
         }
         return .network(error.localizedDescription)
@@ -74,11 +105,16 @@ public struct RetryPolicy: Sendable {
     /// False where a second wait as long as the first would cost more than it could win back: the clean-up, whose
     /// transcript can go in as spoken instead.
     public var retriesTimeouts: Bool
+    /// True for an error after which trying again isn't worth it here: the network is known to be down and something
+    /// else can take over (see `OfflineFallback`).
+    public var stopsEarly: (@Sendable (APIError) -> Bool)?
 
-    public init(maxAttempts: Int = 4, baseDelay: Double = 1.0, retriesTimeouts: Bool = true) {
+    public init(maxAttempts: Int = 4, baseDelay: Double = 1.0, retriesTimeouts: Bool = true,
+                stopsEarly: (@Sendable (APIError) -> Bool)? = nil) {
         self.maxAttempts = maxAttempts
         self.baseDelay = baseDelay
         self.retriesTimeouts = retriesTimeouts
+        self.stopsEarly = stopsEarly
     }
 
     /// 1s, 2s, 4s … with ±20% jitter so parallel chunks don't retry in lockstep.
@@ -98,7 +134,7 @@ public struct RetryPolicy: Sendable {
             } catch {
                 let apiError = APIError.from(error)
                 guard apiError.isRetryable, retriesTimeouts || !apiError.isTimeout, attempt < maxAttempts,
-                      !Task.isCancelled else { throw apiError }
+                      stopsEarly?(apiError) != true, !Task.isCancelled else { throw apiError }
                 onRetry?(attempt, apiError)
                 try await Task.sleep(nanoseconds: UInt64(delay(afterAttempt: attempt) * 1_000_000_000))
                 attempt += 1

@@ -56,6 +56,11 @@ public sealed class DictationRecord
     /// another one sends them again (see <see cref="TypelessCore.DictationSettings.ReusesTranscripts"/>).
     /// </summary>
     [JsonPropertyName("chunkLanguage")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ChunkLanguage { get; set; }
+    /// <summary>
+    /// The chunks recognised on this PC because the provider couldn't be reached (see <see cref="TypelessCore.OfflineFallback"/>),
+    /// in order; null when there were none. A retry with the provider sends them to it again.
+    /// </summary>
+    [JsonPropertyName("onDeviceChunks")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<int>? OnDeviceChunks { get; set; }
     [JsonPropertyName("timing")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public DictationTiming? Timing { get; set; }
     /// <summary>What processing it cost so far in USD, retries included (null when nothing could be priced).</summary>
     [JsonPropertyName("cost")][JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Cost { get; set; }
@@ -132,6 +137,7 @@ public sealed class DictationRecord
     {
         var copy = (DictationRecord)MemberwiseClone();
         copy.ChunkTexts = new Dictionary<int, string>(ChunkTexts);
+        copy.OnDeviceChunks = OnDeviceChunks is null ? null : new List<int>(OnDeviceChunks);
         copy.Timing = Timing?.Copy();
         return copy;
     }

@@ -91,6 +91,16 @@ final class AppSettings: ObservableObject {
     /// Learn vocabulary from the fixes the user makes to dictated text (see EditWatcher).
     @AppStorage("learnFromEdits") var learnFromEdits: Bool = true
     @Published private(set) var learnedTerms: [LearnedTerm]
+    /// Learn how the user writes from their own texts, and add the note to the clean-up's preferences (see StyleLearner).
+    /// Off by default: a sample of History goes to the clean-up provider.
+    @AppStorage("learnStyle") var learnStyle: Bool = false
+    /// The style note, learned or written by hand; used while `learnStyle` is on.
+    @AppStorage("styleNote") var styleNote: String = ""
+    /// The note as it was last learned: a note that differs was edited by hand, and isn't replaced on its own (see
+    /// `StyleLearning.isDue`).
+    @AppStorage("styleLearnedNote") var styleLearnedNote: String = ""
+    /// Eligible dictations since the note was last learned (see `StyleLearning.relearnEvery`).
+    @AppStorage("styleNewDictations") var styleNewDictations: Int = 0
     /// Send the text around the cursor with the transcript, for the clean-up to spell names by (see CursorContextReader).
     /// Off by default: it goes to the clean-up provider.
     @AppStorage("useCursorContext") var useCursorContext: Bool = false
@@ -359,7 +369,7 @@ final class AppSettings: ObservableObject {
     /// What a dictation runs with when no profile applies.
     var globalDictationSettings: DictationSettings {
         DictationSettings(polishEnabled: polishEnabled, pressEnter: pressEnterAfterInsert, language: sttLanguage,
-                          extraInstructions: extraInstructions)
+                          extraInstructions: StyleLearning.compose(extraInstructions, note: learnStyle ? styleNote : ""))
     }
 
     /// What a dictation started in the app with this bundle ID runs with.

@@ -53,6 +53,17 @@ final class UsageStore: ObservableObject {
         return spendReminder(today: today, spentBefore: before)
     }
 
+    /// Adds what a clean-up model request made outside any dictation cost (learning the writing style, see StyleLearner)
+    /// to today's spend. Returns the spending reminder that brings due, if any.
+    @discardableResult
+    func recordCleanUp(cost: Double, unpriced: Int) -> SpendReminder? {
+        let today = CalendarDay(Date())
+        let before = ledger.month(today).cost
+        ledger.addCost(on: today, transcription: 0, cleanup: cost, unpriced: unpriced)
+        ledger.save(to: Self.fileURL)
+        return spendReminder(today: today, spentBefore: before)
+    }
+
     /// This calendar month's spend (what Home shows as "this month") against the monthly limit, while one is set.
     var monthlySpend: (spent: Double, limit: Double)? {
         guard let limit = AppSettings.shared.activeSpendLimit else { return nil }

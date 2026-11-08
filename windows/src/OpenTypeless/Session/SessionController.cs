@@ -222,6 +222,9 @@ public sealed class SessionController
                 Hud.Show(new HudPhase.Learned(string.Join(L("、", ", "), added)), 2.5);
             }
         };
+        _editWatcher.OnEdit = (inserted, edited) => StyleLearner.Shared.RecordEdit(inserted, edited);
+        StyleLearner.Shared.ModelInfoFor = model => _modelInfo.GetValueOrDefault(model);
+        StyleLearner.Shared.OnSpendReminder = reminder => Hud.ShowWhenFree(new HudPhase.Spending(reminder), 4);
         _recorder.OnFailure = error => _dispatcher.TryEnqueue(() =>
         {
             // The recorder has stopped: a warm microphone is opened again once idle (or by the next dictation).
@@ -1160,8 +1163,11 @@ public sealed class SessionController
         // it stays, now with its clean-up.
         if (token.IsCancellationRequested) record.Status = DictationStatus.Cancelled;
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
+        var counted = record.Counted == true;
         Account(record, pipeline, polished, discarded, sent);
         _history.Update(record);
+        // Counted just now: it finished for the first time (a retry of one already counted isn't new).
+        if (!counted && record.Counted == true) StyleLearner.Shared.DictationFinished(record);
     }
 
     // MARK: - Editing a selection
@@ -1541,7 +1547,7 @@ public sealed class SessionController
                     Reset();
                     Hud.FinishWorking();
                 }
-                if (_settings.LearnFromEdits && watchEdits && !sent) _editWatcher.Watch(inserted);
+                if ((_settings.LearnFromEdits || _settings.LearnStyle) && watchEdits && !sent) _editWatcher.Watch(inserted);
                 return "pasted";
             case TextInserter.Outcome.Skipped:
                 // The screen locked or another window came to the front just as Ctrl+V was due.

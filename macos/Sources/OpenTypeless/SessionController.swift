@@ -192,6 +192,11 @@ final class SessionController: ObservableObject {
                 self.hud.show(.learned(added.joined(separator: L("、", ", "))), autoHideAfter: 2.5)
             }
         }
+        editWatcher.onEdit = { inserted, edited in StyleLearner.shared.recordEdit(inserted: inserted, edited: edited) }
+        StyleLearner.shared.modelInfo = { [weak self] model in self?.modelInfo[model] }
+        StyleLearner.shared.onSpendReminder = { [weak self] reminder in
+            self?.hud.showWhenFree(.spending(reminder), autoHideAfter: 4)
+        }
         // The capsule's buttons: ✕ (and ■ while processing) is Esc, ↑ is letting go of the key.
         hud.model.onCancel = { [weak self] in self?.escapePressed() }
         hud.model.onFinish = { [weak self] in self?.finishPressed() }
@@ -560,7 +565,7 @@ final class SessionController: ObservableObject {
 
         // Whatever the user did to the previous dictation is final now.
         editWatcher.finish(quiet: true, reason: "next dictation")
-        if settings.learnFromEdits { editWatcher.prepare() }
+        if settings.learnFromEdits || settings.learnStyle { editWatcher.prepare() }
 
         var record = history.create()
         record.status = .recording
@@ -1080,8 +1085,11 @@ final class SessionController: ObservableObject {
         // so it stays, now with its clean-up.
         if Task.isCancelled { record.status = .cancelled }
         // Costs, the usage ledger and History are written once the text is in place: nobody is waiting on them.
+        let counted = record.counted == true
         account(&record, pipeline: pipeline, polished: polished, discarded: discarded, context: sent)
         history.update(record)
+        // Counted just now: it finished for the first time (a retry of one already counted isn't new).
+        if !counted, record.counted == true { StyleLearner.shared.dictationFinished(record) }
     }
 
     /// `transcript` with the layout commands said in it as line breaks, unless they're switched off (see `SpokenLayout`).
@@ -1431,7 +1439,7 @@ final class SessionController: ObservableObject {
                 reset()
                 hud.finishWorking()
             }
-            if settings.learnFromEdits, watchEdits, !sent { editWatcher.watch(inserted: inserted) }
+            if settings.learnFromEdits || settings.learnStyle, watchEdits, !sent { editWatcher.watch(inserted: inserted) }
             return "pasted"
         case .notPasted:
             finish(showing: .copied, hideAfter: 1.6)

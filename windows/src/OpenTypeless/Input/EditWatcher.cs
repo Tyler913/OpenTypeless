@@ -27,6 +27,11 @@ public sealed class EditWatcher
     /// starting, so nothing should be shown).
     /// </summary>
     public Action<List<Correction>, bool>? OnCorrections;
+    /// <summary>
+    /// Called with the dictated text and what the user changed it into, when a watch ends with it changed, for learning
+    /// how they write (see StyleLearner).
+    /// </summary>
+    public Action<string, string>? OnEdit;
 
     private sealed class Session(string? app, string inserted, IUIAutomationElement? element, string baseline, TypedEdit? keys)
     {
@@ -320,6 +325,7 @@ public sealed class EditWatcher
             return;
         }
         fields["edited"] = true;
+        OnEdit?.Invoke(session.Inserted, edited);
         var review = CorrectionLearner.ReviewEdit(session.Inserted, edited, SpellChecker.IsCommonWord, ChineseWords.Split);
         LearningLog.AddReview(fields, review);
         LearningLog.Write("end", session.App, fields);

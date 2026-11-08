@@ -46,6 +46,17 @@ public sealed class StylePage : PageBase
     private readonly List<UIElement> _translationDetails = [];
     private readonly List<UIElement> _otherLanguage = [];
 
+    /// <summary>
+    /// Learning how the user writes: the switch, the note (learned, or edited by hand), and Learn now and Clear. Why a run
+    /// gave no new note shows under the section until the next one.
+    /// </summary>
+    private readonly CardSection _style = new() { Title = L("写作风格", "Writing style") };
+    private readonly TextBox _styleNote;
+    private readonly StackPanel _styleButtons;
+    private readonly Button _learnNow = new() { Content = L("立即学习", "Learn Now") };
+    private readonly Button _clearStyle = new() { Content = L("清除", "Clear") };
+    private readonly ProgressRing _learning = new() { IsActive = true, Width = 16, Height = 16, VerticalAlignment = VerticalAlignment.Center };
+
     public StylePage(SettingsWindow window) : base(SettingsPage.Style)
     {
         _window = window;
@@ -71,6 +82,37 @@ public sealed class StylePage : PageBase
                                       "e.g. “Never use bullet lists”, “Keep my casual tone”, “Keep technical terms lowercase”."),
                                     text => _settings.ExtraInstructions = text));
         Body.Children.Add(preferences);
+
+        // Writing style: the note and its buttons show while the switch is on.
+        var learnStyle = new ToggleSwitch { IsOn = _settings.LearnStyle, OnContent = "", OffContent = "", MinWidth = 0 };
+        learnStyle.Toggled += (_, _) =>
+        {
+            _settings.LearnStyle = learnStyle.IsOn;
+            if (!learnStyle.IsOn) StyleLearner.Shared.SwitchedOff();
+            UpdateStyle();
+        };
+        _style.Body.Add(new CardRow
+        {
+            Glyph = Glyphs.TextStyle, Title = L("学习我的写作风格", "Learn my writing style"),
+            Help = L("根据历史记录里最近的听写和你粘贴后自己改过的文字，总结你的标点、大小写、中英混排、数字格式和语气习惯，写成几行说明，整理时照着做。每听写 50 次自动更新一次，也可以随时点「立即学习」。只学写法，不学内容。这些文字只发给你自己设置的文字整理服务商，费用计入花费。你手动改过的说明不会被自动更新覆盖。关闭后不再学习也不再使用，为此保存的修改记录会删除；说明会保留，点「清除」才会清空。",
+                     "Your recent dictations in History, and the changes you make after a paste, are summed up in a few lines about your punctuation, capitalisation, mixing of languages, number formats and tone, and clean-up follows them. It's updated every 50 dictations, or whenever you press Learn Now. Only how you write is learned, never what you write about. The texts go only to your own clean-up provider, and the request counts toward your spend. A note you've edited isn't replaced automatically. Turned off, nothing is learned or used and the changes kept for it are deleted; the note stays until you press Clear."),
+            Trailing = learnStyle,
+        });
+        _styleNote = Editor(_settings.StyleNote, 120, L("学到的写作习惯会显示在这里，你也可以自己修改。",
+                                                        "What's learned about how you write shows here. You can edit it too."),
+                            text => _settings.StyleNote = text);
+        _style.Body.Add(_styleNote);
+        _style.Body.Add(new CardDivider { Inset = 0 });
+        _learnNow.Click += (_, _) => StyleLearner.Shared.LearnNow();
+        _clearStyle.Click += (_, _) => StyleLearner.Shared.Clear();
+        _styleButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8, Padding = new Thickness(12, 8, 12, 8),
+            Children = { _learnNow, _clearStyle, _learning },
+        };
+        _style.Body.Add(_styleButtons);
+        UpdateStyle();
+        Body.Children.Add(_style);
 
         RenderSnippets();
         Body.Children.Add(_snippets);
@@ -117,7 +159,23 @@ public sealed class StylePage : PageBase
         Body.Children.Add(_translation);
 
         _settings.PropertyChanged += OnSettingsChanged;
+        StyleLearner.Shared.Changed += OnStyleChanged;
     }
+
+    /// <summary>Shows the note and its buttons while learning is on, what's under way, and why the last run gave no note.</summary>
+    private void UpdateStyle()
+    {
+        var on = _settings.LearnStyle;
+        var learner = StyleLearner.Shared;
+        _styleNote.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        _styleButtons.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        _learnNow.IsEnabled = !learner.IsLearning;
+        _clearStyle.IsEnabled = !learner.IsLearning && _settings.StyleNote.Length > 0;
+        _learning.Visibility = learner.IsLearning ? Visibility.Visible : Visibility.Collapsed;
+        _style.Footer = on ? learner.Problem : null;
+    }
+
+    private void OnStyleChanged() => DispatcherQueue.TryEnqueue(UpdateStyle);
 
     /// <summary>A row shown while translation mode is on.</summary>
     private void AddTranslationDetail(UIElement element)
@@ -138,7 +196,11 @@ public sealed class StylePage : PageBase
         foreach (var element in _otherLanguage) element.Visibility = other ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    protected override void OnClosed() => _settings.PropertyChanged -= OnSettingsChanged;
+    protected override void OnClosed()
+    {
+        _settings.PropertyChanged -= OnSettingsChanged;
+        StyleLearner.Shared.Changed -= OnStyleChanged;
+    }
 
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -149,6 +211,15 @@ public sealed class StylePage : PageBase
                 break;
             case nameof(AppSettings.TranslationEnabled) or nameof(AppSettings.TranslationLanguage) or nameof(AppSettings.TranslationChord):
                 DispatcherQueue.TryEnqueue(UpdateTranslation);
+                break;
+            case nameof(AppSettings.StyleNote):
+                // A note was learned (or cleared) while the page is open: show it, unless the user is typing.
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    var note = _settings.StyleNote;
+                    if (_styleNote.FocusState == FocusState.Unfocused && Normalize(_styleNote.Text) != note) _styleNote.Text = note;
+                    UpdateStyle();
+                });
                 break;
             case nameof(AppSettings.Vocabulary):
                 // A term was learned (or forgotten) while the page is open: show it, unless the user is typing.

@@ -310,6 +310,40 @@ public sealed class AppSettings : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Learn how the user writes from their own texts, and add the note to the clean-up's preferences (see StyleLearner).
+    /// Off by default: a sample of History goes to the clean-up provider.
+    /// </summary>
+    public bool LearnStyle
+    {
+        get => GetBool("learnStyle", false);
+        set => SetValue("learnStyle", value);
+    }
+
+    /// <summary>The style note, learned or written by hand; used while <see cref="LearnStyle"/> is on.</summary>
+    public string StyleNote
+    {
+        get => GetString("styleNote", "");
+        set => SetValue("styleNote", value);
+    }
+
+    /// <summary>
+    /// The note as it was last learned: a note that differs was edited by hand, and isn't replaced on its own (see
+    /// <see cref="StyleLearning.IsDue"/>).
+    /// </summary>
+    public string StyleLearnedNote
+    {
+        get => GetString("styleLearnedNote", "");
+        set => SetValue("styleLearnedNote", value);
+    }
+
+    /// <summary>Eligible dictations since the note was last learned (see <see cref="StyleLearning.RelearnEvery"/>).</summary>
+    public int StyleNewDictations
+    {
+        get => GetInt("styleNewDictations", 0);
+        set => SetValue("styleNewDictations", value);
+    }
+
+    /// <summary>
     /// Translation mode: holding the hotkey and pressing <see cref="TranslationChord"/> inserts that dictation translated
     /// (see <see cref="TranslationTarget"/>). Off until the user turns it on and picks a language.
     /// </summary>
@@ -798,7 +832,8 @@ public sealed class AppSettings : INotifyPropertyChanged
     public void ShowSampleAppProfiles(IEnumerable<AppProfile> profiles) => _sampleProfiles = profiles.ToList();
 
     /// <summary>What a dictation runs with when no profile applies.</summary>
-    public DictationSettings GlobalDictationSettings => Reachable(new(PolishEnabled, PressEnterAfterInsert, SttLanguage, ExtraInstructions));
+    public DictationSettings GlobalDictationSettings => Reachable(new(PolishEnabled, PressEnterAfterInsert, SttLanguage,
+                                                                     StyleLearning.Compose(ExtraInstructions, LearnStyle ? StyleNote : "")));
 
     /// <summary>What a dictation started in the app with this executable name ("slack.exe") runs with.</summary>
     public DictationSettings DictationSettingsForApp(string? executable) =>

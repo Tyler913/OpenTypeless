@@ -1772,6 +1772,96 @@
     "fr": "p. ex. « Jamais de listes à puces », « Garde mon ton décontracté », « Termes techniques en minuscules ».",
     "de": "z. B. „Keine Aufzählungen verwenden“, „Meinen lockeren Ton beibehalten“, „Fachbegriffe kleinschreiben“."
   },
+  "Writing style": {
+    "ja": "文体",
+    "ko": "글쓰기 스타일",
+    "es": "Estilo de escritura",
+    "pt": "Estilo de escrita",
+    "ru": "Стиль письма",
+    "fr": "Style d'écriture",
+    "de": "Schreibstil"
+  },
+  "Learn my writing style": {
+    "ja": "自分の文体を学習",
+    "ko": "내 글쓰기 스타일 학습",
+    "es": "Aprender mi estilo de escritura",
+    "pt": "Aprender meu estilo de escrita",
+    "ru": "Изучать мой стиль письма",
+    "fr": "Apprendre mon style d'écriture",
+    "de": "Meinen Schreibstil lernen"
+  },
+  "Your recent dictations in History, and the changes you make after a paste, are summed up in a few lines about your punctuation, capitalisation, mixing of languages, number formats and tone, and clean-up follows them. It's updated every 50 dictations, or whenever you press Learn Now. Only how you write is learned, never what you write about. The texts go only to your own clean-up provider, and the request counts toward your spend. A note you've edited isn't replaced automatically. Turned off, nothing is learned or used and the changes kept for it are deleted; the note stays until you press Clear.": {
+    "ja": "履歴にある最近の音声入力と、ペースト後に自分で直した文章から、句読点、大文字と小文字、言語の混ぜ方、数字の書き方、口調の癖を数行にまとめ、整形はそれに従います。50 回の音声入力ごとに自動で更新され、「今すぐ学習」でいつでも更新できます。学ぶのは書き方だけで、内容は学びません。文章は自分で設定した整形プロバイダーにだけ送られ、そのリクエストも支出に含まれます。手で編集したメモは自動では置き換えられません。オフにすると学習も使用もされず、そのために保存した修正記録は削除されます。メモは「消去」を押すまで残ります。",
+    "ko": "기록에 있는 최근 받아쓰기와 붙여넣은 뒤 직접 고친 내용을 바탕으로 문장 부호, 대소문자, 언어를 섞어 쓰는 방식, 숫자 표기, 말투 습관을 몇 줄로 정리하고, 다듬기가 이를 따릅니다. 받아쓰기 50번마다 자동으로 갱신되며, 언제든 '지금 학습'을 눌러 갱신할 수 있습니다. 쓰는 방식만 학습하고 내용은 학습하지 않습니다. 텍스트는 직접 설정한 다듬기 제공업체로만 전송되며, 그 요청도 지출에 포함됩니다. 직접 수정한 메모는 자동으로 바뀌지 않습니다. 끄면 학습도 사용도 하지 않고 이를 위해 저장한 수정 기록은 삭제되며, 메모는 '지우기'를 누를 때까지 남습니다.",
+    "es": "Tus dictados recientes del historial y los cambios que haces después de pegar se resumen en unas líneas sobre tu puntuación, mayúsculas, mezcla de idiomas, formato de números y tono, y la limpieza las sigue. Se actualiza cada 50 dictados, o cuando pulsas Aprender ahora. Solo se aprende cómo escribes, nunca de qué escribes. Los textos solo van a tu propio proveedor de limpieza, y la solicitud cuenta en tu gasto. Una nota que hayas editado no se reemplaza automáticamente. Desactivado, no se aprende ni se usa nada y se borran los cambios guardados para ello; la nota se queda hasta que pulses Borrar.",
+    "pt": "Seus ditados recentes do histórico e as alterações que você faz depois de colar são resumidos em algumas linhas sobre sua pontuação, maiúsculas, mistura de idiomas, formato de números e tom, e a limpeza os segue. É atualizado a cada 50 ditados, ou sempre que você clicar em Aprender agora. Só se aprende como você escreve, nunca sobre o que escreve. Os textos vão apenas para o seu próprio provedor de limpeza, e a solicitação conta nos seus gastos. Uma nota que você editou não é substituída automaticamente. Desativado, nada é aprendido nem usado e as alterações guardadas para isso são apagadas; a nota fica até você clicar em Limpar.",
+    "ru": "Ваши недавние диктовки из истории и правки, которые вы вносите после вставки, сводятся в несколько строк о вашей пунктуации, заглавных буквах, смешении языков, записи чисел и тоне, и очистка им следует. Заметка обновляется каждые 50 диктовок или когда вы нажимаете «Изучить сейчас». Изучается только то, как вы пишете, а не о чём. Тексты отправляются только вашему поставщику очистки, а запрос учитывается в расходах. Заметку, которую вы изменили вручную, автоматически не заменяют. Если выключить, ничего не изучается и не используется, а сохранённые для этого правки удаляются; заметка остаётся, пока вы не нажмёте «Очистить».",
+    "fr": "Vos dictées récentes de l'historique et les modifications que vous faites après un collage sont résumées en quelques lignes sur votre ponctuation, vos majuscules, votre mélange de langues, l'écriture des nombres et votre ton, et le nettoyage les suit. La note est mise à jour toutes les 50 dictées, ou quand vous cliquez sur Apprendre maintenant. Seule votre façon d'écrire est apprise, jamais ce dont vous parlez. Les textes ne vont qu'à votre propre fournisseur de nettoyage, et la requête compte dans vos dépenses. Une note que vous avez modifiée n'est pas remplacée automatiquement. Désactivé, rien n'est appris ni utilisé et les modifications gardées pour cela sont supprimées ; la note reste jusqu'à ce que vous cliquiez sur Effacer.",
+    "de": "Deine letzten Diktate im Verlauf und die Änderungen, die du nach dem Einfügen machst, werden in ein paar Zeilen zu Zeichensetzung, Groß- und Kleinschreibung, Sprachmischung, Zahlenformaten und Ton zusammengefasst, und die Bereinigung richtet sich danach. Die Notiz wird alle 50 Diktate aktualisiert oder wenn du auf „Jetzt lernen“ klickst. Gelernt wird nur, wie du schreibst, nie worüber. Die Texte gehen nur an deinen eigenen Bereinigungsanbieter, und die Anfrage zählt zu deinen Ausgaben. Eine Notiz, die du bearbeitet hast, wird nicht automatisch ersetzt. Ausgeschaltet wird nichts gelernt oder verwendet, und die dafür gespeicherten Änderungen werden gelöscht; die Notiz bleibt, bis du auf „Löschen“ klickst."
+  },
+  "What's learned about how you write shows here. You can edit it too.": {
+    "ja": "学習した書き方の癖がここに表示されます。自分で編集することもできます。",
+    "ko": "학습한 글쓰기 습관이 여기에 표시됩니다. 직접 수정할 수도 있습니다.",
+    "es": "Aquí aparece lo que se aprende sobre cómo escribes. También puedes editarlo.",
+    "pt": "O que for aprendido sobre como você escreve aparece aqui. Você também pode editar.",
+    "ru": "Здесь появится то, что удалось узнать о вашем стиле. Это можно изменить вручную.",
+    "fr": "Ce qui est appris sur votre façon d'écrire s'affiche ici. Vous pouvez aussi le modifier.",
+    "de": "Hier erscheint, was über deinen Schreibstil gelernt wurde. Du kannst es auch bearbeiten."
+  },
+  "Learn Now": {
+    "ja": "今すぐ学習",
+    "ko": "지금 학습",
+    "es": "Aprender ahora",
+    "pt": "Aprender agora",
+    "ru": "Изучить сейчас",
+    "fr": "Apprendre maintenant",
+    "de": "Jetzt lernen"
+  },
+  "Clear": {
+    "ja": "消去",
+    "ko": "지우기",
+    "es": "Borrar",
+    "pt": "Limpar",
+    "ru": "Очистить",
+    "fr": "Effacer",
+    "de": "Löschen"
+  },
+  "Not enough texts to learn from yet. Dictate a little more first": {
+    "ja": "学習できる文章がまだ足りません。もう少し音声入力してからお試しください",
+    "ko": "학습할 텍스트가 아직 부족합니다. 조금 더 받아쓰기한 뒤 다시 시도하세요",
+    "es": "Aún no hay suficientes textos para aprender. Dicta un poco más primero",
+    "pt": "Ainda não há textos suficientes para aprender. Dite um pouco mais primeiro",
+    "ru": "Пока недостаточно текстов для изучения. Сначала надиктуйте ещё немного",
+    "fr": "Pas encore assez de textes pour apprendre. Dictez encore un peu d'abord",
+    "de": "Noch nicht genug Texte zum Lernen. Diktiere erst noch ein wenig"
+  },
+  "No clear habits yet. The note is unchanged": {
+    "ja": "まだはっきりした癖は見つかりません。メモは変わっていません",
+    "ko": "아직 뚜렷한 습관이 없습니다. 메모는 그대로입니다",
+    "es": "Aún no hay hábitos claros. La nota no ha cambiado",
+    "pt": "Ainda não há hábitos claros. A nota não mudou",
+    "ru": "Явных привычек пока нет. Заметка не изменилась",
+    "fr": "Pas encore d'habitudes nettes. La note n'a pas changé",
+    "de": "Noch keine klaren Gewohnheiten. Die Notiz ist unverändert"
+  },
+  "No usable note came back. The note is unchanged": {
+    "ja": "使えるメモが返ってきませんでした。メモは変わっていません",
+    "ko": "사용할 수 있는 메모를 받지 못했습니다. 메모는 그대로입니다",
+    "es": "No llegó una nota utilizable. La nota no ha cambiado",
+    "pt": "Não veio uma nota utilizável. A nota não mudou",
+    "ru": "Пригодная заметка не пришла. Заметка не изменилась",
+    "fr": "Aucune note utilisable n'est revenue. La note n'a pas changé",
+    "de": "Es kam keine brauchbare Notiz zurück. Die Notiz ist unverändert"
+  },
+  "Couldn't learn: ": {
+    "ja": "学習できませんでした：",
+    "ko": "학습하지 못했습니다: ",
+    "es": "No se pudo aprender: ",
+    "pt": "Não foi possível aprender: ",
+    "ru": "Не удалось изучить: ",
+    "fr": "Apprentissage impossible : ",
+    "de": "Lernen fehlgeschlagen: "
+  },
   "heard as ": {
     "ja": "聞き取り：",
     "ko": "인식: ",

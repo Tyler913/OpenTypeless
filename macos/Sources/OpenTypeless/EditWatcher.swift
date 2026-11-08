@@ -17,6 +17,9 @@ final class EditWatcher {
     /// Called with the learnable corrections when a watch ends, and whether it ended quietly (a new
     /// dictation is starting, so nothing should be shown).
     var onCorrections: (([Correction], _ quiet: Bool) -> Void)?
+    /// Called with the dictated text and what the user changed it into, when a watch ends with it changed, for learning
+    /// how they write (see StyleLearner).
+    var onEdit: ((_ inserted: String, _ edited: String) -> Void)?
 
     /// Reading the field itself.
     private struct FieldSession {
@@ -204,6 +207,7 @@ final class EditWatcher {
             return
         }
         fields["edited"] = true
+        onEdit?(watch.inserted, edited)
         let review = CorrectionLearner.review(original: watch.inserted, edited: edited, isCommonWord: Self.isCommonWord)
         fields.merge(LearningLog.review(review)) { $1 }
         let corrections = review.learnable

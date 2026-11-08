@@ -1559,6 +1559,7 @@ struct StylePage: View {
                                           "e.g. “Never use bullet lists”, “Keep my casual tone”, “Keep technical terms lowercase”."),
                            height: 88)
             }
+            StyleSection(settings: settings)
             CardSection(title: L("快捷短语", "Snippets"),
                         help: L("说出触发词，插入时会换成你写好的内容，一字不改，句子中间说也行。触发词会作为词汇提示交给语音识别和整理，让它原样保留。最好选一个平时不会说的说法，免得误替换。",
                                 "Say a trigger and the text you wrote goes in instead, word for word, even mid-sentence. Triggers go to speech-to-text and clean-up as vocabulary, so they come through intact. Pick a phrase you wouldn't otherwise say, so it isn't replaced by accident.")) {
@@ -1682,6 +1683,44 @@ struct StylePage: View {
             parts.append(L("另有 \(plan.known) 个已经在词汇表里。", "\(plan.known) more are already in your vocabulary."))
         }
         return parts.joined(separator: "\n\n")
+    }
+}
+
+/// Learning how the user writes: the switch, the note (learned, or edited by hand), and Learn now and Clear. Why a run
+/// gave no new note shows under the section until the next one.
+private struct StyleSection: View {
+    @ObservedObject var settings: AppSettings
+    @ObservedObject private var learner = StyleLearner.shared
+
+    var body: some View {
+        CardSection(title: L("写作风格", "Writing style"), footer: settings.learnStyle ? learner.problem : nil) {
+            CardRow(title: L("学习我的写作风格", "Learn my writing style"),
+                    help: L("根据历史记录里最近的听写和你粘贴后自己改过的文字，总结你的标点、大小写、中英混排、数字格式和语气习惯，写成几行说明，整理时照着做。每听写 50 次自动更新一次，也可以随时点「立即学习」。只学写法，不学内容。这些文字只发给你自己设置的文字整理服务商，费用计入花费。你手动改过的说明不会被自动更新覆盖。关闭后不再学习也不再使用，为此保存的修改记录会删除；说明会保留，点「清除」才会清空。",
+                            "Your recent dictations in History, and the changes you make after a paste, are summed up in a few lines about your punctuation, capitalisation, mixing of languages, number formats and tone, and clean-up follows them. It's updated every 50 dictations, or whenever you press Learn Now. Only how you write is learned, never what you write about. The texts go only to your own clean-up provider, and the request counts toward your spend. A note you've edited isn't replaced automatically. Turned off, nothing is learned or used and the changes kept for it are deleted; the note stays until you press Clear."),
+                    isOn: $settings.learnStyle)
+            if settings.learnStyle {
+                CardDivider()
+                NoteEditor(text: $settings.styleNote,
+                           placeholder: L("学到的写作习惯会显示在这里，你也可以自己修改。",
+                                          "What's learned about how you write shows here. You can edit it too."),
+                           height: 120)
+                CardDivider(inset: 0)
+                HStack(spacing: 8) {
+                    Button(L("立即学习", "Learn Now")) { learner.learnNow() }
+                        .disabled(learner.isLearning)
+                    Button(L("清除", "Clear")) { learner.clear() }
+                        .disabled(learner.isLearning || settings.styleNote.isEmpty)
+                    if learner.isLearning { ProgressView().controlSize(.small) }
+                    Spacer()
+                }
+                .controlSize(.small)
+                .rowPadding(.horizontal, 12)
+                .rowPadding(.vertical, 8)
+            }
+        }
+        .onChange(of: settings.learnStyle) { _, on in
+            if !on { learner.switchedOff() }
+        }
     }
 }
 

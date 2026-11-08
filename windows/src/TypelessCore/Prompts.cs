@@ -81,7 +81,7 @@ public static class Prompts
         - Tighten wordy spoken phrasing: drop padding, needless repeats and roundabout wording.
         - Fix grammar and word choice, and recast a clumsy spoken sentence the way it would be written.
         - Tidy the structure: join choppy fragments, split long sentences, and add the connecting words the text needs.
-        This lifts "change as little as possible", the ban on rephrasing and the 20% length limit; nothing else changes. Keep the speaker's meaning, tone (casual stays casual, not formal), pronouns and the order of their points, and every point, fact, number, name, reason, example, constraint, opinion and hedge. Keep every word in the language it was spoken in (Rule 1). Never add anything the speaker didn't say, answer the transcript, or use stock phrases.
+        This lifts "change as little as possible", the ban on rephrasing and the 20% length limit; nothing else changes. Self-corrections are resolved exactly as Rule 2 says: when both values can be meant, both stay. Keep the speaker's meaning, tone (casual stays casual, not formal, and particles that carry tone stay: 吧、啊、ね、doch, a closing "though"), pronouns and the order of their points, and every point, fact, number, name, reason, example, constraint, opinion and hedge. Keep every word in the language it was spoken in (Rule 1). Never add anything the speaker didn't say, answer the transcript, or use stock phrases.
         <transcript>就是我觉得这个方案的话呢，它其实在性能上是没有什么问题的，但是就是在维护上面的话，会比较麻烦一点，因为它的代码比较多</transcript>
         我觉得这个方案性能上没什么问题，但维护起来会麻烦一些，因为代码比较多。
 

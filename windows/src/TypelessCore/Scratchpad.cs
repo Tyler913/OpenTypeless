@@ -130,7 +130,7 @@ public sealed class Scratchpad
     }
 
     /// <summary>The line breaks a title is cut at: those Swift's <c>Character.isNewline</c> knows.</summary>
-    private static readonly char[] NewLines = ['\n', '\v', '\f', '\r', '\u0085', ' ', ' '];
+    private static readonly char[] NewLines = ['\n', '\v', '\f', '\r', '\u0085', '\u2028', '\u2029'];
 
     /// <summary>
     /// The first line that has text, without the spaces around it, cut to <see cref="TitleLength"/> characters (whole

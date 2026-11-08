@@ -5,7 +5,7 @@
     { "text": "\r\n\tWindows lines\r\nsecond", "title": "Windows lines" },
     { "text": "\rOld Mac line\rsecond", "title": "Old Mac line" },
     { "text": "　会议纪要　\n第二行", "title": "会议纪要" },
-    { "text": "first second", "title": "first" },
+    { "text": "first\u2028second", "title": "first" },
     { "text": "", "title": "" },
     { "text": " \n \t \r\n ", "title": "" },
     { "text": "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789", "title": "01234567890123456789012345678901234567890123456789012345678901234567890123456789" }

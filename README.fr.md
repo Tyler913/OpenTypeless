@@ -40,11 +40,13 @@ La plupart des apps de dictée s’en sortent pour une phrase et cèdent sur deu
 - **Traduire en parlant.** Ajoutez **Maj** et vos mots sortent dans la langue choisie.
 - **Modifier à la voix.** Sélectionnez du texte, ajoutez **Ctrl** et dites « plus formel » ou « fais-en une liste ».
 - **Un vocabulaire qui apprend.** Ajoutez noms et jargon ; les mots corrigés après le collage sont appris tout seuls.
+- **Apprend votre façon d’écrire (facultatif).** Votre ponctuation et votre ton, tirés de vos dictées et corrections dans une courte note modifiable.
 - **Extraits.** Dites « mon e-mail » et le texte enregistré est inséré, mot pour mot.
-- **Réglages par app.** Entrée après l’insertion dans Slack, ton formel dans Mail, pas de nettoyage dans Terminal.
-- **Historique et fichiers.** Chaque dictée se recherche et s’exporte, et les fichiers audio ou vidéo se transcrivent aussi.
+- **Bloc-notes.** Un bloc-notes où dicter, qui garde aussi une dictée qui n’avait nulle part où aller.
+- **Le nettoyage à votre goût.** Désactivé, Légère, Standard ou Soignée, déjà réglé pour les apps de discussion, de mail et de code. Par app, vous pouvez aussi appuyer sur Entrée après l’insertion, comme dans Slack.
+- **Historique et fichiers.** Chaque dictée se recherche, s’exporte et se réécoute, et les fichiers audio ou vidéo se transcrivent aussi.
 - **Maîtrisez vos dépenses.** Mots, temps gagné et coût sur l’Accueil, avec une limite mensuelle facultative.
-- **Sur l’appareil, sans clé.** La transcription peut aussi se faire sur votre ordinateur : gratuite, hors ligne et privée, un peu moins précise que les modèles dans le cloud.
+- **Sur l’appareil, sans clé.** La transcription peut aussi se faire sur votre ordinateur : gratuite, hors ligne et privée, un peu moins précise que les modèles dans le cloud. Elle prend aussi le relais hors connexion.
 - **Aperçu en direct (bêta).** Voyez vos mots au-dessus de la capsule pendant que vous parlez.
 - **Neuf langues, mises à jour automatiques.** English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch, Русский.
 

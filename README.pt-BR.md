@@ -40,11 +40,13 @@ A maioria dos apps de ditado vai bem com uma frase e falha em dois minutos de fa
 - **Traduza enquanto fala.** Adicione **Shift** e suas palavras saem no idioma escolhido.
 - **Edite com a voz.** Selecione um texto, adicione **Ctrl** e diga “deixe mais formal” ou “transforme numa lista”.
 - **Vocabulário que aprende.** Adicione nomes e jargões; palavras que você corrige depois de colar são aprendidas sozinhas.
+- **Aprende como você escreve (opcional).** Sua pontuação e seu tom, aprendidos dos seus ditados e correções numa nota curta que você pode editar.
 - **Trechos prontos.** Diga “meu e-mail” e o texto salvo entra, palavra por palavra.
-- **Ajustes por app.** Enter depois de inserir no Slack, tom formal no Mail, sem limpeza no Terminal.
-- **Histórico e arquivos.** Todo ditado pode ser buscado e exportado, e arquivos de áudio ou vídeo também podem ser transcritos.
+- **Bloco de notas.** Um bloco para ditar, onde também fica guardado um ditado que não tinha onde entrar.
+- **Limpeza do seu jeito.** Desligada, Leve, Normal ou Polida, já ajustada para apps de chat, e-mail e código. Por app você também pode apertar Enter depois de inserir, como no Slack.
+- **Histórico e arquivos.** Todo ditado pode ser buscado, exportado e ouvido de novo, e arquivos de áudio ou vídeo também podem ser transcritos.
 - **Saiba quanto gasta.** Palavras, tempo economizado e custo na tela Início, com um limite mensal opcional.
-- **No dispositivo, sem chave.** A transcrição também pode rodar no seu computador: gratuita, offline e privada, um pouco menos precisa que os modelos na nuvem.
+- **No dispositivo, sem chave.** A transcrição também pode rodar no seu computador: gratuita, offline e privada, um pouco menos precisa que os modelos na nuvem. Também assume quando você está offline.
 - **Prévia ao vivo (beta).** Veja suas palavras acima da cápsula enquanto fala.
 - **Nove idiomas, atualizações automáticas.** English, 简体中文, 日本語, 한국어, Español, Português, Français, Deutsch, Русский.
 

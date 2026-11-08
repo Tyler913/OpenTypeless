@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.UI.Dispatching;
+using OpenTypeless.Audio;
 using TypelessCore;
 
 namespace OpenTypeless.Services;
@@ -119,6 +120,8 @@ public sealed class DictationRecord
     /// <summary>Where a file's sound is written while it's read; renamed to <see cref="AudioPath"/> once all of it is there.</summary>
     [JsonIgnore] public string PartialAudioPath => Path.Combine(Folder, "audio.partial.wav");
     [JsonIgnore] public bool HasAudio => File.Exists(AudioPath);
+    /// <summary>History can play its recording (see <see cref="RecordingPlayback"/>).</summary>
+    [JsonIgnore] public bool IsPlayable => RecordingPlayback.IsPlayable(Status.RawValue(), HasAudio);
 
     /// <summary>
     /// This dictation as History exports it. A record keeps no time zone, so its time is written in this PC's, with the
@@ -287,6 +290,7 @@ public sealed class HistoryStore
 
     public void Delete(DictationRecord record)
     {
+        RecordingPlayer.Shared.Stop(record.Id);
         _records.RemoveAll(r => r.Id == record.Id);
         try { Directory.Delete(record.Folder, recursive: true); } catch { /* already gone */ }
         _audioSizes.Remove(record.Id);
@@ -360,12 +364,14 @@ public sealed class HistoryStore
             switch (actions[index])
             {
                 case HistoryPruning.Action.RemoveAudio:
+                    RecordingPlayer.Shared.Stop(record.Id);
                     try { File.Delete(record.AudioPath); } catch { }
                     _audioSizes[record.Id] = 0;
                     kept.Add(record);
                     changed = true;
                     break;
                 case HistoryPruning.Action.Remove:
+                    RecordingPlayer.Shared.Stop(record.Id);
                     try { Directory.Delete(record.Folder, recursive: true); } catch { }
                     _audioSizes.Remove(record.Id);
                     changed = true;

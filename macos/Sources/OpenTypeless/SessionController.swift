@@ -538,6 +538,8 @@ final class SessionController: ObservableObject {
         isLocked = false
         // The new dictation is what the user is after now.
         dropPendingPasteLast("a dictation started")
+        // A recording playing in History would be heard by the microphone.
+        RecordingPlayer.shared.stop()
         guard settings.speechReady else {
             note("not started — speech-to-text provider not configured")
             hud.show(.error(settings.speechSetupMessage), autoHideAfter: 3)

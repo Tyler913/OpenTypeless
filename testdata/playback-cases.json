@@ -1,0 +1,144 @@
+{
+  "_comment": "Shared by the macOS (swift-testing) and Windows (xUnit) test suites, so both apps play a dictation's recording from History the same way. playable: whether History offers to play a record (status as in session.json; hasAudio: its audio.wav is there). sounds: where the samples are in a recording, from the first bytes of its WAV file (header, hex) and the file's size; sound null when there is nothing to play.",
+  "playable": [
+    { "status": "done", "hasAudio": true, "playable": true },
+    { "status": "polishFailed", "hasAudio": true, "playable": true },
+    { "status": "failed", "hasAudio": true, "playable": true },
+    { "status": "cancelled", "hasAudio": true, "playable": true },
+    { "status": "processing", "hasAudio": true, "playable": true },
+    { "status": "recording", "hasAudio": true, "playable": false },
+    { "status": "done", "hasAudio": false, "playable": false },
+    { "status": "failed", "hasAudio": false, "playable": false },
+    { "status": "processing", "hasAudio": false, "playable": false }
+  ],
+  "sounds": [
+    {
+      "name": "finalized, as WAVFileWriter leaves it",
+      "header": "52494646a40c000057415645666d74201000000001000100803e0000007d00000200100064617461800c0000",
+      "fileSize": 3244,
+      "sound": {
+        "offset": 44,
+        "byteCount": 3200,
+        "headerIsRight": true
+      }
+    },
+    {
+      "name": "never finalized: the app quit or crashed while recording",
+      "header": "524946462400000057415645666d74201000000001000100803e0000007d0000020010006461746100000000",
+      "fileSize": 3244,
+      "sound": {
+        "offset": 44,
+        "byteCount": 3200,
+        "headerIsRight": false
+      }
+    },
+    {
+      "name": "written by a streaming writer",
+      "header": "52494646ffffffff57415645666d74201000000001000100803e0000007d00000200100064617461ffffffff",
+      "fileSize": 3244,
+      "sound": {
+        "offset": 44,
+        "byteCount": 3200,
+        "headerIsRight": false
+      }
+    },
+    {
+      "name": "cut off: says more than the file holds",
+      "header": "524946462419000057415645666d74201000000001000100803e0000007d0000020010006461746100190000",
+      "fileSize": 3244,
+      "sound": {
+        "offset": 44,
+        "byteCount": 3200,
+        "headerIsRight": false
+      }
+    },
+    {
+      "name": "never finalized, with half a sample at the end",
+      "header": "524946462400000057415645666d74201000000001000100803e0000007d0000020010006461746100000000",
+      "fileSize": 3245,
+      "sound": {
+        "offset": 44,
+        "byteCount": 3200,
+        "headerIsRight": false
+      }
+    },
+    {
+      "name": "a chunk after the samples",
+      "header": "52494646b80c000057415645666d74201000000001000100803e0000007d00000200100064617461800c0000",
+      "fileSize": 3264,
+      "sound": {
+        "offset": 44,
+        "byteCount": 3200,
+        "headerIsRight": true
+      }
+    },
+    {
+      "name": "a LIST chunk before the samples",
+      "header": "52494646b00c000057415645666d74201000000001000100803e0000007d0000020010004c49535404000000494e464f64617461800c0000",
+      "fileSize": 3256,
+      "sound": {
+        "offset": 56,
+        "byteCount": 3200,
+        "headerIsRight": true
+      }
+    },
+    {
+      "name": "WAVE_FORMAT_EXTENSIBLE, as Media Foundation writes plain PCM",
+      "header": "52494646bc0c000057415645666d742028000000feff0100803e0000007d00000200100000000000000000000000000000000000000000000000000064617461800c0000",
+      "fileSize": 3268,
+      "sound": {
+        "offset": 68,
+        "byteCount": 3200,
+        "headerIsRight": true
+      }
+    },
+    {
+      "name": "only a header: nothing to play",
+      "header": "524946462400000057415645666d74201000000001000100803e0000007d0000020010006461746100000000",
+      "fileSize": 44,
+      "sound": null
+    },
+    {
+      "name": "stereo",
+      "header": "52494646a40c000057415645666d74201000000001000200803e000000fa00000400100064617461800c0000",
+      "fileSize": 3244,
+      "sound": null
+    },
+    {
+      "name": "44.1 kHz",
+      "header": "52494646a40c000057415645666d7420100000000100010044ac0000885801000200100064617461800c0000",
+      "fileSize": 3244,
+      "sound": null
+    },
+    {
+      "name": "8-bit",
+      "header": "52494646a40c000057415645666d74201000000001000100803e0000803e00000100080064617461800c0000",
+      "fileSize": 3244,
+      "sound": null
+    },
+    {
+      "name": "compressed",
+      "header": "52494646a40c000057415645666d74201000000055000100803e0000007d00000200100064617461800c0000",
+      "fileSize": 3244,
+      "sound": null
+    },
+    {
+      "name": "no format chunk",
+      "header": "524946468c0c00005741564564617461800c0000",
+      "fileSize": 3220,
+      "sound": null
+    },
+    {
+      "name": "not a WAV",
+      "header": "4944330400000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "fileSize": 3244,
+      "sound": null
+    },
+    {
+      "name": "too short to hold a header",
+      "header": "524946460000000057415645666d74201000000001000100803e0000007d",
+      "fileSize": 3244,
+      "sound": null
+    }
+  ]
+}

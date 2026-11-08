@@ -3596,6 +3596,42 @@ extension Translations {
     "fr": "Impossible d’enregistrer l’audio",
     "de": "Aufnahme konnte nicht gesichert werden"
   },
+  "Play recording": {
+    "ja": "録音を再生",
+    "ko": "녹음 재생",
+    "es": "Reproducir grabación",
+    "pt": "Reproduzir gravação",
+    "ru": "Воспроизвести запись",
+    "fr": "Lire l’audio",
+    "de": "Aufnahme abspielen"
+  },
+  "Pause": {
+    "ja": "一時停止",
+    "ko": "일시 정지",
+    "es": "Pausar",
+    "pt": "Pausar",
+    "ru": "Пауза",
+    "fr": "Pause",
+    "de": "Pause"
+  },
+  "Couldn't play the recording": {
+    "ja": "録音を再生できませんでした",
+    "ko": "녹음을 재생할 수 없습니다",
+    "es": "No se pudo reproducir la grabación",
+    "pt": "Não foi possível reproduzir a gravação",
+    "ru": "Не удалось воспроизвести запись",
+    "fr": "Impossible de lire l’audio",
+    "de": "Aufnahme konnte nicht abgespielt werden"
+  },
+  "The recording is damaged or can't be read.": {
+    "ja": "録音ファイルが壊れているか、読み込めません。",
+    "ko": "녹음 파일이 손상되었거나 읽을 수 없습니다.",
+    "es": "La grabación está dañada o no se puede leer.",
+    "pt": "A gravação está danificada ou não pode ser lida.",
+    "ru": "Файл записи повреждён или не читается.",
+    "fr": "L’audio est endommagé ou illisible.",
+    "de": "Die Aufnahme ist beschädigt oder kann nicht gelesen werden."
+  },
   "Import": {
     "ja": "読み込む",
     "ko": "가져오기",

@@ -129,6 +129,8 @@ struct DictationRecord: Codable, Identifiable, Equatable {
     /// Where a file's sound is written while it's read; renamed to `audioURL` once all of it is there.
     var partialAudioURL: URL { folder.appendingPathComponent("audio.partial.wav") }
     var hasAudio: Bool { FileManager.default.fileExists(atPath: audioURL.path) }
+    /// History can play its recording (see RecordingPlayback).
+    var isPlayable: Bool { RecordingPlayback.isPlayable(status: status.rawValue, hasAudio: hasAudio) }
 
     /// This dictation as History exports it. A record keeps no time zone, so its time is written in this Mac's, with the
     /// offset that zone had on that date.
@@ -219,6 +221,7 @@ final class HistoryStore: ObservableObject {
     }
 
     func delete(_ record: DictationRecord) {
+        RecordingPlayer.shared.stop(recordID: record.id)
         records.removeAll { $0.id == record.id }
         try? FileManager.default.removeItem(at: record.folder)
         audioSizes[record.id] = nil
@@ -268,11 +271,13 @@ final class HistoryStore: ObservableObject {
             case .keep:
                 kept.append(record)
             case .removeAudio:
+                RecordingPlayer.shared.stop(recordID: record.id)
                 try? FileManager.default.removeItem(at: record.audioURL)
                 audioSizes[record.id] = 0
                 kept.append(record)
                 changed = true
             case .remove:
+                RecordingPlayer.shared.stop(recordID: record.id)
                 try? FileManager.default.removeItem(at: record.folder)
                 audioSizes[record.id] = nil
                 changed = true

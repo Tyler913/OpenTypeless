@@ -579,6 +579,8 @@ public sealed class SessionController
         _isLocked = false;
         // The new dictation is what the user is after now.
         DropPendingPasteLast("a dictation started");
+        // A recording playing in History would be heard by the microphone.
+        RecordingPlayer.Shared.Stop();
         // On-device needs its model and no key; a provider needs its key.
         if (SpeechModel.SetupIssue(_settings) is { } issue)
         {

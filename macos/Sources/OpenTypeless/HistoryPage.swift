@@ -374,6 +374,9 @@ private struct HistoryDetail: View {
                     }
                 }
                 Spacer(minLength: 8)
+                if record.isPlayable {
+                    PlaybackControl(record: record, player: RecordingPlayer.shared, controller: controller)
+                }
                 if record.status != .done { StatusPill(text: record.status.label, color: record.status.color) }
             }
             .padding(16)
@@ -565,6 +568,47 @@ private struct HistoryDetail: View {
         }
         if let profile = record.profileName { parts.append(profile) }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// Plays the dictation's recording, and while it's playing or paused shows how far it has got. Selecting another
+/// dictation or leaving History stops it.
+private struct PlaybackControl: View {
+    let record: DictationRecord
+    @ObservedObject var player: RecordingPlayer
+    @ObservedObject var controller: SessionController
+
+    var body: some View {
+        let current = player.recordID == record.id
+        let playing = current && player.isPlaying
+        HStack(spacing: 6) {
+            if current {
+                Text(verbatim: "\(Self.clock(player.elapsed)) / \(Self.clock(player.duration.rounded()))")
+                    .font(.system(size: 11.5))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            Button { player.toggle(record) } label: {
+                Image(systemName: playing ? "pause.fill" : "play.fill").frame(width: 14)
+            }
+            .controlSize(.small)
+            // The microphone would hear it.
+            .disabled(controller.state != .idle)
+            .help(playing ? L("暂停", "Pause") : L("播放录音", "Play recording"))
+            .accessibilityLabel(playing ? L("暂停", "Pause") : L("播放录音", "Play recording"))
+        }
+        .onDisappear { player.stop(recordID: record.id) }
+        .alert(L("无法播放录音", "Couldn't play the recording"), isPresented: Binding(get: { player.failure != nil }, set: { if !$0 { player.failure = nil } })) {
+            Button(L("好", "OK")) {}
+        } message: {
+            Text(player.failure ?? "")
+        }
+    }
+
+    /// "0:07", "12:40": minutes and seconds, cut down to the second.
+    static func clock(_ seconds: Double) -> String {
+        let whole = max(0, Int(seconds))
+        return String(format: "%d:%02d", whole / 60, whole % 60)
     }
 }
 

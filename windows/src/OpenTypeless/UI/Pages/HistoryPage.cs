@@ -134,6 +134,7 @@ public sealed class HistoryPage : PageBase
     protected override void OnClosed()
     {
         _searchDelay.Stop();
+        RecordingPlayer.Shared.Stop();
         _history.Changed -= OnHistoryChanged;
         _files.Changed -= Update;
     }
@@ -402,6 +403,8 @@ public sealed class HistoryPage : PageBase
         }
         _shownDetail = shown;
         _detailProgress = null;
+        // Its control goes with the detail it was in: another dictation selected, or none left.
+        if (RecordingPlayer.Shared.RecordId is { } playing && playing != record?.Id) RecordingPlayer.Shared.Stop();
         _detailHost.Content = record == null ? null : Detail(record);
     }
 
@@ -624,6 +627,7 @@ public sealed class HistoryPage : PageBase
             },
         });
         var trailing = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Top };
+        if (record.IsPlayable) trailing.Children.Add(PlaybackControl(record));
         // Where the wait after releasing the key went.
         if (record.Timing?.Summary is { } timing) trailing.Children.Add(new HelpTip(timing));
         if (record.Status != DictationStatus.Done) trailing.Children.Add(new StatusPill(record.Status.Label(), record.Status.Tint()));
@@ -791,6 +795,52 @@ public sealed class HistoryPage : PageBase
         Grid.SetRow(buttons, 4);
         layout.Children.Add(buttons);
         return layout;
+    }
+
+    /// <summary>
+    /// Plays the dictation's recording, and while it's playing or paused shows how far it has got. Selecting another
+    /// dictation or leaving History stops it.
+    /// </summary>
+    private FrameworkElement PlaybackControl(DictationRecord record)
+    {
+        var player = RecordingPlayer.Shared;
+        var time = Ui.Text("", 11.5, foreground: Ui.Secondary);
+        time.VerticalAlignment = VerticalAlignment.Center;
+        var icon = Ui.Icon(Glyphs.Play, 14, filled: true);
+        // The microphone would hear it.
+        var button = new Button { Content = icon, IsEnabled = _controller.State == SessionController.SessionState.Idle };
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { time, button } };
+        void Refresh()
+        {
+            var current = player.RecordId == record.Id;
+            var playing = current && player.IsPlaying;
+            time.Visibility = current ? Visibility.Visible : Visibility.Collapsed;
+            if (current) time.Text = $"{Clock(player.Elapsed)} / {Clock(Math.Round(player.Duration))}";
+            Ui.SetGlyph(icon, playing ? Glyphs.Pause : Glyphs.Play, filled: true);
+            Ui.Label(button, playing ? L("暂停", "Pause") : L("播放录音", "Play recording"));
+        }
+        button.Click += async (_, _) =>
+        {
+            if (player.Toggle(record)) return;
+            await Exports.ShowDialog(XamlRoot, L("无法播放录音", "Couldn't play the recording"),
+                                     L("录音文件已损坏或无法读取。", "The recording is damaged or can't be read."));
+        };
+        panel.Loaded += (_, _) =>
+        {
+            player.Changed -= Refresh;
+            player.Changed += Refresh;
+            Refresh();
+        };
+        panel.Unloaded += (_, _) => player.Changed -= Refresh;
+        Refresh();
+        return panel;
+    }
+
+    /// <summary>"0:07", "12:40": minutes and seconds, cut down to the second.</summary>
+    private static string Clock(double seconds)
+    {
+        var whole = Math.Max(0, (int)seconds);
+        return $"{whole / 60}:{whole % 60:00}";
     }
 
     private static void RevealRecording(DictationRecord record) => Process.Start("explorer.exe", $"/select,\"{record.AudioPath}\"");

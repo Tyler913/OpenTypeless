@@ -111,6 +111,9 @@ ICONS = [
     ("Cloud", "cloud"),
     ("DataUsage", "data_usage"),
     ("Placement", "panel_bottom"),
+    # Playing a recording in History
+    ("Play", "play"),
+    ("Pause", "pause"),
 ]
 
 FIRST = 0xE000

@@ -17,13 +17,6 @@ internal sealed class SampleCounter
     public double Seconds => AudioFormat.Seconds((int)Interlocked.Read(ref _count));
 }
 
-/// <summary>
-/// What a recording is for: plain dictation, a translation (see <see cref="TranslationTarget"/>), or an edit of the text
-/// selected in the app in front (see <see cref="SelectionCommand"/>), which the translation and command chords (see
-/// <see cref="ModeChords{TMode}"/>) switch it to while recording.
-/// </summary>
-public enum RecordingMode { Dictation, Translate, Command }
-
 internal static class TranslationFallbackText
 {
     /// <summary>Why a translation couldn't be used, for History.</summary>
@@ -82,26 +75,26 @@ internal static class CommandText
     };
 }
 
-/// <summary>Orchestrates one dictation: hotkey → record → chunked STT → polish → paste. UI-thread only.</summary>
+/// <summary>
+/// Orchestrates one dictation: hotkey → record → chunked STT → polish → paste. UI-thread only. What each key, click and
+/// system event does to it is <see cref="DictationSession"/>'s to decide (in TypelessCore, as in the macOS app, with
+/// shared test cases); this class tells it what happened and carries out what it answers, with the microphone, the
+/// capsule, History and the paste.
+/// </summary>
 public sealed class SessionController
 {
-    public enum SessionState { Idle, Recording, Processing }
-
     public event Action? StateChanged;
     /// <summary>Asks the app to open the settings window (on a page, or null for the current one).</summary>
     public event Action<string?>? OpenSettingsRequested;
 
-    private SessionState _state = SessionState.Idle;
-    public SessionState State
-    {
-        get => _state;
-        private set
-        {
-            if (_state == value) return;
-            _state = value;
-            StateChanged?.Invoke();
-        }
-    }
+    /// <summary>
+    /// Where the dictation stands: whether one is recording or being processed, hands-free or held, in which mode, which
+    /// one is current, and whether its text is pasted (see <see cref="DictationSession"/>).
+    /// </summary>
+    private readonly DictationSession _session = new();
+
+    /// <summary>The session's phase, for the views that watch it (see <see cref="StateChanged"/>).</summary>
+    public SessionPhase State => _session.Phase;
 
     public string? LastError { get; private set; }
 
@@ -129,22 +122,14 @@ public sealed class SessionController
     /// </summary>
     private DictationSettings? _dictationSettings;
     private SampleCounter _counter = new();
-    /// <summary>When the hotkey went down, by the key event's own time (seconds on the tick clock, see <see cref="HotkeyPress"/>).</summary>
-    private double? _pressedAt;
-    private bool _handsFree;
-    /// <summary>
-    /// The send key that ended this recording (see <see cref="SendKey"/>): pressed in the app once the text is pasted
-    /// there, for this dictation only. Off unless it was pressed.
-    /// </summary>
-    private SendKey _sendKey;
     /// <summary>
     /// Second keys that switch the recording's mode while the hotkey is held (see <see cref="ModeChords{TMode}"/>): the
     /// translation chord's, while translation mode is on (see <see cref="UpdateModeChords"/>, which also gives the hotkey
     /// hook the keys to keep from the focused app).
     /// </summary>
-    public ModeChords<RecordingMode> ModeChords { get; private set; } = new();
+    public ModeChords<RecordingMode> ModeChords => _session.Chords;
     /// <summary>What the running recording is for; plain dictation at every start.</summary>
-    public RecordingMode Mode { get; private set; } = RecordingMode.Dictation;
+    public RecordingMode Mode => _session.Mode;
     /// <summary>
     /// Command mode: the selection being read (or read) when the chord was pressed, where, and how many clicks and keys
     /// had reached apps by then (see <see cref="ReadSelection"/>). Dropped with the recording, or when another chord
@@ -153,23 +138,10 @@ public sealed class SessionController
     private Task<(SelectedText.Place? Place, SelectionRead Read, long Mark)>? _selection;
     private CancellationTokenSource? _selectionCancel;
     /// <summary>
-    /// The "Paste last dictation" waiting for its keys to be let go, or pasting, by its number. A new dictation, Esc or the
-    /// session locking drops it (null), and what it still had to do is left undone. Pressing it again meanwhile does nothing.
-    /// </summary>
-    private int? _pendingPasteLast;
-    private int _pasteLastCount;
-    /// <summary>
-    /// Which dictation is current: bumped whenever one ends or is cancelled, so work still out for an earlier one (its
-    /// paste, its Enter, its reset) can tell it's no longer wanted and leaves the next dictation alone.
-    /// </summary>
-    private int _generation;
-    /// <summary>
     /// The foreground window when the recording stopped, where the text is meant to go (for a retry, the window "Paste last
     /// dictation" was asked for in, or 0).
     /// </summary>
     private nint _pasteTarget;
-    /// <summary>Between the session locking (or sleep) and unlocking: no warm microphone meanwhile.</summary>
-    private bool _isLocked;
     /// <summary>
     /// Cancelled recordings still being transcribed in the background (see <see cref="KeepCancelledRecording"/>). A retry
     /// from History takes the record over, and the background result is then dropped rather than written over the retry's.
@@ -187,10 +159,6 @@ public sealed class SessionController
     /// <summary>Clean-ups started ahead of time that finished but were then dropped because the speaker went on: they were billed too.</summary>
     private readonly List<SegmentedPolishResult> _discardedPolishes = new();
     private Dictionary<string, ModelInfo> _modelInfo = new();
-    /// <summary>False when retrying from the history page, or once the screen locked: the result goes to the clipboard instead.</summary>
-    private bool _deliverByPaste = true;
-    /// <summary>Why <see cref="_deliverByPaste"/> is false, for whether the text is also kept in the Scratchpad (see <see cref="ScratchpadCapture"/>).</summary>
-    private ScratchpadCapture.Outcome _noPasteReason = ScratchpadCapture.Outcome.FromHistory;
     /// <summary>
     /// The text around the cursor in the field being dictated into, read as recording started, for the clean-up to spell
     /// names by (see <see cref="CursorContext"/>); null when that's off or there was none. Never saved.
@@ -216,12 +184,13 @@ public sealed class SessionController
     {
         // Watched from now on, so the first dictation already knows whether the network is down.
         NetworkStatus.Start();
+        _session.PhaseChanged += () => StateChanged?.Invoke();
         _editWatcher.OnCorrections = (corrections, quiet) =>
         {
             if (!_settings.LearnFromEdits) return;
             var added = _settings.Learn(corrections);
             Note($"learned from edits: {string.Join(", ", corrections.Select(c => $"{c.Heard} → {c.Corrected}"))}, new: {string.Join(", ", added)}");
-            if (added.Count > 0 && !quiet && State == SessionState.Idle)
+            if (added.Count > 0 && !quiet && State == SessionPhase.Idle)
             {
                 Hud.Show(new HudPhase.Learned(string.Join(L("、", ", "), added)), 2.5);
             }
@@ -262,8 +231,8 @@ public sealed class SessionController
     /// </summary>
     public void UpdateWarmMicrophone()
     {
-        if (State != SessionState.Idle) return;
-        if (_settings.KeepMicrophoneWarm && Permissions.MicrophoneGranted && !_isLocked)
+        if (State != SessionPhase.Idle) return;
+        if (_settings.KeepMicrophoneWarm && Permissions.MicrophoneGranted && !_session.IsLocked)
         {
             if (_recorder.IsRecording && _openDeviceId == ChosenDeviceId) return;
             _recorder.Stop();
@@ -292,44 +261,80 @@ public sealed class SessionController
 
     private static void Note(string text) => AppLog.Debug("session", text);
 
+    /// <summary>Does what the session decided, in order (see <see cref="SessionEffect"/>).</summary>
+    /// <param name="pressedAt">When the hotkey went down, for a recording that starts.</param>
+    /// <param name="reason">Why a "Paste last dictation" still waiting was dropped, for the log.</param>
+    private void CarryOut(IReadOnlyList<SessionEffect> effects, double pressedAt = 0, string reason = "")
+    {
+        foreach (var effect in effects)
+        {
+            switch (effect)
+            {
+                case SessionEffect.StartRecording:
+                    StartRecording(pressedAt);
+                    break;
+                case SessionEffect.FinishRecording:
+                    FinishRecording();
+                    break;
+                case SessionEffect.SwitchMode switched:
+                    SwitchMode(switched.Mode);
+                    break;
+                case SessionEffect.Cancel cancelled:
+                    Cancel(cancelled.Silently);
+                    break;
+                case SessionEffect.KeepCancelled:
+                    KeepCancelledRecording();
+                    break;
+                case SessionEffect.PasteLastDropped:
+                    Note($"paste last dictation dropped — {reason}");
+                    break;
+                case SessionEffect.Perform performed:
+                    RunAction(performed.Action, _settings.Shortcut(performed.Action));
+                    break;
+            }
+        }
+    }
+
+    /// <summary>How long the running recording is so far, without what the warm microphone heard before the key.</summary>
+    private double RecordedSeconds => _counter.Seconds - _preRollSeconds;
+
     /// <param name="at">When the key went down (the event's own time, see <see cref="HotkeyPress"/>).</param>
     public void HotkeyPressed(double at)
     {
         switch (State)
         {
-            case SessionState.Idle:
+            case SessionPhase.Idle:
                 Note("start recording");
-                StartRecording(at);
                 break;
-            case SessionState.Recording when _handsFree:
+            case SessionPhase.Recording when _session.HandsFree:
                 Note("stop (hands-free)");
-                FinishRecording();
                 break;
-            case SessionState.Recording:
+            case SessionPhase.Recording:
                 Note("press ignored — already recording");
                 break;
             default:
                 Note("press ignored — still processing the previous dictation");
                 break;
         }
+        CarryOut(_session.HotkeyDown(), at, "a dictation started");
     }
 
     public void HotkeyReleased(double at)
     {
-        if (State != SessionState.Recording || _handsFree || _pressedAt is not { } pressedAt) return;
+        if (State != SessionPhase.Recording || _session.HandsFree || _session.PressedAt is not { } pressedAt) return;
+        var effects = _session.HotkeyUp(at);
         var held = at - pressedAt;
-        var tap = HotkeyPress.IsTap(pressedAt, at);
-        Note(tap ? $"tap ({held:0.00}s) → hands-free" : $"released after {held:0.00}s → stop");
-        if (tap) _handsFree = true;
-        else FinishRecording();
+        Note(_session.HandsFree ? $"tap ({held:0.00}s) → hands-free" : $"released after {held:0.00}s → stop");
+        CarryOut(effects);
     }
 
     /// <summary>The capsule's ↑ was clicked: the recording ends as letting go of the key (or the second tap, hands-free) would.</summary>
     public void FinishPressed()
     {
-        if (State != SessionState.Recording) return;
+        var effects = _session.FinishRequested();
+        if (effects.Count == 0) return;
         Note("stop (capsule button)");
-        FinishRecording();
+        CarryOut(effects);
     }
 
     /// <summary>
@@ -338,18 +343,20 @@ public sealed class SessionController
     /// </summary>
     public void OtherKeyPressed(int keyCode, double at)
     {
-        if (State != SessionState.Recording || _pressedAt is not { } pressedAt) return;
-        switch (ModeChords.OtherKey(keyCode, pressedAt, at, _handsFree))
+        var effects = _session.OtherKey(keyCode, at);
+        foreach (var effect in effects)
         {
-            case OtherKeyOutcome<RecordingMode>.SwitchMode chord when chord.Mode != Mode:
-                Note($"mode → {chord.Mode} (chord key {keyCode})");
-                SwitchMode(chord.Mode);
-                break;
-            case OtherKeyOutcome<RecordingMode>.Cancel:
-                Note("cancelled — another key was pressed with the shortcut (treated as a key combo)");
-                Cancel(silently: true);
-                break;
+            switch (effect)
+            {
+                case SessionEffect.SwitchMode switched:
+                    Note($"mode → {switched.Mode} (chord key {keyCode})");
+                    break;
+                case SessionEffect.Cancel:
+                    Note("cancelled — another key was pressed with the shortcut (treated as a key combo)");
+                    break;
+            }
         }
+        CarryOut(effects);
     }
 
     /// <summary>
@@ -364,7 +371,7 @@ public sealed class SessionController
         if (mode == RecordingMode.Translate && translation is null) return;
         if (mode == RecordingMode.Command && !_settings.CommandModeEnabled) return;
         if (Mode == RecordingMode.Command) DropSelection();
-        Mode = mode;
+        _session.Switched(mode);
         if (_record != null)
         {
             _record.Translation = translation;
@@ -388,7 +395,7 @@ public sealed class SessionController
     /// </summary>
     private void ReadSelection()
     {
-        var generation = _generation;
+        var generation = _session.Generation;
         var cancel = new CancellationTokenSource();
         _selectionCancel = cancel;
         var hotkey = _settings.Hotkey;
@@ -415,9 +422,10 @@ public sealed class SessionController
     /// <summary>While still recording in command mode: the recording stops as if it never started, and the capsule says why.</summary>
     private void SelectionRefused(SelectionRefusal reason, int generation)
     {
-        if (generation != _generation || State != SessionState.Recording || Mode != RecordingMode.Command) return;
+        var effects = _session.SelectionRefused(generation);
+        if (effects.Count == 0) return;
         Note($"command mode: selection refused ({reason}) — recording stopped");
-        Cancel(silently: true);
+        CarryOut(effects);
         Hud.Show(new HudPhase.Error(reason.Message()), 3);
     }
 
@@ -454,7 +462,7 @@ public sealed class SessionController
                 chords.Register(key, RecordingMode.Command);
             }
         }
-        ModeChords = chords;
+        _session.Chords = chords;
         return chords.Keys;
     }
 
@@ -464,12 +472,11 @@ public sealed class SessionController
     /// </summary>
     public void SendKeyPressed()
     {
-        if (State != SessionState.Recording) return;
         var key = _settings.SendKey;
-        if (key == SendKey.Off) return;
+        var effects = _session.SendKeyDown(key);
+        if (effects.Count == 0) return;
         Note($"send key {key.RawValue()} → stop, and send once the text is in");
-        _sendKey = key;
-        FinishRecording();
+        CarryOut(effects);
     }
 
     /// <summary>
@@ -479,24 +486,22 @@ public sealed class SessionController
     /// </summary>
     public void SystemLocked(string reason)
     {
-        // A warm microphone doesn't stay on behind the lock screen either; see SystemUnlocked.
-        _isLocked = true;
-        // Nor does a "Paste last dictation" still waiting go ahead once the session is unlocked again.
-        DropPendingPasteLast(reason);
+        var phase = State;
+        // A warm microphone doesn't stay on behind the lock screen either (see SystemUnlocked), nor does a "Paste last
+        // dictation" still waiting go ahead once the session is unlocked again.
+        var effects = _session.Locked(RecordedSeconds);
         // Nor is the text around the cursor read on: what it would find now isn't the speaker's.
         StopCursorContextRead();
-        switch (State)
+        switch (phase)
         {
-            case SessionState.Recording:
+            case SessionPhase.Recording:
                 Note($"{reason} while recording — cancelled as with Esc");
-                EscapePressed();
                 break;
-            case SessionState.Processing:
+            case SessionPhase.Processing:
                 Note($"{reason} while processing — the text goes to the clipboard");
-                _deliverByPaste = false;
-                _noPasteReason = ScratchpadCapture.Outcome.Locked;
                 break;
         }
+        CarryOut(effects, reason: reason);
         UpdateWarmMicrophone();
         SilenceWarmMicrophoneIfLocked();
     }
@@ -504,21 +509,11 @@ public sealed class SessionController
     /// <summary>The session was unlocked: a warm microphone can come back on.</summary>
     public void SystemUnlocked()
     {
-        if (!_isLocked) return;
-        _isLocked = false;
+        if (!_session.Unlocked()) return;
         UpdateWarmMicrophone();
     }
 
-    public void EscapePressed()
-    {
-        if (State == SessionState.Idle)
-        {
-            DropPendingPasteLast("Esc");
-            return;
-        }
-        if (State == SessionState.Recording && CancelPolicy.Keeps(_counter.Seconds - _preRollSeconds)) KeepCancelledRecording();
-        else Cancel(silently: false);
-    }
+    public void EscapePressed() => CarryOut(_session.Escape(RecordedSeconds), reason: "Esc");
 
     /// <summary>
     /// Esc on a long recording: stop and insert nothing, but keep it. The rest is transcribed in the background
@@ -526,7 +521,7 @@ public sealed class SessionController
     /// </summary>
     private void KeepCancelledRecording()
     {
-        if (State != SessionState.Recording || _record is not { } record || _pipeline is not { } pipeline) return;
+        if (State != SessionPhase.Recording || _record is not { } record || _pipeline is not { } pipeline) return;
         StopCapture();
         PlaySound(Sounds.Kind.Stop);
         record.Duration = _counter.Seconds;
@@ -584,10 +579,6 @@ public sealed class SessionController
         var dictation = _settings.DictationSettingsForApp(FocusProbe.ForegroundExecutable());
         // First of all, so the connections are ready by the time the first request goes out.
         WarmConnections(dictation.PolishEnabled);
-        // Someone is dictating, so the session is unlocked, whatever notification was missed (a resume without a lock).
-        _isLocked = false;
-        // The new dictation is what the user is after now.
-        DropPendingPasteLast("a dictation started");
         // A recording playing in History would be heard by the microphone.
         RecordingPlayer.Shared.Stop();
         // On-device needs its model and no key; a provider needs its key.
@@ -687,12 +678,7 @@ public sealed class SessionController
         _dictationSettings = dictation;
         if (dictation.ProfileName is { } profileName) Note($"app profile: {profileName}");
         if (dictation.Recommendation is { } recommendation) Note($"recommended settings: {recommendation.Id()}");
-        _deliverByPaste = true;
-        _pressedAt = pressedAt;
-        _handsFree = false;
-        _sendKey = SendKey.Off;
-        Mode = RecordingMode.Dictation;
-        State = SessionState.Recording;
+        _session.Began(pressedAt);
         LastError = null;
         Hud.Model.ResetLevels();
         Hud.Model.Badge = null;
@@ -706,7 +692,7 @@ public sealed class SessionController
         _maxDurationTimer = _dispatcher.CreateTimer();
         _maxDurationTimer.Interval = TimeSpan.FromMinutes(Math.Max(1, _settings.MaxRecordingMinutes));
         _maxDurationTimer.IsRepeating = false;
-        _maxDurationTimer.Tick += (_, _) => FinishRecording();
+        _maxDurationTimer.Tick += (_, _) => CarryOut(_session.FinishRequested());
         _maxDurationTimer.Start();
 
         // A long dictation keeps the clean-up's connection (idle while speech-to-text works) from timing out.
@@ -726,7 +712,7 @@ public sealed class SessionController
     {
         if (CursorContextReader.Begin() is not { } read) return;
         _cursorRead = read;
-        var generation = _generation;
+        var generation = _session.Generation;
         _ = Take();
 
         async Task Take()
@@ -734,7 +720,7 @@ public sealed class SessionController
             var context = await CursorContextReader.Read(read).ConfigureAwait(false);
             _dispatcher.TryEnqueue(() =>
             {
-                if (_cursorRead != read || _generation != generation || _isLocked || read.IsCancelled) return;
+                if (_cursorRead != read || _session.Generation != generation || _session.IsLocked || read.IsCancelled) return;
                 _cursorRead = null;
                 _cursorContext = context;
                 // Its length only: the text stays out of the log.
@@ -853,7 +839,7 @@ public sealed class SessionController
     /// </summary>
     private void SilenceWarmMicrophoneIfLocked()
     {
-        if (!_isLocked || IsCapturing || !_recorder.IsRecording) return;
+        if (!_session.IsLocked || IsCapturing || !_recorder.IsRecording) return;
         _recorder.Stop();
         _openDeviceId = null;
         _sink.End();
@@ -868,14 +854,14 @@ public sealed class SessionController
 
     private void FinishRecording()
     {
-        if (State != SessionState.Recording || _record is not { } record || _pipeline is not { } pipeline
+        if (State != SessionPhase.Recording || _record is not { } record || _pipeline is not { } pipeline
             || _dictationSettings is not { } dictation) return;
         // A cold recorder hands over everything it still holds as it stops, so it stops before the length is judged;
         // a warm one goes on for a moment instead (below), which a recording this short doesn't need.
         var warm = _settings.KeepMicrophoneWarm && _recorder.IsRecording;
         if (!warm) StopCapture();
         record.Duration = _counter.Seconds;
-        if (record.Duration - _preRollSeconds < 0.4)
+        if (DictationSession.IsAccidental(record.Duration - _preRollSeconds))
         {
             if (warm) StopCapture();
             PlaySound(Sounds.Kind.Stop);
@@ -891,7 +877,7 @@ public sealed class SessionController
         record.Status = DictationStatus.Processing;
         _history.Update(record);
         _record = record;
-        State = SessionState.Processing;
+        _session.Processing();
         // Where the text should go: if another window is in front by the time it's ready, it goes to the clipboard.
         _pasteTarget = Win32.GetForegroundWindow();
         // Released in an app with other settings than the one the recording was started in (see Suits): the text was
@@ -899,8 +885,7 @@ public sealed class SessionController
         if (!Suits(dictation))
         {
             Note("released in an app with other settings than the one the recording started in → clipboard");
-            _deliverByPaste = false;
-            _noPasteReason = ScratchpadCapture.Outcome.MovedAway;
+            _session.DeliverToClipboard(ScratchpadCapture.Outcome.MovedAway);
         }
         Hud.ShowWorking(dictation.PolishEnabled || record.Translation != null || record.IsCommand);
 
@@ -909,7 +894,7 @@ public sealed class SessionController
         var waitsForTail = warm && !pipeline.EndsInCoveredPause;
         var processing = new CancellationTokenSource();
         _processing = processing;
-        var generation = _generation;
+        var generation = _session.Generation;
         _ = Run();
 
         async Task Run()
@@ -1312,8 +1297,8 @@ public sealed class SessionController
     private async Task<string> DeliverEdit(string text, SelectedText.Place place, string original, SelectionSource source,
                                            long mark, int generation, CancellationToken token)
     {
-        if (_deliverByPaste) await TextInserter.LeaveMenuMode();
-        var canPaste = _deliverByPaste && !_isLocked;
+        if (_session.DeliversByPaste) await TextInserter.LeaveMenuMode();
+        var canPaste = _session.DeliversByPaste && !_session.IsLocked;
         var sameWindow = canPaste && await place.IsInFront();
         var now = sameWindow && source == SelectionSource.Accessibility ? await SelectedText.SelectionNow() : null;
         var editable = !sameWindow || await FocusProbe.FocusedTarget() != FocusProbe.Target.NotEditable;
@@ -1332,7 +1317,7 @@ public sealed class SessionController
             return "copied";
         }
         var outcome = await TextInserter.Insert(text, _settings.RestoreClipboard,
-                                                () => IsCurrent(generation, token) && _deliverByPaste && !_isLocked
+                                                () => IsCurrent(generation, token) && _session.DeliversByPaste && !_session.IsLocked
                                                       && Win32.GetForegroundWindow() == place.Window
                                                       && Win32.WindowTitle(place.Window) == place.Title
                                                       && HotkeyMonitor.Shared.InputCount == mark);
@@ -1351,7 +1336,7 @@ public sealed class SessionController
             case TextInserter.Outcome.Skipped:
                 // The window, a click or key, or the lock changed just as Ctrl+V was due.
                 TextInserter.CopyToClipboard(text);
-                var reason = !_deliverByPaste || _isLocked ? SelectionCommand.ClipboardReason.Locked
+                var reason = !_session.DeliversByPaste || _session.IsLocked ? SelectionCommand.ClipboardReason.Locked
                     : HotkeyMonitor.Shared.InputCount != mark ? SelectionCommand.ClipboardReason.SelectionChanged
                     : SelectionCommand.ClipboardReason.MovedAway;
                 Finish(new HudPhase.Error(reason.Message()), 3);
@@ -1404,7 +1389,7 @@ public sealed class SessionController
     private SpokenLayout.LaidOut LaidOutTranscript(string transcript) => SpokenLayout.Layout(transcript, _settings.SpokenLayoutCommands);
 
     /// <summary>Whether the dictation <paramref name="generation"/> is still the one under way, not cancelled or followed by another.</summary>
-    private bool IsCurrent(int generation, CancellationToken token) => generation == _generation && !token.IsCancellationRequested;
+    private bool IsCurrent(int generation, CancellationToken token) => _session.IsCurrent(generation) && !token.IsCancellationRequested;
 
     /// <summary>Whether the window in front is no longer the one the recording was made for.</summary>
     private bool FocusMoved => _pasteTarget != 0 && Win32.GetForegroundWindow() != _pasteTarget;
@@ -1441,7 +1426,7 @@ public sealed class SessionController
     /// </summary>
     private void SpeculationChanged(string? transcript)
     {
-        if (State != SessionState.Recording || Mode == RecordingMode.Command || _dictationSettings is not { } dictation
+        if (State != SessionPhase.Recording || Mode == RecordingMode.Command || _dictationSettings is not { } dictation
             || !(dictation.PolishEnabled || Mode == RecordingMode.Translate)) return;
         // As the clean-up would be given it once the key is released (see Process).
         var upcoming = transcript is null ? null : LaidOutTranscript(transcript);
@@ -1512,7 +1497,7 @@ public sealed class SessionController
     {
         // The Scratchpad's own editor, with the cursor in it: typed in directly, without the clipboard or a paste. No Enter,
         // no send key, no watching for edits.
-        if (_deliverByPaste && !FocusMoved && Suits(dictation)
+        if (_session.DeliversByPaste && !FocusMoved && Suits(dictation)
             && ScratchpadWindow.TryInsert(text, _settings.FitToSurroundingText, _settings.VocabularyList))
         {
             Note("deliver → the Scratchpad's editor");
@@ -1527,23 +1512,23 @@ public sealed class SessionController
             }
             return "scratchpad";
         }
-        if (_deliverByPaste) await TextInserter.LeaveMenuMode();
-        var target = _deliverByPaste ? await FocusProbe.FocusedTarget() : FocusProbe.Target.NotEditable;
+        if (_session.DeliversByPaste) await TextInserter.LeaveMenuMode();
+        var target = _session.DeliversByPaste ? await FocusProbe.FocusedTarget() : FocusProbe.Target.NotEditable;
         // Read before the checks below, so a cancel or a switch of window while it's read still counts.
-        var fit = _deliverByPaste && target != FocusProbe.Target.NotEditable && !FocusMoved ? await FitToCursor(text) : null;
+        var fit = _session.DeliversByPaste && target != FocusProbe.Target.NotEditable && !FocusMoved ? await FitToCursor(text) : null;
         if (!IsCurrent(generation, token))
         {
             Note("deliver → nothing, the dictation was cancelled meanwhile");
             return "cancelled";
         }
-        var otherSettings = _deliverByPaste && !Suits(dictation);
-        if (target == FocusProbe.Target.NotEditable || _deliverByPaste && FocusMoved || otherSettings)
+        var otherSettings = _session.DeliversByPaste && !Suits(dictation);
+        if (target == FocusProbe.Target.NotEditable || _session.DeliversByPaste && FocusMoved || otherSettings)
         {
             var reason = target == FocusProbe.Target.NotEditable ? "focus not editable"
                 : otherSettings ? "an app with other settings in front" : "another window in front";
             Note($"deliver → clipboard ({reason})");
             TextInserter.CopyToClipboard(text);
-            var saved = SaveToScratchpad(text, !_deliverByPaste ? _noPasteReason
+            var saved = SaveToScratchpad(text, !_session.DeliversByPaste ? _session.NoPasteReason
                 : target == FocusProbe.Target.NotEditable ? ScratchpadCapture.Outcome.NotEditable : ScratchpadCapture.Outcome.MovedAway);
             Finish(notice is { } n ? new HudPhase.Error(n) : new HudPhase.Copied(saved), saved ? 2.2 : 1.6);
             return "copied";
@@ -1561,7 +1546,7 @@ public sealed class SessionController
             };
         }
         var outcome = await TextInserter.Insert(fit?.Text ?? text, _settings.RestoreClipboard,
-                                                () => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved && Suits(dictation),
+                                                () => IsCurrent(generation, token) && _session.DeliversByPaste && !FocusMoved && Suits(dictation),
                                                 fallback: text, stillFits: stillFits);
         var inserted = fit is { } used && fits ? used.Text : text;
         if (!IsCurrent(generation, token))
@@ -1575,16 +1560,16 @@ public sealed class SessionController
             case TextInserter.Outcome.Pasted:
                 // Sends it, in a chat box or an AI prompt. Then there's no text left to watch for corrections.
                 var sent = false;
-                if (_sendKey != SendKey.Off)
+                if (_session.SendKey != SendKey.Off)
                 {
                     // The key that ended the recording, in place of "Press Enter after inserting".
-                    sent = await Send(_sendKey, generation, token);
+                    sent = await Send(_session.SendKey, generation, token);
                     if (!IsCurrent(generation, token)) return "pasted";
                 }
                 else if (dictation.PressEnter)
                 {
                     // Not into another window that came to the front after the paste, nor once the screen locked.
-                    sent = await TextInserter.PressEnter(() => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved && Suits(dictation));
+                    sent = await TextInserter.PressEnter(() => IsCurrent(generation, token) && _session.DeliversByPaste && !FocusMoved && Suits(dictation));
                     if (!IsCurrent(generation, token)) return "pasted";
                 }
                 if (notice is { } message)
@@ -1601,7 +1586,7 @@ public sealed class SessionController
             case TextInserter.Outcome.Skipped:
                 // The screen locked or another window came to the front just as Ctrl+V was due.
                 TextInserter.CopyToClipboard(text);
-                var savedSkipped = SaveToScratchpad(text, _isLocked ? ScratchpadCapture.Outcome.Locked : ScratchpadCapture.Outcome.MovedAway);
+                var savedSkipped = SaveToScratchpad(text, _session.IsLocked ? ScratchpadCapture.Outcome.Locked : ScratchpadCapture.Outcome.MovedAway);
                 Finish(notice is { } skippedNotice ? new HudPhase.Error(skippedNotice) : new HudPhase.Copied(savedSkipped), savedSkipped ? 2.2 : 1.6);
                 return "copied";
             default:
@@ -1639,7 +1624,7 @@ public sealed class SessionController
             return false;
         }
         if (!IsCurrent(generation, token)) return false;
-        var sent = await TextInserter.PressEnter(() => IsCurrent(generation, token) && _deliverByPaste && !FocusMoved, keys.Modifiers);
+        var sent = await TextInserter.PressEnter(() => IsCurrent(generation, token) && _session.DeliversByPaste && !FocusMoved, keys.Modifiers);
         Note($"send key → {(sent ? "sent" : "not sent, the dictation was cancelled or focus moved")}");
         return sent;
     }
@@ -1792,11 +1777,16 @@ public sealed class SessionController
     /// <param name="shortcut">The keys that were pressed.</param>
     public void Perform(ShortcutAction action, Hotkey? shortcut)
     {
-        if (State != SessionState.Idle)
+        if (_session.ActionPressed(action).Count == 0)
         {
             Note($"{action.RawValue()} ignored — a dictation is under way");
             return;
         }
+        RunAction(action, shortcut);
+    }
+
+    private void RunAction(ShortcutAction action, Hotkey? shortcut)
+    {
         switch (action)
         {
             case ShortcutAction.PasteLastDictation:
@@ -1824,9 +1814,7 @@ public sealed class SessionController
     /// </param>
     public void PasteLastDictation(Hotkey? shortcut, nint target)
     {
-        if (State != SessionState.Idle || _pendingPasteLast != null) return;
-        var id = ++_pasteLastCount;
-        _pendingPasteLast = id;
+        if (_session.BeginPasteLast() is not { } id) return;
         _ = Run();
 
         async Task Run()
@@ -1840,7 +1828,7 @@ public sealed class SessionController
             }
             finally
             {
-                if (_pendingPasteLast == id) _pendingPasteLast = null;
+                _session.EndPasteLast(id);
             }
         }
     }
@@ -1862,7 +1850,7 @@ public sealed class SessionController
             case LastDictation.Choice.Retry retry:
                 Note("paste last dictation → the newest one failed: retried");
                 // Its text goes in like a dictation's: only into the target, while it's still in front (see FocusMoved).
-                Retry(records[retry.Index], paste: released && !_isLocked, target: target);
+                Retry(records[retry.Index], paste: released && !_session.IsLocked, target: target);
                 return;
             case LastDictation.Choice.Paste paste:
                 var text = records[paste.Index].FinalText;
@@ -1902,14 +1890,7 @@ public sealed class SessionController
     }
 
     /// <summary>Whether the "Paste last dictation" <paramref name="id"/> is still wanted: not dropped, and no dictation under way.</summary>
-    private bool PasteLastIsCurrent(int id) => _pendingPasteLast == id && State == SessionState.Idle && !_isLocked;
-
-    private void DropPendingPasteLast(string reason)
-    {
-        if (_pendingPasteLast == null) return;
-        _pendingPasteLast = null;
-        Note($"paste last dictation dropped — {reason}");
-    }
+    private bool PasteLastIsCurrent(int id) => _session.PasteLastIsCurrent(id);
 
     /// <summary>Whether <paramref name="window"/> is in front (0: it couldn't be told, so there's nothing to check).</summary>
     private static bool IsInFront(nint window) => window == 0 || Win32.GetForegroundWindow() == window;
@@ -1920,7 +1901,7 @@ public sealed class SessionController
     /// <param name="target">The window its text is pasted into, only while that window is in front (0: whichever is in front then).</param>
     public void Retry(DictationRecord saved, bool paste, nint target = 0)
     {
-        if (State != SessionState.Idle) return;
+        if (State != SessionPhase.Idle) return;
         // An edit of a selection can't run again without its selection, which isn't kept; run as a dictation, it would
         // paste the instruction.
         if (saved.IsCommand)
@@ -1944,8 +1925,6 @@ public sealed class SessionController
             Hud.Show(new HudPhase.Error(L("找不到这条记录的录音文件", "The recording for this entry is gone")), 3);
             return;
         }
-        _deliverByPaste = paste;
-        _noPasteReason = ScratchpadCapture.Outcome.FromHistory;
         // A cancelled recording still being transcribed in the background is this run's now.
         _keptInBackground.Remove(saved.Id);
         // The app profile it was made with, while that still exists; the global settings otherwise.
@@ -1971,9 +1950,8 @@ public sealed class SessionController
         _record = record;
         _dictationSettings = dictation;
         _pasteTarget = target;
-        State = SessionState.Processing;
         // A translation dictation is translated again, into the language it was translated into then.
-        Mode = record.Translation is null ? RecordingMode.Dictation : RecordingMode.Translate;
+        _session.Retrying(paste, record.Translation is null ? RecordingMode.Dictation : RecordingMode.Translate);
         Hud.Model.Badge = record.Translation?.Badge;
         Hud.ShowWorking(dictation.PolishEnabled || record.Translation != null);
 
@@ -1981,7 +1959,7 @@ public sealed class SessionController
         _pipeline = pipeline;
         var processing = new CancellationTokenSource();
         _processing = processing;
-        var generation = _generation;
+        var generation = _session.Generation;
         _ = RunRetry();
 
         async Task RunRetry()
@@ -1995,7 +1973,7 @@ public sealed class SessionController
 
     public void Cancel(bool silently)
     {
-        var wasRecording = State == SessionState.Recording;
+        var wasRecording = State == SessionPhase.Recording;
         _processing?.Cancel();
         _pipeline?.Cancel();
         // Also right after the key was released, while the last of the audio is still coming in: no waiting for it.
@@ -2052,17 +2030,18 @@ public sealed class SessionController
             NoteOfflineChunks(record, pipeline);
         }
         // An accidental tap isn't worth an entry.
-        if (record.Duration - _preRollSeconds < 0.4) _history.Delete(record);
+        if (DictationSession.IsAccidental(record.Duration - _preRollSeconds)) _history.Delete(record);
         else _history.Update(record);
         Hud.Show(new HudPhase.Hidden());
     }
 
     private void Abort(string message)
     {
-        if (State != SessionState.Recording) return;
+        var effects = _session.FinishRequested();
+        if (effects.Count == 0) return;
         // Keep whatever was captured: process it rather than throwing it away.
         Hud.Show(new HudPhase.Error(message), 2);
-        FinishRecording();
+        CarryOut(effects);
     }
 
     private void Finish(HudPhase phase, double hideAfter)
@@ -2074,17 +2053,12 @@ public sealed class SessionController
     private void Reset()
     {
         DropSpeculativePolish();
-        _generation++;
-        State = SessionState.Idle;
+        _session.Ended();
         _preRollSeconds = 0;
         _pipeline = null;
         _record = null;
         _dictationSettings = null;
-        _pressedAt = null;
         _pasteTarget = 0;
-        _handsFree = false;
-        _sendKey = SendKey.Off;
-        Mode = RecordingMode.Dictation;
         DropSelection();
         _processing = null;
         StopCursorContextRead();

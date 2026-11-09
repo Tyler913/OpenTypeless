@@ -388,7 +388,7 @@ public sealed class HistoryPage : PageBase
         // Rebuilt when the record changed (records are replaced, not edited), lost its recording, the retry button's
         // state would differ, or its file has got further.
         (DictationRecord? Record, bool HasAudio, bool Idle, FileTranscription.Progress? Progress) shown =
-            (record, record?.HasAudio ?? false, _controller.State == SessionController.SessionState.Idle,
+            (record, record?.HasAudio ?? false, _controller.State == SessionPhase.Idle,
              record == null ? null : _files.Progress(record.Id));
         if (_shownDetail == shown) return;
         // Only the file's progress moved: the line and bar are updated, not the whole detail rebuilt (no flicker).
@@ -744,7 +744,7 @@ public sealed class HistoryPage : PageBase
                     Orientation = Orientation.Horizontal, Spacing = 6,
                     Children = { Ui.Icon(Glyphs.Refresh, 13), Ui.Text(L("重新转写", "Re-transcribe"), 13) },
                 },
-                IsEnabled = _controller.State == SessionController.SessionState.Idle,
+                IsEnabled = _controller.State == SessionPhase.Idle,
             };
             ToolTipService.SetToolTip(retry, L("完成后复制到剪贴板", "Copies the result to the clipboard"));
             retry.Click += (_, _) => _controller.Retry(record, paste: false);
@@ -815,7 +815,7 @@ public sealed class HistoryPage : PageBase
         time.VerticalAlignment = VerticalAlignment.Center;
         var icon = Ui.Icon(Glyphs.Play, 14, filled: true);
         // The microphone would hear it.
-        var button = new Button { Content = icon, IsEnabled = _controller.State == SessionController.SessionState.Idle };
+        var button = new Button { Content = icon, IsEnabled = _controller.State == SessionPhase.Idle };
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { time, button } };
         void Refresh()
         {

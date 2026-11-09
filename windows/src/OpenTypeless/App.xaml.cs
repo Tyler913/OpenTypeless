@@ -87,10 +87,10 @@ public partial class App : Application
         _controller.StateChanged += () =>
         {
             // Esc cancels a dictation under way, and then shouldn't reach the focused app too.
-            _hotkey.SwallowsEscape = _controller.State != SessionController.SessionState.Idle;
+            _hotkey.SwallowsEscape = _controller.State != TypelessCore.SessionPhase.Idle;
             UpdateSendKey();
             _tray.SetState(_controller.State);
-            if (_controller.State != SessionController.SessionState.Idle) return;
+            if (_controller.State != TypelessCore.SessionPhase.Idle) return;
             Updater.Shared.SessionBecameIdle();
             // A warm microphone that failed during the dictation is opened again.
             _dispatcher?.TryEnqueue(_controller.UpdateWarmMicrophone);
@@ -113,7 +113,7 @@ public partial class App : Application
         // Read now, off the UI thread, so the General page has its microphone list the first time it opens.
         _ = MicrophoneList.ReadAsync();
         PriceStore.Shared.RefreshIfStale();
-        Updater.Shared.CanInstallNow = () => _controller.State == SessionController.SessionState.Idle;
+        Updater.Shared.CanInstallNow = () => _controller.State == TypelessCore.SessionPhase.Idle;
         Updater.Shared.Quit = Quit;
         Updater.Shared.Start();
 
@@ -161,7 +161,7 @@ public partial class App : Application
     /// <summary>The send key only means "finish and send" while a dictation is recording; otherwise it's the focused app's.</summary>
     private void UpdateSendKey()
     {
-        _hotkey.RecordingSendKey = _controller.State == SessionController.SessionState.Recording ? _settings.SendKey : TypelessCore.SendKey.Off;
+        _hotkey.RecordingSendKey = _controller.State == TypelessCore.SessionPhase.Recording ? _settings.SendKey : TypelessCore.SendKey.Off;
     }
 
     /// <summary>After the guide: the page for whatever is still missing, or Home.</summary>
@@ -182,7 +182,7 @@ public partial class App : Application
     {
         _popover.Dismiss();
         // Quitting mid-recording keeps what was said, retryable from History; so does a file being transcribed.
-        if (_controller.State != SessionController.SessionState.Idle) _controller.StopForQuit();
+        if (_controller.State != TypelessCore.SessionPhase.Idle) _controller.StopForQuit();
         _controller.StopFilesForQuit();
         _tray.Dispose();
         _onboarding?.CloseForExit();

@@ -33,7 +33,7 @@ public sealed class TrayIcon : IDisposable
 
     private readonly uint _taskbarCreated = Win32.RegisterWindowMessage("TaskbarCreated");
     private readonly Win32.WNDPROC _wndProc; // kept alive for the window's lifetime
-    private SessionController.SessionState _state = SessionController.SessionState.Idle;
+    private TypelessCore.SessionPhase _state = TypelessCore.SessionPhase.Idle;
     private nint _icon;
     private bool _added;
 
@@ -61,7 +61,7 @@ public sealed class TrayIcon : IDisposable
         Add();
     }
 
-    public void SetState(SessionController.SessionState state)
+    public void SetState(TypelessCore.SessionPhase state)
     {
         _state = state;
         Update(Win32.NIM_MODIFY);
@@ -188,7 +188,7 @@ public sealed class TrayIcon : IDisposable
 /// </summary>
 public static class TrayGlyphs
 {
-    public static nint Render(SessionController.SessionState state, int size, bool lightTaskbar)
+    public static nint Render(TypelessCore.SessionPhase state, int size, bool lightTaskbar)
     {
         var pixels = new uint[size * size];
         var ink = lightTaskbar ? 0x000000u : 0xFFFFFFu;
@@ -217,14 +217,14 @@ public static class TrayGlyphs
     }
 
     /// <summary>How much ink (0…1) the glyph for <paramref name="state"/> puts at (u, v).</summary>
-    private static double Ink(SessionController.SessionState state, double u, double v)
+    private static double Ink(TypelessCore.SessionPhase state, double u, double v)
     {
         switch (state)
         {
-            case SessionController.SessionState.Recording:
+            case TypelessCore.SessionPhase.Recording:
                 // Filled disc with the mark knocked out.
                 return Distance(u, v, 0.5, 0.5) <= 0.47 && Mark(u, v, 0.56) == 0 ? 1 : 0;
-            case SessionController.SessionState.Processing:
+            case TypelessCore.SessionPhase.Processing:
                 var ring = Math.Abs(Distance(u, v, 0.5, 0.5) - 0.41) <= 0.055;
                 var dots = Distance(u, v, 0.29, 0.5) <= 0.07 || Distance(u, v, 0.5, 0.5) <= 0.07 || Distance(u, v, 0.71, 0.5) <= 0.07;
                 return ring || dots ? 1 : 0;

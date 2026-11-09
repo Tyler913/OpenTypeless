@@ -714,8 +714,8 @@ public sealed class OnboardingWindow : Window
         if (_tryStatus == null) return;
         (string Text, Brush? Brush) status = _controller.State switch
         {
-            SessionController.SessionState.Recording => (L("正在听…", "Listening…"), Palette.Brush(Tint.Red)),
-            SessionController.SessionState.Processing => (L("正在整理…", "Writing…"), Ui.Secondary),
+            SessionPhase.Recording => (L("正在听…", "Listening…"), Palette.Brush(Tint.Red)),
+            SessionPhase.Processing => (L("正在整理…", "Writing…"), Ui.Secondary),
             _ when _tryError != null => (_tryError, Palette.Brush(Tint.Red)),
             _ when !string.IsNullOrWhiteSpace(_tryText) => (L("成功了！在任何能打字的地方都可以这样用。", "It works! Use it anywhere you can type."), Palette.Brush(Tint.Green)),
             _ => ("", null),

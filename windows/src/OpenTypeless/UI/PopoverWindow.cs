@@ -222,8 +222,8 @@ public sealed class PopoverWindow : Window
         // Idle shows nothing when everything is set up: the pill only speaks up when something needs attention.
         var pill = _controller.State switch
         {
-            SessionController.SessionState.Recording => new StatusPill(L("录音中", "Recording"), Tint.Red),
-            SessionController.SessionState.Processing => new StatusPill(L("处理中", "Processing"), Tint.Blue),
+            SessionPhase.Recording => new StatusPill(L("录音中", "Recording"), Tint.Red),
+            SessionPhase.Processing => new StatusPill(L("处理中", "Processing"), Tint.Blue),
             _ => NeedsSetup() ? new StatusPill(L("需要完成设置", "Setup needed"), Tint.Orange) : null,
         };
         if (pill != null)
@@ -242,8 +242,8 @@ public sealed class PopoverWindow : Window
     {
         var (glyph, brush) = _controller.State switch
         {
-            SessionController.SessionState.Recording => (Glyphs.Speech, Palette.Brush(Tint.Red)),
-            SessionController.SessionState.Processing => (Glyphs.Sparkle, Palette.Brush(Tint.Blue)),
+            SessionPhase.Recording => (Glyphs.Speech, Palette.Brush(Tint.Red)),
+            SessionPhase.Processing => (Glyphs.Sparkle, Palette.Brush(Tint.Blue)),
             _ => (Glyphs.Microphone, Palette.Brush(Tint.Accent)),
         };
         var circle = new Border
@@ -265,8 +265,8 @@ public sealed class PopoverWindow : Window
         };
         FrameworkElement title = _controller.State switch
         {
-            SessionController.SessionState.Recording => Ui.Text(L("录音中", "Recording"), 14, FontWeights.SemiBold),
-            SessionController.SessionState.Processing => Ui.Text(L("处理中", "Processing"), 14, FontWeights.SemiBold),
+            SessionPhase.Recording => Ui.Text(L("录音中", "Recording"), 14, FontWeights.SemiBold),
+            SessionPhase.Processing => Ui.Text(L("处理中", "Processing"), 14, FontWeights.SemiBold),
             _ => new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -398,7 +398,7 @@ public sealed class PopoverWindow : Window
     /// <summary>The last dictation, when it failed. A transcribed file is retried from History instead: its text is never pasted.</summary>
     private DictationRecord? FailedRecord()
     {
-        if (_controller.State != SessionController.SessionState.Idle) return null;
+        if (_controller.State != SessionPhase.Idle) return null;
         var last = _history.Records.FirstOrDefault();
         // An edit of a selection can't be run again without its selection.
         return last is { Status: DictationStatus.Failed, HasAudio: true, IsFile: false, IsCommand: false } ? last : null;
@@ -522,7 +522,7 @@ public sealed class PopoverWindow : Window
         {
             Content = Ui.Icon(Glyphs.Paste, 16),
             Style = Subtle,
-            IsEnabled = _controller.State == SessionController.SessionState.Idle && _history.Records.Count > 0,
+            IsEnabled = _controller.State == SessionPhase.Idle && _history.Records.Count > 0,
         };
         Ui.Label(pasteLast, action.Title());
         ToolTipService.SetToolTip(pasteLast, action.Title() + (_settings.Shortcut(action) is { } shortcut ? $" ({shortcut.DisplayName})" : ""));

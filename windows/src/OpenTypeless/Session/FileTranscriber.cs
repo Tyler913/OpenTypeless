@@ -42,8 +42,8 @@ public sealed class FileTranscriber
     public FileTranscriber(SessionController controller)
     {
         _controller = controller;
-        _dictating = controller.State != SessionController.SessionState.Idle;
-        controller.StateChanged += () => _dictating = controller.State != SessionController.SessionState.Idle;
+        _dictating = controller.State != SessionPhase.Idle;
+        controller.StateChanged += () => _dictating = controller.State != SessionPhase.Idle;
     }
 
     /// <summary>How far this record's file has got; null when it isn't being transcribed or waiting to be.</summary>

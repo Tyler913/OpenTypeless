@@ -10,15 +10,6 @@ private final class SampleCounter: @unchecked Sendable {
     var seconds: Double { lock.withLock { AudioFormat.seconds(forSampleCount: count) } }
 }
 
-/// What a recording is for: plain dictation, a translation (see `TranslationTarget`), or an edit of the text selected
-/// in the app in front (see `SelectionCommand`), which the translation and command chords (see `ModeChords`) switch it
-/// to while recording.
-enum RecordingMode: Equatable, Sendable {
-    case dictation
-    case translate
-    case command
-}
-
 private extension PolishFallback {
     /// Why a translation couldn't be used, for History.
     var translationReason: String {
@@ -82,13 +73,21 @@ final class ContextSent: @unchecked Sendable {
     var isSet: Bool { lock.withLock { value } }
 }
 
-/// Orchestrates one dictation: hotkey → record → chunked STT → polish → paste.
+/// Orchestrates one dictation: hotkey → record → chunked STT → polish → paste. What each key, click and system event
+/// does to it is `DictationSession`'s to decide (in TypelessCore, as in the Windows app, with shared test cases); this class
+/// tells it what happened and carries out what it answers, with the microphone, the capsule, History and the paste.
 @MainActor
 final class SessionController: ObservableObject {
-    enum State: Equatable { case idle, recording, processing }
+    typealias State = DictationSession.Phase
 
+    /// The session's phase, for the views that watch it.
     @Published private(set) var state: State = .idle
     @Published private(set) var lastError: String?
+    /// Where the dictation stands: whether one is recording or being processed, hands-free or held, in which mode,
+    /// which one is current, and whether its text is pasted (see `DictationSession`).
+    private var session = DictationSession() {
+        didSet { if state != session.phase { state = session.phase } }
+    }
 
     let hud = HUDController()
     private let editWatcher = EditWatcher()
@@ -113,18 +112,16 @@ final class SessionController: ObservableObject {
     /// when it started (see DictationSettings).
     private var dictationSettings: DictationSettings?
     private var counter = SampleCounter()
-    /// When the hotkey went down, by the key event's own time (`ProcessInfo.systemUptime` clock, see `HotkeyPress`).
-    private var pressedAt: TimeInterval?
-    private var handsFree = false
+    private var handsFree: Bool { session.handsFree }
     /// The send key that ended this recording (see `SendKey`): pressed in the app once the text is pasted there, for this
     /// dictation only. Off unless it was pressed.
-    private var sendKey: SendKey = .off
+    private var sendKey: SendKey { session.sendKey }
     /// Second keys that switch the recording's mode while the hotkey is held (see `ModeChords`): the translation chord's,
     /// while translation mode is on (see `updateModeChords`, which also gives the hotkey monitor the keys to keep from
     /// the focused app).
-    private(set) var modeChords = ModeChords<RecordingMode>()
+    var modeChords: ModeChords<RecordingMode> { session.chords }
     /// What the running recording is for; plain dictation at every start.
-    private(set) var mode: RecordingMode = .dictation
+    var mode: RecordingMode { session.mode }
     /// Command mode: the selection being read (or read) when the chord was pressed, and where (see `readSelection`).
     /// Dropped with the recording, or when another chord switches it to another mode.
     private var selectionRead: Task<SelectionReading, Never>?
@@ -136,21 +133,17 @@ final class SessionController: ObservableObject {
         let read: SelectionRead
         let mark: SelectedText.InputMark
     }
-    /// The "Paste last dictation" waiting for its keys to be let go, or pasting, by its number. A new dictation, Esc or
-    /// the screen locking drops it (nil), and what it still had to do is left undone. Pressing it again meanwhile does nothing.
-    private var pendingPasteLast: Int?
-    private var pasteLastCount = 0
     /// The app last in front other than this one: where the menu-bar panel's "Paste last dictation" goes, should the
     /// click on the panel have brought this app forward.
     private var lastOtherApp: pid_t?
     /// Which dictation is current: bumped whenever one ends or is cancelled, so work still out for an earlier one (its
     /// paste, its Return, its reset) can tell it's no longer wanted and leaves the next dictation alone.
-    private var generation = 0
+    private var generation: Int { session.generation }
     /// The app in front when the recording stopped, where the text is meant to go (for a retry, the app "Paste last
     /// dictation" was asked for in, or nil).
     private var pasteTarget: pid_t?
     /// Between the screen locking (or sleep) and unlocking: no warm microphone meanwhile.
-    private var isLocked = false
+    private var isLocked: Bool { session.isLocked }
     /// Cancelled recordings still being transcribed in the background (see `keepCancelledRecording`). A retry from
     /// History takes the record over, and the background result is then dropped rather than written over the retry's.
     private var keptInBackground: Set<String> = []
@@ -171,9 +164,9 @@ final class SessionController: ObservableObject {
     private var modelInfoFetchedAt: Date?
     private var modelInfoLoading = false
     /// False when retrying from the history window, or once the screen locked: the result goes to the clipboard instead.
-    private var deliverByPaste = true
+    private var deliverByPaste: Bool { session.deliversByPaste }
     /// Why `deliverByPaste` is false, for whether the text is also kept in the Scratchpad (see `ScratchpadCapture`).
-    private var noPasteReason: ScratchpadCapture.Outcome = .fromHistory
+    private var noPasteReason: ScratchpadCapture.Outcome { session.noPasteReason }
     /// The text around the cursor in the field being dictated into, read as recording started, for the clean-up to spell
     /// names by (see CursorContext); nil when that's off or there was none. Never saved.
     private var cursorContext: String?
@@ -284,6 +277,26 @@ final class SessionController: ObservableObject {
     private let log = Logger(subsystem: "local.opentypeless.app", category: "session")
     private func note(_ text: String) { log.debug("\(text, privacy: .public)") }
 
+    /// Does what the session decided, in order (see `SessionEffect`). `pressedAt`: when the hotkey went down, for a
+    /// recording that starts. `reason`: why a "Paste last dictation" still waiting was dropped, for the log.
+    private func carryOut(_ effects: [SessionEffect], pressedAt: TimeInterval = ProcessInfo.processInfo.systemUptime,
+                          because reason: String = "") {
+        for effect in effects {
+            switch effect {
+            case .startRecording: startRecording(pressedAt: pressedAt)
+            case .finishRecording: finishRecording()
+            case let .switchMode(newMode): switchMode(to: newMode)
+            case let .cancel(silently): cancel(silently: silently)
+            case .keepCancelled: keepCancelledRecording()
+            case .pasteLastDropped: note("paste last dictation dropped — \(reason)")
+            case let .perform(action): run(action, shortcut: settings.shortcut(for: action))
+            }
+        }
+    }
+
+    /// How long the running recording is so far, without what the warm microphone heard before the key.
+    private var recordedSeconds: Double { counter.seconds - preRollSeconds }
+
     /// `time`: when the key went down (the event's own time, see `HotkeyPress`).
     func hotkeyPressed(at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         switch state {
@@ -292,50 +305,37 @@ final class SessionController: ObservableObject {
         case .recording: note("press ignored — already recording")
         case .processing: note("press ignored — still processing the previous dictation")
         }
-        switch state {
-        case .idle:
-            startRecording(pressedAt: time)
-        case .recording where handsFree:
-            finishRecording()
-        default:
-            break
-        }
+        carryOut(session.hotkeyDown(), pressedAt: time, because: "a dictation started")
     }
 
     func hotkeyReleased(at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
-        guard state == .recording, !handsFree, let pressedAt else { return }
+        guard state == .recording, !handsFree, let pressedAt = session.pressedAt else { return }
+        let effects = session.hotkeyUp(at: time)
         let held = time - pressedAt
-        let tap = HotkeyPress.isTap(pressedAt: pressedAt, releasedAt: time)
-        note(tap ? String(format: "tap (%.2fs) → hands-free", held) : String(format: "released after %.2fs → stop", held))
-        if tap {
-            handsFree = true
-        } else {
-            finishRecording()
-        }
+        note(handsFree ? String(format: "tap (%.2fs) → hands-free", held) : String(format: "released after %.2fs → stop", held))
+        carryOut(effects)
     }
 
     /// The capsule's ↑ was clicked: the recording ends as letting go of the key (or the second tap, hands-free) would.
     func finishPressed() {
-        guard state == .recording else { return }
+        let effects = session.finishRequested()
+        guard !effects.isEmpty else { return }
         note("stop (capsule button)")
-        finishRecording()
+        carryOut(effects)
     }
 
     /// Another key went down while the hotkey was held: a registered chord switches the recording's mode; otherwise
     /// Fn+F-key and similar combos shouldn't start a dictation.
     func otherKeyPressed(_ keyCode: Int64, at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
-        guard state == .recording, let pressedAt else { return }
-        switch modeChords.otherKey(keyCode, pressedAt: pressedAt, at: time, handsFree: handsFree) {
-        case let .switchMode(newMode):
-            guard newMode != mode else { return }
-            note("mode → \(newMode) (chord key \(keyCode))")
-            switchMode(to: newMode)
-        case .cancel:
-            note("cancelled — another key was pressed with the shortcut (treated as a key combo)")
-            cancel(silently: true)
-        case .ignore:
-            break
+        let effects = session.otherKey(keyCode, at: time)
+        for effect in effects {
+            switch effect {
+            case let .switchMode(newMode): note("mode → \(newMode) (chord key \(keyCode))")
+            case .cancel: note("cancelled — another key was pressed with the shortcut (treated as a key combo)")
+            default: break
+            }
         }
+        carryOut(effects)
     }
 
     /// The running recording becomes `newMode`'s: the record keeps it (a retry runs the same way), the capsule shows it,
@@ -350,7 +350,7 @@ final class SessionController: ObservableObject {
         case .command: guard settings.commandModeEnabled else { return }
         }
         if mode == .command { dropSelection() }
-        mode = newMode
+        session.switched(to: newMode)
         record?.translation = translation
         if newMode == .command { record?.mode = SelectionCommand.recordMode }
         hud.model.badge = translation?.badge ?? (newMode == .command ? L("✎ 编辑", "✎ Edit") : nil)
@@ -386,9 +386,10 @@ final class SessionController: ObservableObject {
 
     /// While still recording in command mode: the recording stops as if it never started, and the capsule says why.
     private func selectionRefused(_ reason: SelectionRefusal, generation: Int) {
-        guard generation == self.generation, state == .recording, mode == .command else { return }
+        let effects = session.selectionRefused(generation: generation)
+        guard !effects.isEmpty else { return }
         note("command mode: selection refused (\(reason)) — recording stopped")
-        cancel(silently: true)
+        carryOut(effects)
         hud.show(.error(reason.message), autoHideAfter: 3)
     }
 
@@ -417,46 +418,40 @@ final class SessionController: ObservableObject {
                 chords.register(key, mode: .command)
             }
         }
-        modeChords = chords
+        session.chords = chords
         return chords.keys
     }
 
     /// The send key went down while recording (see `SendKey`): the recording ends as if the hotkey were let go (or, hands-free,
     /// pressed again), and once its text is pasted the same key is pressed in that app to send it.
     func sendKeyPressed() {
-        guard state == .recording else { return }
         let key = settings.sendKey
-        guard key != .off else { return }
+        let effects = session.sendKeyDown(key)
+        guard !effects.isEmpty else { return }
         note("send key \(key.rawValue) → stop, and send once the text is in")
-        sendKey = key
-        finishRecording()
+        carryOut(effects)
     }
 
     /// The Mac is going to sleep or the screen was locked. A hands-free recording mustn't keep the microphone open on
     /// the lock screen, nor its text land in whatever has focus afterwards: a recording stops as with Esc (a long one is
     /// kept in History), and one being processed goes to the clipboard instead of being pasted.
     func systemLocked(_ reason: String) {
-        // A warm microphone doesn't stay on behind the lock screen either; see `systemUnlocked`.
-        isLocked = true
+        let phase = state
+        // A warm microphone doesn't stay on behind the lock screen either (see `systemUnlocked`), nor does a "Paste last
+        // dictation" still waiting go ahead once the screen is unlocked again.
+        let effects = session.locked(recordedSeconds: recordedSeconds)
         // Nor is the text around the cursor read on: what it would find now isn't the speaker's.
         stopCursorContextRead()
         defer {
             updateWarmMicrophone()
             silenceWarmMicrophoneIfLocked()
         }
-        // Nor does a "Paste last dictation" still waiting go ahead once the screen is unlocked again.
-        dropPendingPasteLast(reason)
-        switch state {
-        case .idle:
-            return
-        case .recording:
-            note("\(reason) while recording — cancelled as with Esc")
-            escapePressed()
-        case .processing:
-            note("\(reason) while processing — the text goes to the clipboard")
-            deliverByPaste = false
-            noPasteReason = .locked
+        switch phase {
+        case .idle: break
+        case .recording: note("\(reason) while recording — cancelled as with Esc")
+        case .processing: note("\(reason) while processing — the text goes to the clipboard")
         }
+        carryOut(effects, because: reason)
     }
 
     /// While locked, a warm microphone goes off as soon as no dictation is capturing, also mid-processing: kept warm, it
@@ -470,8 +465,7 @@ final class SessionController: ObservableObject {
 
     /// The screen was unlocked (or the Mac woke without locking it): a warm microphone can come back on.
     func systemUnlocked() {
-        guard isLocked else { return }
-        isLocked = false
+        guard session.unlocked() else { return }
         updateWarmMicrophone()
     }
 
@@ -481,15 +475,7 @@ final class SessionController: ObservableObject {
     }
 
     func escapePressed() {
-        guard state != .idle else {
-            dropPendingPasteLast("Esc")
-            return
-        }
-        if state == .recording, CancelPolicy.keeps(recordedSeconds: counter.seconds - preRollSeconds) {
-            keepCancelledRecording()
-        } else {
-            cancel(silently: false)
-        }
+        carryOut(session.escape(recordedSeconds: recordedSeconds), because: "Esc")
     }
 
     /// Esc on a long recording: stop and insert nothing, but keep it. The rest is transcribed in the background
@@ -545,10 +531,6 @@ final class SessionController: ObservableObject {
         let dictation = settings.dictationSettings(forApp: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
         // First of all, so the connections are ready by the time the first request goes out.
         warmConnections(polishes: dictation.polishEnabled)
-        // Someone is dictating, so the screen is unlocked, whatever notification was missed (a wake without a lock).
-        isLocked = false
-        // The new dictation is what the user is after now.
-        dropPendingPasteLast("a dictation started")
         // A recording playing in History would be heard by the microphone.
         RecordingPlayer.shared.stop()
         guard settings.speechReady else {
@@ -647,12 +629,7 @@ final class SessionController: ObservableObject {
         dictationSettings = dictation
         if let name = dictation.profileName { note("app profile: \(name)") }
         if let kind = dictation.recommendation { note("recommended settings: \(kind.rawValue)") }
-        deliverByPaste = true
-        self.pressedAt = pressedAt
-        handsFree = false
-        sendKey = .off
-        mode = .dictation
-        state = .recording
+        session.began(pressedAt: pressedAt)
         lastError = nil
         hud.model.resetLevels()
         hud.model.badge = nil
@@ -667,7 +644,10 @@ final class SessionController: ObservableObject {
         maxDurationTimer = Timer.scheduledTimer(
             withTimeInterval: TimeInterval(max(1, settings.maxRecordingMinutes) * 60), repeats: false
         ) { [weak self] _ in
-            Task { @MainActor in self?.finishRecording() }
+            Task { @MainActor in
+                guard let self else { return }
+                self.carryOut(self.session.finishRequested())
+            }
         }
         // A long dictation keeps the clean-up's connection (idle while speech-to-text works) from timing out.
         warmTimer = Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in
@@ -825,7 +805,7 @@ final class SessionController: ObservableObject {
     private func finishRecording() {
         guard state == .recording, var record, let pipeline, let dictation = dictationSettings else { return }
         record.duration = counter.seconds
-        if record.duration - preRollSeconds < 0.4 {
+        if DictationSession.isAccidental(recordedSeconds: record.duration - preRollSeconds) {
             stopCapture()
             playSound("Pop")
             note(String(format: "discarded — only %.2fs of audio", record.duration))
@@ -840,15 +820,14 @@ final class SessionController: ObservableObject {
         record.status = .processing
         history.update(record)
         self.record = record
-        state = .processing
+        session.processing()
         // Where the text should go: if another app is in front by the time it's ready, it goes to the clipboard.
         pasteTarget = NSWorkspace.shared.frontmostApplication?.processIdentifier
         // Released in an app with other settings than the one the recording was started in (see `suits`): the text was
         // spoken for that one, so it goes to the clipboard, with no Return.
         if !suits(dictation) {
             note("released in \(frontmostID), which has other settings than the app the recording started in → clipboard")
-            deliverByPaste = false
-            noPasteReason = .movedAway
+            session.deliverToClipboard(because: .movedAway)
         }
         hud.showWorking(polishes: dictation.polishEnabled || record.translation != nil || record.isCommand)
 
@@ -1304,7 +1283,7 @@ final class SessionController: ObservableObject {
 
     /// Whether the dictation `generation` is still the one under way, not cancelled or followed by another.
     private func isCurrent(_ generation: Int) -> Bool {
-        generation == self.generation && !Task.isCancelled
+        session.isCurrent(generation) && !Task.isCancelled
     }
 
     /// Whether the app in front is no longer the one the recording was made for.
@@ -1661,10 +1640,14 @@ final class SessionController: ObservableObject {
     /// An action's shortcut was pressed (see `ShortcutAction`). Only between dictations: while one is under way its keys
     /// do nothing (they're kept from the focused app all the same). `shortcut`: the keys that were pressed.
     func perform(_ action: ShortcutAction, shortcut: Hotkey?) {
-        guard state == .idle else {
+        guard session.actionPressed(action) == [.perform(action)] else {
             note("\(action.rawValue) ignored — a dictation is under way")
             return
         }
+        run(action, shortcut: shortcut)
+    }
+
+    private func run(_ action: ShortcutAction, shortcut: Hotkey?) {
         switch action {
         case .pasteLastDictation: pasteLastDictation(releasing: shortcut)
         case .openScratchpad: ScratchpadWindowController.shared.show()
@@ -1682,12 +1665,9 @@ final class SessionController: ObservableObject {
     /// keys still held would be another shortcut altogether. nil from the menu bar, whose panel first has to give focus
     /// back to the app the text goes to.
     func pasteLastDictation(releasing shortcut: Hotkey?) {
-        guard state == .idle, pendingPasteLast == nil else { return }
+        guard let id = session.beginPasteLast() else { return }
         let front = NSWorkspace.shared.frontmostApplication
         let target = shortcut == nil ? Self.otherApp(front) ?? lastOtherApp : front?.processIdentifier
-        pasteLastCount += 1
-        let id = pasteLastCount
-        pendingPasteLast = id
         Task { [weak self] in
             let released: Bool
             if let shortcut {
@@ -1702,7 +1682,7 @@ final class SessionController: ObservableObject {
 
     /// `released`: false when the shortcut's keys were still held after a while; the text then goes to the clipboard.
     private func pasteLast(_ id: Int, into target: pid_t?, released: Bool) async {
-        defer { if pendingPasteLast == id { pendingPasteLast = nil } }
+        defer { session.endPasteLast(id) }
         // Dropped meanwhile: by Esc, the screen locking, or a dictation started while the keys were still held.
         guard pasteLastIsCurrent(id) else { return }
         let records = history.records
@@ -1754,13 +1734,7 @@ final class SessionController: ObservableObject {
 
     /// Whether the "Paste last dictation" `id` is still wanted: not dropped, and no dictation under way.
     private func pasteLastIsCurrent(_ id: Int) -> Bool {
-        pendingPasteLast == id && state == .idle && !isLocked
-    }
-
-    private func dropPendingPasteLast(_ reason: String) {
-        guard pendingPasteLast != nil else { return }
-        pendingPasteLast = nil
-        note("paste last dictation dropped — \(reason)")
+        session.pasteLastIsCurrent(id)
     }
 
     /// Whether `app` is in front (nil: the app couldn't be told when it was asked for, so there's nothing to check).
@@ -1795,8 +1769,6 @@ final class SessionController: ObservableObject {
             hud.show(.error(L("找不到这条记录的录音文件", "The recording for this entry is gone")), autoHideAfter: 3)
             return
         }
-        deliverByPaste = paste
-        noPasteReason = .fromHistory
         // A cancelled recording still being transcribed in the background is this run's now.
         keptInBackground.remove(saved.id)
         // The app profile it was made with, while that still exists; the global settings otherwise.
@@ -1822,9 +1794,8 @@ final class SessionController: ObservableObject {
         self.record = record
         dictationSettings = dictation
         pasteTarget = target
-        state = .processing
         // A translation dictation is translated again, into the language it was translated into then.
-        mode = record.translation == nil ? .dictation : .translate
+        session.retrying(paste: paste, mode: record.translation == nil ? .dictation : .translate)
         hud.model.badge = record.translation?.badge
         hud.showWorking(polishes: dictation.polishEnabled || record.translation != nil)
 
@@ -1880,14 +1851,19 @@ final class SessionController: ObservableObject {
             noteOfflineChunks(&record, pipeline: pipeline)
         }
         // An accidental tap isn't worth an entry.
-        if record.duration - preRollSeconds < 0.4 { history.delete(record) } else { history.update(record) }
+        if DictationSession.isAccidental(recordedSeconds: record.duration - preRollSeconds) {
+            history.delete(record)
+        } else {
+            history.update(record)
+        }
     }
 
     private func abort(message: String) {
-        guard state == .recording else { return }
+        let effects = session.finishRequested()
+        guard !effects.isEmpty else { return }
         // Keep whatever was captured: process it rather than throwing it away.
         hud.show(.error(message), autoHideAfter: 2)
-        finishRecording()
+        carryOut(effects)
     }
 
     private func finish(showing phase: HUDModel.Phase, hideAfter: Double) {
@@ -1897,17 +1873,12 @@ final class SessionController: ObservableObject {
 
     private func reset() {
         dropSpeculativePolish()
-        generation += 1
-        state = .idle
+        session.ended()
         preRollSeconds = 0
         pipeline = nil
         record = nil
         dictationSettings = nil
-        pressedAt = nil
         pasteTarget = nil
-        handsFree = false
-        sendKey = .off
-        mode = .dictation
         dropSelection()
         processingTask = nil
         stopCursorContextRead()

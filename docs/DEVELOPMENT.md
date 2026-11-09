@@ -153,7 +153,7 @@ GitHub Actions ([`.github/workflows/`](../.github/workflows/)) builds only the a
 |---|---|
 | `macos/**` | **macOS build** on an Apple silicon and an Intel runner: the tests, then each one's disk image and zip, checked and launched. |
 | `windows/**` | **Windows build** on an x64 and an ARM64 runner: the tests, then each one's portable zip and installer; the installer is run, the app started and uninstalled again. |
-| `testdata/**` | Both builds: the shared test cases (word counts, prices, time saved) that both test suites read, so the two apps agree. |
+| `testdata/**` | Both builds: the shared test cases (word counts, prices, time saved, what each key does to a dictation…) that both test suites read, so the two apps agree. |
 | `i18n/**` | Both builds: the translations both apps embed. |
 | `eval/**`, `scripts/ci/**` | Both builds, plus the shared validation checks. |
 | Only `docs/`, `README*.md` | No platform build; shared checks still run. |

@@ -1,0 +1,454 @@
+{
+  "about": "What each key, click and system event does to a dictation (DictationSession), read by both apps' test suites. A case is a list of steps in order. \"do\" names what happened or what the app reports, with its arguments: \"at\" a time in seconds, \"key\" a key code, \"seconds\" the length recorded so far, \"sendKey\", \"action\", \"generation\", \"mode\", \"paste\", \"reason\", \"id\". \"effects\" is what the session must answer, in order (every deciding step has it); \"returns\" what a query answers; \"then\" what must be true afterwards. \"chords\" registers second keys by key code.",
+  "phases": ["idle", "recording", "processing"],
+  "modes": ["dictation", "translate", "command"],
+  "effects": ["startRecording", "finishRecording", "switchMode:translate", "switchMode:command", "cancel", "cancel:silently", "keepCancelled", "pasteLastDropped", "perform:pasteLastDictation", "perform:openScratchpad"],
+  "accidentalSeconds": 0.4,
+  "accidental": [
+    { "seconds": 0, "accidental": true },
+    { "seconds": 0.39, "accidental": true },
+    { "seconds": 0.4, "accidental": false },
+    { "seconds": 12, "accidental": false }
+  ],
+  "cases": [
+    {
+      "name": "hold to talk",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"], "then": { "phase": "idle", "generation": 0 } },
+        { "do": "began", "at": 100, "then": { "phase": "recording", "handsFree": false, "mode": "dictation", "byPaste": true, "sendKey": "off" } },
+        { "do": "hotkeyUp", "at": 102.5, "effects": ["finishRecording"], "then": { "phase": "recording" } },
+        { "do": "processing", "then": { "phase": "processing" } },
+        { "do": "ended", "then": { "phase": "idle", "generation": 1 } }
+      ]
+    },
+    {
+      "name": "a tap goes hands-free, and the next press ends it",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 100.25, "effects": [], "then": { "phase": "recording", "handsFree": true } },
+        { "do": "hotkeyUp", "at": 100.5, "effects": [], "then": { "phase": "recording", "handsFree": true } },
+        { "do": "hotkeyDown", "effects": ["finishRecording"], "then": { "phase": "recording" } },
+        { "do": "processing" },
+        { "do": "hotkeyUp", "at": 130, "effects": [], "then": { "phase": "processing" } },
+        { "do": "ended", "then": { "phase": "idle", "handsFree": false, "generation": 1 } }
+      ]
+    },
+    {
+      "name": "the key going down again while it's held does nothing",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyDown", "effects": [], "then": { "phase": "recording", "handsFree": false } },
+        { "do": "hotkeyUp", "at": 103, "effects": ["finishRecording"] }
+      ]
+    },
+    {
+      "name": "a press while the last dictation is still being processed is ignored",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 104, "effects": ["finishRecording"] },
+        { "do": "processing" },
+        { "do": "hotkeyDown", "effects": [], "then": { "phase": "processing" } },
+        { "do": "hotkeyUp", "at": 106, "effects": [], "then": { "phase": "processing", "generation": 0 } }
+      ]
+    },
+    {
+      "name": "the microphone didn't open: nothing started, and the next press tries again",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "hotkeyUp", "at": 100.5, "effects": [], "then": { "phase": "idle", "generation": 0 } },
+        { "do": "escape", "seconds": 0, "effects": [] },
+        { "do": "hotkeyDown", "effects": ["startRecording"] }
+      ]
+    },
+    {
+      "name": "another key soon after the press makes a key combination, not a dictation",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "otherKey", "key": 96, "at": 100.75, "effects": ["cancel:silently"], "then": { "phase": "recording" } },
+        { "do": "ended", "then": { "phase": "idle", "generation": 1 } },
+        { "do": "hotkeyUp", "at": 101, "effects": [] }
+      ]
+    },
+    {
+      "name": "a second after the press another key is just typing",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "otherKey", "key": 96, "at": 101, "effects": [] },
+        { "do": "otherKey", "key": 96, "at": 109.5, "effects": [], "then": { "phase": "recording" } },
+        { "do": "hotkeyUp", "at": 110, "effects": ["finishRecording"] }
+      ]
+    },
+    {
+      "name": "hands-free, another key never cancels",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 100.25, "effects": [], "then": { "handsFree": true } },
+        { "do": "otherKey", "key": 96, "at": 100.5, "effects": [], "then": { "phase": "recording" } }
+      ]
+    },
+    {
+      "name": "another key between dictations or while processing does nothing",
+      "chords": { "56": "translate" },
+      "steps": [
+        { "do": "otherKey", "key": 96, "at": 50, "effects": [] },
+        { "do": "otherKey", "key": 56, "at": 50, "effects": [] },
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 103, "effects": ["finishRecording"] },
+        { "do": "processing" },
+        { "do": "otherKey", "key": 96, "at": 103.25, "effects": [] },
+        { "do": "otherKey", "key": 56, "at": 103.25, "effects": [], "then": { "phase": "processing", "mode": "dictation" } }
+      ]
+    },
+    {
+      "name": "a chord switches the recording's mode, once, for as long as the key is held",
+      "chords": { "56": "translate", "60": "translate", "59": "command" },
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "otherKey", "key": 56, "at": 100.25, "effects": ["switchMode:translate"], "then": { "mode": "dictation", "phase": "recording" } },
+        { "do": "switched", "mode": "translate", "then": { "mode": "translate" } },
+        { "do": "otherKey", "key": 60, "at": 100.5, "effects": [] },
+        { "do": "otherKey", "key": 56, "at": 105, "effects": [] },
+        { "do": "otherKey", "key": 59, "at": 110, "effects": ["switchMode:command"] },
+        { "do": "switched", "mode": "command", "then": { "mode": "command" } },
+        { "do": "hotkeyUp", "at": 111, "effects": ["finishRecording"] },
+        { "do": "processing", "then": { "mode": "command" } },
+        { "do": "ended", "then": { "mode": "dictation" } },
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 200, "then": { "mode": "dictation" } }
+      ]
+    },
+    {
+      "name": "a chord whose mode was switched off a moment ago changes nothing",
+      "chords": { "56": "translate" },
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "otherKey", "key": 56, "at": 100.25, "effects": ["switchMode:translate"], "then": { "mode": "dictation" } },
+        { "do": "otherKey", "key": 56, "at": 100.5, "effects": ["switchMode:translate"], "then": { "mode": "dictation", "phase": "recording" } }
+      ]
+    },
+    {
+      "name": "a chord works hands-free too, long after the press",
+      "chords": { "56": "translate" },
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 100.25, "effects": [], "then": { "handsFree": true } },
+        { "do": "otherKey", "key": 56, "at": 160, "effects": ["switchMode:translate"] },
+        { "do": "switched", "mode": "translate" },
+        { "do": "hotkeyDown", "effects": ["finishRecording"], "then": { "mode": "translate" } }
+      ]
+    },
+    {
+      "name": "the send key ends the recording and is kept for the paste",
+      "steps": [
+        { "do": "sendKeyDown", "sendKey": "enter", "effects": [], "then": { "sendKey": "off" } },
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "sendKeyDown", "sendKey": "off", "effects": [], "then": { "sendKey": "off", "phase": "recording" } },
+        { "do": "sendKeyDown", "sendKey": "enter", "effects": ["finishRecording"], "then": { "sendKey": "enter", "phase": "recording" } },
+        { "do": "processing" },
+        { "do": "sendKeyDown", "sendKey": "shiftEnter", "effects": [], "then": { "sendKey": "enter", "phase": "processing" } },
+        { "do": "ended", "then": { "sendKey": "off" } },
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 200, "then": { "sendKey": "off" } }
+      ]
+    },
+    {
+      "name": "a hands-free recording ended by the send key",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 100.25, "effects": [] },
+        { "do": "sendKeyDown", "sendKey": "commandEnter", "effects": ["finishRecording"], "then": { "sendKey": "commandEnter", "handsFree": true } }
+      ]
+    },
+    {
+      "name": "Esc between dictations does nothing",
+      "steps": [
+        { "do": "escape", "seconds": 0, "effects": [], "then": { "phase": "idle", "generation": 0 } }
+      ]
+    },
+    {
+      "name": "Esc on a short recording throws it away",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "escape", "seconds": 9.75, "effects": ["cancel"], "then": { "phase": "recording" } },
+        { "do": "ended", "then": { "phase": "idle", "generation": 1 } }
+      ]
+    },
+    {
+      "name": "Esc on a long recording keeps it",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 100.25, "effects": [] },
+        { "do": "escape", "seconds": 10, "effects": ["keepCancelled"] },
+        { "do": "ended", "then": { "phase": "idle", "generation": 1, "handsFree": false } }
+      ]
+    },
+    {
+      "name": "Esc while processing cancels, however long the recording was",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 145, "effects": ["finishRecording"] },
+        { "do": "processing" },
+        { "do": "escape", "seconds": 45, "effects": ["cancel"] },
+        { "do": "ended", "then": { "phase": "idle", "generation": 1 } },
+        { "do": "escape", "seconds": 45, "effects": [] }
+      ]
+    },
+    {
+      "name": "work still out for a cancelled dictation isn't current, also once the next one records",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100, "then": { "isCurrent": { "0": true, "1": false } } },
+        { "do": "hotkeyUp", "at": 104, "effects": ["finishRecording"] },
+        { "do": "processing", "then": { "isCurrent": { "0": true } } },
+        { "do": "escape", "seconds": 4, "effects": ["cancel"] },
+        { "do": "ended", "then": { "generation": 1, "isCurrent": { "0": false, "1": true } } },
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 200, "then": { "phase": "recording", "isCurrent": { "0": false, "1": true } } },
+        { "do": "hotkeyUp", "at": 203, "effects": ["finishRecording"] },
+        { "do": "processing" },
+        { "do": "ended", "then": { "generation": 2, "isCurrent": { "0": false, "1": false, "2": true } } }
+      ]
+    },
+    {
+      "name": "the screen locking between dictations, and unlocking",
+      "steps": [
+        { "do": "locked", "seconds": 0, "effects": [], "then": { "locked": true, "phase": "idle" } },
+        { "do": "unlocked", "returns": true, "then": { "locked": false } },
+        { "do": "unlocked", "returns": false, "then": { "locked": false } }
+      ]
+    },
+    {
+      "name": "the screen locking on a short recording stops it as Esc would",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 100.25, "effects": [] },
+        { "do": "locked", "seconds": 3, "effects": ["cancel"], "then": { "locked": true, "byPaste": true } },
+        { "do": "ended", "then": { "phase": "idle", "locked": true } }
+      ]
+    },
+    {
+      "name": "the screen locking on a long recording keeps it",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 100.25, "effects": [] },
+        { "do": "locked", "seconds": 45, "effects": ["keepCancelled"], "then": { "locked": true } }
+      ]
+    },
+    {
+      "name": "the screen locking while processing sends the text to the clipboard",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 108, "effects": ["finishRecording"] },
+        { "do": "processing", "then": { "byPaste": true } },
+        { "do": "locked", "seconds": 8, "effects": [], "then": { "phase": "processing", "byPaste": false, "noPasteReason": "locked", "locked": true, "generation": 0 } },
+        { "do": "unlocked", "returns": true, "then": { "byPaste": false, "noPasteReason": "locked" } },
+        { "do": "ended" },
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 200, "then": { "byPaste": true } }
+      ]
+    },
+    {
+      "name": "a press means someone is at the keyboard: the screen counts as unlocked",
+      "steps": [
+        { "do": "locked", "seconds": 0, "effects": [], "then": { "locked": true } },
+        { "do": "hotkeyDown", "effects": ["startRecording"], "then": { "locked": false } },
+        { "do": "unlocked", "returns": false }
+      ]
+    },
+    {
+      "name": "a press while recording or processing doesn't unlock anything",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 105, "effects": ["finishRecording"] },
+        { "do": "processing" },
+        { "do": "locked", "seconds": 5, "effects": [] },
+        { "do": "hotkeyDown", "effects": [], "then": { "locked": true, "byPaste": false } }
+      ]
+    },
+    {
+      "name": "let go of in an app with other settings: the clipboard, and the next dictation pastes again",
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 103, "effects": ["finishRecording"] },
+        { "do": "processing" },
+        { "do": "deliverToClipboard", "reason": "movedAway", "then": { "byPaste": false, "noPasteReason": "movedAway", "phase": "processing" } },
+        { "do": "ended" },
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 200, "then": { "byPaste": true } }
+      ]
+    },
+    {
+      "name": "a retry from History goes to the clipboard",
+      "steps": [
+        { "do": "retrying", "paste": false, "mode": "dictation", "then": { "phase": "processing", "byPaste": false, "noPasteReason": "fromHistory", "mode": "dictation" } },
+        { "do": "hotkeyDown", "effects": [] },
+        { "do": "action", "action": "pasteLastDictation", "effects": [] },
+        { "do": "escape", "seconds": 0, "effects": ["cancel"] },
+        { "do": "ended", "then": { "phase": "idle", "generation": 1 } }
+      ]
+    },
+    {
+      "name": "a retried translation is a translation again, pasted when asked from the menu, unless the screen locks",
+      "steps": [
+        { "do": "retrying", "paste": true, "mode": "translate", "then": { "phase": "processing", "byPaste": true, "mode": "translate" } },
+        { "do": "locked", "seconds": 0, "effects": [], "then": { "byPaste": false, "noPasteReason": "locked" } },
+        { "do": "ended", "then": { "mode": "dictation" } }
+      ]
+    },
+    {
+      "name": "the capsule's button, the longest recording or a lost microphone end a recording, and nothing else",
+      "steps": [
+        { "do": "finishRequested", "effects": [] },
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "hotkeyUp", "at": 100.25, "effects": [] },
+        { "do": "finishRequested", "effects": ["finishRecording"], "then": { "phase": "recording" } },
+        { "do": "processing" },
+        { "do": "finishRequested", "effects": [], "then": { "phase": "processing" } }
+      ]
+    },
+    {
+      "name": "an action's shortcut only works between dictations",
+      "steps": [
+        { "do": "action", "action": "pasteLastDictation", "effects": ["perform:pasteLastDictation"] },
+        { "do": "action", "action": "openScratchpad", "effects": ["perform:openScratchpad"], "then": { "phase": "idle" } },
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "action", "action": "pasteLastDictation", "effects": [] },
+        { "do": "hotkeyUp", "at": 102, "effects": ["finishRecording"] },
+        { "do": "processing" },
+        { "do": "action", "action": "openScratchpad", "effects": [] },
+        { "do": "ended" },
+        { "do": "action", "action": "openScratchpad", "effects": ["perform:openScratchpad"] }
+      ]
+    },
+    {
+      "name": "one Paste last dictation at a time",
+      "steps": [
+        { "do": "beginPasteLast", "returns": 1, "then": { "pasteLast": 1, "pasteLastIsCurrent": { "1": true, "2": false } } },
+        { "do": "beginPasteLast", "returns": null, "then": { "pasteLast": 1 } },
+        { "do": "endPasteLast", "id": 1, "then": { "pasteLast": null, "pasteLastIsCurrent": { "1": false } } },
+        { "do": "beginPasteLast", "returns": 2, "then": { "pasteLast": 2, "pasteLastIsCurrent": { "1": false, "2": true } } }
+      ]
+    },
+    {
+      "name": "Esc drops a Paste last dictation still waiting",
+      "steps": [
+        { "do": "beginPasteLast", "returns": 1 },
+        { "do": "escape", "seconds": 0, "effects": ["pasteLastDropped"], "then": { "pasteLast": null, "pasteLastIsCurrent": { "1": false }, "phase": "idle", "generation": 0 } },
+        { "do": "escape", "seconds": 0, "effects": [] },
+        { "do": "beginPasteLast", "returns": 2 },
+        { "do": "endPasteLast", "id": 1, "then": { "pasteLast": 2, "pasteLastIsCurrent": { "2": true } } }
+      ]
+    },
+    {
+      "name": "the screen locking drops a Paste last dictation still waiting",
+      "steps": [
+        { "do": "beginPasteLast", "returns": 1 },
+        { "do": "locked", "seconds": 0, "effects": ["pasteLastDropped"], "then": { "pasteLast": null, "pasteLastIsCurrent": { "1": false } } },
+        { "do": "unlocked", "returns": true, "then": { "pasteLastIsCurrent": { "1": false } } }
+      ]
+    },
+    {
+      "name": "a Paste last dictation asked for behind the lock screen is never current",
+      "steps": [
+        { "do": "locked", "seconds": 0, "effects": [] },
+        { "do": "beginPasteLast", "returns": 1, "then": { "pasteLast": 1, "pasteLastIsCurrent": { "1": false } } },
+        { "do": "unlocked", "returns": true, "then": { "pasteLastIsCurrent": { "1": true } } }
+      ]
+    },
+    {
+      "name": "a dictation takes over from a Paste last dictation still waiting",
+      "steps": [
+        { "do": "beginPasteLast", "returns": 1 },
+        { "do": "hotkeyDown", "effects": ["pasteLastDropped", "startRecording"], "then": { "pasteLast": null } },
+        { "do": "began", "at": 100, "then": { "pasteLastIsCurrent": { "1": false } } },
+        { "do": "beginPasteLast", "returns": null },
+        { "do": "hotkeyUp", "at": 102, "effects": ["finishRecording"] },
+        { "do": "processing" },
+        { "do": "beginPasteLast", "returns": null, "then": { "pasteLast": null } },
+        { "do": "ended" },
+        { "do": "beginPasteLast", "returns": 2 }
+      ]
+    },
+    {
+      "name": "a Paste last dictation that retries a failed dictation isn't current while that runs",
+      "steps": [
+        { "do": "beginPasteLast", "returns": 1, "then": { "pasteLastIsCurrent": { "1": true } } },
+        { "do": "retrying", "paste": true, "mode": "dictation", "then": { "pasteLast": 1, "pasteLastIsCurrent": { "1": false } } },
+        { "do": "endPasteLast", "id": 1, "then": { "pasteLast": null, "phase": "processing" } }
+      ]
+    },
+    {
+      "name": "a selection that can't be edited stops the recording that asked for it",
+      "chords": { "59": "command" },
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "selectionRefused", "generation": 0, "effects": [] },
+        { "do": "otherKey", "key": 59, "at": 100.25, "effects": ["switchMode:command"] },
+        { "do": "switched", "mode": "command" },
+        { "do": "selectionRefused", "generation": 0, "effects": ["cancel:silently"], "then": { "phase": "recording" } },
+        { "do": "ended", "then": { "phase": "idle", "generation": 1 } },
+        { "do": "selectionRefused", "generation": 0, "effects": [] },
+        { "do": "selectionRefused", "generation": 1, "effects": [] }
+      ]
+    },
+    {
+      "name": "a refusal that comes back late leaves the next recording alone",
+      "chords": { "59": "command" },
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "otherKey", "key": 59, "at": 100.25, "effects": ["switchMode:command"] },
+        { "do": "switched", "mode": "command" },
+        { "do": "escape", "seconds": 2, "effects": ["cancel"] },
+        { "do": "ended" },
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 200 },
+        { "do": "otherKey", "key": 59, "at": 200.25, "effects": ["switchMode:command"] },
+        { "do": "switched", "mode": "command" },
+        { "do": "selectionRefused", "generation": 0, "effects": [], "then": { "phase": "recording", "mode": "command" } },
+        { "do": "selectionRefused", "generation": 1, "effects": ["cancel:silently"] }
+      ]
+    },
+    {
+      "name": "a refusal after the mode changed, or after the key was let go of, is the edit's to report",
+      "chords": { "59": "command", "56": "translate" },
+      "steps": [
+        { "do": "hotkeyDown", "effects": ["startRecording"] },
+        { "do": "began", "at": 100 },
+        { "do": "otherKey", "key": 59, "at": 100.25, "effects": ["switchMode:command"] },
+        { "do": "switched", "mode": "command" },
+        { "do": "otherKey", "key": 56, "at": 101, "effects": ["switchMode:translate"] },
+        { "do": "switched", "mode": "translate" },
+        { "do": "selectionRefused", "generation": 0, "effects": [] },
+        { "do": "otherKey", "key": 59, "at": 102, "effects": ["switchMode:command"] },
+        { "do": "switched", "mode": "command" },
+        { "do": "hotkeyUp", "at": 103, "effects": ["finishRecording"] },
+        { "do": "processing" },
+        { "do": "selectionRefused", "generation": 0, "effects": [], "then": { "phase": "processing", "mode": "command" } }
+      ]
+    }
+  ]
+}

@@ -217,9 +217,10 @@ internal sealed class ProviderCard : UserControl
                 Child = Ui.Text(tag, 10.5, FontWeights.Medium, Palette.Brush(Tint.Accent)),
             });
         }
-        var configured = _settings.IsConfigured(_id);
-        _status.Text = configured ? L("已配置", "Ready") : L("未配置", "Not set");
-        _status.Tint = configured ? Tint.Green : Tint.Secondary;
+        // Nothing to say once the provider works; only a missing key gets a pill.
+        _status.Text = L("未配置", "Not set");
+        _status.Tint = Tint.Secondary;
+        _status.Visibility = _settings.IsConfigured(_id) ? Visibility.Collapsed : Visibility.Visible;
         _reset.Visibility = _id != ProviderId.Custom && _settings.BaseUrl(_id) != _id.DefaultBaseUrl() ? Visibility.Visible : Visibility.Collapsed;
         _test.IsEnabled = !_testing && _settings.Endpoint(_id) != null;
         // A provider a step uses stays: switch the step to another one first.

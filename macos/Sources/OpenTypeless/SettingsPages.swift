@@ -773,9 +773,8 @@ private struct ProviderCard: View {
                         }
                     }
                     Spacer()
-                    if settings.isConfigured(id) {
-                        StatusPill(text: L("已配置", "Ready"), color: .green)
-                    } else {
+                    // Nothing to say once the provider works; only a missing key gets a pill.
+                    if !settings.isConfigured(id) {
                         StatusPill(text: L("未配置", "Not set"), color: .secondary)
                     }
                     Image(systemName: "chevron.right")

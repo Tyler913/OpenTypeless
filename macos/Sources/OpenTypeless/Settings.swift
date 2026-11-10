@@ -236,7 +236,7 @@ final class AppSettings: ObservableObject {
     }
 
     /// Read once: the environment doesn't change while the app runs, and copying all of it on every call added up, with
-    /// every provider's "Ready" badge and menu asking several times per redraw.
+    /// every provider's status and menu asking several times per redraw.
     static let openRouterKeyFromEnvironment: String? =
         ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"].flatMap { $0.isEmpty ? nil : $0 }
 

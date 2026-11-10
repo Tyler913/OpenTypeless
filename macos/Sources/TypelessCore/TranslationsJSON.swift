@@ -500,15 +500,6 @@ extension Translations {
     "fr": "Droite ",
     "de": "Rechts "
   },
-  "Ready": {
-    "ja": "準備完了",
-    "ko": "준비됨",
-    "es": "Listo",
-    "pt": "Pronto",
-    "ru": "Готово",
-    "fr": "Prêt",
-    "de": "Bereit"
-  },
   "Recording": {
     "ja": "録音中",
     "ko": "녹음 중",

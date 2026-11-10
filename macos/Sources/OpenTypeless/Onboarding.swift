@@ -207,7 +207,7 @@ private struct StepDots: View {
         HStack(spacing: 7) {
             ForEach(OnboardingStep.allCases, id: \.self) { step in
                 Capsule()
-                    .fill(step == current ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(Color.primary.opacity(0.15)))
+                    .fill(step == current ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.primary.opacity(0.15)))
                     .frame(width: step == current ? 22 : 7, height: 7)
             }
         }
@@ -272,12 +272,12 @@ private struct WelcomeStep: View {
                 .padding(.top, 8)
             // What it does, as Apple's own welcome screens list it: a coloured symbol, a title and a line under it.
             VStack(alignment: .leading, spacing: 18) {
-                Feature(symbol: "mic.fill", color: .red, title: L("按住说话", "Hold to talk"),
+                Feature(symbol: "mic.fill", title: L("按住说话", "Hold to talk"),
                         detail: L("按住快捷键说话，松开后自动整理并插入到光标处",
                                   "Hold the shortcut while you speak; release to clean up and insert"))
-                Feature(symbol: "sparkles", color: .purple, title: L("用 AI 整理文字", "Clean up with AI"),
+                Feature(symbol: "text.badge.checkmark", title: L("用 AI 整理文字", "Clean up with AI"),
                         detail: L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists"))
-                Feature(symbol: "chevron.left.forwardslash.chevron.right", color: .blue,
+                Feature(symbol: "chevron.left.forwardslash.chevron.right",
                         title: L("完全开源 · MIT 许可", "Fully open source · MIT licensed"),
                         detail: L("录音会用你自己的 API Key 发给你选的服务商转写和整理。推荐 OpenRouter：一个 Key 就能同时用于两步。",
                                   "Your recording goes to a provider you choose, with your own API key. OpenRouter is recommended: one key covers both transcription and clean-up."))
@@ -293,7 +293,6 @@ private struct WelcomeStep: View {
 /// One thing the app does, on the welcome step.
 private struct Feature: View {
     let symbol: String
-    let color: Color
     let title: String
     let detail: String
 
@@ -301,7 +300,7 @@ private struct Feature: View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
                 .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(color)
+                .foregroundStyle(Color.accentColor)
                 .frame(width: 32)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 13, weight: .semibold))
@@ -411,9 +410,9 @@ private struct ModelSummary: View {
         let models = Onboarding.models(for: provider)
         VStack(alignment: .leading, spacing: 8) {
             Card {
-                row(icon: "waveform", color: .blue, title: L("语音转文字", "Speech-to-text"), model: models.stt)
+                row(icon: "waveform", title: L("语音转文字", "Speech-to-text"), model: models.stt)
                 CardDivider(inset: 50)
-                row(icon: "sparkles", color: .purple, title: L("文字整理", "Clean-up"), model: models.chat)
+                row(icon: "text.badge.checkmark", title: L("文字整理", "Clean-up"), model: models.chat)
             }
             Text(L("之后可以随时在「设置 → 模型」里更换。", "You can change them any time in Settings → Models."))
                 .font(.system(size: 11.5))
@@ -422,12 +421,12 @@ private struct ModelSummary: View {
         }
     }
 
-    private func row(icon: String, color: Color, title: String, model: String) -> some View {
+    private func row(icon: String, title: String, model: String) -> some View {
         HStack(spacing: 12) {
-            IconBadge(symbol: icon, color: color, size: 24)
+            IconBadge(symbol: icon, size: 24)
             Text(title).font(.system(size: 13))
             Spacer()
-            Text(model).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+            Text(model).font(.system(size: 12)).foregroundStyle(.secondary).textSelection(.enabled)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
@@ -462,7 +461,7 @@ private struct TryStep: View {
             if !micGranted || !axGranted {
                 Card {
                     if !micGranted {
-                        CardRow(icon: "mic.fill", iconColor: .red, title: L("麦克风", "Microphone"),
+                        CardRow(icon: "mic.fill", title: L("麦克风", "Microphone"),
                                 subtitle: L("用来录下你的语音", "To record your voice")) {
                             Button(L("授权…", "Grant…")) {
                                 if Permissions.microphoneAsked { Permissions.openMicrophoneSettings() }
@@ -473,7 +472,7 @@ private struct TryStep: View {
                     }
                     if !micGranted && !axGranted { CardDivider(inset: 50) }
                     if !axGranted {
-                        CardRow(icon: "accessibility", iconColor: .blue, title: L("辅助功能", "Accessibility"),
+                        CardRow(icon: "accessibility", title: L("辅助功能", "Accessibility"),
                                 subtitle: L("用来监听快捷键，并把文字粘贴到光标处", "To listen for the shortcut and paste text at the cursor")) {
                             Button(L("授权…", "Grant…")) {
                                 Permissions.promptAccessibility()
@@ -591,14 +590,14 @@ private struct DoneStep: View {
                        subtitle: L("OpenTypeless 在菜单栏里待命。在任何应用里按住 \(settings.hotkey.displayName) 就能听写。",
                                    "OpenTypeless waits in the menu bar. Hold \(settings.hotkey.displayName) in any app to dictate."))
             Card {
-                CardRow(icon: "hand.point.down.fill", iconColor: .blue, title: L("按住说话", "Hold to talk"),
+                CardRow(icon: "hand.point.down.fill", title: L("按住说话", "Hold to talk"),
                         subtitle: L("按住快捷键说话，松开后自动整理并插入到光标处",
                                     "Hold the shortcut while you speak; release to clean up and insert")) { EmptyView() }
                 CardDivider(inset: 50)
-                CardRow(icon: "hand.tap.fill", iconColor: .purple, title: L("轻点一下：免手持", "Tap once: hands-free"),
+                CardRow(icon: "hand.tap.fill", title: L("轻点一下：免手持", "Tap once: hands-free"),
                         subtitle: L("适合长段口述，说完再按一次结束", "For long dictation — press again when done")) { EmptyView() }
                 CardDivider(inset: 50)
-                CardRow(icon: "escape", iconColor: .gray, title: L("Esc 取消", "Esc to cancel"),
+                CardRow(icon: "escape", title: L("Esc 取消", "Esc to cancel"),
                         subtitle: L("录音或处理过程中随时取消", "Cancel any time while recording or processing")) { EmptyView() }
             }
         }

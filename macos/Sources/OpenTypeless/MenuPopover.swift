@@ -261,7 +261,7 @@ private struct RecentRow: View {
     }
 }
 
-/// A command in the panel: a symbol in a grey circle, its title, and its shortcut at the end, highlighted under the pointer.
+/// A command in the panel, as in a menu: a plain symbol, its title, and its shortcut at the end, highlighted under the pointer.
 private struct MenuRow: View {
     let symbol: String
     let title: String
@@ -273,9 +273,9 @@ private struct MenuRow: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: symbol)
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .frame(width: 24, height: 24)
-                    .background(Circle().fill(Color.primary.opacity(0.09)))
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
                 Text(title).font(.system(size: 13))
                 Spacer(minLength: 8)
                 if let shortcut {

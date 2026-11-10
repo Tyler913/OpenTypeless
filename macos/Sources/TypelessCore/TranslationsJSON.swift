@@ -5971,6 +5971,42 @@ extension Translations {
     "ru": "Всего {0}; распознаётся бесплатно на этом ПК. Тишина пропускается.",
     "fr": "{0} au total, reconnu gratuitement sur ce PC. Les silences sont ignorés.",
     "de": "Insgesamt {0}, kostenlos auf diesem PC erkannt. Stille wird übersprungen."
+  },
+  "Used for speech-to-text and clean-up": {
+    "ja": "音声認識と整形に使用中",
+    "ko": "음성 인식 및 정리에 사용 중",
+    "es": "Se usa para voz a texto y limpieza",
+    "pt": "Usado para voz para texto e limpeza",
+    "ru": "Используется для распознавания речи и обработки текста",
+    "fr": "Utilisé pour la transcription et le nettoyage",
+    "de": "Für Spracherkennung und Bereinigung verwendet"
+  },
+  "Used for speech-to-text": {
+    "ja": "音声認識に使用中",
+    "ko": "음성 인식에 사용 중",
+    "es": "Se usa para voz a texto",
+    "pt": "Usado para voz para texto",
+    "ru": "Используется для распознавания речи",
+    "fr": "Utilisé pour la transcription",
+    "de": "Für Spracherkennung verwendet"
+  },
+  "Used for clean-up": {
+    "ja": "整形に使用中",
+    "ko": "정리에 사용 중",
+    "es": "Se usa para limpieza",
+    "pt": "Usado para limpeza",
+    "ru": "Используется для обработки текста",
+    "fr": "Utilisé pour le nettoyage",
+    "de": "Für Bereinigung verwendet"
+  },
+  "Can do speech-to-text and clean-up": {
+    "ja": "音声認識と整形に対応",
+    "ko": "음성 인식 및 정리 지원",
+    "es": "Admite voz a texto y limpieza",
+    "pt": "Suporta voz para texto e limpeza",
+    "ru": "Подходит для распознавания речи и обработки текста",
+    "fr": "Prend en charge la transcription et le nettoyage",
+    "de": "Kann Spracherkennung und Bereinigung"
   }
 }
 

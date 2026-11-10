@@ -4,10 +4,6 @@ import TypelessCore
 
 /// Shared visual building blocks for the settings window and the menu-bar popover.
 enum Theme {
-    static let brand = LinearGradient(
-        colors: [Color(red: 0.36, green: 0.30, blue: 0.95), Color(red: 0.12, green: 0.62, blue: 0.98)],
-        startPoint: .topLeading, endPoint: .bottomTrailing
-    )
     /// macOS 26 grouped-content radius.
     static let cardRadius: CGFloat = 14
     /// How wide a page of settings gets: past this, rows only put more space between a title and its control.
@@ -108,21 +104,17 @@ struct AppTile: View {
     }
 }
 
-/// Coloured rounded square with a white SF Symbol, like System Settings.
+/// An SF Symbol in the secondary colour, centred in a square of `size`: one colour for every icon, so colour is left
+/// to mean state (a warning, a recording, a selection).
 struct IconBadge: View {
     let symbol: String
-    let color: Color
     var size: CGFloat = 26
 
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
-            .fill(LinearGradient(colors: [color.opacity(0.85), color], startPoint: .top, endPoint: .bottom))
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.62))
+            .foregroundStyle(.secondary)
             .frame(width: size, height: size)
-            .overlay(
-                Image(systemName: symbol)
-                    .font(.system(size: size * 0.5, weight: .semibold))
-                    .foregroundStyle(.white)
-            )
     }
 }
 
@@ -184,6 +176,9 @@ struct HelpTip: View {
     let text: String
     /// What it explains, which VoiceOver says.
     var topic: String? = nil
+    /// False keeps the "?" out of sight (still there for the keyboard and VoiceOver) until this turns true: a row's
+    /// tip shows while the pointer is over the row, so a page of rows isn't a column of question marks.
+    var revealed = true
     @State private var hovering = false
     @State private var pinned = false
     /// The change of `hovering` under way: passing over a "?" on the way elsewhere doesn't open it, and the pointer
@@ -201,6 +196,8 @@ struct HelpTip: View {
                 .contentShape(Rectangle().inset(by: -3))
         }
         .buttonStyle(.plain)
+        .opacity(revealed || hovering || pinned ? 1 : 0)
+        .animation(.easeOut(duration: 0.12), value: revealed)
         .accessibilityLabel(topic.map { L("关于「\($0)」", "About \($0)") } ?? L("说明", "More information"))
         .accessibilityHint(text)
         .onHover(perform: setHovering)
@@ -300,20 +297,20 @@ struct CardSection<Content: View>: View {
 
 struct CardRow<Trailing: View>: View {
     var icon: String? = nil
-    var iconColor: Color = .accentColor
     let title: String
     var subtitle: String? = nil
     var help: String? = nil
     @ViewBuilder var trailing: Trailing
     @Environment(\.inSettingsForm) private var inForm
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 12) {
-            if let icon { IconBadge(symbol: icon, color: iconColor, size: 24) }
+            if let icon { IconBadge(symbol: icon, size: 24) }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text(title).font(.system(size: 13))
-                    if let help { HelpTip(text: help, topic: title) }
+                    if let help { HelpTip(text: help, topic: title, revealed: hovering) }
                 }
                 if let subtitle {
                     Text(subtitle)
@@ -328,13 +325,15 @@ struct CardRow<Trailing: View>: View {
         .padding(.horizontal, inForm ? 0 : 14)
         .padding(.vertical, inForm ? 1 : 9)
         .frame(minHeight: inForm ? 22 : 42)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
     }
 }
 
 extension CardRow where Trailing == RowSwitch {
     /// A row ending in an on/off switch.
-    init(icon: String? = nil, iconColor: Color = .accentColor, title: String, subtitle: String? = nil, help: String? = nil, isOn: Binding<Bool>) {
-        self.init(icon: icon, iconColor: iconColor, title: title, subtitle: subtitle, help: help) { RowSwitch(title: title, isOn: isOn) }
+    init(icon: String? = nil, title: String, subtitle: String? = nil, help: String? = nil, isOn: Binding<Bool>) {
+        self.init(icon: icon, title: title, subtitle: subtitle, help: help) { RowSwitch(title: title, isOn: isOn) }
     }
 }
 

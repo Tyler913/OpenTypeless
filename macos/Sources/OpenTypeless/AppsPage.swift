@@ -284,12 +284,10 @@ private struct AppProfileCard: View {
                 .opacity(cleansUp ? 1 : 0.5)
                 CardDivider(inset: 0)
                 HStack {
-                    Text(profile.app).font(.system(size: 11, design: .monospaced)).foregroundStyle(.tertiary).textSelection(.enabled)
+                    Text(profile.app).font(.system(size: 11)).foregroundStyle(.tertiary).textSelection(.enabled)
                     Spacer()
-                    Button(role: .destructive) {
+                    Button(L("移除", "Remove"), role: .destructive) {
                         settings.removeAppProfile(id: profile.id)
-                    } label: {
-                        Label(L("移除", "Remove"), systemImage: "trash")
                     }
                     .controlSize(.small)
                 }

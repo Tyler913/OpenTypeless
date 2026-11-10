@@ -22,28 +22,14 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
-        case .home: return "house.fill"
-        case .general: return "gearshape.fill"
-        case .shortcut: return "keyboard.fill"
-        case .providers: return "key.fill"
-        case .models: return "cpu.fill"
+        case .home: return "house"
+        case .general: return "gearshape"
+        case .shortcut: return "keyboard"
+        case .providers: return "key"
+        case .models: return "cpu"
         case .style: return "textformat"
-        case .apps: return "square.grid.2x2.fill"
-        case .history: return "clock.fill"
-        }
-    }
-
-    /// The colour of the page's icon tile in the sidebar, as System Settings gives each pane its own.
-    var color: Color {
-        switch self {
-        case .home: return .blue
-        case .general: return .gray
-        case .shortcut: return .indigo
-        case .providers: return .orange
-        case .models: return .purple
-        case .style: return .pink
-        case .apps: return .teal
-        case .history: return .green
+        case .apps: return "square.grid.2x2"
+        case .history: return "clock"
         }
     }
 }
@@ -112,12 +98,9 @@ struct SettingsSidebar: View {
             set: { if let page = $0 { navigation.page = page } }
         )) {
             ForEach(SettingsPage.allCases) { page in
-                Label {
-                    Text(page.title)
-                } icon: {
-                    IconBadge(symbol: page.symbol, color: page.color, size: 20)
-                }
-                .tag(page)
+                // Plain symbols in the sidebar's own tint, as in Mail or Finder: no colour per page.
+                Label(page.title, systemImage: page.symbol)
+                    .tag(page)
             }
         }
         .listStyle(.sidebar)
@@ -144,7 +127,7 @@ struct SettingsSidebar: View {
     }
 }
 
-/// The page's title, with an explanation behind a "?" and controls for the whole page at its end, above the content.
+/// The page's title (the sidebar already shows its icon), with an explanation behind a "?" and controls for the whole page at its end, above the content.
 /// Shared by every page. A page of settings is a grouped `Form`, drawn by the system as in System Settings; Home and
 /// History lay out their own content.
 struct PageScaffold<Accessory: View, Content: View>: View {
@@ -157,8 +140,7 @@ struct PageScaffold<Accessory: View, Content: View>: View {
     @ViewBuilder var content: Content
 
     private var header: some View {
-        HStack(spacing: 10) {
-            IconBadge(symbol: page.symbol, color: page.color, size: 26)
+        HStack(spacing: 6) {
             Text(page.title)
                 .font(.system(size: 20, weight: .bold))
                 .lineLimit(1)

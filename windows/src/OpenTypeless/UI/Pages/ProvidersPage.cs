@@ -112,7 +112,8 @@ internal sealed class ProviderCard : UserControl
 {
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly ProviderId _id;
-    private readonly StackPanel _tags = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
+    /// <summary>The line under the name: what the provider is used for now, or else what it can do here.</summary>
+    private readonly TextBlock _usage = Ui.Text("", 12, foreground: Ui.Secondary);
     private readonly StatusPill _status = new();
     private readonly FontIcon _chevron = Ui.Icon(Glyphs.ChevronRight, 11);
     private readonly Border _divider = new() { Height = 1 };
@@ -120,8 +121,6 @@ internal sealed class ProviderCard : UserControl
     private readonly Button _reset = new();
     private readonly Button _test = new();
     private readonly Button _remove = new();
-    private readonly Border _footerDivider = new() { Height = 1 };
-    private readonly Grid _footer = new() { Padding = new Thickness(14, 10, 14, 10) };
     private readonly Action<bool> _onExpanded;
     private readonly StackPanel _testResult = new() { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
     /// <summary>Shown while Credential Manager refuses the key, which then only lasts until the app quits.</summary>
@@ -144,8 +143,8 @@ internal sealed class ProviderCard : UserControl
         // Header (the whole row toggles the card).
         var name = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
-            Children = { Ui.Text(id.DisplayName(), 13.5, FontWeights.Medium), _tags },
+            Spacing = 1, VerticalAlignment = VerticalAlignment.Center,
+            Children = { Ui.Text(id.DisplayName(), 13.5, FontWeights.Medium), _usage },
         };
         var header = new Grid
         {
@@ -182,10 +181,9 @@ internal sealed class ProviderCard : UserControl
         };
 
         _divider.Background = Palette.Theme("DividerStrokeColorDefaultBrush");
-        _footerDivider.Background = Palette.Theme("DividerStrokeColorDefaultBrush");
+        BuildRemove(onRemoved);
         BuildDetails();
-        BuildFooter(onRemoved);
-        Content = Card.Make(new StackPanel { Children = { toggle, _divider, _details, _footerDivider, _footer } });
+        Content = Card.Make(new StackPanel { Children = { toggle, _divider, _details } });
         RefreshHeader();
         UpdateExpansion();
     }
@@ -198,25 +196,13 @@ internal sealed class ProviderCard : UserControl
 
     private void UpdateExpansion()
     {
-        _divider.Visibility = _details.Visibility = _footerDivider.Visibility = _footer.Visibility =
-            _expanded ? Visibility.Visible : Visibility.Collapsed;
+        _divider.Visibility = _details.Visibility = _expanded ? Visibility.Visible : Visibility.Collapsed;
         _chevron.RenderTransform = new RotateTransform { Angle = _expanded ? 90 : 0 };
     }
 
     public void RefreshHeader()
     {
-        _tags.Children.Clear();
-        foreach (var tag in UsageTags())
-        {
-            _tags.Children.Add(new Border
-            {
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(6, 1, 6, 2),
-                Background = Palette.Brush(Tint.Accent, 0.14),
-                VerticalAlignment = VerticalAlignment.Center,
-                Child = Ui.Text(tag, 10.5, FontWeights.Medium, Palette.Brush(Tint.Accent)),
-            });
-        }
+        _usage.Text = UsageLine();
         // Nothing to say once the provider works; only a missing key gets a pill.
         _status.Text = L("未配置", "Not set");
         _status.Tint = Tint.Secondary;
@@ -231,38 +217,27 @@ internal sealed class ProviderCard : UserControl
             : L("移除这个服务商和它的 API Key", "Removes this provider and its API key"));
     }
 
-    /// <summary>What the provider can do here, and Remove.</summary>
-    private void BuildFooter(Action onRemoved)
+    /// <summary>Remove, beside Test at the end of the card.</summary>
+    private void BuildRemove(Action onRemoved)
     {
-        var steps = _id.SupportsStt() && _id.SupportsChat() ? ProvidersPage.GroupTitle(ProviderGroup.Both)
-            : _id.SupportsStt() ? L("仅语音转文字", "Speech-to-text only") : L("仅文字整理", "Clean-up only");
-        var text = Ui.Text(steps, 12, foreground: Ui.Secondary);
-        text.VerticalAlignment = VerticalAlignment.Center;
-        _footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        _footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        _footer.Children.Add(text);
-        var removeLabel = L("移除", "Remove");
-        _remove.Content = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Children = { Ui.Icon(Glyphs.Delete, 12), new TextBlock { Text = removeLabel } },
-        };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_remove, removeLabel);
+        _remove.Content = L("移除", "Remove");
         _remove.Click += (_, _) =>
         {
             if (_settings.IsInUse(_id)) return;
             _settings.RemoveProvider(_id);
             onRemoved();
         };
-        Grid.SetColumn(_remove, 1);
-        _footer.Children.Add(_remove);
     }
 
-    private IEnumerable<string> UsageTags()
+    private string UsageLine()
     {
-        if (_settings.SttProvider == _id) yield return L("转写中使用", "Speech-to-text");
-        if (_settings.PolishEnabled && _settings.PolishProvider == _id) yield return L("整理中使用", "Clean-up");
+        var stt = _settings.SttProvider == _id;
+        var chat = _settings.PolishEnabled && _settings.PolishProvider == _id;
+        if (stt && chat) return L("用于语音转文字和文字整理", "Used for speech-to-text and clean-up");
+        if (stt) return L("用于语音转文字", "Used for speech-to-text");
+        if (chat) return L("用于文字整理", "Used for clean-up");
+        if (_id.SupportsStt() && _id.SupportsChat()) return L("可用于语音转文字和文字整理", "Can do speech-to-text and clean-up");
+        return _id.SupportsStt() ? L("仅语音转文字", "Speech-to-text only") : L("仅文字整理", "Clean-up only");
     }
 
     private void BuildDetails()
@@ -319,6 +294,7 @@ internal sealed class ProviderCard : UserControl
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                 new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = GridLength.Auto },
             },
         };
         if (_id.KeysUrl() is { } keysUrl)
@@ -350,7 +326,9 @@ internal sealed class ProviderCard : UserControl
         _test.Content = L("测试连接", "Test");
         _test.Click += (_, _) => Test();
         ToolTipService.SetToolTip(_test, L("检查 API Key，并测三次往返延迟取中位数", "Checks the API key and times three round trips (median)"));
-        Grid.SetColumn(_test, 2);
+        Grid.SetColumn(_remove, 2);
+        bottom.Children.Add(_remove);
+        Grid.SetColumn(_test, 3);
         bottom.Children.Add(_test);
         _details.Children.Add(bottom);
     }

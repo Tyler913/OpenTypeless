@@ -762,15 +762,9 @@ private struct ProviderCard: View {
         Card {
             Button { withAnimation(.easeOut(duration: 0.18)) { expanded.toggle() } } label: {
                 HStack(spacing: 12) {
-                    HStack(spacing: 6) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(id.displayName).font(.system(size: 13, weight: .medium))
-                        ForEach(usageTags, id: \.self) { tag in
-                            Text(tag)
-                                .font(.system(size: 10, weight: .medium))
-                                .padding(.horizontal, 6).padding(.vertical, 1.5)
-                                .background(Capsule().fill(Color.accentColor.opacity(0.14)))
-                                .foregroundStyle(Color.accentColor)
-                        }
+                        Text(usage).font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     Spacer()
                     // Nothing to say once the provider works; only a missing key gets a pill.
@@ -844,46 +838,37 @@ private struct ProviderCard: View {
                                 .lineLimit(2)
                                 .help(testResult.text)
                         }
+                        // A provider a step uses stays: switch the step to another one first.
+                        Button(L("移除", "Remove"), role: .destructive) {
+                            settings.removeProvider(id)
+                            onRemove()
+                        }
+                        .disabled(settings.isInUse(id))
+                        .help(settings.isInUse(id)
+                              ? L("正在使用，先在「模型」里换成别的服务商", "In use: choose another provider under Models first")
+                              : L("移除这个服务商和它的 API Key", "Removes this provider and its API key"))
                         Button(testing ? L("测试中…", "Testing…") : L("测试连接", "Test")) { test() }
                             .help(L("检查 API Key，并测三次往返延迟取中位数", "Checks the API key and times three round trips (median)"))
                             .disabled(testing || settings.endpoint(for: id) == nil)
                     }
                 }
                 .rowPadding(.all, 14)
-                CardDivider(inset: 0)
-                HStack {
-                    Text(supportedSteps).font(.system(size: 11.5)).foregroundStyle(.secondary)
-                    Spacer()
-                    // A provider a step uses stays: switch the step to another one first.
-                    Button(role: .destructive) {
-                        settings.removeProvider(id)
-                        onRemove()
-                    } label: {
-                        Label(L("移除", "Remove"), systemImage: "trash")
-                    }
-                    .controlSize(.small)
-                    .disabled(settings.isInUse(id))
-                    .help(settings.isInUse(id)
-                          ? L("正在使用，先在「模型」里换成别的服务商", "In use: choose another provider under Models first")
-                          : L("移除这个服务商和它的 API Key", "Removes this provider and its API key"))
-                }
-                .rowPadding(.horizontal, 14)
-                .rowPadding(.vertical, 10)
             }
         }
     }
 
-    /// What this provider can do here: "Speech-to-text and clean-up", or one of them.
-    private var supportedSteps: String {
-        if id.supportsSTT && id.supportsChat { return ProviderGroup.both.title }
-        return id.supportsSTT ? L("仅语音转文字", "Speech-to-text only") : L("仅文字整理", "Clean-up only")
-    }
-
-    private var usageTags: [String] {
-        var tags: [String] = []
-        if settings.speechEngine == .provider, settings.sttProvider == id { tags.append(L("转写中使用", "Speech-to-text")) }
-        if settings.polishEnabled, settings.polishProvider == id { tags.append(L("整理中使用", "Clean-up")) }
-        return tags
+    /// The line under the name: what the provider is used for now, or else what it can do here.
+    private var usage: String {
+        let stt = settings.speechEngine == .provider && settings.sttProvider == id
+        let chat = settings.polishEnabled && settings.polishProvider == id
+        switch (stt, chat) {
+        case (true, true): return L("用于语音转文字和文字整理", "Used for speech-to-text and clean-up")
+        case (true, false): return L("用于语音转文字", "Used for speech-to-text")
+        case (false, true): return L("用于文字整理", "Used for clean-up")
+        case (false, false):
+            if id.supportsSTT && id.supportsChat { return L("可用于语音转文字和文字整理", "Can do speech-to-text and clean-up") }
+            return id.supportsSTT ? L("仅语音转文字", "Speech-to-text only") : L("仅文字整理", "Clean-up only")
+        }
     }
 
     private func test() {
@@ -1248,28 +1233,22 @@ private struct ProviderPicker: View {
         // The providers set up on the Providers page first; the others, which need a key, after them.
         let setUp = options.filter { $0 == selection || settings.isSetUp($0) }
         let others = options.filter { !setUp.contains($0) }
-        Menu {
+        // A pop-up like every other choice on the page, rather than a pull-down menu.
+        Picker(L("服务商", "Provider"), selection: Binding(get: { selection }, set: onSelect)) {
             ForEach(setUp) { id in item(id) }
             if !others.isEmpty {
                 Divider()
                 ForEach(others) { id in item(id) }
             }
-        } label: {
-            Text(selection.displayName)
         }
+        .labelsHidden()
+        .pickerStyle(.menu)
         .fixedSize()
     }
 
     private func item(_ id: ProviderID) -> some View {
-        Button {
-            onSelect(id)
-        } label: {
-            if id == selection {
-                Label(id.displayName, systemImage: "checkmark")
-            } else {
-                Text(settings.isConfigured(id) ? id.displayName : id.displayName + L("（未配置）", " (not set)"))
-            }
-        }
+        Text(id == selection || settings.isConfigured(id) ? id.displayName : id.displayName + L("（未配置）", " (not set)"))
+            .tag(id)
     }
 }
 
@@ -1299,26 +1278,21 @@ private struct HostRow: View {
             if hosts.count > 1 || chosen != nil {
                 CardDivider()
                 CardRow(title: L("托管方", "Host"), help: subtitle) {
-                    Menu {
-                        Button {
-                            settings.setOpenRouterHost(nil, for: model)
-                        } label: {
-                            if chosen == nil { Label(automatic, systemImage: "checkmark") } else { Text(automatic) }
-                        }
+                    Picker(L("托管方", "Host"), selection: Binding(
+                        get: { chosen },
+                        set: { settings.setOpenRouterHost($0, for: model) }
+                    )) {
+                        Text(automatic).tag(String?.none)
                         Divider()
                         if let chosen, !hosts.contains(where: { $0.tag == chosen }) {
-                            Label(chosen, systemImage: "checkmark")
+                            Text(chosen).tag(String?.some(chosen))
                         }
                         ForEach(hosts) { host in
-                            Button {
-                                settings.setOpenRouterHost(host.tag, for: model)
-                            } label: {
-                                if host.tag == chosen { Label(detail(host), systemImage: "checkmark") } else { Text(detail(host)) }
-                            }
+                            Text(detail(host)).tag(String?.some(host.tag))
                         }
-                    } label: {
-                        Text(chosen.map(label) ?? automatic)
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
                     .fixedSize()
                 }
             }
@@ -1508,7 +1482,6 @@ private struct ModelField: View {
                 .labelsHidden()
                 .multilineTextAlignment(.leading)
                 .textFieldStyle(.roundedBorder)
-                .font(.system(size: 12, design: .monospaced))
                 .frame(width: 270)
             ModelMenu(models: models, language: AppLanguage.resolved) { text = $0 }
                 .equatable()

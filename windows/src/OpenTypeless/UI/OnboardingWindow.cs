@@ -346,13 +346,13 @@ public sealed class OnboardingWindow : Window
                                        14, foreground: Ui.Secondary, wrap: true));
         tagline.Margin = new Thickness(0, 8, 0, 0);
         hero.Children.Add(tagline);
-        // What it does: a coloured icon, a title and a line under it.
+        // What it does: an icon in the accent colour, a title and a line under it.
         var features = new StackPanel { Spacing = 18, MaxWidth = 460, Margin = new Thickness(0, 30, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
-        features.Children.Add(Feature(Glyphs.Microphone, Tint.Red, L("按住说话", "Hold to talk"),
+        features.Children.Add(Feature(Glyphs.Microphone, L("按住说话", "Hold to talk"),
             L("按住快捷键说话，松开后自动整理并插入到光标处", "Hold the shortcut while you speak; release to clean up and insert")));
-        features.Children.Add(Feature(Glyphs.Sparkle, Tint.Purple, L("用 AI 整理文字", "Clean up with AI"),
+        features.Children.Add(Feature(Glyphs.Paragraph, L("用 AI 整理文字", "Clean up with AI"),
             L("去掉口头禅和自我修正，自动分段、整理成列表", "Removes fillers and false starts, adds paragraphs and lists")));
-        features.Children.Add(Feature(Glyphs.Code, Tint.Blue, L("完全开源 · MIT 许可", "Fully open source · MIT licensed"),
+        features.Children.Add(Feature(Glyphs.Code, L("完全开源 · MIT 许可", "Fully open source · MIT licensed"),
             L("录音会用你自己的 API Key 发给你选的服务商转写和整理。推荐 OpenRouter：一个 Key 就能同时用于两步。",
               "Your recording goes to a provider you choose, with your own API key. OpenRouter is recommended: one key covers both transcription and clean-up.")));
         hero.Children.Add(features);
@@ -360,7 +360,7 @@ public sealed class OnboardingWindow : Window
     }
 
     /// <summary>One thing the app does, on the welcome step.</summary>
-    private static Grid Feature(string glyph, Tint tint, string title, string detail)
+    private static Grid Feature(string glyph, string title, string detail)
     {
         var text = new StackPanel
         {
@@ -371,7 +371,7 @@ public sealed class OnboardingWindow : Window
         var grid = new Grid { ColumnSpacing = 14 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var icon = HomePage.IconTile(glyph, tint, 36);
+        var icon = HomePage.IconTile(glyph, 24, Palette.Brush(Tint.Accent));
         icon.VerticalAlignment = VerticalAlignment.Top;
         grid.Children.Add(icon);
         Grid.SetColumn(text, 1);
@@ -529,7 +529,7 @@ public sealed class OnboardingWindow : Window
             {
                 ModelRow(Glyphs.Speech, L("语音转文字", "Speech-to-text"), stt),
                 new CardDivider { Inset = 50 },
-                ModelRow(Glyphs.Sparkle, L("文字整理", "Clean-up"), chat),
+                ModelRow(Glyphs.Paragraph, L("文字整理", "Clean-up"), chat),
             },
         }));
         var note = Ui.Text(L("之后可以随时在「设置 → 模型」里更换。", "You can change them any time in Settings → Models."), 11.5, foreground: Ui.Secondary, wrap: true);
@@ -571,7 +571,6 @@ public sealed class OnboardingWindow : Window
     private static CardRow ModelRow(string glyph, string title, string model)
     {
         var text = Ui.Text(model, 12, foreground: Ui.Secondary);
-        text.FontFamily = new FontFamily("Cascadia Mono,Consolas");
         text.IsTextSelectionEnabled = true;
         return new CardRow { Glyph = glyph, Title = title, Trailing = text };
     }

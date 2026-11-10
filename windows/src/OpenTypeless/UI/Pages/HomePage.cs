@@ -48,26 +48,26 @@ public sealed class HomePage : PageBase
 
         if (ledger.IsEmpty)
         {
-            Body.Children.Add(new NoticeBar(Glyphs.Info, Tint.Blue,
-                L($"按住 {_settings.Hotkey.DisplayName} 说话，你的统计就会出现在这里。",
-                  $"Hold {_settings.Hotkey.DisplayName} and talk. Your stats will show up here.")));
+            // Before the first dictation there's nothing to count: how to start, instead of zeros and an empty grid.
+            Body.Children.Add(FirstDictationCard());
+            return;
         }
 
-        // Four headline figures, each on a tile of its own with a coloured icon.
+        // Four headline figures, each on a tile of its own.
         var speed = all.SpeakingWordsPerMinute;
         var cells = new Grid { ColumnSpacing = 12 };
         for (var i = 0; i < 4; i++) cells.ColumnDefinitions.Add(new ColumnDefinition());
-        AddCell(cells, 0, Glyphs.Font, Tint.Blue, L("总字数", "Words dictated"), null, UsageFormat.Count(all.Words),
+        AddCell(cells, 0, Glyphs.Font, L("总字数", "Words dictated"), null, UsageFormat.Count(all.Words),
                 L($"今天 {UsageFormat.Count(todayTotals.Words)}", $"{UsageFormat.Count(todayTotals.Words)} today"),
                 L($"本月 {UsageFormat.Count(month.Words)}", $"{UsageFormat.Count(month.Words)} this month"));
-        AddCell(cells, 1, Glyphs.Timer, Tint.Green, L("节省的时间", "Time saved"),
+        AddCell(cells, 1, Glyphs.Timer, L("节省的时间", "Time saved"),
                 all.Words == 0 ? null : L(
                     $"说这 {UsageFormat.Count(all.Words)} 个字用了 {UsageFormat.Duration(all.SpeakingSeconds)}；按每分钟 {wpm} 字打出来要 {UsageFormat.Duration(all.TypingSeconds(wpm))}。打字速度可以在「通用」里修改。",
                     $"Saying these {UsageFormat.Count(all.Words)} words took {UsageFormat.Duration(all.SpeakingSeconds)}; typing them at {wpm} wpm would take {UsageFormat.Duration(all.TypingSeconds(wpm))}. Change the typing speed under General."),
                 UsageFormat.Duration(all.SavedSeconds(wpm)), L($"按每分钟打 {wpm} 字算", $"vs. typing at {wpm} wpm"));
-        AddCell(cells, 2, Glyphs.Speed, Tint.Orange, L("说话速度", "Speaking speed"), null, speed is { } s ? L($"{s:0} 字/分钟", $"{s:0} wpm") : "—",
+        AddCell(cells, 2, Glyphs.Speed, L("说话速度", "Speaking speed"), null, speed is { } s ? L($"{s:0} 字/分钟", $"{s:0} wpm") : "—",
                 speed is { } v ? L($"是打字的 {v / wpm:0.0} 倍", $"{v / wpm:0.0}× your typing speed") : L("说几句就能算出来", "Dictate a little to see it"));
-        AddCell(cells, 3, Glyphs.Microphone, Tint.Pink, L("听写次数", "Dictations"), null, UsageFormat.Count(all.Dictations),
+        AddCell(cells, 3, Glyphs.Microphone, L("听写次数", "Dictations"), null, UsageFormat.Count(all.Dictations),
                 streak > 0 ? L($"连续 {streak} 天 · 最长 {longest} 天", $"{streak}-day streak · Best {longest}")
                            : L($"最长连续 {longest} 天", $"Longest streak {longest} days"));
         Body.Children.Add(cells);
@@ -100,6 +100,25 @@ public sealed class HomePage : PageBase
         }
     }
 
+    /// <summary>Home before the first dictation: the shortcut, how to use it, and somewhere to try it.</summary>
+    private Border FirstDictationCard()
+    {
+        var text = Ui.Text(L($"按住 {_settings.Hotkey.DisplayName} 说话，你的统计就会出现在这里。",
+                             $"Hold {_settings.Hotkey.DisplayName} and talk. Your stats will show up here."),
+                           14, foreground: Ui.Secondary, wrap: true);
+        text.TextAlignment = TextAlignment.Center;
+        text.HorizontalAlignment = HorizontalAlignment.Center;
+        var open = new Button { Content = L("打开草稿本", "Open Scratchpad"), HorizontalAlignment = HorizontalAlignment.Center };
+        open.Click += (_, _) => ScratchpadWindow.Open();
+        return Card.Make(new StackPanel
+        {
+            Spacing = 16,
+            Padding = new Thickness(24, 36, 24, 36),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Children = { new KeyCaps { Caps = _settings.Hotkey.KeyCaps, Large = true }, text, open },
+        });
+    }
+
     /// A section title above a card that fills the rest of its grid cell.
     private static Grid TitledCard(string title, string? help, UIElement content)
     {
@@ -115,8 +134,8 @@ public sealed class HomePage : PageBase
         return grid;
     }
 
-    /// <summary>One headline figure on its own card: a coloured icon and the label, the number, and a line of context.</summary>
-    private static void AddCell(Grid grid, int index, string glyph, Tint tint, string title, string? help, string value, string caption, string? tooltip = null)
+    /// <summary>One headline figure on its own card: an icon and the label, the number, and a line of context.</summary>
+    private static void AddCell(Grid grid, int index, string glyph, string title, string? help, string value, string caption, string? tooltip = null)
     {
         var valueText = Ui.Text(value, 26, FontWeights.SemiBold);
         valueText.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -124,7 +143,7 @@ public sealed class HomePage : PageBase
         captionText.MaxLines = 2;
         captionText.TextTrimming = TextTrimming.CharacterEllipsis;
         var label = new TitleLine(Ui.Text(title, 12.5, foreground: Ui.Secondary)) { Help = help };
-        var icon = IconTile(glyph, tint);
+        var icon = IconTile(glyph, 18);
         icon.HorizontalAlignment = HorizontalAlignment.Left;
         icon.Margin = new Thickness(0, 0, 0, 10);
         var cell = new StackPanel
@@ -139,23 +158,12 @@ public sealed class HomePage : PageBase
         grid.Children.Add(card);
     }
 
-    /// <summary>A Fluent icon on a rounded square tinted with its colour.</summary>
-    internal static Border IconTile(string glyph, Tint tint, double size = 28) => new()
-    {
-        Width = size,
-        Height = size,
-        CornerRadius = new CornerRadius(size * 0.25),
-        Background = Palette.Brush(tint, 0.16),
-        Child = new FontIcon
-        {
-            Glyph = Icons.Glyph(glyph, size * 0.57, filled: true),
-            FontFamily = Icons.Font,
-            FontSize = size * 0.57,
-            Foreground = Palette.Brush(tint),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        },
-    };
+    /// <summary>
+    /// A Fluent icon, in the secondary text colour unless <paramref name="foreground"/> says otherwise: one colour for every
+    /// icon, so colour is left to mean state (a warning, a recording, a selection).
+    /// </summary>
+    internal static FontIcon IconTile(string glyph, double size = 20, Brush? foreground = null) =>
+        Ui.Icon(glyph, size, foreground ?? Ui.Secondary);
 
     /// One line of the Spend card: label and amount, with the split between the two steps on a tooltip, or under it.
     /// With the monthly spending limit (this month's line), how much of it is spent, as a bar.

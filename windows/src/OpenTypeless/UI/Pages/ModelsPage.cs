@@ -279,7 +279,7 @@ public sealed class ModelsPage : PageBase
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(strengthPicker, L("用 AI 整理文字", "Clean up with AI"));
         polish.Body.Add(new CardRow
         {
-            Glyph = Glyphs.Sparkle, Title = L("用 AI 整理文字", "Clean up with AI"),
+            Glyph = Glyphs.Paragraph, Title = L("用 AI 整理文字", "Clean up with AI"),
             Subtitle = StrengthSubtitle(_settings.PolishStrength),
             Help = StrengthHelp,
             Trailing = strengthPicker,
@@ -598,8 +598,6 @@ internal sealed class ModelField : UserControl
     private readonly TextBox _text = new()
     {
         Width = 260,
-        FontFamily = new FontFamily("Cascadia Mono,Consolas"),
-        FontSize = 12.5,
         PlaceholderText = L("模型 ID", "Model ID"),
     };
     private readonly DropDownButton _browse = new();

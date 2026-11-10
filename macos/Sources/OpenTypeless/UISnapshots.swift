@@ -52,7 +52,10 @@ enum UISnapshots {
                     window.center()
                     try showAndCapture(window, to: url)
                 } else {
+                    // On the window's background, as in the app: a dark page is white text over it, and over a
+                    // transparent image the smoke test (which lays images on white) sees nothing.
                     let view = SettingsDetailView(navigation: navigation, controller: controller)
+                        .background(Color(nsColor: .windowBackgroundColor))
                     try save(NSHostingView(rootView: view), size: NSSize(width: 740, height: 660), to: url)
                 }
             }

@@ -232,11 +232,31 @@ public sealed class HelpTip : UserControl
             _flyout ??= new Flyout { Content = _body };
             _flyout.ShowAt(_button);
         };
+        _button.GotFocus += (_, _) => { _focused = true; UpdateOpacity(); };
+        _button.LostFocus += (_, _) => { _focused = false; UpdateOpacity(); };
         Content = _button;
         UpdateName();
     }
 
     private Flyout? _flyout;
+    private bool _revealed = true;
+    private bool _focused;
+
+    /// <summary>
+    /// False keeps the "?" out of sight until this turns true (a row's tip shows while the pointer is over the row, so a
+    /// page of rows isn't a column of question marks). It's still there for the keyboard and Narrator, and shows while focused.
+    /// </summary>
+    public bool Revealed
+    {
+        get => _revealed;
+        set
+        {
+            _revealed = value;
+            UpdateOpacity();
+        }
+    }
+
+    private void UpdateOpacity() => _button.Opacity = _revealed || _focused ? 1 : 0;
 
     public HelpTip(string text, string? topic = null) : this()
     {
@@ -289,6 +309,9 @@ internal sealed class TitleLine : UserControl
         line.Children.Add(_help);
         Content = line;
     }
+
+    /// <summary>Whether the "?" is in sight; see <see cref="HelpTip.Revealed"/>.</summary>
+    public bool HelpRevealed { get => _help.Revealed; set => _help.Revealed = value; }
 
     public string? Help
     {
@@ -422,6 +445,12 @@ public sealed class CardRow : UserControl
         grid.Children.Add(_icon);
         grid.Children.Add(text);
         grid.Children.Add(_trailing);
+        // The row's "?" shows while the pointer is over the row; the transparent background makes all of it count.
+        grid.Background = new SolidColorBrush(Colors.Transparent);
+        _title.HelpRevealed = false;
+        grid.PointerEntered += (_, _) => _title.HelpRevealed = true;
+        grid.PointerExited += (_, _) => _title.HelpRevealed = false;
+        grid.PointerCanceled += (_, _) => _title.HelpRevealed = false;
         Content = grid;
     }
 

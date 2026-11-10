@@ -97,7 +97,7 @@ struct Hotkey: Codable, Equatable {
         let left = L("左", "Left ")
         let right = L("右", "Right ")
         switch keyCode {
-        case 63: return "Fn 🌐"
+        case 63: return "Fn"
         case 54: return right + "⌘"
         case 55: return left + "⌘"
         case 61: return right + "⌥"

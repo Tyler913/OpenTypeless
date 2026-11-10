@@ -19,65 +19,70 @@ struct HomePage: View {
 
         PageScaffold(page: .home, maxWidth: nil) {
             if ledger.isEmpty {
-                Banner(symbol: "info.circle.fill", color: .blue,
-                       text: L("按住 \(settings.hotkey.displayName) 说话，你的统计就会出现在这里。",
-                               "Hold \(settings.hotkey.displayName) and talk. Your stats will show up here.")) { EmptyView() }
-            }
-
-            let speed = all.speakingWordsPerMinute
-            HStack(spacing: 12) {
-                StatTile(symbol: "text.word.spacing", color: .blue,
-                         title: L("总字数", "Words dictated"), value: UsageFormat.count(all.words),
-                         caption: L("今天 \(UsageFormat.count(todayTotals.words))", "\(UsageFormat.count(todayTotals.words)) today"))
-                    .help(L("本月 \(UsageFormat.count(month.words))", "\(UsageFormat.count(month.words)) this month"))
-                StatTile(symbol: "hourglass", color: .green,
-                         title: L("节省的时间", "Time saved"),
-                         help: all.words > 0
-                             ? L("说这 \(UsageFormat.count(all.words)) 个字用了 \(UsageFormat.duration(all.speakingSeconds))；按每分钟 \(wpm) 字打出来要 \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm))))。打字速度可以在「通用」里修改。",
-                                 "Saying these \(UsageFormat.count(all.words)) words took \(UsageFormat.duration(all.speakingSeconds)); typing them at \(wpm) wpm would take \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm)))). Change the typing speed under General.")
-                             : nil,
-                         value: UsageFormat.duration(all.savedSeconds(wordsPerMinute: Double(wpm))),
-                         caption: L("按每分钟打 \(wpm) 字算", "vs. typing at \(wpm) wpm"))
-                StatTile(symbol: "gauge.with.needle", color: .orange,
-                         title: L("说话速度", "Speaking speed"),
-                         value: speed.map { L("\(Int($0.rounded())) 字/分钟", "\(Int($0.rounded())) wpm") } ?? "—",
-                         caption: speed.map {
-                             let ratio = String(format: "%.1f", $0 / Double(wpm))
-                             return L("是打字的 \(ratio) 倍", "\(ratio)× your typing speed")
-                         } ?? L("说几句就能算出来", "Dictate a little to see it"))
-                StatTile(symbol: "mic.fill", color: .pink,
-                         title: L("听写次数", "Dictations"), value: UsageFormat.count(all.dictations),
-                         caption: streaks.current > 0
-                             ? L("连续 \(streaks.current) 天 · 最长 \(streaks.longest) 天",
-                                 "\(streaks.current)-day streak · Best \(streaks.longest)")
-                             : L("最长连续 \(streaks.longest) 天", "Longest streak \(streaks.longest) days"))
-            }
-            .fixedSize(horizontal: false, vertical: true)
-
-            // Spend takes a third of the width, the activity grid the rest.
-            ProportionalRow(ratios: [1, 2], spacing: 12) {
-                TitledCard(title: L("花费", "Spend"), help: spendHelp) {
-                    SpendLine(title: L("今天", "Today"), totals: todayTotals)
-                    CardDivider()
-                    SpendLine(title: L("本月", "This month"), totals: month, limit: settings.activeSpendLimit)
-                    CardDivider()
-                    SpendLine(title: L("累计", "All time"), totals: all, showsSplit: true)
-                }
-                TitledCard(title: L("活跃度", "Activity")) {
-                    ActivityHeatmap(ledger: ledger, today: today)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                }
-            }
-            if all.unpriced > 0 {
-                Banner(symbol: "exclamationmark.triangle.fill", color: .orange,
-                       text: L("有 \(all.unpriced) 次请求的模型没有价格，没有计入花费。",
-                               "\(all.unpriced) requests used a model with no price, so they aren't in the spend.")) {
-                    Button(L("设置价格", "Set prices")) { navigation.page = .models }.controlSize(.small)
-                }
+                // Before the first dictation there's nothing to count: how to start, instead of zeros and an empty grid.
+                FirstDictationCard(settings: settings)
+            } else {
+                figures(all: all, todayTotals: todayTotals, month: month, wpm: wpm, streaks: streaks, ledger: ledger, today: today)
             }
         }
         .task { prices.refreshIfStale(maxAge: 60 * 60) }
+    }
+
+    @ViewBuilder
+    private func figures(all: UsageTotals, todayTotals: UsageTotals, month: UsageTotals, wpm: Int,
+                         streaks: (current: Int, longest: Int), ledger: UsageLedger, today: CalendarDay) -> some View {
+        let speed = all.speakingWordsPerMinute
+        HStack(spacing: 12) {
+            StatTile(symbol: "text.word.spacing",
+                     title: L("总字数", "Words dictated"), value: UsageFormat.count(all.words),
+                     caption: L("今天 \(UsageFormat.count(todayTotals.words))", "\(UsageFormat.count(todayTotals.words)) today"))
+                .help(L("本月 \(UsageFormat.count(month.words))", "\(UsageFormat.count(month.words)) this month"))
+            StatTile(symbol: "hourglass",
+                     title: L("节省的时间", "Time saved"),
+                     help: all.words > 0
+                         ? L("说这 \(UsageFormat.count(all.words)) 个字用了 \(UsageFormat.duration(all.speakingSeconds))；按每分钟 \(wpm) 字打出来要 \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm))))。打字速度可以在「通用」里修改。",
+                             "Saying these \(UsageFormat.count(all.words)) words took \(UsageFormat.duration(all.speakingSeconds)); typing them at \(wpm) wpm would take \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm)))). Change the typing speed under General.")
+                         : nil,
+                     value: UsageFormat.duration(all.savedSeconds(wordsPerMinute: Double(wpm))),
+                     caption: L("按每分钟打 \(wpm) 字算", "vs. typing at \(wpm) wpm"))
+            StatTile(symbol: "gauge.with.needle",
+                     title: L("说话速度", "Speaking speed"),
+                     value: speed.map { L("\(Int($0.rounded())) 字/分钟", "\(Int($0.rounded())) wpm") } ?? "—",
+                     caption: speed.map {
+                         let ratio = String(format: "%.1f", $0 / Double(wpm))
+                         return L("是打字的 \(ratio) 倍", "\(ratio)× your typing speed")
+                     } ?? L("说几句就能算出来", "Dictate a little to see it"))
+            StatTile(symbol: "mic.fill",
+                     title: L("听写次数", "Dictations"), value: UsageFormat.count(all.dictations),
+                     caption: streaks.current > 0
+                         ? L("连续 \(streaks.current) 天 · 最长 \(streaks.longest) 天",
+                             "\(streaks.current)-day streak · Best \(streaks.longest)")
+                         : L("最长连续 \(streaks.longest) 天", "Longest streak \(streaks.longest) days"))
+        }
+        .fixedSize(horizontal: false, vertical: true)
+
+        // Spend takes a third of the width, the activity grid the rest.
+        ProportionalRow(ratios: [1, 2], spacing: 12) {
+            TitledCard(title: L("花费", "Spend"), help: spendHelp) {
+                SpendLine(title: L("今天", "Today"), totals: todayTotals)
+                CardDivider()
+                SpendLine(title: L("本月", "This month"), totals: month, limit: settings.activeSpendLimit)
+                CardDivider()
+                SpendLine(title: L("累计", "All time"), totals: all, showsSplit: true)
+            }
+            TitledCard(title: L("活跃度", "Activity")) {
+                ActivityHeatmap(ledger: ledger, today: today)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+            }
+        }
+        if all.unpriced > 0 {
+            Banner(symbol: "exclamationmark.triangle.fill", color: .orange,
+                   text: L("有 \(all.unpriced) 次请求的模型没有价格，没有计入花费。",
+                           "\(all.unpriced) requests used a model with no price, so they aren't in the spend.")) {
+                Button(L("设置价格", "Set prices")) { navigation.page = .models }.controlSize(.small)
+            }
+        }
     }
 
     private var spendHelp: String {
@@ -88,10 +93,31 @@ struct HomePage: View {
     }
 }
 
-/// One headline figure, on a tile of its own: a coloured symbol and its label, the number, and a line of context.
+/// Home before the first dictation: the shortcut, how to use it, and somewhere to try it.
+private struct FirstDictationCard: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        Card {
+            VStack(spacing: 16) {
+                KeyCaps(caps: settings.hotkey.keyCaps, large: true)
+                Text(L("按住 \(settings.hotkey.displayName) 说话，你的统计就会出现在这里。",
+                       "Hold \(settings.hotkey.displayName) and talk. Your stats will show up here."))
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button(L("打开草稿本", "Open Scratchpad")) { ScratchpadWindowController.shared.show() }
+            }
+            .padding(.vertical, 36)
+            .padding(.horizontal, 24)
+            .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+/// One headline figure, on a tile of its own: a symbol and its label, the number, and a line of context.
 private struct StatTile: View {
     let symbol: String
-    let color: Color
     let title: String
     var help: String? = nil
     let value: String
@@ -101,7 +127,7 @@ private struct StatTile: View {
         Card {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 7) {
-                    IconBadge(symbol: symbol, color: color, size: 22)
+                    IconBadge(symbol: symbol, size: 18)
                     Text(title)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)

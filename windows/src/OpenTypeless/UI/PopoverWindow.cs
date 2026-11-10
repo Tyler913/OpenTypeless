@@ -243,7 +243,7 @@ public sealed class PopoverWindow : Window
         var (glyph, brush) = _controller.State switch
         {
             SessionPhase.Recording => (Glyphs.Speech, Palette.Brush(Tint.Red)),
-            SessionPhase.Processing => (Glyphs.Sparkle, Palette.Brush(Tint.Blue)),
+            SessionPhase.Processing => (Glyphs.Sync, Palette.Brush(Tint.Blue)),
             _ => (Glyphs.Microphone, Palette.Brush(Tint.Accent)),
         };
         var circle = new Border

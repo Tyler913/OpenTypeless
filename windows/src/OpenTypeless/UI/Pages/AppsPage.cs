@@ -277,7 +277,7 @@ internal sealed class AppProfileCard : UserControl
         // A picker for each setting.
         _details.Children.Add(new CardRow
         {
-            Glyph = Glyphs.Sparkle, Title = L("用 AI 整理文字", "Clean up with AI"),
+            Glyph = Glyphs.Paragraph, Title = L("用 AI 整理文字", "Clean up with AI"),
             Trailing = StrengthBox(),
         });
         _details.Children.Add(new CardDivider());
@@ -327,20 +327,10 @@ internal sealed class AppProfileCard : UserControl
 
         // What it matches, and Remove.
         var executable = Ui.Text(profile.App, 11, foreground: Ui.Tertiary);
-        executable.FontFamily = new FontFamily("Cascadia Mono,Consolas");
         executable.IsTextSelectionEnabled = true;
         executable.VerticalAlignment = VerticalAlignment.Center;
         var removeLabel = L("移除", "Remove");
-        var remove = new Button
-        {
-            Content = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 6,
-                Children = { Ui.Icon(Glyphs.Delete, 12), new TextBlock { Text = removeLabel } },
-            },
-        };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(remove, removeLabel);
+        var remove = new Button { Content = removeLabel };
         remove.Click += (_, _) =>
         {
             _settings.RemoveAppProfile(_profile.Id);

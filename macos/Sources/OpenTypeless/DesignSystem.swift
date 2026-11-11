@@ -10,9 +10,17 @@ enum Theme {
     static let formWidth: CGFloat = 720
     /// How wide Home gets: past this, its figures and lists only drift apart.
     static let dashboardWidth: CGFloat = 900
-    /// The fill of a card: the tint a grouped form gives its sections, so Home and History sit on the page the way a
-    /// page of settings does.
-    static let cardFill = Color.primary.opacity(0.04)
+    /// The fill of a card: the window's background a shade towards the text colour, the tint a grouped form gives its
+    /// sections, so Home and History sit on the page the way a page of settings does. Opaque, so that what stays put in
+    /// a card while its rows scroll (History's day headings) can be filled with it too.
+    static let cardFill = Color(nsColor: NSColor(name: nil) { appearance in
+        let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        var base = NSColor.windowBackgroundColor
+        appearance.performAsCurrentDrawingAppearance {
+            base = NSColor.windowBackgroundColor.usingColorSpace(.sRGB) ?? base
+        }
+        return base.blended(withFraction: dark ? 0.05 : 0.04, of: dark ? .white : .black) ?? base
+    })
     /// A hairline inside a card: between rows, columns and panes.
     static let hairline = Color.primary.opacity(0.08)
 }

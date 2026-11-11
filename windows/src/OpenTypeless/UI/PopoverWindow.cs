@@ -422,7 +422,7 @@ public sealed class PopoverWindow : Window
     private Button RecentRow(DictationRecord record)
     {
         var copied = _copiedId == record.Id;
-        var text = Ui.Text(record.OutputText, 13, wrap: true);
+        var text = Ui.Text(Formatting.OneLine(record.OutputText), 13, wrap: true);
         text.MaxLines = 2;
         text.TextTrimming = TextTrimming.CharacterEllipsis;
         var meta = Ui.Text($"{Formatting.ShortStamp(record.Date)} · {Formatting.DurationLabel(record.Duration)}", 11, foreground: Ui.Tertiary);

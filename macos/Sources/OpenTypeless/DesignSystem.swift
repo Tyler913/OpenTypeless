@@ -477,6 +477,14 @@ struct HoverButtonStyle: ButtonStyle {
     }
 }
 
+extension String {
+    /// The text on one line, for a preview of a line or two: a dictation's own line breaks (a list, paragraphs) would
+    /// otherwise end the preview at its first line and leave the next one empty.
+    var onOneLine: String {
+        split(whereSeparator: \.isNewline).joined(separator: " ")
+    }
+}
+
 extension Locale {
     /// The locale dates and times are written in: the system's own format when it's in the app's language (so an
     /// English UI in the UK still writes 26/09 and 24-hour time), otherwise the usual one for the app's language.

@@ -168,7 +168,7 @@ private struct HomeHeadline: View {
 struct DictationTips: View {
     var body: some View {
         Card {
-            CardRow(icon: "hand.point.down.fill", title: L("按住说话", "Hold to talk"),
+            CardRow(icon: "mic.fill", title: L("按住说话", "Hold to talk"),
                     subtitle: L("按住快捷键说话，松开后自动整理并插入到光标处",
                                 "Hold the shortcut while you speak; release to clean up and insert")) { EmptyView() }
             CardDivider(inset: 50)
@@ -270,7 +270,7 @@ private struct StatCell: View {
     }
 }
 
-/// The last few dictations, a line each: when, the text, how long it took to say. A click copies one; History has the rest.
+/// The last few dictations, a line each: the text, then when it was said and how long it took. A click copies one; History has the rest.
 private struct RecentDictations: View {
     @ObservedObject var history: HistoryStore
     @ObservedObject var navigation: SettingsNavigation
@@ -326,24 +326,19 @@ private struct RecentDictationRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(record.date.shortStamp)
-                .font(.system(size: 11.5))
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .frame(width: 108, alignment: .leading)
-            // One line: a dictation's own line breaks would otherwise end it at its first.
-            Text(record.outputText.split(whereSeparator: \.isNewline).joined(separator: " "))
+            // The text leads; when it was said and how long it took follow at the end, where they line up down the card.
+            Text(record.outputText.onOneLine)
                 .font(.system(size: 13))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text(record.duration.durationLabel)
+            Text("\(record.date.shortStamp) · \(record.duration.durationLabel)")
                 .font(.system(size: 11.5))
                 .monospacedDigit()
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
             Image(systemName: copied ? "checkmark" : "doc.on.doc")
                 .font(.system(size: 11))
                 .foregroundStyle(copied ? Color.green : Color.secondary)

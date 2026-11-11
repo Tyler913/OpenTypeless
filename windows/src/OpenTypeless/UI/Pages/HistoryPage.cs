@@ -535,7 +535,7 @@ public sealed class HistoryPage : PageBase
 
     private static string Preview(DictationRecord record)
     {
-        if (record.OutputText.Length > 0) return record.OutputText;
+        if (record.OutputText.Length > 0) return Formatting.OneLine(record.OutputText);
         return record.Status switch
         {
             DictationStatus.Recording => L("正在录音…", "Recording…"),

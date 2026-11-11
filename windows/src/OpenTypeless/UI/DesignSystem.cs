@@ -788,6 +788,13 @@ public static class Formatting
         return pattern.Contains('d') && pattern.Contains('M') ? pattern : "M/d";
     }
 
+    /// <summary>
+    /// The text on one line, for a preview of a line or two: a dictation's own line breaks (a list, paragraphs) would
+    /// otherwise end the preview at its first line and leave the next one empty.
+    /// </summary>
+    public static string OneLine(string text) =>
+        string.Join(' ', text.Split(['\r', '\n', '\u2028', '\u2029'], StringSplitOptions.RemoveEmptyEntries));
+
     public static string DurationLabel(double seconds)
     {
         var s = (int)Math.Round(seconds, MidpointRounding.AwayFromZero);

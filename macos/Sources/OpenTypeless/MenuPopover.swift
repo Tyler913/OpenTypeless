@@ -225,7 +225,7 @@ private struct RecentRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(record.outputText)
+                Text(record.outputText.onOneLine)
                     .font(.system(size: 12.5))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)

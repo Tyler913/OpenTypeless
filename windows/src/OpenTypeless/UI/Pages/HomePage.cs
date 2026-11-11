@@ -234,7 +234,7 @@ public sealed class HomePage : PageBase
         return Card.Make(new StackPanel { Children = { top, rule, cells } }, large: true);
     }
 
-    /// <summary>The last few dictations, a line each: when, the text, how long it took to say. A click copies one; History has the rest.</summary>
+    /// <summary>The last few dictations, a line each: the text, then when it was said and how long it took. A click copies one; History has the rest.</summary>
     private StackPanel? Recent()
     {
         var records = _history.Records.Where(r => r.OutputText.Length > 0).Take(5).ToList();
@@ -271,33 +271,27 @@ public sealed class HomePage : PageBase
 
     private Button RecentRow(DictationRecord record)
     {
-        var stamp = Ui.Text(Formatting.ShortStamp(record.Date), 12, foreground: Ui.Secondary);
-        stamp.TextTrimming = TextTrimming.CharacterEllipsis;
-        stamp.VerticalAlignment = VerticalAlignment.Center;
-        // One line: a dictation's own line breaks would otherwise end it at its first.
-        var text = Ui.Text(record.OutputText.ReplaceLineEndings(" "), 14);
+        // The text leads; when it was said and how long it took follow at the end, where they line up down the card.
+        var text = Ui.Text(Formatting.OneLine(record.OutputText), 14);
         text.TextTrimming = TextTrimming.CharacterEllipsis;
         text.TextWrapping = TextWrapping.NoWrap;
         text.MaxLines = 1;
         text.VerticalAlignment = VerticalAlignment.Center;
-        var duration = Ui.Text(Formatting.DurationLabel(record.Duration), 12, foreground: Ui.Tertiary);
-        duration.VerticalAlignment = VerticalAlignment.Center;
+        var meta = Ui.Text($"{Formatting.ShortStamp(record.Date)} · {Formatting.DurationLabel(record.Duration)}", 12, foreground: Ui.Secondary);
+        meta.VerticalAlignment = VerticalAlignment.Center;
         // The copy icon shows under the pointer, and turns into a tick for a moment once clicked.
         var icon = Ui.Icon(Glyphs.Copy, 12, Ui.Secondary);
         icon.VerticalAlignment = VerticalAlignment.Center;
         icon.Opacity = 0;
 
         var grid = new Grid { ColumnSpacing = 12 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
-        grid.Children.Add(stamp);
-        Grid.SetColumn(text, 1);
         grid.Children.Add(text);
-        Grid.SetColumn(duration, 2);
-        grid.Children.Add(duration);
-        Grid.SetColumn(icon, 3);
+        Grid.SetColumn(meta, 1);
+        grid.Children.Add(meta);
+        Grid.SetColumn(icon, 2);
         grid.Children.Add(icon);
 
         var button = new Button

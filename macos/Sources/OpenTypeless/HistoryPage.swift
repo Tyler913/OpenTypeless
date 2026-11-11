@@ -334,7 +334,7 @@ private struct HistoryRow: View {
     }
 
     private var preview: String {
-        if !record.outputText.isEmpty { return record.outputText }
+        if !record.outputText.isEmpty { return record.outputText.onOneLine }
         switch record.status {
         case .recording: return L("正在录音…", "Recording…")
         case .processing: return L("正在处理…", "Processing…")

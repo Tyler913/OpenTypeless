@@ -158,16 +158,21 @@ public sealed partial class SettingsWindow : Window
     private void BuildNavigation()
     {
         Nav.MenuItems.Clear();
-        foreach (var page in SettingsPageInfo.All)
+        // In groups with a line between them, without headings: eight pages don't need naming twice.
+        foreach (var group in SettingsPageInfo.Groups)
         {
-            var item = new NavigationViewItem
+            if (Nav.MenuItems.Count > 0) Nav.MenuItems.Add(new NavigationViewItemSeparator());
+            foreach (var page in group)
             {
-                Tag = page,
-                Content = page.Title(),
-                // The icon box is 16 px: the 16 px drawing, unscaled.
-                Icon = Ui.Icon(page.Glyph(), 16),
-            };
-            Nav.MenuItems.Add(item);
+                var item = new NavigationViewItem
+                {
+                    Tag = page,
+                    Content = page.Title(),
+                    // The icon box is 16 px: the 16 px drawing, unscaled.
+                    Icon = Ui.Icon(page.Glyph(), 16),
+                };
+                Nav.MenuItems.Add(item);
+            }
         }
         UpdateNavigationIcons();
         UpdateReadyPill();

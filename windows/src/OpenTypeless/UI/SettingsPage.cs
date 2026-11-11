@@ -13,6 +13,14 @@ public static class SettingsPageInfo
         [SettingsPage.Home, SettingsPage.General, SettingsPage.Shortcut, SettingsPage.Providers, SettingsPage.Models, SettingsPage.Style, SettingsPage.Apps,
          SettingsPage.History];
 
+    /// <summary>The sidebar, top to bottom: what you come back to look at, then how dictation behaves, then the services behind it.</summary>
+    public static readonly SettingsPage[][] Groups =
+    [
+        [SettingsPage.Home, SettingsPage.History],
+        [SettingsPage.General, SettingsPage.Shortcut, SettingsPage.Style, SettingsPage.Apps],
+        [SettingsPage.Providers, SettingsPage.Models],
+    ];
+
     public static string RawValue(this SettingsPage page) => page.ToString().ToLowerInvariant();
 
     public static SettingsPage? Parse(string? raw) => All.Cast<SettingsPage?>().FirstOrDefault(p => p!.Value.RawValue() == raw);
@@ -61,7 +69,10 @@ public abstract class PageBase : UserControl
     /// <param name="help">What the title's "?" explains.</param>
     /// <param name="scrolls">Whether the content scrolls.</param>
     /// <param name="formWidth">Whether the content stops at <see cref="FormWidth"/>, rather than filling the window for pages that have use for the room.</param>
-    protected PageBase(SettingsPage page, string? help = null, bool scrolls = true, bool formWidth = true)
+    /// <param name="maxWidth">A width of the page's own to stop at, margins included (Home's).</param>
+    /// <param name="showsTitle">False for a page that opens on a headline of its own (Home).</param>
+    protected PageBase(SettingsPage page, string? help = null, bool scrolls = true, bool formWidth = true, double? maxWidth = null,
+                       bool showsTitle = true)
     {
         var title = new StackPanel
         {
@@ -78,8 +89,11 @@ public abstract class PageBase : UserControl
         header.Children.Add(_accessory);
         if (scrolls)
         {
-            var stack = new StackPanel { Spacing = 24, Padding = new Thickness(36, 6, 36, 36), Children = { header, Body } };
-            if (formWidth) stack.MaxWidth = FormWidth;
+            var stack = new StackPanel { Spacing = 24, Padding = new Thickness(36, showsTitle ? 6 : 14, 36, 36) };
+            if (showsTitle) stack.Children.Add(header);
+            stack.Children.Add(Body);
+            if (maxWidth is { } width) stack.MaxWidth = width;
+            else if (formWidth) stack.MaxWidth = FormWidth;
             // In a grid so that the width limit centres it.
             Content = new ScrollViewer { Content = new Grid { Children = { stack } }, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         }

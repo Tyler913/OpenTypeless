@@ -52,11 +52,16 @@ enum UISnapshots {
                     window.center()
                     try showAndCapture(window, to: url)
                 } else {
-                    // On the window's background, as in the app: a dark page is white text over it, and over a
-                    // transparent image the smoke test (which lays images on white) sees nothing.
-                    let view = SettingsDetailView(navigation: navigation, controller: controller)
-                        .background(Color(nsColor: .windowBackgroundColor))
-                    try save(NSHostingView(rootView: view), size: NSSize(width: 740, height: 660), to: url)
+                    // The sidebar beside the page, at the window's size, on the window's background as in the app: a
+                    // dark page is white text over it, and over a transparent image the smoke test (which lays
+                    // images on white) sees nothing.
+                    let view = HStack(spacing: 0) {
+                        SettingsSidebar(navigation: navigation, settings: AppSettings.shared).frame(width: 220)
+                        Divider()
+                        SettingsDetailView(navigation: navigation, controller: controller)
+                    }
+                    .background(Color(nsColor: .windowBackgroundColor))
+                    try save(NSHostingView(rootView: view), size: NSSize(width: 960, height: 660), to: url)
                 }
             }
             for step in OnboardingStep.allCases {

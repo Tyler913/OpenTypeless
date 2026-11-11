@@ -171,6 +171,25 @@ class SnapshotProcessChecks(unittest.TestCase):
                 self.assertEqual(error.exception.code, 1)
                 self.assertTrue((out / "summary.md").is_file())
 
+    def test_sample_data_is_what_both_apps_read(self):
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory) / "en-dark-data"
+            run_snapshots.seed_sample_data(data)
+            usage = json.loads((data / "usage.json").read_text(encoding="utf-8"))
+            self.assertEqual(usage["version"], 1)
+            self.assertGreater(len(usage["days"]), 60)
+            for day, totals in usage["days"].items():
+                self.assertRegex(day, r"^\d{4}-\d{2}-\d{2}$")
+                # Every key: Swift's decoder takes none of them as optional.
+                self.assertEqual(set(totals), {"words", "dictations", "seconds", "sttCost", "polishCost", "unpriced"})
+            sessions = sorted((data / "Sessions").iterdir())
+            self.assertEqual(len(sessions), len(run_snapshots.SAMPLE_DICTATIONS))
+            for folder in sessions:
+                record = json.loads((folder / "session.json").read_text(encoding="utf-8"))
+                self.assertEqual(record["id"], folder.name)
+                self.assertRegex(record["date"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+                self.assertLessEqual({"duration", "status", "rawText", "chunkTexts"}, set(record))
+
 
 class EvaluationFixtureChecks(unittest.TestCase):
     def test_both_evaluation_sets_have_unique_ids_and_valid_assertions(self):

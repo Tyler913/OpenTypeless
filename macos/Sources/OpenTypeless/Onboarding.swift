@@ -589,17 +589,7 @@ private struct DoneStep: View {
             StepHeader(title: L("一切就绪", "You're all set"),
                        subtitle: L("OpenTypeless 在菜单栏里待命。在任何应用里按住 \(settings.hotkey.displayName) 就能听写。",
                                    "OpenTypeless waits in the menu bar. Hold \(settings.hotkey.displayName) in any app to dictate."))
-            Card {
-                CardRow(icon: "hand.point.down.fill", title: L("按住说话", "Hold to talk"),
-                        subtitle: L("按住快捷键说话，松开后自动整理并插入到光标处",
-                                    "Hold the shortcut while you speak; release to clean up and insert")) { EmptyView() }
-                CardDivider(inset: 50)
-                CardRow(icon: "hand.tap.fill", title: L("轻点一下：免手持", "Tap once: hands-free"),
-                        subtitle: L("适合长段口述，说完再按一次结束", "For long dictation — press again when done")) { EmptyView() }
-                CardDivider(inset: 50)
-                CardRow(icon: "escape", title: L("Esc 取消", "Esc to cancel"),
-                        subtitle: L("录音或处理过程中随时取消", "Cancel any time while recording or processing")) { EmptyView() }
-            }
+            DictationTips()
         }
         .padding(.horizontal, 44)
         .frame(maxHeight: .infinity, alignment: .top)

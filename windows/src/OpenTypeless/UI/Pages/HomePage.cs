@@ -3,13 +3,16 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using OpenTypeless.Input;
 using OpenTypeless.Services;
 using TypelessCore;
 
 namespace OpenTypeless.UI;
 
 /// <summary>
-/// The first page: how much you've dictated, the time that saved over typing, what it cost, and a year of activity.
+/// The first page. It opens on how to dictate, then says what dictating has added up to: the time it saved and three
+/// more figures on one card, a year of activity and the spend, and the last few dictations. Before the first dictation
+/// there's nothing to count, so it shows how the key works instead.
 /// </summary>
 public sealed class HomePage : PageBase
 {
@@ -17,12 +20,18 @@ public sealed class HomePage : PageBase
     private readonly AppSettings _settings = AppSettings.Shared;
     private readonly UsageStore _usage = UsageStore.Shared;
     private readonly PriceStore _prices = PriceStore.Shared;
+    private readonly HistoryStore _history = HistoryStore.Shared;
+    /// <summary>The setup issues last drawn, so a change of settings that isn't one of them doesn't redraw the page.</summary>
+    private string _issuesShown = "";
 
-    public HomePage(SettingsWindow window) : base(SettingsPage.Home, formWidth: false)
+    public HomePage(SettingsWindow window) : base(SettingsPage.Home, maxWidth: 1012, showsTitle: false)
     {
         _window = window;
+        Body.Spacing = 20;
         _usage.Changed += OnChanged;
         _prices.Changed += OnChanged;
+        _history.Changed += OnChanged;
+        _settings.PropertyChanged += OnSettingsChanged;
         Render();
         _prices.RefreshIfStale(TimeSpan.FromHours(1));
     }
@@ -31,9 +40,19 @@ public sealed class HomePage : PageBase
     {
         _usage.Changed -= OnChanged;
         _prices.Changed -= OnChanged;
+        _history.Changed -= OnChanged;
+        _settings.PropertyChanged -= OnSettingsChanged;
     }
 
     private void OnChanged() => DispatcherQueue.TryEnqueue(Render);
+
+    /// <summary>A key entered, the engine changed, another shortcut: the headline and the setup notices follow.</summary>
+    private void OnSettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => DispatcherQueue.TryEnqueue(() =>
+    {
+        if (IssuesKey() != _issuesShown || e.PropertyName is null or nameof(AppSettings.Hotkey)) Render();
+    });
+
+    private string IssuesKey() => string.Join("\n", SetupIssues.Current(_settings).Select(issue => issue.Text));
 
     private void Render()
     {
@@ -46,77 +65,276 @@ public sealed class HomePage : PageBase
         var wpm = _settings.TypingWordsPerMinute;
         var (streak, longest) = ledger.Streaks(today);
 
+        Body.Children.Add(Headline());
+        // What still stands in the way of a dictation, each with the page that fixes it.
+        _issuesShown = IssuesKey();
+        foreach (var (text, page) in SetupIssues.Current(_settings))
+        {
+            var fix = new Button { Content = L("设置", "Fix") };
+            fix.Click += (_, _) => _window.Navigate(page);
+            Body.Children.Add(new NoticeBar(Glyphs.Warning, Tint.Orange, text, fix));
+        }
+
         if (ledger.IsEmpty)
         {
-            // Before the first dictation there's nothing to count: how to start, instead of zeros and an empty grid.
-            Body.Children.Add(FirstDictationCard());
-            return;
+            // Before the first dictation: what the key does, instead of zeros and an empty grid.
+            var note = Ui.Text(L($"按住 {_settings.Hotkey.DisplayName} 说话，你的统计就会出现在这里。",
+                                 $"Hold {_settings.Hotkey.DisplayName} and talk. Your stats will show up here."),
+                               12, foreground: Ui.Secondary, wrap: true);
+            note.Margin = new Thickness(1, 0, 0, 0);
+            Body.Children.Add(new StackPanel { Spacing = 8, Children = { DictationTips.Make(), note } });
         }
-
-        // Four headline figures, each on a tile of its own.
-        var speed = all.SpeakingWordsPerMinute;
-        var cells = new Grid { ColumnSpacing = 12 };
-        for (var i = 0; i < 4; i++) cells.ColumnDefinitions.Add(new ColumnDefinition());
-        AddCell(cells, 0, Glyphs.Font, L("总字数", "Words dictated"), null, UsageFormat.Count(all.Words),
-                L($"今天 {UsageFormat.Count(todayTotals.Words)}", $"{UsageFormat.Count(todayTotals.Words)} today"),
-                L($"本月 {UsageFormat.Count(month.Words)}", $"{UsageFormat.Count(month.Words)} this month"));
-        AddCell(cells, 1, Glyphs.Timer, L("节省的时间", "Time saved"),
-                all.Words == 0 ? null : L(
-                    $"说这 {UsageFormat.Count(all.Words)} 个字用了 {UsageFormat.Duration(all.SpeakingSeconds)}；按每分钟 {wpm} 字打出来要 {UsageFormat.Duration(all.TypingSeconds(wpm))}。打字速度可以在「通用」里修改。",
-                    $"Saying these {UsageFormat.Count(all.Words)} words took {UsageFormat.Duration(all.SpeakingSeconds)}; typing them at {wpm} wpm would take {UsageFormat.Duration(all.TypingSeconds(wpm))}. Change the typing speed under General."),
-                UsageFormat.Duration(all.SavedSeconds(wpm)), L($"按每分钟打 {wpm} 字算", $"vs. typing at {wpm} wpm"));
-        AddCell(cells, 2, Glyphs.Speed, L("说话速度", "Speaking speed"), null, speed is { } s ? L($"{s:0} 字/分钟", $"{s:0} wpm") : "—",
-                speed is { } v ? L($"是打字的 {v / wpm:0.0} 倍", $"{v / wpm:0.0}× your typing speed") : L("说几句就能算出来", "Dictate a little to see it"));
-        AddCell(cells, 3, Glyphs.Microphone, L("听写次数", "Dictations"), null, UsageFormat.Count(all.Dictations),
-                streak > 0 ? L($"连续 {streak} 天 · 最长 {longest} 天", $"{streak}-day streak · Best {longest}")
-                           : L($"最长连续 {longest} 天", $"Longest streak {longest} days"));
-        Body.Children.Add(cells);
-
-        // Spend takes a third of the width, the activity grid the rest; both cards as tall as the taller one.
-        var spend = new StackPanel();
-        spend.Children.Add(SpendLine(L("今天", "Today"), todayTotals));
-        spend.Children.Add(new CardDivider());
-        spend.Children.Add(SpendLine(L("本月", "This month"), month, limit: _settings.ActiveSpendLimit));
-        spend.Children.Add(new CardDivider());
-        spend.Children.Add(SpendLine(L("累计", "All time"), all, showsSplit: true));
-        // A new heatmap on every render: XAML refuses (E_INVALIDARG) to put an element into a second card, and one
-        // thrown from a dispatcher callback (a new price list, a finished dictation) ends the app with 0xC000027B.
-        var heatmap = new ActivityHeatmap { Margin = new Thickness(14, 12, 14, 12), Ledger = ledger };
-        var row = new Grid { ColumnSpacing = 12 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
-        row.Children.Add(TitledCard(L("花费", "Spend"), SpendHelp(), spend));
-        var activity = TitledCard(L("活跃度", "Activity"), null, heatmap);
-        Grid.SetColumn(activity, 1);
-        row.Children.Add(activity);
-        Body.Children.Add(row);
-        if (all.Unpriced > 0)
+        else
         {
-            var button = new Button { Content = L("设置价格", "Set prices") };
-            button.Click += (_, _) => _window.Navigate(SettingsPage.Models);
-            Body.Children.Add(new NoticeBar(Glyphs.Warning, Tint.Orange,
-                L($"有 {all.Unpriced} 次请求的模型没有价格，没有计入花费。", $"{all.Unpriced} requests used a model with no price, so they aren't in the spend."),
-                button));
+            var speed = all.SpeakingWordsPerMinute;
+            Body.Children.Add(FiguresCard(
+                new Stat(L("节省的时间", "Time saved"), UsageFormat.Duration(all.SavedSeconds(wpm)), L($"按每分钟打 {wpm} 字算", $"vs. typing at {wpm} wpm"),
+                         Help: all.Words == 0 ? null : L(
+                             $"说这 {UsageFormat.Count(all.Words)} 个字用了 {UsageFormat.Duration(all.SpeakingSeconds)}；按每分钟 {wpm} 字打出来要 {UsageFormat.Duration(all.TypingSeconds(wpm))}。打字速度可以在「通用」里修改。",
+                             $"Saying these {UsageFormat.Count(all.Words)} words took {UsageFormat.Duration(all.SpeakingSeconds)}; typing them at {wpm} wpm would take {UsageFormat.Duration(all.TypingSeconds(wpm))}. Change the typing speed under General.")),
+                [
+                    new Stat(L("总字数", "Words dictated"), UsageFormat.Count(all.Words),
+                             L($"今天 {UsageFormat.Count(todayTotals.Words)}", $"{UsageFormat.Count(todayTotals.Words)} today"),
+                             Tooltip: L($"本月 {UsageFormat.Count(month.Words)}", $"{UsageFormat.Count(month.Words)} this month")),
+                    new Stat(L("说话速度", "Speaking speed"), speed is { } s ? L($"{s:0} 字/分钟", $"{s:0} wpm") : "—",
+                             speed is { } v ? L($"是打字的 {v / wpm:0.0} 倍", $"{v / wpm:0.0}× your typing speed") : L("说几句就能算出来", "Dictate a little to see it")),
+                    new Stat(L("听写次数", "Dictations"), UsageFormat.Count(all.Dictations),
+                             streak > 0 ? L($"连续 {streak} 天 · 最长 {longest} 天", $"{streak}-day streak · Best {longest}")
+                                        : L($"最长连续 {longest} 天", $"Longest streak {longest} days")),
+                ]));
+
+            // The activity grid takes two thirds of the width, the spend the rest; both cards as tall as the taller one.
+            var spend = new StackPanel();
+            spend.Children.Add(SpendLine(L("今天", "Today"), todayTotals));
+            spend.Children.Add(new CardDivider());
+            spend.Children.Add(SpendLine(L("本月", "This month"), month, limit: _settings.ActiveSpendLimit));
+            spend.Children.Add(new CardDivider());
+            spend.Children.Add(SpendLine(L("累计", "All time"), all, showsSplit: true));
+            // A new heatmap on every render: XAML refuses (E_INVALIDARG) to put an element into a second card, and one
+            // thrown from a dispatcher callback (a new price list, a finished dictation) ends the app with 0xC000027B.
+            var heatmap = new ActivityHeatmap { Margin = new Thickness(16, 14, 16, 14), Ledger = ledger };
+            var row = new Grid { ColumnSpacing = 12 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.Children.Add(TitledCard(L("活跃度", "Activity"), null, heatmap));
+            var spendCard = TitledCard(L("花费", "Spend"), SpendHelp(), spend);
+            Grid.SetColumn(spendCard, 1);
+            row.Children.Add(spendCard);
+            Body.Children.Add(row);
+            if (all.Unpriced > 0)
+            {
+                var button = new Button { Content = L("设置价格", "Set prices") };
+                button.Click += (_, _) => _window.Navigate(SettingsPage.Models);
+                Body.Children.Add(new NoticeBar(Glyphs.Warning, Tint.Orange,
+                    L($"有 {all.Unpriced} 次请求的模型没有价格，没有计入花费。", $"{all.Unpriced} requests used a model with no price, so they aren't in the spend."),
+                    button));
+            }
         }
+
+        if (Recent() is { } recent) Body.Children.Add(recent);
     }
 
-    /// <summary>Home before the first dictation: the shortcut, how to use it, and somewhere to try it.</summary>
-    private Border FirstDictationCard()
+    /// <summary>Home's title: how to dictate, with the shortcut's keys as they are on the keyboard, and the Scratchpad to try it in.</summary>
+    private Grid Headline()
     {
-        var text = Ui.Text(L($"按住 {_settings.Hotkey.DisplayName} 说话，你的统计就会出现在这里。",
-                             $"Hold {_settings.Hotkey.DisplayName} and talk. Your stats will show up here."),
-                           14, foreground: Ui.Secondary, wrap: true);
-        text.TextAlignment = TextAlignment.Center;
-        text.HorizontalAlignment = HorizontalAlignment.Center;
-        var open = new Button { Content = L("打开草稿本", "Open Scratchpad"), HorizontalAlignment = HorizontalAlignment.Center };
-        open.Click += (_, _) => ScratchpadWindow.Open();
-        return Card.Make(new StackPanel
+        static TextBlock Word(string text)
         {
-            Spacing = 16,
-            Padding = new Thickness(24, 36, 24, 36),
+            // Windows' TitleTextBlockStyle, as the other pages' titles.
+            var block = Ui.Text(text, 28, FontWeights.SemiBold);
+            block.VerticalAlignment = VerticalAlignment.Center;
+            return block;
+        }
+        var line = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            Children =
+            {
+                Word(L("按住", "Hold")),
+                new KeyCaps { Caps = _settings.Hotkey.KeyCaps, Large = true, VerticalAlignment = VerticalAlignment.Center },
+                Word(L("说话", "and speak")),
+            },
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetHeadingLevel(line, Microsoft.UI.Xaml.Automation.Peers.AutomationHeadingLevel.Level1);
+        var tip = Ui.Text(L("轻点一下进入免手持 · Esc 取消", "Tap once for hands-free · Esc to cancel"), 14, foreground: Ui.Secondary);
+        tip.TextTrimming = TextTrimming.CharacterEllipsis;
+        var open = new Button
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 8,
+                Children = { Ui.Icon(Glyphs.Page, 16), new TextBlock { Text = L("打开草稿本", "Open Scratchpad") } },
+            },
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(open, L("打开草稿本", "Open Scratchpad"));
+        open.Click += (_, _) => ScratchpadWindow.Open();
+        var grid = new Grid { ColumnSpacing = 16, Margin = new Thickness(0, 0, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.Children.Add(new StackPanel { Spacing = 6, Children = { line, tip } });
+        Grid.SetColumn(open, 1);
+        grid.Children.Add(open);
+        return grid;
+    }
+
+    /// <summary>One headline figure: its label, the number, and a line of context; more of the same on a tooltip.</summary>
+    private sealed record Stat(string Title, string Value, string Caption, string? Help = null, string? Tooltip = null);
+
+    /// <summary>
+    /// What dictating has added up to, on one card: the time it saved in large figures, then the other three side by side
+    /// under a hairline, read across like a line of a table rather than as four boxes.
+    /// </summary>
+    private static Border FiguresCard(Stat hero, Stat[] stats)
+    {
+        var heroValue = Ui.Text(hero.Value, 40, FontWeights.SemiBold);
+        heroValue.TextTrimming = TextTrimming.CharacterEllipsis;
+        var heroCaption = Ui.Text(hero.Caption, 12, foreground: Ui.Secondary);
+        // On the figures' baseline, more or less: a 40 px line leaves about 9 px under it.
+        heroCaption.VerticalAlignment = VerticalAlignment.Bottom;
+        heroCaption.Margin = new Thickness(0, 0, 0, 9);
+        var top = new StackPanel
+        {
+            Spacing = 0,
+            Padding = new Thickness(20, 16, 20, 12),
+            Children =
+            {
+                new TitleLine(Ui.Text(hero.Title, 12.5, foreground: Ui.Secondary)) { Help = hero.Help },
+                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { heroValue, heroCaption } },
+            },
+        };
+        var rule = new Microsoft.UI.Xaml.Shapes.Rectangle
+        {
+            Height = 1,
+            Fill = Palette.Theme("DividerStrokeColorDefaultBrush"),
+            Margin = new Thickness(20, 0, 20, 0),
+        };
+        var cells = new Grid { Padding = new Thickness(4, 0, 4, 0) };
+        for (var i = 0; i < stats.Length; i++)
+        {
+            var stat = stats[i];
+            cells.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var value = Ui.Text(stat.Value, 22, FontWeights.SemiBold);
+            value.TextTrimming = TextTrimming.CharacterEllipsis;
+            var caption = Ui.Text(stat.Caption, 12, foreground: Ui.Secondary, wrap: true);
+            caption.MaxLines = 2;
+            caption.TextTrimming = TextTrimming.CharacterEllipsis;
+            var cell = new StackPanel
+            {
+                Spacing = 1,
+                Padding = new Thickness(16, 12, 16, 14),
+                // So that all of the cell counts for the tooltip, not only its text.
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                Children = { value, new TitleLine(Ui.Text(stat.Title, 12.5)) { Help = stat.Help }, caption },
+            };
+            if (stat.Tooltip != null) ToolTipService.SetToolTip(cell, stat.Tooltip);
+            Grid.SetColumn(cell, i);
+            cells.Children.Add(cell);
+        }
+        return Card.Make(new StackPanel { Children = { top, rule, cells } }, large: true);
+    }
+
+    /// <summary>The last few dictations, a line each: when, the text, how long it took to say. A click copies one; History has the rest.</summary>
+    private StackPanel? Recent()
+    {
+        var records = _history.Records.Where(r => r.OutputText.Length > 0).Take(5).ToList();
+        if (records.Count == 0) return null;
+        var title = Ui.Text(L("最近", "Recent"), 14, FontWeights.SemiBold);
+        title.VerticalAlignment = VerticalAlignment.Center;
+        title.Margin = new Thickness(1, 0, 0, 0);
+        var all = new HyperlinkButton
+        {
+            Padding = new Thickness(8, 4, 6, 4),
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, Spacing = 4,
+                Children = { new TextBlock { Text = SettingsPage.History.Title(), FontSize = 12.5 }, Ui.Icon(Glyphs.ChevronRight, 12) },
+            },
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(all, SettingsPage.History.Title());
+        all.Click += (_, _) => _window.Navigate(SettingsPage.History);
+        var header = new Grid();
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.Children.Add(title);
+        Grid.SetColumn(all, 1);
+        header.Children.Add(all);
+
+        var list = new StackPanel();
+        foreach (var record in records)
+        {
+            if (list.Children.Count > 0) list.Children.Add(new CardDivider { Inset = 16 });
+            list.Children.Add(RecentRow(record));
+        }
+        return new StackPanel { Spacing = 4, Children = { header, Card.Make(list, large: true) } };
+    }
+
+    private Button RecentRow(DictationRecord record)
+    {
+        var stamp = Ui.Text(Formatting.ShortStamp(record.Date), 12, foreground: Ui.Secondary);
+        stamp.TextTrimming = TextTrimming.CharacterEllipsis;
+        stamp.VerticalAlignment = VerticalAlignment.Center;
+        // One line: a dictation's own line breaks would otherwise end it at its first.
+        var text = Ui.Text(record.OutputText.ReplaceLineEndings(" "), 14);
+        text.TextTrimming = TextTrimming.CharacterEllipsis;
+        text.TextWrapping = TextWrapping.NoWrap;
+        text.MaxLines = 1;
+        text.VerticalAlignment = VerticalAlignment.Center;
+        var duration = Ui.Text(Formatting.DurationLabel(record.Duration), 12, foreground: Ui.Tertiary);
+        duration.VerticalAlignment = VerticalAlignment.Center;
+        // The copy icon shows under the pointer, and turns into a tick for a moment once clicked.
+        var icon = Ui.Icon(Glyphs.Copy, 12, Ui.Secondary);
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        icon.Opacity = 0;
+
+        var grid = new Grid { ColumnSpacing = 12 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+        grid.Children.Add(stamp);
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+        Grid.SetColumn(duration, 2);
+        grid.Children.Add(duration);
+        Grid.SetColumn(icon, 3);
+        grid.Children.Add(icon);
+
+        var button = new Button
+        {
+            Content = grid,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            Children = { new KeyCaps { Caps = _settings.Hotkey.KeyCaps, Large = true }, text, open },
-        });
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Padding = new Thickness(16, 11, 16, 12),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(0),
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, record.OutputText);
+        ToolTipService.SetToolTip(button, L("点击复制", "Click to copy"));
+        var copied = false;
+        button.PointerEntered += (_, _) => icon.Opacity = 1;
+        button.PointerExited += (_, _) => icon.Opacity = copied ? 1 : 0;
+        button.Click += (_, _) =>
+        {
+            TextInserter.CopyToClipboard(record.OutputText);
+            copied = true;
+            Ui.SetGlyph(icon, Glyphs.Completed, filled: true);
+            icon.Foreground = Palette.Brush(Tint.Green);
+            icon.Opacity = 1;
+            var timer = DispatcherQueue.CreateTimer();
+            timer.Interval = TimeSpan.FromSeconds(1.2);
+            timer.IsRepeating = false;
+            timer.Tick += (_, _) =>
+            {
+                copied = false;
+                Ui.SetGlyph(icon, Glyphs.Copy);
+                icon.Foreground = Ui.Secondary;
+                icon.Opacity = 0;
+            };
+            timer.Start();
+        };
+        return button;
     }
 
     /// A section title above a card that fills the rest of its grid cell.
@@ -127,35 +345,11 @@ public sealed class HomePage : PageBase
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         var label = new TitleLine(Ui.Text(title, 14, FontWeights.SemiBold)) { Margin = new Thickness(1, 0, 0, 0), Help = help };
         grid.Children.Add(label);
-        var card = Card.Make(content);
+        var card = Card.Make(content, large: true);
         card.VerticalAlignment = VerticalAlignment.Stretch;
         Grid.SetRow(card, 1);
         grid.Children.Add(card);
         return grid;
-    }
-
-    /// <summary>One headline figure on its own card: an icon and the label, the number, and a line of context.</summary>
-    private static void AddCell(Grid grid, int index, string glyph, string title, string? help, string value, string caption, string? tooltip = null)
-    {
-        var valueText = Ui.Text(value, 26, FontWeights.SemiBold);
-        valueText.TextTrimming = TextTrimming.CharacterEllipsis;
-        var captionText = Ui.Text(caption, 12, foreground: Ui.Secondary, wrap: true);
-        captionText.MaxLines = 2;
-        captionText.TextTrimming = TextTrimming.CharacterEllipsis;
-        var label = new TitleLine(Ui.Text(title, 12.5, foreground: Ui.Secondary)) { Help = help };
-        var icon = IconTile(glyph, 18);
-        icon.HorizontalAlignment = HorizontalAlignment.Left;
-        icon.Margin = new Thickness(0, 0, 0, 10);
-        var cell = new StackPanel
-        {
-            Spacing = 2,
-            Padding = new Thickness(16, 14, 16, 14),
-            Children = { icon, label, valueText, captionText },
-        };
-        if (tooltip != null) ToolTipService.SetToolTip(cell, tooltip);
-        var card = Card.Make(cell);
-        Grid.SetColumn(card, index);
-        grid.Children.Add(card);
     }
 
     /// <summary>
@@ -224,6 +418,55 @@ public sealed class HomePage : PageBase
         return L($"OpenRouter 按每次请求实际扣费计算（价格表更新于 {updated}）。其他服务商按你在「模型」里填写的价格计算。",
                  $"OpenRouter requests count what OpenRouter billed for them (price list updated {updated}). Other providers use the prices you set under Models.");
     }
+}
+
+/// <summary>
+/// What still stands between the user and a dictation, each with the page that fixes it: a missing key (or, with
+/// on-device recognition, a model not downloaded) and microphone permission. Home and the tray panel show the same list.
+/// </summary>
+internal static class SetupIssues
+{
+    public static List<(string Text, SettingsPage Page)> Current(AppSettings settings)
+    {
+        var items = new List<(string Text, SettingsPage Page)>();
+        if (SpeechModel.SetupIssue(settings) is { } issue)
+        {
+            var name = settings.SttProvider.DisplayName();
+            items.Add(settings.SpeechEngine == SpeechEngine.OnDevice
+                          ? (issue.Message, SettingsPage.Models)
+                          : (L($"还没有配置 {name} 的 API Key", $"No API key for {name}"), SettingsPage.Providers));
+        }
+        if (!Permissions.MicrophoneGranted) items.Add((L("需要麦克风权限", "Microphone permission needed"), SettingsPage.General));
+        return items;
+    }
+}
+
+/// <summary>What the dictation key does, in three rows: hold it, tap it, and Esc. The onboarding ends on the same card.</summary>
+internal static class DictationTips
+{
+    public static Border Make() => Card.Make(new StackPanel
+    {
+        Children =
+        {
+            new CardRow
+            {
+                Glyph = Glyphs.Microphone, Title = L("按住说话", "Hold to talk"),
+                Subtitle = L("按住快捷键说话，松开后自动整理并插入到光标处", "Hold the shortcut while you speak; release to clean up and insert"),
+            },
+            new CardDivider { Inset = 50 },
+            new CardRow
+            {
+                Glyph = Glyphs.TouchPointer, Title = L("轻点一下：免手持", "Tap once: hands-free"),
+                Subtitle = L("适合长段口述，说完再按一次结束", "For long dictation — press again when done"),
+            },
+            new CardDivider { Inset = 50 },
+            new CardRow
+            {
+                Glyph = Glyphs.Cancel, Title = L("Esc 取消", "Esc to cancel"),
+                Subtitle = L("录音或处理过程中随时取消", "Cancel any time while recording or processing"),
+            },
+        },
+    }, large: true);
 }
 
 /// <summary>

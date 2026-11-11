@@ -192,12 +192,15 @@ public static class Card
     /// <summary>The corner radius of Windows 11's settings cards (ControlCornerRadius).</summary>
     public static CornerRadius Radius => Palette.Resource("ControlCornerRadius", new CornerRadius(4));
 
-    public static Border Make(UIElement? child = null) => new()
+    /// <summary>The corner radius of a card that stands on its own rather than in a list of rows (OverlayCornerRadius), as on Home.</summary>
+    public static CornerRadius LargeRadius => Palette.Resource("OverlayCornerRadius", new CornerRadius(8));
+
+    public static Border Make(UIElement? child = null, bool large = false) => new()
     {
         Background = Palette.Theme("CardBackgroundFillColorDefaultBrush"),
         BorderBrush = Palette.Theme("CardStrokeColorDefaultBrush"),
         BorderThickness = new Thickness(1),
-        CornerRadius = Radius,
+        CornerRadius = large ? LargeRadius : Radius,
         Child = child,
     };
 }

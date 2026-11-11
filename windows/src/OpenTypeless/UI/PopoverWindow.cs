@@ -328,15 +328,7 @@ public sealed class PopoverWindow : Window
 
     private FrameworkElement? Warnings()
     {
-        var items = new List<(string Text, SettingsPage Page)>();
-        if (SpeechModel.SetupIssue(_settings) is { } issue)
-        {
-            var name = _settings.SttProvider.DisplayName();
-            items.Add(_settings.SpeechEngine == SpeechEngine.OnDevice
-                          ? (issue.Message, SettingsPage.Models)
-                          : (L($"还没有配置 {name} 的 API Key", $"No API key for {name}"), SettingsPage.Providers));
-        }
-        if (!Permissions.MicrophoneGranted) items.Add((L("需要麦克风权限", "Microphone permission needed"), SettingsPage.General));
+        var items = SetupIssues.Current(_settings);
         var failed = FailedRecord();
         var update = UpdateBanner();
         if (items.Count == 0 && failed == null && update == null) return null;

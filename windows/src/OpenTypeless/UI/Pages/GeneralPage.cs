@@ -51,8 +51,8 @@ public sealed class GeneralPage : PageBase
         });
         Body.Children.Add(permissions);
 
-        // Dictation
-        var dictation = new CardSection { Title = L("听写", "Dictation") };
+        // What happens to the text, then what happens while you talk: one list of ten was a wall of switches.
+        var dictation = new CardSection { Title = L("插入文字", "Inserting text") };
         dictation.Body.Add(new CardRow
         {
             Glyph = Glyphs.Paste, Title = L("恢复剪贴板", "Restore clipboard"),
@@ -92,7 +92,9 @@ public sealed class GeneralPage : PageBase
                      "Say “new line” or “new paragraph” on its own, with a short pause before and after, for a line break or a blank line; 换行 / 新段落 and the other languages’ words work too. Said within a sentence, the words stay as they are; said on their own in a list (“spaces, new line, tabs”), they become a break too."),
             Trailing = Toggle(_settings.SpokenLayoutCommands, on => _settings.SpokenLayoutCommands = on),
         });
-        dictation.Body.Add(new CardDivider());
+        Body.Children.Add(dictation);
+
+        dictation = new CardSection { Title = L("录音时", "While recording") };
         dictation.Body.Add(new CardRow
         {
             Glyph = Glyphs.Volume, Title = L("提示音", "Sounds"),

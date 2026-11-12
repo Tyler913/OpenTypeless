@@ -48,7 +48,7 @@ struct HistoryPage: View {
                             list(records, selected: selected)
                         }
                         .frame(width: 270)
-                        Rectangle().fill(Color.primary.opacity(0.07)).frame(width: 1)
+                        Rectangle().fill(Theme.hairline).frame(width: 1)
                         if let record = records.first(where: { $0.id == selected }) {
                             HistoryDetail(record: record, controller: controller, history: history, files: files)
                                 .id(record.id)
@@ -268,7 +268,7 @@ struct HistoryPage: View {
                                 .padding(.top, 8)
                                 .padding(.bottom, 4)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color(nsColor: .controlBackgroundColor))
+                                .background(Theme.cardFill)
                         }
                     }
                 }
@@ -334,7 +334,7 @@ private struct HistoryRow: View {
     }
 
     private var preview: String {
-        if !record.outputText.isEmpty { return record.outputText }
+        if !record.outputText.isEmpty { return record.outputText.onOneLine }
         switch record.status {
         case .recording: return L("正在录音…", "Recording…")
         case .processing: return L("正在处理…", "Processing…")

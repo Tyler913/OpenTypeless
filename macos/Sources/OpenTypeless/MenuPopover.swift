@@ -199,22 +199,7 @@ struct MenuPopoverView: View {
 
     // MARK: Helpers
 
-    private struct Issue { let text: String; let page: SettingsPage }
-
-    private var setupIssues: [Issue] {
-        var issues: [Issue] = []
-        if !settings.speechReady {
-            issues.append(Issue(text: L("还没有配置 \(settings.sttProvider.displayName) 的 API Key",
-                                        "No API key for \(settings.sttProvider.displayName)"), page: .providers))
-        }
-        if !permissions.accessibilityGranted {
-            issues.append(Issue(text: L("需要辅助功能权限", "Accessibility permission needed"), page: .general))
-        }
-        if !permissions.microphoneGranted {
-            issues.append(Issue(text: L("需要麦克风权限", "Microphone permission needed"), page: .general))
-        }
-        return issues
-    }
+    private var setupIssues: [SetupIssue] { SetupIssue.current(settings: settings, permissions: permissions) }
 
     /// The last dictation, when it failed. A transcribed file is retried from History instead: its text is never pasted.
     private var failedRecord: DictationRecord? {
@@ -240,7 +225,7 @@ private struct RecentRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(record.outputText)
+                Text(record.outputText.onOneLine)
                     .font(.system(size: 12.5))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)

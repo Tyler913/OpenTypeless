@@ -29,6 +29,12 @@
             OpenPaneLength="232"
             SelectionChanged="OnSelectionChanged">
 
+            <!-- The pages sit on the window's Mica like the sidebar does, as in Windows 11 Settings, not on a panel of their own. -->
+            <NavigationView.Resources>
+                <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent" />
+                <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
+            </NavigationView.Resources>
+
             <NavigationView.PaneHeader>
                 <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,16,12">
                     <ui:AppTile TileSize="28" />
@@ -40,7 +46,14 @@
                 <ui:StatusPill x:Name="ReadyPill" Margin="16" HorizontalAlignment="Left" />
             </NavigationView.PaneFooter>
 
-            <ContentControl x:Name="PageHost" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+            <ContentControl x:Name="PageHost" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                <!-- A page slides up into place as it opens, as in Windows 11 Settings. -->
+                <ContentControl.ContentTransitions>
+                    <TransitionCollection>
+                        <EntranceThemeTransition FromVerticalOffset="24" />
+                    </TransitionCollection>
+                </ContentControl.ContentTransitions>
+            </ContentControl>
         </NavigationView>
     </Grid>
 </Window>

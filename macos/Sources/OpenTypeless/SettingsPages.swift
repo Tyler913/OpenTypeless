@@ -39,7 +39,8 @@ struct GeneralPage: View {
                 }
             }
 
-            CardSection(title: L("听写", "Dictation")) {
+            // What happens to the text, then what happens while you talk: one list of ten was a wall of switches.
+            CardSection(title: L("插入文字", "Inserting text")) {
                 CardRow(title: L("恢复剪贴板", "Restore clipboard"),
                         help: L("插入文字后，把剪贴板恢复成原来的内容", "Put your previous clipboard back after inserting"),
                         isOn: $settings.restoreClipboard)
@@ -64,7 +65,9 @@ struct GeneralPage: View {
                         help: L("单独说“换行”或“新段落”（前后稍作停顿），会换成换行或空一行；其他语言的说法也可以，比如 new line、new paragraph。在一句话中间说到这些词时照原样保留；但在列举里单独说出（“空格，换行，制表符”）时也会变成换行。",
                                 "Say “new line” or “new paragraph” on its own, with a short pause before and after, for a line break or a blank line; 换行 / 新段落 and the other languages’ words work too. Said within a sentence, the words stay as they are; said on their own in a list (“spaces, new line, tabs”), they become a break too."),
                         isOn: $settings.spokenLayoutCommands)
-                CardDivider()
+            }
+
+            CardSection(title: L("录音时", "While recording")) {
                 CardRow(title: L("提示音", "Sounds"),
                         subtitle: L("开始和结束录音时播放轻提示音", "Soft chime when recording starts and stops"),
                         isOn: $settings.playSounds)

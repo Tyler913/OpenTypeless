@@ -32,6 +32,9 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .history: return "clock"
         }
     }
+
+    /// The sidebar, top to bottom: what you come back to look at, then how dictation behaves, then the services behind it.
+    static let groups: [[SettingsPage]] = [[.home, .history], [.general, .shortcut, .style, .apps], [.providers, .models]]
 }
 
 @MainActor
@@ -97,10 +100,15 @@ struct SettingsSidebar: View {
             get: { navigation.page },
             set: { if let page = $0 { navigation.page = page } }
         )) {
-            ForEach(SettingsPage.allCases) { page in
-                // Plain symbols in the sidebar's own tint, as in Mail or Finder: no colour per page.
-                Label(page.title, systemImage: page.symbol)
-                    .tag(page)
+            // In groups a gap apart, without headings: eight pages don't need naming twice.
+            ForEach(SettingsPage.groups, id: \.self) { group in
+                Section {
+                    ForEach(group) { page in
+                        // Plain symbols in the sidebar's own tint, as in Mail or Finder: no colour per page.
+                        Label(page.title, systemImage: page.symbol)
+                            .tag(page)
+                    }
+                }
             }
         }
         .listStyle(.sidebar)
@@ -136,6 +144,10 @@ struct PageScaffold<Accessory: View, Content: View>: View {
     var scrolls = true
     /// How wide the content gets; nil lets it fill the window, for pages that have use for the room.
     var maxWidth: CGFloat? = Theme.formWidth
+    /// False for a page that opens on a headline of its own (Home).
+    var showsTitle = true
+    /// Whether a scrolling page of limited width is a grouped form, drawn by the system; false lays the content out as given.
+    var form = true
     @ViewBuilder var accessory: Accessory
     @ViewBuilder var content: Content
 
@@ -152,7 +164,7 @@ struct PageScaffold<Accessory: View, Content: View>: View {
     }
 
     var body: some View {
-        if scrolls, let maxWidth {
+        if scrolls, form, let maxWidth {
             VStack(spacing: 0) {
                 header
                     .padding(.horizontal, 30)
@@ -168,11 +180,11 @@ struct PageScaffold<Accessory: View, Content: View>: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } else {
             let stack = VStack(alignment: .leading, spacing: 20) {
-                header
+                if showsTitle { header }
                 content
             }
             .padding(.horizontal, 30)
-            .padding(.top, 10)
+            .padding(.top, showsTitle ? 10 : 14)
             .padding(.bottom, 28)
             .frame(maxWidth: maxWidth.map { $0 + 60 } ?? .infinity, alignment: .leading)
             .frame(maxWidth: .infinity)
@@ -187,8 +199,10 @@ struct PageScaffold<Accessory: View, Content: View>: View {
 }
 
 extension PageScaffold where Accessory == EmptyView {
-    init(page: SettingsPage, help: String? = nil, scrolls: Bool = true, maxWidth: CGFloat? = Theme.formWidth, @ViewBuilder content: () -> Content) {
-        self.init(page: page, help: help, scrolls: scrolls, maxWidth: maxWidth, accessory: { EmptyView() }, content: content)
+    init(page: SettingsPage, help: String? = nil, scrolls: Bool = true, maxWidth: CGFloat? = Theme.formWidth,
+         showsTitle: Bool = true, form: Bool = true, @ViewBuilder content: () -> Content) {
+        self.init(page: page, help: help, scrolls: scrolls, maxWidth: maxWidth, showsTitle: showsTitle, form: form,
+                  accessory: { EmptyView() }, content: content)
     }
 }
 

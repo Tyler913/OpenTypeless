@@ -754,29 +754,7 @@ public sealed class OnboardingWindow : Window
               $"OpenTypeless waits in the system tray. Hold {_settings.Hotkey.DisplayName} in any app to dictate."));
         header.Margin = new Thickness(0);
         panel.Children.Add(header);
-        panel.Children.Add(Card.Make(new StackPanel
-        {
-            Children =
-            {
-                new CardRow
-                {
-                    Glyph = Glyphs.Microphone, Title = L("按住说话", "Hold to talk"),
-                    Subtitle = L("按住快捷键说话，松开后自动整理并插入到光标处", "Hold the shortcut while you speak; release to clean up and insert"),
-                },
-                new CardDivider { Inset = 50 },
-                new CardRow
-                {
-                    Glyph = Glyphs.TouchPointer, Title = L("轻点一下：免手持", "Tap once: hands-free"),
-                    Subtitle = L("适合长段口述，说完再按一次结束", "For long dictation — press again when done"),
-                },
-                new CardDivider { Inset = 50 },
-                new CardRow
-                {
-                    Glyph = Glyphs.Cancel, Title = L("Esc 取消", "Esc to cancel"),
-                    Subtitle = L("录音或处理过程中随时取消", "Cancel any time while recording or processing"),
-                },
-            },
-        }));
+        panel.Children.Add(DictationTips.Make());
         return panel;
     }
 

@@ -8,6 +8,21 @@ enum Theme {
     static let cardRadius: CGFloat = 14
     /// How wide a page of settings gets: past this, rows only put more space between a title and its control.
     static let formWidth: CGFloat = 720
+    /// How wide Home gets: past this, its figures and lists only drift apart.
+    static let dashboardWidth: CGFloat = 900
+    /// The fill of a card: the window's background a shade towards the text colour, the tint a grouped form gives its
+    /// sections, so Home and History sit on the page the way a page of settings does. Opaque, so that what stays put in
+    /// a card while its rows scroll (History's day headings) can be filled with it too.
+    static let cardFill = Color(nsColor: NSColor(name: nil) { appearance in
+        let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        var base = NSColor.windowBackgroundColor
+        appearance.performAsCurrentDrawingAppearance {
+            base = NSColor.windowBackgroundColor.usingColorSpace(.sRGB) ?? base
+        }
+        return base.blended(withFraction: dark ? 0.05 : 0.04, of: dark ? .white : .black) ?? base
+    })
+    /// A hairline inside a card: between rows, columns and panes.
+    static let hairline = Color.primary.opacity(0.08)
 }
 
 /// The app's mark: three voice bars running into a text caret, so what you say becomes text at your cursor. The same
@@ -148,7 +163,7 @@ private struct RowPadding: ViewModifier {
     }
 }
 
-/// A grouped container with a hairline border; in a settings form, a section of its own.
+/// A grouped container, filled like a grouped form's section; in a settings form, a section of its own.
 struct Card<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.inSettingsForm) private var inForm
@@ -160,11 +175,7 @@ struct Card<Content: View>: View {
             VStack(alignment: .leading, spacing: 0) { content }
                 .background(
                     RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.08))
+                        .fill(Theme.cardFill)
                 )
         }
     }
@@ -355,7 +366,7 @@ struct CardDivider: View {
 
     var body: some View {
         if !inForm {
-            Rectangle().fill(Color.primary.opacity(0.07)).frame(height: 1).padding(.leading, inset)
+            Rectangle().fill(Theme.hairline).frame(height: 1).padding(.leading, inset)
         }
     }
 }
@@ -463,6 +474,14 @@ struct HoverButtonStyle: ButtonStyle {
                 )
                 .onHover { hovering = $0 }
         }
+    }
+}
+
+extension String {
+    /// The text on one line, for a preview of a line or two: a dictation's own line breaks (a list, paragraphs) would
+    /// otherwise end the preview at its first line and leave the next one empty.
+    var onOneLine: String {
+        split(whereSeparator: \.isNewline).joined(separator: " ")
     }
 }
 

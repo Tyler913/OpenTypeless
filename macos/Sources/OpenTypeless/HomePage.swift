@@ -1,12 +1,16 @@
 import SwiftUI
 import TypelessCore
 
-/// The first page: how much you've dictated, the time that saved over typing, what it cost, and a year of activity.
+/// The first page. It opens on how to dictate, then says what dictating has added up to: four figures side by side, a
+/// year of activity and the spend, and the last few dictations. Before the first dictation there's nothing to count,
+/// so it shows how the key works instead.
 struct HomePage: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var navigation: SettingsNavigation
     @ObservedObject var usage = UsageStore.shared
     @ObservedObject var prices = PriceStore.shared
+    @ObservedObject var history = HistoryStore.shared
+    @ObservedObject private var permissions = PermissionsMonitor.shared
 
     var body: some View {
         let ledger = usage.ledger
@@ -17,13 +21,29 @@ struct HomePage: View {
         let wpm = min(300, max(10, settings.typingWordsPerMinute))
         let streaks = ledger.streaks(today: today)
 
-        PageScaffold(page: .home, maxWidth: nil) {
+        PageScaffold(page: .home, maxWidth: Theme.dashboardWidth, showsTitle: false, form: false) {
+            HomeHeadline(settings: settings)
+            // What still stands in the way of a dictation, each with the page that fixes it.
+            ForEach(SetupIssue.current(settings: settings, permissions: permissions)) { issue in
+                Banner(symbol: "exclamationmark.triangle.fill", color: .orange, text: issue.text) {
+                    Button(L("设置", "Fix")) { navigation.page = issue.page }.controlSize(.small)
+                }
+            }
             if ledger.isEmpty {
-                // Before the first dictation there's nothing to count: how to start, instead of zeros and an empty grid.
-                FirstDictationCard(settings: settings)
+                // Before the first dictation: what the key does, instead of zeros and an empty grid.
+                VStack(alignment: .leading, spacing: 8) {
+                    DictationTips()
+                    Text(L("按住 \(settings.hotkey.displayName) 说话，你的统计就会出现在这里。",
+                           "Hold \(settings.hotkey.displayName) and talk. Your stats will show up here."))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 4)
+                }
             } else {
                 figures(all: all, todayTotals: todayTotals, month: month, wpm: wpm, streaks: streaks, ledger: ledger, today: today)
             }
+            RecentDictations(history: history, navigation: navigation)
         }
         .task { prices.refreshIfStale(maxAge: 60 * 60) }
     }
@@ -32,48 +52,44 @@ struct HomePage: View {
     private func figures(all: UsageTotals, todayTotals: UsageTotals, month: UsageTotals, wpm: Int,
                          streaks: (current: Int, longest: Int), ledger: UsageLedger, today: CalendarDay) -> some View {
         let speed = all.speakingWordsPerMinute
-        HStack(spacing: 12) {
-            StatTile(symbol: "text.word.spacing",
-                     title: L("总字数", "Words dictated"), value: UsageFormat.count(all.words),
-                     caption: L("今天 \(UsageFormat.count(todayTotals.words))", "\(UsageFormat.count(todayTotals.words)) today"))
-                .help(L("本月 \(UsageFormat.count(month.words))", "\(UsageFormat.count(month.words)) this month"))
-            StatTile(symbol: "hourglass",
-                     title: L("节省的时间", "Time saved"),
-                     help: all.words > 0
-                         ? L("说这 \(UsageFormat.count(all.words)) 个字用了 \(UsageFormat.duration(all.speakingSeconds))；按每分钟 \(wpm) 字打出来要 \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm))))。打字速度可以在「通用」里修改。",
-                             "Saying these \(UsageFormat.count(all.words)) words took \(UsageFormat.duration(all.speakingSeconds)); typing them at \(wpm) wpm would take \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm)))). Change the typing speed under General.")
-                         : nil,
-                     value: UsageFormat.duration(all.savedSeconds(wordsPerMinute: Double(wpm))),
-                     caption: L("按每分钟打 \(wpm) 字算", "vs. typing at \(wpm) wpm"))
-            StatTile(symbol: "gauge.with.needle",
-                     title: L("说话速度", "Speaking speed"),
+        FiguresCard(
+            hero: Stat(title: L("节省的时间", "Time saved"),
+                       help: all.words > 0
+                           ? L("说这 \(UsageFormat.count(all.words)) 个字用了 \(UsageFormat.duration(all.speakingSeconds))；按每分钟 \(wpm) 字打出来要 \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm))))。打字速度可以在「通用」里修改。",
+                               "Saying these \(UsageFormat.count(all.words)) words took \(UsageFormat.duration(all.speakingSeconds)); typing them at \(wpm) wpm would take \(UsageFormat.duration(all.typingSeconds(wordsPerMinute: Double(wpm)))). Change the typing speed under General.")
+                           : nil,
+                       value: UsageFormat.duration(all.savedSeconds(wordsPerMinute: Double(wpm))),
+                       caption: L("按每分钟打 \(wpm) 字算", "vs. typing at \(wpm) wpm")),
+            stats: [
+                Stat(title: L("总字数", "Words dictated"), value: UsageFormat.count(all.words),
+                     caption: L("今天 \(UsageFormat.count(todayTotals.words))", "\(UsageFormat.count(todayTotals.words)) today"),
+                     tooltip: L("本月 \(UsageFormat.count(month.words))", "\(UsageFormat.count(month.words)) this month")),
+                Stat(title: L("说话速度", "Speaking speed"),
                      value: speed.map { L("\(Int($0.rounded())) 字/分钟", "\(Int($0.rounded())) wpm") } ?? "—",
                      caption: speed.map {
                          let ratio = String(format: "%.1f", $0 / Double(wpm))
                          return L("是打字的 \(ratio) 倍", "\(ratio)× your typing speed")
-                     } ?? L("说几句就能算出来", "Dictate a little to see it"))
-            StatTile(symbol: "mic.fill",
-                     title: L("听写次数", "Dictations"), value: UsageFormat.count(all.dictations),
+                     } ?? L("说几句就能算出来", "Dictate a little to see it")),
+                Stat(title: L("听写次数", "Dictations"), value: UsageFormat.count(all.dictations),
                      caption: streaks.current > 0
                          ? L("连续 \(streaks.current) 天 · 最长 \(streaks.longest) 天",
                              "\(streaks.current)-day streak · Best \(streaks.longest)")
-                         : L("最长连续 \(streaks.longest) 天", "Longest streak \(streaks.longest) days"))
-        }
-        .fixedSize(horizontal: false, vertical: true)
+                         : L("最长连续 \(streaks.longest) 天", "Longest streak \(streaks.longest) days")),
+            ])
 
-        // Spend takes a third of the width, the activity grid the rest.
-        ProportionalRow(ratios: [1, 2], spacing: 12) {
+        // The activity grid takes two thirds of the width, the spend the rest.
+        ProportionalRow(ratios: [2, 1], spacing: 12) {
+            TitledCard(title: L("活跃度", "Activity")) {
+                ActivityHeatmap(ledger: ledger, today: today)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+            }
             TitledCard(title: L("花费", "Spend"), help: spendHelp) {
                 SpendLine(title: L("今天", "Today"), totals: todayTotals)
                 CardDivider()
                 SpendLine(title: L("本月", "This month"), totals: month, limit: settings.activeSpendLimit)
                 CardDivider()
                 SpendLine(title: L("累计", "All time"), totals: all, showsSplit: true)
-            }
-            TitledCard(title: L("活跃度", "Activity")) {
-                ActivityHeatmap(ledger: ledger, today: today)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
             }
         }
         if all.unpriced > 0 {
@@ -93,64 +109,247 @@ struct HomePage: View {
     }
 }
 
-/// Home before the first dictation: the shortcut, how to use it, and somewhere to try it.
-private struct FirstDictationCard: View {
+/// What still stands between the user and a dictation, and the page that fixes it. Home and the menu-bar panel show the
+/// same list.
+struct SetupIssue: Identifiable {
+    let text: String
+    let page: SettingsPage
+
+    var id: String { text }
+
+    @MainActor
+    static func current(settings: AppSettings, permissions: PermissionsMonitor) -> [SetupIssue] {
+        var issues: [SetupIssue] = []
+        if !settings.speechReady {
+            issues.append(SetupIssue(text: L("还没有配置 \(settings.sttProvider.displayName) 的 API Key",
+                                             "No API key for \(settings.sttProvider.displayName)"), page: .providers))
+        }
+        if !permissions.accessibilityGranted {
+            issues.append(SetupIssue(text: L("需要辅助功能权限", "Accessibility permission needed"), page: .general))
+        }
+        if !permissions.microphoneGranted {
+            issues.append(SetupIssue(text: L("需要麦克风权限", "Microphone permission needed"), page: .general))
+        }
+        return issues
+    }
+}
+
+/// Home's title: how to dictate, with the shortcut's keys as they are on the keyboard, and the Scratchpad to try it in.
+private struct HomeHeadline: View {
     @ObservedObject var settings: AppSettings
 
     var body: some View {
-        Card {
-            VStack(spacing: 16) {
-                KeyCaps(caps: settings.hotkey.keyCaps, large: true)
-                Text(L("按住 \(settings.hotkey.displayName) 说话，你的统计就会出现在这里。",
-                       "Hold \(settings.hotkey.displayName) and talk. Your stats will show up here."))
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 9) {
+                    Text(L("按住", "Hold"))
+                    KeyCaps(caps: settings.hotkey.keyCaps, large: true)
+                    Text(L("说话", "and speak"))
+                }
+                .font(.system(size: 24, weight: .bold))
+                .lineLimit(1)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+                Text(L("轻点一下进入免手持 · Esc 取消", "Tap once for hands-free · Esc to cancel"))
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                Button(L("打开草稿本", "Open Scratchpad")) { ScratchpadWindowController.shared.show() }
             }
-            .padding(.vertical, 36)
-            .padding(.horizontal, 24)
-            .frame(maxWidth: .infinity)
+            Spacer(minLength: 12)
+            Button { ScratchpadWindowController.shared.show() } label: {
+                Label(L("打开草稿本", "Open Scratchpad"), systemImage: ShortcutAction.openScratchpad.symbol)
+            }
+            .controlSize(.large)
+        }
+        .padding(.bottom, 4)
+    }
+}
+
+/// What the dictation key does, in three rows: hold it, tap it, and Esc. The onboarding ends on the same card.
+struct DictationTips: View {
+    var body: some View {
+        Card {
+            CardRow(icon: "mic.fill", title: L("按住说话", "Hold to talk"),
+                    subtitle: L("按住快捷键说话，松开后自动整理并插入到光标处",
+                                "Hold the shortcut while you speak; release to clean up and insert")) { EmptyView() }
+            CardDivider(inset: 50)
+            CardRow(icon: "hand.tap.fill", title: L("轻点一下：免手持", "Tap once: hands-free"),
+                    subtitle: L("适合长段口述，说完再按一次结束", "For long dictation — press again when done")) { EmptyView() }
+            CardDivider(inset: 50)
+            CardRow(icon: "escape", title: L("Esc 取消", "Esc to cancel"),
+                    subtitle: L("录音或处理过程中随时取消", "Cancel any time while recording or processing")) { EmptyView() }
         }
     }
 }
 
-/// One headline figure, on a tile of its own: a symbol and its label, the number, and a line of context.
-private struct StatTile: View {
-    let symbol: String
+/// One headline figure: its label, the number, and a line of context.
+private struct Stat: Identifiable {
     let title: String
     var help: String? = nil
     let value: String
     let caption: String
+    /// More of the same figure, shown while the pointer rests on it.
+    var tooltip: String? = nil
+
+    var id: String { title }
+}
+
+/// What dictating has added up to, on one card: the time it saved in large figures, then the other three side by side
+/// under a hairline, read across like a line of a table rather than as four boxes.
+private struct FiguresCard: View {
+    let hero: Stat
+    let stats: [Stat]
 
     var body: some View {
         Card {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 7) {
-                    IconBadge(symbol: symbol, size: 18)
-                    Text(title)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 5) {
+                    Text(hero.title)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    if let help { HelpTip(text: help, topic: title) }
+                    if let help = hero.help { HelpTip(text: help, topic: hero.title) }
                 }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(value)
-                        .font(.system(size: 26, weight: .semibold, design: .rounded))
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(hero.value)
+                        .font(.system(size: 40, weight: .bold, design: .rounded))
+                        .tracking(-0.5)
                         .monospacedDigit()
                         .lineLimit(1)
-                        .minimumScaleFactor(0.55)
-                    Text(caption)
-                        .font(.system(size: 11.5))
+                        .minimumScaleFactor(0.5)
+                    Text(hero.caption)
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                 }
+                .accessibilityElement(children: .combine)
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.horizontal, 18)
+            .padding(.top, 16)
+            .padding(.bottom, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Rectangle().fill(Theme.hairline).frame(height: 1).padding(.horizontal, 18)
+
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(stats) { stat in StatCell(stat: stat) }
+            }
+            .padding(.horizontal, 2)
         }
+    }
+}
+
+/// One of the smaller figures: the number, what it counts, and a line of context.
+private struct StatCell: View {
+    let stat: Stat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(stat.value)
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+            HStack(spacing: 5) {
+                Text(stat.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if let help = stat.help { HelpTip(text: help, topic: stat.title) }
+            }
+            Text(stat.caption)
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .accessibilityElement(children: .combine)
+        .help(stat.tooltip ?? "")
+    }
+}
+
+/// The last few dictations, a line each: the text, then when it was said and how long it took. A click copies one; History has the rest.
+private struct RecentDictations: View {
+    @ObservedObject var history: HistoryStore
+    @ObservedObject var navigation: SettingsNavigation
+    @State private var copiedID: String?
+
+    var body: some View {
+        let records = Array(history.records.lazy.filter { !$0.outputText.isEmpty }.prefix(5))
+        if !records.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    SectionTitle(title: L("最近", "Recent"))
+                    Spacer(minLength: 8)
+                    Button { navigation.page = .history } label: {
+                        HStack(spacing: 3) {
+                            Text(SettingsPage.history.title)
+                            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                        }
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 4)
+                }
+                Card {
+                    ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
+                        if index > 0 { CardDivider() }
+                        Button { copy(record) } label: {
+                            RecentDictationRow(record: record, copied: copiedID == record.id)
+                        }
+                        .buttonStyle(HoverButtonStyle(cornerRadius: 0))
+                        .help(L("点击复制", "Click to copy"))
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+            }
+        }
+    }
+
+    private func copy(_ record: DictationRecord) {
+        TextInserter.copyToClipboard(record.outputText)
+        copiedID = record.id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            if copiedID == record.id { copiedID = nil }
+        }
+    }
+}
+
+private struct RecentDictationRow: View {
+    let record: DictationRecord
+    let copied: Bool
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            // The text leads; when it was said and how long it took follow at the end, where they line up down the card.
+            Text(record.outputText.onOneLine)
+                .font(.system(size: 13))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text("\(record.date.shortStamp) · \(record.duration.durationLabel)")
+                .font(.system(size: 11.5))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.system(size: 11))
+                .foregroundStyle(copied ? Color.green : Color.secondary)
+                .frame(width: 14)
+                .opacity(copied || hovering ? 1 : 0)
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onHover { hovering = $0 }
     }
 }
 

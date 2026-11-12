@@ -899,14 +899,23 @@
     "fr": "Désactivé : l’app attend dans la barre des menus après la connexion. L’ouvrir vous-même affiche toujours l’accueil",
     "de": "Aus: Nach der Anmeldung wartet die App in der Menüleiste. Wenn du sie selbst öffnest, erscheint immer die Startseite"
   },
-  "Dictation": {
-    "ja": "音声入力",
-    "ko": "받아쓰기",
-    "es": "Dictado",
-    "pt": "Ditado",
-    "ru": "Диктовка",
-    "fr": "Dictée",
-    "de": "Diktat"
+  "Inserting text": {
+    "ja": "テキストの挿入",
+    "ko": "텍스트 삽입",
+    "es": "Inserción de texto",
+    "pt": "Inserção de texto",
+    "ru": "Вставка текста",
+    "fr": "Insertion du texte",
+    "de": "Text einfügen"
+  },
+  "While recording": {
+    "ja": "録音中の動作",
+    "ko": "녹음하는 동안",
+    "es": "Durante la grabación",
+    "pt": "Durante a gravação",
+    "ru": "Во время записи",
+    "fr": "Pendant l’enregistrement",
+    "de": "Während der Aufnahme"
   },
   "Restore clipboard": {
     "ja": "クリップボードを復元",

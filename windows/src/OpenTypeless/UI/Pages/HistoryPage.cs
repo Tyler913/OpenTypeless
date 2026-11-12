@@ -349,15 +349,24 @@ public sealed class HistoryPage : PageBase
         _list.ItemsSource = _entries;
         _syncing = false;
         var hotkey = _settings.Hotkey.DisplayName;
+        // Every line centred under the icon, wrapped ones too.
+        static TextBlock Line(TextBlock text)
+        {
+            text.HorizontalAlignment = HorizontalAlignment.Center;
+            text.TextAlignment = TextAlignment.Center;
+            return text;
+        }
         _content.Content = new StackPanel
         {
             Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
                 Ui.Icon(Glyphs.Microphone, 36, Ui.Tertiary),
-                Ui.Text(L("还没有听写记录", "No dictations yet"), 14, FontWeights.Medium),
-                Ui.Text(L($"按住 {hotkey} 说话，每次听写都会保存在这里。", $"Hold {hotkey} and talk. Every dictation is kept here."), 12, foreground: Ui.Secondary),
-                Ui.Text(L("也可以把音频或视频文件拖到这里转写。", "You can also drop audio or video files here to transcribe them."), 12, foreground: Ui.Secondary),
+                Line(Ui.Text(L("还没有听写记录", "No dictations yet"), 14, FontWeights.SemiBold)),
+                Line(Ui.Text(L($"按住 {hotkey} 说话，每次听写都会保存在这里。", $"Hold {hotkey} and talk. Every dictation is kept here."),
+                             12, foreground: Ui.Secondary, wrap: true)),
+                Line(Ui.Text(L("也可以把音频或视频文件拖到这里转写。", "You can also drop audio or video files here to transcribe them."),
+                             12, foreground: Ui.Secondary, wrap: true)),
             },
         };
     }
@@ -526,7 +535,7 @@ public sealed class HistoryPage : PageBase
 
     private static string Preview(DictationRecord record)
     {
-        if (record.OutputText.Length > 0) return record.OutputText;
+        if (record.OutputText.Length > 0) return Formatting.OneLine(record.OutputText);
         return record.Status switch
         {
             DictationStatus.Recording => L("正在录音…", "Recording…"),

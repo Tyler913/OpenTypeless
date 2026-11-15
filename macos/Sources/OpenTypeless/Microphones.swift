@@ -168,6 +168,13 @@ final class MicrophoneTester: ObservableObject {
         recorder.onLevel = { [weak self] level in
             DispatchQueue.main.async { self?.push(level) }
         }
+        // Called on the main thread; the recorder has stopped.
+        recorder.onFailure = { [weak self] error in
+            MainActor.assumeIsolated {
+                self?.stop()
+                self?.error = error.localizedDescription
+            }
+        }
         do {
             try recorder.start()
             isRunning = true

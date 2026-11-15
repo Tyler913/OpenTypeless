@@ -113,6 +113,15 @@ extension Translations {
     "fr": "Impossible de créer le convertisseur audio",
     "de": "Audiokonverter konnte nicht erstellt werden"
   },
+  "The microphone kept dropping out. Try another input": {
+    "ja": "マイクが何度も途切れました。別の入力を試してください",
+    "ko": "마이크 연결이 계속 끊겼습니다. 다른 입력 장치를 사용해 보세요",
+    "es": "El micrófono se cortaba una y otra vez. Prueba con otra entrada",
+    "pt": "O microfone continuou caindo. Experimente outra entrada",
+    "ru": "Микрофон постоянно отключался. Попробуйте другой вход",
+    "fr": "Le micro se coupait sans arrêt. Essayez une autre entrée",
+    "de": "Das Mikrofon ist immer wieder ausgefallen. Versuche einen anderen Eingang"
+  },
   "Yesterday": {
     "ja": "昨日",
     "ko": "어제",

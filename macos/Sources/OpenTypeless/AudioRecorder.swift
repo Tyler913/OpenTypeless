@@ -6,7 +6,8 @@ import TypelessCore
 /// Captures the chosen microphone (or the system default) and delivers 16 kHz mono Int16 samples.
 ///
 /// A fresh AVAudioEngine is built per recording, and the engine is rebuilt in place if the audio
-/// route changes mid-recording (e.g. AirPods connect), so a long dictation keeps going.
+/// route changes mid-recording (e.g. AirPods connect), so a long dictation keeps going. Only a real change rebuilds it
+/// (see `CaptureRestartPolicy`): on a chosen input the engine reports one each time it starts.
 ///
 /// While a call app runs Apple's voice processing, macOS hands other apps the built-in microphone's raw
 /// capsules: three channels, about 30 dB quieter than usual. AVAudioConverter turns three channels into one
@@ -38,6 +39,9 @@ final class AudioRecorder {
     /// The input has more than two channels: a call's quiet raw capsules, which `gain` lifts.
     private var liftsQuietInput = false
     private var configObserver: NSObjectProtocol?
+    /// The input's sample rate the tap was installed for (its channel count is `inputChannels`).
+    private var inputSampleRate: Double = 0
+    private var restartPolicy = CaptureRestartPolicy()
     /// What the pipeline takes: 16 kHz mono 16-bit, converted to directly from one channel (or two, once averaged).
     private let int16Format = AVAudioFormat(
         commonFormat: .pcmFormatInt16,
@@ -69,11 +73,13 @@ final class AudioRecorder {
     enum RecorderError: LocalizedError {
         case noInput
         case converter
+        case unstable
 
         var errorDescription: String? {
             switch self {
             case .noInput: return L("没有可用的麦克风", "No microphone available")
             case .converter: return L("无法创建音频格式转换器", "Couldn't create the audio converter")
+            case .unstable: return L("麦克风反复断开，请换一个输入设备再试", "The microphone kept dropping out. Try another input")
             }
         }
     }
@@ -81,6 +87,7 @@ final class AudioRecorder {
     func start() throws {
         guard !isRecording else { return }
         reportedGain = false
+        restartPolicy.reset()
         try startEngine()
         isRecording = true
     }
@@ -117,6 +124,7 @@ final class AudioRecorder {
         self.mixFormat = mixFormat
         self.liftsQuietInput = liftsQuietInput
         inputChannels = inputFormat.channelCount
+        inputSampleRate = inputFormat.sampleRate
         gain = InputGain(initialGain: liftsQuietInput ? AudioRecorder.learntGain : 1)
         log.debug("capture started: \(inputFormat.channelCount, privacy: .public) ch at \(inputFormat.sampleRate, privacy: .public) Hz")
 
@@ -148,14 +156,45 @@ final class AudioRecorder {
     }
 
     private func handleConfigurationChange() {
-        guard isRecording else { return }
-        teardown()
-        do {
-            try startEngine()
-        } catch {
+        guard isRecording, let engine else { return }
+        let input = engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        let decision = restartPolicy.decide(
+            isRunning: engine.isRunning,
+            onExpectedInput: isOnExpectedInput(input),
+            sameFormat: format.sampleRate == inputSampleRate && format.channelCount == inputChannels,
+            now: ProcessInfo.processInfo.systemUptime
+        )
+        log.debug("configuration changed: \(String(describing: decision), privacy: .public)")
+        switch decision {
+        case .keep:
+            return
+        case .rebuild:
+            teardown()
+            do {
+                try startEngine()
+            } catch {
+                isRecording = false
+                openedDeviceUID = nil
+                onFailure?(error)
+            }
+        case .giveUp:
             isRecording = false
-            onFailure?(error)
+            teardown()
+            openedDeviceUID = nil
+            onFailure?(RecorderError.unstable)
         }
+    }
+
+    /// The engine's input unit is still on the device it was opened on: the chosen one, or the system default.
+    private func isOnExpectedInput(_ input: AVAudioInputNode) -> Bool {
+        let expected = openedDeviceUID == nil ? Microphones.defaultInputID : openedDeviceUID.flatMap(Microphones.deviceID(uid:))
+        guard let expected, let unit = input.audioUnit else { return false }
+        var current = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioUnitGetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                                   &current, &size) == noErr else { return false }
+        return current == expected
     }
 
     private func process(_ input: AVAudioPCMBuffer) {
